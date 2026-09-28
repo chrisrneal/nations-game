@@ -3,7 +3,7 @@ import type { ForeignNation } from '@nations/contracts';
 import type { PlayerView } from '../platform/index.ts';
 import { MAP_BOX, labelAt, project } from '../world/positions.ts';
 import { NATIONS, label, nameOf, shortName, tiesBetween, type Ties } from '../world/nations.ts';
-import { GOODS, balance, fairAmount, fmt, spare, vsBaselinePct, type Good, type TradeDraft } from './econ.ts';
+import { baselineNote, GOODS, balance, fairAmount, fmt, lastMonthPct, scoreOf, spare, type Good, type TradeDraft } from './econ.ts';
 import { Sheet } from './Sheet.tsx';
 import { Num } from './why.tsx';
 
@@ -128,8 +128,8 @@ export const WorldMap = memo(function WorldMap(props: { view: PlayerView; onTrad
             <Num
               why={{
                 title: `${nameOf(open.id)}'s position`,
-                value: `${vsBaselinePct(open.nation)}% of baseline`,
-                text: `Public figures: output ${fmt(open.nation.public.output)} a month against a baseline of ${fmt(open.nation.public.baselineOutput)}; ${position(open.nation, 'food')}; ${position(open.nation, 'energy')}.`,
+                value: `${scoreOf(view, open.id)?.ownPct ?? lastMonthPct(open.nation)}% of baseline`,
+                text: `Public figures: output ${fmt(open.nation.public.output)} a month against a baseline of ${fmt(open.nation.public.baselineOutput)}; ${position(open.nation, 'food')}; ${position(open.nation, 'energy')}. ${scoreOf(view, open.id) === undefined ? 'Background regions are not scored.' : `The percent is its score over about the last year. ${baselineNote(false)}`}`,
               }}
             >
               {position(open.nation, 'food')} · {position(open.nation, 'energy')}

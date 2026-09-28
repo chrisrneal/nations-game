@@ -63,13 +63,16 @@ describe('decision cards from the View', () => {
     expect(cardsFor(update.view, new Set([all[0]!.id])).map((c) => c.id)).not.toContain(all[0]!.id);
   });
 
-  it('final standings list the 17 nations from public View data', () => {
+  it('final standings list the 17 nations and rank them exactly as the sim scores them', () => {
     const engine = new GameEngine();
     engine.newGame('egypt', 2);
     const end = engine.advance(60);
-    const rows = standings(end.view, end.standing.multiplierBp);
+    const rows = standings(end.view);
     expect(rows).toHaveLength(17);
     expect(rows.map((r) => r.id)).toContain('egypt');
     expect(rows[0]!.score).toBeGreaterThanOrEqual(rows[16]!.score);
+    const simTop = [...end.view.scores.nations].sort((a, b) => b.finalScore - a.finalScore)[0]!;
+    expect(rows[0]!.id).toBe(simTop.id);
+    for (const row of rows) expect(row.score).toBe(end.view.scores.nations.find((n) => n.id === row.id)!.finalScore);
   });
 });

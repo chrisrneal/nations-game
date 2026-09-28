@@ -61,9 +61,20 @@ export function outlook(view: NationView, good: Good): { stock: number; producti
   return { stock, production, demand, gap: demand - production - stock };
 }
 
-/** Realised output as a percent of the nation's own baseline: the D3 score before the multiplier. */
-export function vsBaselinePct(n: Pick<ForeignNation, 'public'>): number {
+/** Last month's output as a percent of last month's baseline output: one month only, not the score. */
+export function lastMonthPct(n: Pick<ForeignNation, 'public'>): number {
   return n.public.baselineOutput <= 0 ? 0 : Math.round((n.public.output * 1000) / n.public.baselineOutput) / 10;
+}
+
+/** The sim's score for one playable nation, from the View (RULES 5); undefined for a background region. */
+export function scoreOf(view: NationView, id: string): { ownPct: number; finalScore: number } | undefined {
+  const n = view.scores.nations.find((x) => x.id === id);
+  return n === undefined ? undefined : { ownPct: Math.round(n.ownScoreBp / 10) / 10, finalScore: n.finalScore };
+}
+
+/** The shared world multiplier from the View, as a two-decimal string (RULES 5.2). */
+export function multiplierText(view: NationView): string {
+  return (view.scores.multiplierBp / 10_000).toFixed(2);
 }
 
 /** A proposed trade: what the player gives and what they ask for, to one partner. */
@@ -159,18 +170,33 @@ export const commands = {
 export interface Standing {
   readonly id: string;
   readonly name: string;
+  /** ownScore as a percent: smoothed output over smoothed baseline (RULES 5.1). */
   readonly vsBaselinePct: number;
   readonly score: number;
 }
 
-/** Final scores from public View data: own output over own baseline, times the shared multiplier (RULES 5). */
-export function standings(view: NationView, multiplierBp: number): Standing[] {
-  const scale = rule(view, 'scoreScale');
-  const all = [view.self, ...view.others].filter((n) => n.public.kind === 'playable');
-  return all
-    .map((n) => {
-      const own = n.public.baselineOutput <= 0 ? 0 : (n.public.output * 10_000) / n.public.baselineOutput;
-      return { id: n.id as string, name: n.name, vsBaselinePct: vsBaselinePct(n), score: Math.floor((scale * own * multiplierBp) / 100_000_000) };
-    })
-    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+/**
+ * Final standings, read straight from the sim's scoreboard in the View: the
+ * interface never recomputes a score, so the table ranks exactly as the sim does.
+ */
+export function standings(view: NationView): Standing[] {
+  const names = new Map<string, string>([[view.selfId as string, view.self.name], ...view.others.map((o) => [o.id as string, o.name] as [string, string])]);
+  return view.scores.nations
+    .map((n) => ({ id: n.id as string, name: names.get(n.id) ?? n.id, vsBaselinePct: Math.round(n.ownScoreBp / 10) / 10, score: n.finalScore }))
+    // Stable sort on the score alone: a tie keeps the sim's nation order, as the scoreboard does.
+    .sort((a, b) => b.score - a.score);
+}
+
+/** One sentence on what a baseline is (RULES 2.8, 5.1), for your own nation or another. */
+export function baselineNote(own: boolean): string {
+  return own
+    ? 'Your baseline is the growth the IMF projects for you, less the shortfall your geography makes normal: in a world short of food and energy, a big importer is expected to go a little short.'
+    : 'A baseline is the growth the IMF projects for a nation, less the shortfall its geography makes normal in a world short of food and energy.';
+}
+
+/** One sentence on the world multiplier, with its range from the rules (RULES 5.2). */
+export function multiplierNote(view: NationView): string {
+  const lo = (rule(view, 'collectiveFloorBp') / 10_000).toFixed(2);
+  const hi = (rule(view, 'collectiveCeilingBp') / 10_000).toFixed(2);
+  return `How well the world did together: nations at their baseline and food and energy demand met. It multiplies every score the same way, from ${lo} to ${hi}.`;
 }

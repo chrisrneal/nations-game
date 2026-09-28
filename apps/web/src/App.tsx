@@ -166,7 +166,7 @@ export function App(props: { host: GameHost }): ReactElement {
         <header className="top">
           <div className="nation">
             <span>{nameOf(view.selfId)}</span>
-            <OutputLine view={view} multiplierBp={standing.multiplierBp} />
+            <OutputLine view={view} />
           </div>
           <ResourceStrip view={view} />
         </header>

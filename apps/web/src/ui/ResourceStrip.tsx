@@ -1,6 +1,6 @@
 import { memo, type ReactElement } from 'react';
 import type { NationView } from '@nations/contracts';
-import { fmt, outlook, rule, vsBaselinePct, type Good } from './econ.ts';
+import { baselineNote, fmt, lastMonthPct, multiplierText, outlook, rule, scoreOf, type Good } from './econ.ts';
 import { Num, type Why } from './why.tsx';
 
 function goodWhy(view: NationView, good: Good): Why {
@@ -17,18 +17,18 @@ function goodWhy(view: NationView, good: Good): Why {
   };
 }
 
-/** Output against the baseline, above the strip: the scoreboard (RULES 2). */
-export const OutputLine = memo(function OutputLine(props: { view: NationView; multiplierBp: number }): ReactElement {
+/** Your score against your own baseline, above the strip: the sim's own number (RULES 5). */
+export const OutputLine = memo(function OutputLine(props: { view: NationView }): ReactElement {
   const { view } = props;
-  const pct = vsBaselinePct(view.self);
+  const pct = scoreOf(view, view.selfId)?.ownPct ?? lastMonthPct(view.self);
   const last = view.self.private.last;
   return (
     <Num
       className="output"
       why={{
-        title: 'Output',
-        value: `${fmt(view.self.public.output)} a month · ${pct}% of baseline`,
-        text: `Your economy's output last month, against the path the IMF projects for you (${fmt(view.self.public.baselineOutput)}). Your score is this ratio times the world multiplier (now × ${(props.multiplierBp / 10_000).toFixed(2)}). Shortfalls cost ${last.penaltyPct}% last month; trade that covers a deficit adds lasting growth.`,
+        title: 'Your score',
+        value: `${pct}% of baseline`,
+        text: `Your output against your own baseline over about the last year (last month alone: ${fmt(view.self.public.output)} against ${fmt(view.self.public.baselineOutput)}, ${lastMonthPct(view.self)}%). ${baselineNote(true)} Your final score is this times the world multiplier (now × ${multiplierText(view)}). Shortfalls cost ${last.penaltyPct}% last month; trade adds lasting growth.`,
       }}
     >
       <span data-testid="output">{pct}%</span> of baseline
