@@ -12,3 +12,36 @@ export type { View } from './view.ts';
 export type { Host, HostUpdate, Pace } from './host.ts';
 export type { SaveFile } from './save.ts';
 export type { Tunable } from './tunable.ts';
+export type {
+  EconomyReport,
+  Flow,
+  NationEndowment,
+  NationKind,
+  NationMap,
+  Prices,
+  Resource,
+  ResourceAmount,
+  StandingPolicy,
+  Stocks,
+  WorldLedger,
+} from './economy.ts';
+export type {
+  AcceptOfferCommand,
+  CounterOfferCommand,
+  CounterOfferPayload,
+  EconomyEventPayloads,
+  EconomyEventType,
+  FundResilienceCommand,
+  GameCommand,
+  MakeOfferCommand,
+  MakeOfferPayload,
+  OfferOutcome,
+  OfferRefPayload,
+  PingCommand,
+  RejectOfferCommand,
+  SetControllerCommand,
+  SetPolicyCommand,
+  TradeOffer,
+  WithdrawOfferCommand,
+} from './trade.ts';
+export type { ForeignNation, NationPrivate, NationPublic, NationRecord, NationView } from './nations.ts';
