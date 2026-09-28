@@ -2,6 +2,5 @@
   "buildCommand": "npm run build",
   "outputDirectory": "apps/web/dist",
   "framework": null,
-  "installCommand": "npm install",
-  "nodeVersion": "22.x"
+  "installCommand": "npm install"
 }
