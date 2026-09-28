@@ -17,12 +17,18 @@ export interface SimSaveFile extends SaveFile {
 
 /**
  * Migrations keyed by the version they upgrade FROM: `MIGRATIONS[1]` turns a
- * version-1 save into version 2. Empty while only version 1 exists. When
- * `SCHEMA_VERSION` is bumped, add the matching entry and a test with a real
- * old save file.
+ * version-1 save into version 2. When `SCHEMA_VERSION` is bumped, add the
+ * matching entry and a test with a real old save file.
+ *
+ * 1 -> 2 cannot be done: a Phase 0 save holds no economy, and its recorded
+ * hash was made by rules that no longer exist, so it could never verify. It
+ * fails with a message a player can act on instead of a hash mismatch.
  */
-export const MIGRATIONS: Readonly<Record<number, (save: Record<string, unknown>) => Record<string, unknown>>> =
-  {};
+export const MIGRATIONS: Readonly<Record<number, (save: Record<string, unknown>) => Record<string, unknown>>> = {
+  1: () => {
+    throw new Error('This save is from the Phase 0 prototype, which had no economy. Start a new game.');
+  },
+};
 
 /** Brings a parsed save up to the current schema, or throws loudly. */
 export function migrateSave(

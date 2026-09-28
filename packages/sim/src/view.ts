@@ -1,26 +1,19 @@
-import type { NationId, View } from '@nations/contracts';
-import type { NationPublic, NationRecord, WorldState } from './world.ts';
+import type { ForeignNation, NationId, NationRecord, NationView } from '@nations/contracts';
+import { TUNABLES } from './tunables.ts';
+import type { WorldState } from './world.ts';
 
-/** Another nation as seen from outside: identity and public fields only. */
-export interface ForeignNation {
-  readonly id: NationId;
-  readonly name: string;
-  readonly public: NationPublic;
-}
+export type { ForeignNation, NationView } from '@nations/contracts';
 
-/**
- * One nation's picture of the world (seam 6). Extends the contracts `View`
- * with this nation's own full record and every other nation's public face.
- */
-export interface NationView extends View {
-  readonly self: NationRecord;
-  readonly others: readonly ForeignNation[];
-}
+/** Every tunable's value, by id: the public rules, the same for every nation. */
+const RULES: Readonly<Record<string, number>> = Object.freeze(
+  Object.fromEntries(Object.entries(TUNABLES).map(([id, tunable]) => [id, tunable.value])),
+);
 
 /**
- * Builds a nation's View. Other nations are built by copying the allowed
- * fields one by one, never by deleting private ones from a copy, so a field
- * added to State later stays hidden until someone deliberately exposes it.
+ * Builds a nation's View (seam 6). Other nations are built by copying the
+ * allowed fields one by one, never by deleting private ones from a copy, so a
+ * field added to State later stays hidden until someone deliberately exposes
+ * it. Offers between two other nations never appear.
  */
 export function viewFor(state: WorldState, selfId: NationId): NationView {
   const self = state.nations[selfId];
@@ -32,8 +25,21 @@ export function viewFor(state: WorldState, selfId: NationId): NationView {
   for (const id of state.nationOrder) {
     if (id === selfId) continue;
     const other = state.nations[id] as NationRecord;
-    others.push({ id: other.id, name: other.name, public: { pingsReceived: other.public.pingsReceived } });
+    const p = other.public;
+    others.push({
+      id: other.id,
+      name: other.name,
+      public: {
+        kind: p.kind,
+        pingsReceived: p.pingsReceived,
+        output: p.output,
+        baselineOutput: p.baselineOutput,
+        food: { demand: p.food.demand, production: p.food.production },
+        energy: { demand: p.energy.demand, production: p.energy.production },
+      },
+    });
   }
+  const priv = self.private;
   return {
     schemaVersion: state.schemaVersion,
     selfId,
@@ -43,9 +49,24 @@ export function viewFor(state: WorldState, selfId: NationId): NationView {
     self: {
       id: self.id,
       name: self.name,
-      public: { ...self.public },
-      private: { ...self.private },
+      public: {
+        ...self.public,
+        food: { ...self.public.food },
+        energy: { ...self.public.energy },
+      },
+      private: {
+        ...priv,
+        stocks: { ...priv.stocks },
+        policy: { ...priv.policy },
+        trust: { ...priv.trust },
+        last: { ...priv.last },
+      },
     },
     others,
+    offers: state.offers
+      .filter((o) => o.from === selfId || o.to === selfId)
+      .map((o) => ({ ...o, give: { ...o.give }, get: { ...o.get } })),
+    prices: { ...state.prices },
+    rules: RULES,
   };
 }

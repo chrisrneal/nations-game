@@ -2,7 +2,7 @@
  * @nations/sim - the pure simulation core.
  *
  * Contract enforced by tsconfig, ESLint and a test in packages/harness:
- * no DOM, no network, no Date, no Math.random, no imports except
+ * no DOM, no network, no clock, no Math.random, no imports except
  * @nations/contracts. Randomness comes from the seeded RNG inside State,
  * economy maths uses integers, iteration order over nations is stable.
  *
@@ -10,13 +10,16 @@
  * it through `Session` (queue + tick + command log + saves); UI and AI read
  * only `viewFor(state, nationId)`.
  */
-export { TUNABLES } from './tunables.ts';
+export { TUNABLES, type RuleValues, type TunableId } from './tunables.ts';
 export { mix32, nextUint32, randomInt, seedRng } from './rng.ts';
 export { canonicalJson, hashState, hashString } from './hash.ts';
 export {
+  NEUTRAL_ENDOWMENT,
   SCHEMA_VERSION,
   createWorld,
+  defaultPolicy,
   nationId,
+  startingResilience,
   type CreateWorldOptions,
   type NationPrivate,
   type NationPublic,
@@ -24,13 +27,34 @@ export {
   type RosterEntry,
   type WorldState,
 } from './world.ts';
+export { rosterFromWorldData } from './data.ts';
+export {
+  flowsFor,
+  isFair,
+  potentialOutput,
+  referencePrices,
+  shortfallPenaltyBp,
+  structuralBalance,
+  valueMilli,
+} from './economy.ts';
+export { startingTrust } from './trust.ts';
+export { policyAnswer } from './trade.ts';
+export { ownScoreBp, scoreboard, type NationScore, type Scoreboard } from './score.ts';
 export {
   COMMAND_TYPES,
+  RESOURCES,
   validateCommand,
   validateCommandShape,
+  type AcceptOfferCommand,
+  type CounterOfferCommand,
+  type FundResilienceCommand,
+  type MakeOfferCommand,
   type PingCommand,
+  type RejectOfferCommand,
   type SetControllerCommand,
+  type SetPolicyCommand,
   type SimCommand,
+  type WithdrawOfferCommand,
 } from './commands.ts';
 export { canonicalOrder, step, type StepResult } from './step.ts';
 export { viewFor, type ForeignNation, type NationView } from './view.ts';

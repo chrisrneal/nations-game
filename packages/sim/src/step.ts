@@ -1,9 +1,19 @@
-import type { Command, ControllerSlot, Event, NationId } from '@nations/contracts';
-import type { PingCommand, SetControllerCommand } from './commands.ts';
-import { validateCommand } from './commands.ts';
-import { randomInt } from './rng.ts';
+import type { Command, ControllerSlot, Event, NationId, NationRecord, StandingPolicy } from '@nations/contracts';
+import { asSimCommand, validateCommand } from './commands.ts';
+import { economyTick, referencePrices } from './economy.ts';
+import {
+  acceptOffer,
+  counterOffer,
+  createOffer,
+  expireOffers,
+  rejectOffer,
+  runPolicies,
+  withdrawOffer,
+  type TradeContext,
+} from './trade.ts';
+import { driftTrust } from './trust.ts';
 import { TUNABLES } from './tunables.ts';
-import type { NationRecord, WorldState } from './world.ts';
+import type { WorldState } from './world.ts';
 
 export interface StepResult {
   readonly state: WorldState;
@@ -31,20 +41,39 @@ export function canonicalOrder(state: WorldState, commands: readonly Command[]):
 }
 
 /**
- * The whole simulation surface (seam 1). Applies the commands stamped for
- * `state.tick`, then advances the tick by one. Pure: never mutates `state` or
- * `commands`, reads no clock and draws randomness only from `state.rng`.
+ * The whole simulation surface (seam 1). One tick, in this order:
  *
- * Invalid commands are not errors: they become a `commandRejected` event seen
- * only by the sender, so a bad client cannot stop the world.
+ * 1. Commands stamped for `state.tick`, in canonical order. Trades settle the
+ *    moment they are accepted.
+ * 2. Standing policies answer offers on their last tick (seam 8), then
+ *    anything still unanswered expires.
+ * 3. Every nation's economy: produce, consume, shortfall, income, resilience,
+ *    growth (docs/RULES.md section 2).
+ * 4. Trust drifts towards baseTrust; reference prices are refreshed.
+ *
+ * Pure: never mutates `state` or `commands`, reads no clock and draws
+ * randomness only from `state.rng`. Invalid commands are not errors: they
+ * become a `commandRejected` event seen only by the sender.
  */
 export function step(state: WorldState, commands: readonly Command[]): StepResult {
   const events: Event[] = [];
   const nations: Record<NationId, NationRecord> = { ...state.nations };
   const controllers: Record<NationId, ControllerSlot> = { ...state.controllers };
-  let rng = state.rng;
+  const ctx: TradeContext = {
+    tick: state.tick,
+    prices: state.prices,
+    nationOrder: state.nationOrder,
+    nations,
+    endowments: state.endowments,
+    offers: [...state.offers],
+    nextOfferId: state.nextOfferId,
+    ledger: state.ledger,
+    events,
+    covered: new Map(),
+    gainCbp: new Map(),
+  };
+  const draft = (): WorldState => ({ ...state, nations, controllers, offers: ctx.offers });
   const perNation = new Map<string, number>();
-  const draft: WorldState = { ...state, nations, controllers };
 
   const reject = (command: Command, reason: string): void => {
     events.push({
@@ -56,7 +85,7 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
   };
 
   for (const command of canonicalOrder(state, commands)) {
-    const reason = validateCommand(draft, command);
+    const reason = validateCommand(draft(), command);
     if (reason !== null) {
       reject(command, reason);
       continue;
@@ -68,22 +97,13 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
       continue;
     }
 
-    const typed = command as PingCommand | SetControllerCommand;
+    const typed = asSimCommand(command);
     switch (typed.type) {
       case 'ping': {
         const sender = nations[typed.nationId] as NationRecord;
+        nations[sender.id] = { ...sender, private: { ...sender.private, pingsSent: sender.private.pingsSent + 1 } };
         const target = nations[typed.payload.target] as NationRecord;
-        const roll = randomInt(rng, 1, TUNABLES.placeholderRollSides.value);
-        rng = roll.rng;
-        nations[sender.id] = {
-          ...sender,
-          private: { ...sender.private, pingsSent: sender.private.pingsSent + 1, lastRoll: roll.value },
-        };
-        const freshTarget = nations[target.id] as NationRecord;
-        nations[target.id] = {
-          ...freshTarget,
-          public: { ...freshTarget.public, pingsReceived: freshTarget.public.pingsReceived + 1 },
-        };
+        nations[target.id] = { ...target, public: { ...target.public, pingsReceived: target.public.pingsReceived + 1 } };
         events.push({
           tick: state.tick,
           type: 'pinged',
@@ -103,8 +123,81 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
         });
         break;
       }
+      case 'makeOffer':
+        createOffer(ctx, typed.nationId, typed.payload.to, typed.payload.give, typed.payload.get, null);
+        break;
+      case 'acceptOffer':
+        acceptOffer(ctx, typed.payload.offerId, 'command');
+        break;
+      case 'rejectOffer':
+        rejectOffer(ctx, typed.payload.offerId, 'command');
+        break;
+      case 'counterOffer':
+        counterOffer(ctx, typed.payload.offerId, typed.payload.give, typed.payload.get);
+        break;
+      case 'withdrawOffer':
+        withdrawOffer(ctx, typed.payload.offerId);
+        break;
+      case 'setPolicy': {
+        const n = nations[typed.nationId] as NationRecord;
+        const policy: StandingPolicy = { ...n.private.policy, ...typed.payload };
+        nations[n.id] = { ...n, private: { ...n.private, policy } };
+        events.push({
+          tick: state.tick,
+          type: 'policyChanged',
+          payload: { nationId: n.id, policy },
+          audience: [n.id],
+        });
+        break;
+      }
+      case 'fundResilience': {
+        const n = nations[typed.nationId] as NationRecord;
+        const points = typed.payload.points;
+        const cost = points * TUNABLES.resilienceCostPerPoint.value;
+        nations[n.id] = {
+          ...n,
+          private: {
+            ...n.private,
+            resilience: n.private.resilience + points,
+            stocks: { ...n.private.stocks, credit: n.private.stocks.credit - cost },
+          },
+        };
+        ctx.ledger = { ...ctx.ledger, creditSpentResilience: ctx.ledger.creditSpentResilience + cost };
+        events.push({
+          tick: state.tick,
+          type: 'resilienceFunded',
+          payload: { nationId: n.id, points, cost },
+          audience: [n.id],
+        });
+        break;
+      }
     }
   }
 
-  return { state: { ...draft, rng, tick: state.tick + 1 }, events };
+  runPolicies(ctx);
+  expireOffers(ctx);
+
+  let ledger = ctx.ledger;
+  for (const id of state.nationOrder) {
+    const endowment = state.endowments[id];
+    if (endowment === undefined) throw new Error(`No endowment for "${id}"`);
+    const result = economyTick(nations[id] as NationRecord, endowment, ledger, ctx.gainCbp.get(id) ?? 0);
+    ledger = result.ledger;
+    nations[id] = driftTrust(result.nation, state.nationOrder);
+    const report = result.nation.private.last;
+    if (report.unmetFood > 0 || report.unmetEnergy > 0) {
+      events.push({ tick: state.tick, type: 'shortfall', payload: { nationId: id, report }, audience: [id] });
+    }
+  }
+
+  const next: WorldState = {
+    ...state,
+    nations,
+    controllers,
+    offers: ctx.offers,
+    nextOfferId: ctx.nextOfferId,
+    ledger,
+    tick: state.tick + 1,
+  };
+  return { state: { ...next, prices: referencePrices(next) }, events };
 }
