@@ -23,11 +23,37 @@ export interface SimSaveFile extends SaveFile {
  * 1 -> 2 cannot be done: a Phase 0 save holds no economy, and its recorded
  * hash was made by rules that no longer exist, so it could never verify. It
  * fails with a message a player can act on instead of a hash mismatch.
+ *
+ * 2 -> 3 (prompt 09: structural baseline, own-imbalance trade gains, smoothed
+ * score). A save with nothing to replay (every phone save: the snapshot is the
+ * saved position) keeps its position exactly: the snapshot gains an empty
+ * score track, so smoothing starts from the next month, and its hash is
+ * re-recorded for the new shape. A save whose move history must be replayed
+ * cannot be: the new rules would replay it to a different position, so it is
+ * refused with a message a player can act on.
  */
+function migrate2to3(save: Record<string, unknown>): Record<string, unknown> {
+  const snapshot = save.snapshot as Record<string, unknown> | undefined;
+  const log = save.commandLog;
+  if (typeof snapshot !== 'object' || snapshot === null || !Array.isArray(log)) {
+    throw new Error('Save is missing its snapshot or command log');
+  }
+  const savedAtTick = save.savedAtTick;
+  const replays = snapshot.tick !== savedAtTick || (log as { tick?: unknown }[]).some((c) => typeof c.tick === 'number' && c.tick < (savedAtTick as number));
+  if (replays) {
+    throw new Error(
+      'This save needs its moves replayed, and the scoring rules changed since it was made, so they would not replay to the same position. Start a new game.',
+    );
+  }
+  const upgraded = { ...snapshot, schemaVersion: 3, scoreTrack: {} } as unknown as WorldState;
+  return { ...save, schemaVersion: 3, snapshot: upgraded, stateHash: hashState(upgraded) };
+}
+
 export const MIGRATIONS: Readonly<Record<number, (save: Record<string, unknown>) => Record<string, unknown>>> = {
   1: () => {
     throw new Error('This save is from the Phase 0 prototype, which had no economy. Start a new game.');
   },
+  2: migrate2to3,
 };
 
 /** Brings a parsed save up to the current schema, or throws loudly. */

@@ -21,8 +21,19 @@ export type { NationPrivate, NationPublic, NationRecord } from '@nations/contrac
 /**
  * Save format version for WorldState. Bump it and add a migration in save.ts.
  * 2 = Phase 1 economy and trade (prompt 06).
+ * 3 = structural baseline, own-imbalance trade gains and the smoothed score
+ *     track (prompt 09).
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
+
+/**
+ * One nation's smoothed output and baseline output (RULES 5.1), x 1,000 so a
+ * small nation's smoothing is not rounded away. ownScore is their ratio.
+ */
+export interface ScoreTrack {
+  readonly outputE3: number;
+  readonly baselineE3: number;
+}
 
 /**
  * The full world as the sim sees it: the contracts `State` plus nations,
@@ -40,6 +51,11 @@ export interface WorldState extends State {
   /** Reference prices for the tick about to be stepped. */
   readonly prices: Prices;
   readonly ledger: WorldLedger;
+  /**
+   * Smoothed output and baseline per nation (RULES 5.1). A nation appears
+   * after its first month; before that ownScore reads the last month.
+   */
+  readonly scoreTrack: Readonly<Record<NationId, ScoreTrack>>;
 }
 
 /**
@@ -196,6 +212,7 @@ export function createWorld(options: CreateWorldOptions): WorldState {
     offers: [],
     nextOfferId: 1,
     ledger: EMPTY_LEDGER,
+    scoreTrack: {},
   };
   return { ...base, prices: referencePrices(base) };
 }

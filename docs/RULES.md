@@ -145,7 +145,7 @@ penalty  = min(maxShortfallPenaltyPct, unmetPct * shortfallPenaltyBpPerPct / 100
 output  *= (1 - penalty / 100)
 ```
 
-At the starting values, 10% of demand unmet costs 4% of output, and the penalty
+At the starting values, 10% of demand unmet costs 3.5% of output, and the penalty
 caps at 30%. A nation is never killed by a shortfall; it is made poorer, which keeps
 Gate 1's "dead states under 2%" achievable while still making a deficit hurt.
 
@@ -153,6 +153,44 @@ Gate 1's "dead states under 2%" achievable while still making a deficit hurt.
 stocks, and sources and sinks in band. The conservation invariant is: for each
 resource, total production plus imports equals total consumption plus exports plus
 named sinks, every tick, exactly, in integers.
+
+### 2.8 The structural world and each nation's fair share
+
+*(Prompt 09, the top-scorer fairness rule.)* The 2030 world is net short: world
+Energy production covers about 82% of demand and Food about 87%. So in any game
+some importers must go short, and before this rule the ones that did scored
+badly for their geography, not their play.
+
+The **structural world** is every nation, background regions included, sitting on
+its own baseline path with no play at all. For each good the sim works out, every
+month, how much of the world's structural deficit the world's structural surplus
+could cover:
+
+```
+cover_good = min(100%, sum(surplus) * structuralCoverSharePct / 100 / sum(deficit))
+```
+
+`structuralCoverSharePct` (80) allows for spare goods that never reach a buyer:
+background regions answer offers but never make them (§12 Q1). Cover reads
+baseline paths only, so nothing any player does moves it.
+
+A nation's **fair share** of a deficit is `deficit * cover`. The part beyond it is
+what the world cannot supply to anyone who is not taking more than their share:
+
+```
+structuralUnmet_good = deficit_good - fairShare_good
+structuralPenalty    = the §2.7 penalty on structuralUnmet (food and energy together)
+```
+
+Exporters and balanced nations expect no penalty. At the start of the real game,
+with the §11 values, the world can cover 35% of its food deficits and 40% of its
+energy deficits. Japan, Korea and Turkiye expect the 30% cap; Egypt, Saudi Arabia
+and Mexico about 20-21%; Germany 17%; China and India 11-12%; Indonesia and
+Nigeria 6%; South Africa 1%.
+
+The actual shortfall penalty (§2.7) is unchanged: a nation that goes short still
+loses that output, and the world still loses it. What changes is the yardstick
+it is scored against (§5.1).
 
 ---
 
@@ -189,15 +227,36 @@ the AI remembers (§7).
 
 ### 3.3 What a trade is worth
 
-Both sides gain, but not equally:
+A trade in Food or Energy from a nation with a structural surplus to one with a
+structural deficit makes both of them permanently more productive. **Each side
+gains by the share of its own imbalance that the trade clears, never by the size
+of the other side:**
 
 ```
-gain = gainsFromTradeBp * (share of the receiver's deficit this trade covers)
+clearable_i = value of i's whole surplus + value of i's fair share of each deficit (§2.8)
+gain_i      = gainsFromTradeBp * value cleared by i this month / clearable_i
+              capped at gainsFromTradeBp a month
 ```
 
-The side whose deficit is covered gains more, which is why a surplus nation wants a
-hungry partner and a hungry nation can bargain with its need. This is the mechanism
-Gate 1 measures.
+Values are at reference prices (§3.2). A seller clears the units it sells, up to
+its monthly surplus; a buyer clears the units it receives, up to its monthly
+deficit. A credit leg clears nothing. The gain is added to the nation's capacity,
+so it lasts.
+
+So a nation that sells its whole surplus, or covers its fair share of its deficits,
+grows `gainsFromTradeBp` (0.40%) a month faster than its baseline, whether it is
+India or South Africa. The buyer gains a second way too: covering a deficit avoids
+the shortfall penalty (§2.7), and covering more than its fair share lifts it above
+its baseline (§5.1).
+
+*Why not the old rule.* Prompt 06 paid both sides `gainsFromTradeBp * (share of
+the receiver's deficit covered)`, as a share of each side's own capacity. A giant
+seller that covered a small nation's whole deficit then gained 0.40% of a giant
+economy for a few units of food, many times a month: India's capacity grew 88%
+from trade in a 60-month game while Australia's grew 4%. That, with the scarce
+world of §2.8, is why India topped the score in 35-45% of games.
+
+This is the mechanism Gate 1 measures.
 
 ### 3.4 Answering when nobody is home
 
@@ -311,11 +370,30 @@ D3, in arithmetic.
 ### 5.1 Your own baseline
 
 Each nation has a baseline path from `baselineGrowth.basisPoints` — what the IMF
-expects it to do. At the final tick:
+expects it to do — in the structural world of §2.8. Each month:
 
 ```
-ownScore_i = output_i(final) / baselineOutput_i(final)
+baselineOutput_i = baseline potential_i * (1 - structuralPenalty_i)
 ```
+
+So the baseline already expects a nation's usual deficit: Japan's baseline knows
+Japan imports its energy in a world that is short of it. ownScore then measures
+play, not geography. An importer that covers exactly its fair share, and an
+exporter that sells nothing, both sit at 1.00 before trade gains.
+
+ownScore is read from a smoothed path, not from the final month alone. Every month
+the sim moves each nation's smoothed output and smoothed baseline output
+`1/scoreSmoothingTicks` of the way (1/12) towards that month's values:
+
+```
+smoothed = smoothed + (thisMonth - smoothed) / scoreSmoothingTicks   (the first month seeds it)
+ownScore_i = smoothedOutput_i / smoothedBaselineOutput_i
+```
+
+A score read from one month let a lucky or unlucky last delivery decide a
+five-year game: the importers with the most variable shortfalls topped far more
+often than their average play deserved. With a 12-month average, the last year
+counts most and no single month decides.
 
 1.00 means you did exactly as well as the projections said. 1.15 means you beat your
 own future by 15%. **Nigeria beating its baseline scores the same as the United
@@ -370,6 +448,11 @@ output. Then:
 
 So `finalScore_i = scoreScale × ownScore_i × multiplier`, where the hostile act
 leaves the first factor unchanged-then-falling and strictly reduces the second.
+
+The §2.8 baseline does not open a way round this. Structural cover is computed
+from every nation's baseline path, which no play can move, so starving *j* never
+lowers *i*'s baseline. And a trade gain (§3.3) depends only on the share of *i*'s
+own imbalance it clears, never on anyone else's position.
 The derivative is negative for every *i*, at every position on the board. A
 **trailing** nation is not an exception: it cannot close a gap by widening it,
 because its score is measured against its own baseline and nobody else's, so pulling
@@ -602,7 +685,8 @@ wherever they feed economy maths.
 | `foodDemandPerMillionPeople` | 1 | 1 | 3 | One food unit feeds one million people for a month. Raising it makes food scarcer for everyone equally |
 | `energyDemandPerOutput` | 100 | 60 | 150 | Energy demand as a percent of output. The band covers a world that electrifies fast and one that does not |
 | `selfSufficiencyPivot` | 50 | 40 | 60 | The index value at which production equals demand. Moving it shifts the whole world into surplus or deficit |
-| `shortfallPenaltyBpPerPct` | 40 | 10 | 120 | Output cost per percent of unmet demand. At 40, a 10% shortfall costs 4% of output |
+| `shortfallPenaltyBpPerPct` | 35 | 10 | 120 | Output cost per percent of unmet demand. At 35, a 10% shortfall costs 3.5% of output. Prompt 09 tuning (seeds 1001-1400 only): 40 -> 35 |
+| `structuralCoverSharePct` | 80 | 50 | 100 | Share of the world's structural surplus counted as reachable when setting each importer's fair share and its baseline (§2.8). 100 assumes every spare unit reaches a buyer; lower allows for goods that never reach market. Prompt 09 tuning (seeds 1001-1400 only) |
 | `maxShortfallPenaltyPct` | 30 | 10 | 60 | Cap on the shortfall penalty, so no nation is killed by one bad tick (Gate 1: dead states under 2%) |
 | `mineralsEnergyBonusBpPer10` | 10 | 0 | 40 | Energy production bonus per 10 points of mineral endowment. Caps at +10% at the starting value |
 | `mineralsOutputBonusBpPer10` | 10 | 0 | 40 | Output bonus per 10 points of refining leverage. Caps at +10%. Set both to 0 to test a world where minerals do not matter |
@@ -623,7 +707,7 @@ wherever they feed economy maths.
 | `offerLifeTicks` | 3 | 1 | 12 | Three world months to answer. Short enough to keep the board moving, long enough for an absent player's policies to catch it (S8) |
 | `maxOpenOffersPerNation` | 6 | 2 | 20 | Caps spam from AI and spreadsheet play from humans |
 | `priceBandPct` | 35 | 10 | 60 | Width of the fair-price band either side of the reference price. Narrow bands make hard bargains common and trust volatile |
-| `gainsFromTradeBp` | 15 | 5 | 40 | Output bonus per trade, scaled by the share of the receiver's deficit covered. This is the number Gate 1's 15% trade advantage is tuned with |
+| `gainsFromTradeBp` | 40 | 5 | 40 | Monthly output bonus for a nation whose trades clear its whole imbalance: all its surplus and its fair share of each deficit (§3.3). Each side gains by the share of its own imbalance cleared, capped at this rate a month. The number Gate 1's 15% trade advantage is tuned with (prompt 06: 15 -> 40; prompt 09 kept 40) |
 | `autoAcceptTrustThreshold` | 55 | 30 | 80 | Trust level at which the trusted-partner standing policy fires |
 
 ### Trust
@@ -679,6 +763,7 @@ wherever they feed economy maths.
 | `collectiveCeilingBp` | 14000 | 11000 | 20000 | Multiplier when the world achieves everything (1.40). The gap to the floor is how much cooperation is worth |
 | `baselineToleranceBp` | 9500 | 9000 | 9900 | `ownScore` counted as "at baseline" for the collective goal (0.95) |
 | `scoreScale` | 1000 | 100 | 10000 | Cosmetic multiplier so final scores read as four digits |
+| `scoreSmoothingTicks` | 12 | 1 | 24 | Window of the monthly exponential average ownScore is read from (§5.1). 1 is the old final-month reading. Prompt 09 tuning (seeds 1001-1400 only) |
 
 ### AI
 

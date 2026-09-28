@@ -37,9 +37,9 @@ describe('economy formulas (RULES section 2)', () => {
     expect(rich.energy.production).toBe(Math.floor((plain.energy.production * 10_100) / 10_000));
   });
 
-  it('shortfall penalty: 10% unmet costs 4% of output; both resources together cap at 30%', () => {
+  it('shortfall penalty: 10% unmet costs 10 x shortfallPenaltyBpPerPct; both resources together cap at 30%', () => {
     const flow = { demand: 1_000, production: 0 };
-    expect(shortfallPenaltyBp(100, flow, 0, flow)).toBe(400);
+    expect(shortfallPenaltyBp(100, flow, 0, flow)).toBe(10 * TUNABLES.shortfallPenaltyBpPerPct.value);
     expect(shortfallPenaltyBp(1_000, flow, 1_000, flow)).toBe(TUNABLES.maxShortfallPenaltyPct.value * 100);
   });
 
