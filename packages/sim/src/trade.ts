@@ -8,7 +8,7 @@ import type {
   TradeOffer,
   WorldLedger,
 } from '@nations/contracts';
-import { CAPACITY_CEILING_E4, fairShareDeficit, isFair, mulDiv, potentialOutput, structuralBalance, type StructuralCover } from './economy.ts';
+import { CAPACITY_CEILING_E4, fairShareDeficit, isFair, mulDiv, structuralBalance, type StructuralCover } from './economy.ts';
 import { adjustTrust } from './trust.ts';
 import { TUNABLES } from './tunables.ts';
 
@@ -39,12 +39,6 @@ export interface TradeContext {
   readonly covered: Map<string, number>;
   /** Trade gain granted this tick per nation, hundredths of a basis point. */
   readonly gainCbp: Map<NationId, number>;
-  /**
-   * Value cleared this tick for the trade gain (RULES 3.3), thousandths of a
-   * Credit: surplus sold, key `${nation}:out`, and import base covered, key
-   * `${nation}:in`.
-   */
-  readonly clearedMilli: Map<string, number>;
   /** This tick's structural cover (RULES 2.8), which sets each importer's fair share. */
   readonly cover: StructuralCover;
 }
@@ -100,64 +94,18 @@ function moveStock(nation: NationRecord, amount: ResourceAmount, sign: 1 | -1): 
 
 /**
  * What a nation can clear by trade in a month, in thousandths of a Credit at
- * reference prices (RULES 3.3). The export base is the value of its whole
- * structural surplus of each good. The import base is the value of its fair
- * share of each structural deficit (RULES 2.8), raised to at least
- * `tradeGainImportFloorBp` of its own potential output, but never above the
- * value of its whole deficit: a small import has to be covered more fully to
- * earn the full gain. A nation with no imbalance has nothing to clear.
+ * reference prices (RULES 3.3): its whole structural surplus of each good,
+ * plus its fair share of each structural deficit (RULES 2.8). A nation with
+ * no imbalance has nothing to clear and gains nothing from trade.
  */
-export interface TradeGainBases {
-  readonly exportMilli: number;
-  readonly importMilli: number;
-}
-
-export function tradeGainBases(
-  nation: Pick<NationRecord, 'public' | 'private'>,
-  e: NationEndowment,
-  prices: Prices,
-  cover: StructuralCover,
-): TradeGainBases {
-  let exportMilli = 0;
-  let fairMilli = 0;
-  let deficitMilli = 0;
+export function tradeImbalanceMilli(nation: Pick<NationRecord, 'public'>, prices: Prices, cover: StructuralCover): number {
+  let total = 0;
   for (const good of ['food', 'energy'] as const) {
     const flow = nation.public[good];
     const balance = flow.production - flow.demand;
-    if (balance >= 0) exportMilli += balance * prices[good];
-    else {
-      fairMilli += fairShareDeficit(flow, cover[good]) * prices[good];
-      deficitMilli -= balance * prices[good];
-    }
+    total += (balance >= 0 ? balance : fairShareDeficit(flow, cover[good])) * prices[good];
   }
-  const floor = mulDiv(potentialOutput(e, nation.private.capacityE4) * 1000, TUNABLES.tradeGainImportFloorBp.value, 10_000);
-  return { exportMilli, importMilli: Math.min(deficitMilli, Math.max(fairMilli, floor)) };
-}
-
-/**
- * The payout curve, in parts per million: 1 - (1 - share)^power. Power 1 is a
- * straight line; higher powers pay the first units cleared the most, and every
- * power pays nothing for nothing and everything for everything.
- */
-export function curvePpm(sharePpm: number, power: number): number {
-  const rest = 1_000_000 - Math.max(0, Math.min(1_000_000, sharePpm));
-  let left = 1_000_000;
-  for (let i = 0; i < power; i++) left = mulDiv(left, rest, 1_000_000);
-  return 1_000_000 - left;
-}
-
-/**
- * Share of the full monthly trade gain earned, in parts per million (RULES
- * 3.3): each side's cleared share runs through its own curve, and the two
- * sides are weighted by the size of their bases.
- */
-export function gainSharePpm(bases: TradeGainBases, soldMilli: number, coveredMilli: number, sellCurve: number, buyCurve: number): number {
-  const total = bases.exportMilli + bases.importMilli;
-  if (total <= 0) return 0;
-  const side = (base: number, cleared: number, power: number): number =>
-    base <= 0 ? 0 : mulDiv(base, curvePpm(mulDiv(Math.min(cleared, base), 1_000_000, base), power), 1_000_000);
-  const credit = side(bases.exportMilli, soldMilli, sellCurve) + side(bases.importMilli, coveredMilli, buyCurve);
-  return Math.min(1_000_000, mulDiv(credit, 1_000_000, total));
+  return total;
 }
 
 /**
@@ -169,10 +117,10 @@ export function gainSharePpm(bases: TradeGainBases, soldMilli: number, coveredMi
  * repeat deliveries cannot farm it.
  *
  * Each side gains by the share of its own imbalance the leg clears, never by
- * the other side's size or position: `gainsFromTradeBp` x `gainSharePpm` of
- * everything it has cleared this month, less what earlier legs already paid.
- * So the month's total is the same however the trades are split, and it never
- * passes `gainsFromTradeBp`.
+ * the other side's size: `gainsFromTradeBp` x cleared value / what it can
+ * clear (`tradeImbalanceMilli`), capped at `gainsFromTradeBp` a month. A
+ * nation that trades its whole surplus, or covers its fair share of a
+ * deficit, grows the full rate whatever its size.
  */
 function applyGains(ctx: TradeContext, supplier: NationId, receiver: NationId, leg: ResourceAmount): void {
   if (leg.resource === 'credit') return;
@@ -188,24 +136,15 @@ function applyGains(ctx: TradeContext, supplier: NationId, receiver: NationId, l
   ctx.covered.set(outKey, (ctx.covered.get(outKey) ?? 0) + sold);
 
   const fullCbp = TUNABLES.gainsFromTradeBp.value * 100;
-  for (const [id, units, side] of [
-    [supplier, sold, 'out'],
-    [receiver, covered, 'in'],
+  for (const [id, units] of [
+    [supplier, sold],
+    [receiver, covered],
   ] as const) {
-    if (units <= 0) continue;
     const n = get(ctx, id);
-    const bases = tradeGainBases(n, ctx.endowments[id] as NationEndowment, ctx.prices, ctx.cover);
-    const key = `${id}:${side}`;
-    ctx.clearedMilli.set(key, (ctx.clearedMilli.get(key) ?? 0) + units * ctx.prices[leg.resource]);
-    const sharePpm = gainSharePpm(
-      bases,
-      ctx.clearedMilli.get(`${id}:out`) ?? 0,
-      ctx.clearedMilli.get(`${id}:in`) ?? 0,
-      TUNABLES.tradeGainSellCurve.value,
-      TUNABLES.tradeGainBuyCurve.value,
-    );
-    const cbp = mulDiv(fullCbp, sharePpm, 1_000_000) - (ctx.gainCbp.get(id) ?? 0);
-    if (cbp <= 0) continue;
+    const room = fullCbp - (ctx.gainCbp.get(id) ?? 0);
+    const clearable = tradeImbalanceMilli(n, ctx.prices, ctx.cover);
+    if (units <= 0 || room <= 0 || clearable <= 0) continue;
+    const cbp = Math.min(room, mulDiv(fullCbp, units * ctx.prices[leg.resource], clearable));
     const gainE4 = mulDiv(n.private.capacityE4, cbp, 1_000_000);
     const capacityE4 = Math.min(CAPACITY_CEILING_E4, n.private.capacityE4 + gainE4);
     ctx.nations[id] = { ...n, private: { ...n.private, capacityE4 } };

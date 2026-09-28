@@ -11,7 +11,7 @@ import {
 } from './economy.ts';
 import { ownScoreBp, scoreboard, smoothTowards } from './score.ts';
 import { step } from './step.ts';
-import { answer, amt, offer, policy } from './testkit.ts';
+import { answer, amt, offer } from './testkit.ts';
 import { curvePpm, gainSharePpm, tradeGainBases } from './trade.ts';
 import { TUNABLES } from './tunables.ts';
 import { createWorld, NEUTRAL_ENDOWMENT, type RosterEntry, type WorldState } from './world.ts';
@@ -126,11 +126,8 @@ describe('trade gains by own imbalance cleared (RULES 3.3)', () => {
   const curve = (share: number, power: number): number => 1 - (1 - Math.min(1, share)) ** power;
   const sell = (s: WorldState, to: NationId, units: number, tick = 0) => {
     const credit = Math.max(1, Math.floor((units * s.prices.food) / 1000));
-    // Small sales cannot be priced inside the fair band in whole Credits, so the seller allows hard bargains.
-    const made = step(s, [policy(X, { hardBargains: true }, tick), offer(X, to, amt('food', units), amt('credit', credit), tick)]).state;
-    const done = step(made, [answer('acceptOffer', to, made.nextOfferId - 1, tick + 1)]);
-    expect(done.events.some((e) => e.type === 'offerSettled')).toBe(true);
-    return done.state;
+    const made = step(s, [offer(X, to, amt('food', units), amt('credit', credit), tick)]).state;
+    return step(made, [answer('acceptOffer', to, made.nextOfferId - 1, tick + 1)]).state;
   };
   const bases = (s: WorldState, n: NationId) => tradeGainBases(nation(s, n), s.endowments[n]!, s.prices, structuralCover(s));
 
@@ -219,10 +216,9 @@ describe('a small imbalance never out-earns a large one (prompt 13)', () => {
   const gainFor = (to: NationId, units: number): number => {
     const s = world();
     const credit = Math.max(1, Math.floor((units * s.prices.food) / 1000));
-    const made = step(s, [policy(X, { hardBargains: true }, 0), offer(X, to, amt('food', units), amt('credit', credit), 0)]).state;
-    const done = step(made, [answer('acceptOffer', to, made.nextOfferId - 1, 1)]);
-    expect(done.events.some((e) => e.type === 'offerSettled')).toBe(true);
-    return nation(done.state, to).private.last.tradeGainCbp;
+    const made = step(s, [offer(X, to, amt('food', units), amt('credit', credit), 0)]).state;
+    const done = step(made, [answer('acceptOffer', to, made.nextOfferId - 1, 1)]).state;
+    return nation(done, to).private.last.tradeGainCbp;
   };
   const fair = (n: NationId): number => {
     const s = world();

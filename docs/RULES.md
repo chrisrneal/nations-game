@@ -229,75 +229,32 @@ the AI remembers (§7).
 
 A trade in Food or Energy from a nation with a structural surplus to one with a
 structural deficit makes both of them permanently more productive. **Each side
-gains by the share of its own imbalance that its trades clear, never by the size
-or position of the other side.** *(Prompt 13 added the import floor and the two
-payout curves; prompt 09 set the own-imbalance rule.)*
-
-Each month every nation has two bases, in value at reference prices (§3.2):
+gains by the share of its own imbalance that the trade clears, never by the size
+of the other side:**
 
 ```
-exportBase_i = value of i's whole structural surplus of each good
-importBase_i = value of i's fair share of each structural deficit (§2.8),
-               raised to at least tradeGainImportFloorBp of i's own potential output,
-               but never above the value of i's whole deficit
+clearable_i = value of i's whole surplus + value of i's fair share of each deficit (§2.8)
+gain_i      = gainsFromTradeBp * value cleared by i this month / clearable_i
+              capped at gainsFromTradeBp a month
 ```
 
-A seller clears the units it sells, up to its monthly surplus; a buyer clears the
-units it receives, up to its monthly deficit. A credit leg clears nothing. Each
-side's cleared share runs through its own payout curve, and the two sides are
-weighted by the size of their bases:
+Values are at reference prices (§3.2). A seller clears the units it sells, up to
+its monthly surplus; a buyer clears the units it receives, up to its monthly
+deficit. A credit leg clears nothing. The gain is added to the nation's capacity,
+so it lasts.
 
-```
-credit_i = exportBase_i * (1 - (1 - sold_i    / exportBase_i) ^ tradeGainSellCurve)
-         + importBase_i * (1 - (1 - covered_i / importBase_i) ^ tradeGainBuyCurve)
-gain_i   = gainsFromTradeBp * credit_i / (exportBase_i + importBase_i)
-```
+So a nation that sells its whole surplus, or covers its fair share of its deficits,
+grows `gainsFromTradeBp` (0.40%) a month faster than its baseline, whether it is
+India or South Africa. The buyer gains a second way too: covering a deficit avoids
+the shortfall penalty (§2.7), and covering more than its fair share lifts it above
+its baseline (§5.1).
 
-A share above 1 counts as 1, so `gain_i` never passes `gainsFromTradeBp` (0.40%)
-a month. The gain is added to the nation's capacity, so it lasts. It is worked
-out on everything the nation cleared that month, so splitting a month's trades
-into many small deals earns exactly the same as one big deal.
-
-What each piece is for:
-
-- **Own imbalance, not the partner's.** A nation that sells its whole surplus, or
-  covers its whole import base, grows 0.40% a month faster than its baseline,
-  whether it is India or South Africa.
-- **The buyer's curve is steep** (`tradeGainBuyCurve` 6). The first units of a
-  deficit avert the worst of a shortfall, so they pay the most: covering half of
-  the import base earns 98% of that side's gain. Deep importers (China, India,
-  Japan, Korea) can only ever cover part of their share, and under a straight
-  line they earned only that part.
-- **The seller's curve is gentle** (`tradeGainSellCurve` 2). Spare goods are worth
-  about the same per unit, so selling half the surplus earns 75% of that side's gain.
-- **The import floor** (`tradeGainImportFloorBp`, 3.5% of output). A nation whose
-  fair share is a tiny part of its economy (Saudi Arabia's food, Indonesia's
-  food, Egypt) has to cover more of its real deficit, up to all of it, to earn
-  the full import-side gain. One small delivery can no longer fill it. The floor
-  never asks for more than the nation's whole deficit, so the full gain is always
-  reachable.
-
-With both curves at 1 and the floor at 0 this is exactly the prompt 09 rule.
-
-The buyer also gains a second way: covering a deficit avoids the shortfall
-penalty (§2.7), and covering more than its fair share lifts it above its baseline
-(§5.1).
-
-*Why not the old rules.* Prompt 06 paid both sides `gainsFromTradeBp * (share of
+*Why not the old rule.* Prompt 06 paid both sides `gainsFromTradeBp * (share of
 the receiver's deficit covered)`, as a share of each side's own capacity. A giant
 seller that covered a small nation's whole deficit then gained 0.40% of a giant
 economy for a few units of food, many times a month: India's capacity grew 88%
-from trade in a 60-month game while Australia's grew 4%. Prompt 09 paid each side
-a straight-line share of its own imbalance. Then every exporter that traded sold
-its whole surplus and sat on the cap every month, while deep importers earned a
-fraction. The winner came down to which exporter reached the cap a month sooner
-(docs/balance/gate1-prompt13.md). Paying by value traded relative to own output
-(tried in prompts 09 and 13) moves the win to economies whose trade is a large
-share of their output, so it was not used.
-
-*Sabotage (§5.3).* Every term is the nation's own (its sales, its deliveries,
-its surplus, deficit and output) apart from the structural cover, which reads
-baseline paths only. Harming another nation changes none of them.
+from trade in a 60-month game while Australia's grew 4%. That, with the scarce
+world of §2.8, is why India topped the score in 35-45% of games.
 
 This is the mechanism Gate 1 measures.
 
@@ -495,8 +452,7 @@ leaves the first factor unchanged-then-falling and strictly reduces the second.
 The §2.8 baseline does not open a way round this. Structural cover is computed
 from every nation's baseline path, which no play can move, so starving *j* never
 lowers *i*'s baseline. And a trade gain (§3.3) depends only on the share of *i*'s
-own imbalance it clears (its own sales, deliveries, surplus, deficit and output),
-never on anyone else's position.
+own imbalance it clears, never on anyone else's position.
 The derivative is negative for every *i*, at every position on the board. A
 **trailing** nation is not an exception: it cannot close a gap by widening it,
 because its score is measured against its own baseline and nobody else's, so pulling
@@ -753,10 +709,7 @@ wherever they feed economy maths.
 | `offerLifeTicks` | 3 | 1 | 12 | Three world months to answer. Short enough to keep the board moving, long enough for an absent player's policies to catch it (S8) |
 | `maxOpenOffersPerNation` | 6 | 2 | 20 | Caps spam from AI and spreadsheet play from humans |
 | `priceBandPct` | 35 | 10 | 60 | Width of the fair-price band either side of the reference price. Narrow bands make hard bargains common and trust volatile |
-| `gainsFromTradeBp` | 40 | 5 | 40 | Monthly output bonus for a nation whose trades clear its whole imbalance: all its surplus and its import base (§3.3). Each side gains by the share of its own imbalance cleared, through the payout curves, never above this rate a month. The number Gate 1's 15% trade advantage is tuned with (prompt 06: 15 -> 40; prompt 09 kept 40) |
-| `tradeGainSellCurve` | 2 | 1 | 8 | Seller-side payout curve (§3.3): selling a share x of the surplus earns 1 - (1 - x)^this of that side's gain. 1 is a straight line (prompt 09). Gentle, because spare goods are worth about the same per unit. Prompt 13 tuning (seeds 1001-1800 only) |
-| `tradeGainBuyCurve` | 6 | 1 | 8 | Buyer-side payout curve (§3.3): covering a share x of the import base earns 1 - (1 - x)^this. Steep, because the first units of a deficit avert the worst of a shortfall; it lets deep importers earn most of the gain. Prompt 13 tuning (seeds 1001-1800 only) |
-| `tradeGainImportFloorBp` | 350 | 0 | 1000 | Smallest import base as basis points of the nation's own potential output, never above its whole deficit (§3.3). A tiny fair share cannot fill the import side from one small delivery. 0 is the prompt 09 rule. Prompt 13 tuning (seeds 1001-1800 only) |
+| `gainsFromTradeBp` | 40 | 5 | 40 | Monthly output bonus for a nation whose trades clear its whole imbalance: all its surplus and its fair share of each deficit (§3.3). Each side gains by the share of its own imbalance cleared, capped at this rate a month. The number Gate 1's 15% trade advantage is tuned with (prompt 06: 15 -> 40; prompt 09 kept 40) |
 | `foodBasePriceMilli` | 100 | 20 | 500 | Reference price of one food unit in thousandths of a Credit when world supply meets demand (§3.2). 100 puts world food spending near 4% of output |
 | `energyBasePriceMilli` | 60 | 10 | 300 | Reference price of one energy unit in thousandths of a Credit at balance. 60 puts world energy spending near 6% of output |
 | `autoAcceptTrustThreshold` | 55 | 30 | 80 | Trust level at which the trusted-partner standing policy fires |
