@@ -87,6 +87,17 @@ try airplane mode. README.md has the steps.
 speed check reading; cards, resources and trust are placeholders until the Phase 1
 economy (docs/GAPS.md, prompt 04).
 
+### 2026-09-28 - prompt 05, Gate 0 review (independent)
+**Changed.** docs/gates/GATE-0.md written; no code changed. Verdict **FAIL**:
+criteria 1-4 PASS (reviewer re-ran determinism with the real 17 nations and a
+300-seed save/reload test with AI and caretaker switches, all identical),
+criteria 5-7 OWNER CHECK (phone speed, real-device install, one-handed
+decisions), criterion 8 FAIL because seam 8 (interactions as State objects with
+expiry ticks) has no code. Harness roster bug confirmed still open.
+**How to see it.** Open docs/gates/GATE-0.md.
+**Left.** Build seam 8 and fix the harness roster, then re-review; owner phone
+checks. See docs/GAPS.md, prompt 05.
+
 ### 2026-09-27 - prompt 02, World 2030 and rules (lane D)
 **Changed.** `data/world-2030.json` replaced: 17 playable nations and 6 background
 regional aggregates, each with population, GDP (nominal and PPP), a 2026-2031

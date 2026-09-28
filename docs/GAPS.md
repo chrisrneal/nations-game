@@ -34,3 +34,8 @@ Each entry: prompt number, phase, what is missing, owning lane.
 - 04, Phase 0, ESLint's `@nations/sim` ban in apps/web/src could be widened to `@nations/ai`, `comlink` and platform internals; the boundary test covers these instead because eslint.config.js is architect-owned. Architect.
 - 04, Phase 0, Saves are compact (the current state becomes the snapshot), so an in-app save cannot replay the game from tick 0. Fine for resume; bug-report replay would need the full log kept. Lane P.
 - 04, Phase 0, Real-device checks still open: install on an iPhone and an Android phone from the Vercel production address, airplane-mode reopen, and the in-app speed check reading on a mid-range phone. Owner.
+
+- 05, Phase 0, **Gate 0 FAIL: seam 8 is not built.** No interaction type in contracts, nothing in `WorldState`, no expiry or default answer in `step`, nothing in `NationView`; inbox cards live in React state and are lost on reload. See docs/gates/GATE-0.md. Lanes C, S, A, U, P.
+- 05, Phase 0, Harness roster still fictional (prompt 02 gap above): every harness game, the benchmark and the built-in determinism check run eight "nations" named after JSON keys. Reviewer verified determinism separately with the real 17. Lane H.
+- 05, Phase 0, App saves are always compact, so phone saves have an empty command log and cannot replay a game (seam 9's bug-repro job). Lane P.
+- 05, Phase 0, `controllerChanged` events are public, which would tell rivals when a human is away in multiplayer. Decide before Phase 5. Architect.
