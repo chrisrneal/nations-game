@@ -10,13 +10,16 @@
  * every resource; the map and a proposed trade; 60 fps at 4x with the CPU
  * slowed 4x; policies reach the sim; export a file, clear site data, import it
  * and the same game (fingerprint) resumes; reopens offline; a full game plays
- * to the end screen.
+ * to the end screen. Prompt 12: an accepted offer passes only when it settles
+ * ("Trade done" and the received stock changes), and the end screen's winner
+ * must match the sim's own scoreboard for the exported final game.
  */
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, type Page } from 'playwright-core';
+import { loadSave, scoreboard } from '@nations/sim';
 
 const PORT = 4179;
 const URL = `http://localhost:${PORT}/`;
@@ -39,6 +42,12 @@ function check(name: string, ok: boolean, detail = ''): void {
 async function noHorizontalScroll(page: Page, where: string): Promise<void> {
   const width = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth));
   check(`no horizontal scroll: ${where}`, width <= WIDTH, `scrollWidth ${width}`);
+}
+
+/** A resource chip's number (store, or resilience out of 100), without the icon or separators. */
+async function chip(page: Page, key: string): Promise<number> {
+  const text = (await page.getByTestId(`chip-${key}`).textContent()) ?? '';
+  return Number(/[\d,]+/.exec(text)?.[0]?.replace(/,/g, '') ?? NaN);
 }
 
 async function tick(page: Page): Promise<number> {
@@ -104,9 +113,20 @@ async function main(): Promise<void> {
       await page.locator('.card-offer').first().tap();
       await page.locator('.sheet [data-option="accept"]').tap();
       await page.getByText(/Accepted/).first().waitFor({ timeout: 5000 });
+      const before = { food: await chip(page, 'food'), energy: await chip(page, 'energy'), credit: await chip(page, 'credit') };
       await page.getByTestId('next-month').tap();
-      await page.getByText(/Trade done|failed|Not sent/).first().waitFor({ timeout: 5000 });
-      check('accepting an offer settles it in the sim', true);
+      // Only a settled trade passes: "failed" or "Not sent" is a failure, not a pass.
+      const outcome = page.getByText(/Trade done with|failed|Not sent/).first();
+      await outcome.waitFor({ timeout: 5000 });
+      const text = (await outcome.textContent()) ?? '';
+      const got = /you got ([\d,]+) (food|energy|credit)/.exec(text);
+      const good = (got?.[2] ?? 'food') as 'food' | 'energy' | 'credit';
+      const after = await chip(page, good);
+      check(
+        'accepting an offer settles it in the sim',
+        text.startsWith('Trade done with') && got !== null && after !== before[good],
+        `${text}; ${good} ${before[good]} -> ${after}`,
+      );
     }
 
     // Counter an offer through the trade sheet, if one is open.
@@ -219,6 +239,19 @@ async function main(): Promise<void> {
     check('a full game reaches the end screen', (await tick(page)) === 60, `month ${await tick(page)}`);
     check('final table lists all 17 nations', (await page.locator('.gameover tbody tr').count()) === 17);
     await noHorizontalScroll(page, 'game over');
+    const shownWinner = ((await page.locator('.gameover tbody tr').first().locator('td').nth(1).textContent()) ?? '').trim();
+
+    // The end screen's winner is the sim's winner: export the finished game and score it with the sim itself.
+    await page.getByRole('button', { name: /Game/ }).tap();
+    const [finalDownload] = await Promise.all([page.waitForEvent('download'), page.getByTestId('export').tap()]);
+    const finalFile = join(profile, 'final.json');
+    await finalDownload.saveAs(finalFile);
+    const file = JSON.parse(readFileSync(finalFile, 'utf8')) as { game: { save: unknown } };
+    const finalState = loadSave(file.game.save).state;
+    const board = scoreboard(finalState);
+    const simTop = [...board.nations].sort((a, b) => b.finalScore - a.finalScore)[0];
+    const simWinner = simTop === undefined ? '' : (finalState.nations[simTop.id]?.name ?? '');
+    check("the end screen's winner is the sim's winner", shownWinner !== '' && shownWinner === simWinner, `screen ${shownWinner}, sim ${simWinner}`);
 
     await context.close();
   } finally {

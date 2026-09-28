@@ -44,4 +44,4 @@ export type {
   TradeOffer,
   WithdrawOfferCommand,
 } from './trade.ts';
-export type { ForeignNation, NationPrivate, NationPublic, NationRecord, NationView } from './nations.ts';
+export type { ForeignNation, NationPrivate, NationPublic, NationRecord, NationScore, NationView, ScoresView } from './nations.ts';

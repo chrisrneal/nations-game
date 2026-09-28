@@ -1,4 +1,5 @@
 import type { ForeignNation, NationId, NationRecord, NationView } from '@nations/contracts';
+import { scoreboard } from './score.ts';
 import { TUNABLES } from './tunables.ts';
 import type { WorldState } from './world.ts';
 
@@ -40,6 +41,8 @@ export function viewFor(state: WorldState, selfId: NationId): NationView {
     });
   }
   const priv = self.private;
+  // The sim's own scoreboard: public, identical for every viewer (RULES 5).
+  const board = scoreboard(state);
   return {
     schemaVersion: state.schemaVersion,
     selfId,
@@ -67,6 +70,10 @@ export function viewFor(state: WorldState, selfId: NationId): NationView {
       .filter((o) => o.from === selfId || o.to === selfId)
       .map((o) => ({ ...o, give: { ...o.give }, get: { ...o.get } })),
     prices: { ...state.prices },
+    scores: {
+      multiplierBp: board.multiplierBp,
+      nations: board.nations.map((n) => ({ id: n.id, ownScoreBp: n.ownScoreBp, finalScore: n.finalScore })),
+    },
     rules: RULES,
   };
 }

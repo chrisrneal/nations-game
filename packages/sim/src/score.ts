@@ -1,4 +1,4 @@
-import type { NationId, NationRecord } from '@nations/contracts';
+import type { NationRecord, NationScore } from '@nations/contracts';
 import { TUNABLES } from './tunables.ts';
 import type { ScoreTrack, WorldState } from './world.ts';
 
@@ -9,12 +9,7 @@ import type { ScoreTrack, WorldState } from './world.ts';
  * exist yet: nations at or above their own baseline, and world deficits met.
  * The climate and pandemic goals join the mean when Phase 2 adds them.
  */
-export interface NationScore {
-  readonly id: NationId;
-  /** Smoothed realised output over smoothed baseline output, x 10,000 (RULES 5.1). */
-  readonly ownScoreBp: number;
-  readonly finalScore: number;
-}
+export type { NationScore };
 
 export interface Scoreboard {
   readonly collectiveBp: number;

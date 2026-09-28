@@ -27,6 +27,20 @@ Gate 1 verdict: **FAIL** (docs/gates/GATE-1.md, second review after prompts 09-1
 
 ## Session log
 
+### 2026-09-28 - prompt 12, Interface shows the sim's real score (lanes C, S, U, P)
+**Changed.** The View now carries the sim's own scoreboard (`NationView.scores`: every
+playable nation's 12-month ownScore and final score, plus the world multiplier). The end
+screen, the score line above the resource strip and the map read it instead of
+recomputing last month's ratio. Over the 200 Gate 1 games the end screen's winner used to
+differ from the sim's in 93 games; now it differs in 0. The baseline why-sheets explain
+the baseline as RULES 2.8 defines it. The game-over table's Baseline and Score cells have
+why-sheets. The phone check now fails on a refused or failed trade, and checks the end
+screen's winner against the sim's scoreboard for the exported final game. 300 tests and
+34/34 phone checks pass. The save schema is unchanged, because the View is never saved.
+**How to see it.** Play to month 60 (Game tab, 4x): the table's order is the game's real
+ranking. Tap any percent or score for its explanation.
+**Left.** See docs/GAPS.md, prompt 12.
+
 ### 2026-09-28 - prompt 11, Spread AI trade offers (lane A)
 **Changed.** No change to the game. The AI seller now drew its buyers in a seeded order
 weighted by deficit size, with tests (commit 7397c25). On the tuning seeds (1001-1400)

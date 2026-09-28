@@ -8,7 +8,6 @@ import {
   mix32,
   nationId,
   rosterFromWorldData,
-  scoreboard,
   viewFor,
   type RosterEntry,
   type SimSaveFile,
@@ -20,13 +19,10 @@ import { PACE_INTERVAL_MS, SUPPORTED_PACES } from './pace.ts';
 export type PlayerView = NationView;
 
 /**
- * World-level standing the host derives for the interface. Public by nature
- * (the collective multiplier is the same for every nation); it rides beside the
- * View until the sim puts it in the View itself (docs/GAPS.md, prompt 07).
+ * Game-level facts the host adds for the interface. Scores and the collective
+ * multiplier are in the View itself (`view.scores`, prompt 12).
  */
 export interface Standing {
-  /** Collective multiplier x 10,000 (RULES 5.2). */
-  readonly multiplierBp: number;
   /** Months in a full game. */
   readonly gameLength: number;
   /** True once the last month has been played; the clock stops. */
@@ -206,7 +202,6 @@ export class GameEngine {
     const visible = events.filter((event) => event.audience.length === 0 || event.audience.includes(humanId));
     const state = session.state;
     const standing: Standing = {
-      multiplierBp: scoreboard(state).multiplierBp,
       gameLength: GAME_LENGTH,
       over: state.tick >= GAME_LENGTH,
       fingerprint: hashState(state),
