@@ -16,14 +16,29 @@ Gate 0 verdict: **PASS WITH WAIVERS** (docs/gates/GATE-0.md).
 ## Gate 1 checklist
 Suite: `npm run harness -- gate1` (200 seeded full-roster games, random strategies, paired runs). Latest results: docs/balance/gate1-prompt06.md.
 - [x] 200 seeded full-roster games with no crashes (0), no negative stocks (0), sources and sinks in band (food 92.2%, energy 84.8% consumed/produced; Credit sinks 0.5% of income)
-- [x] The same nation does 15%+ better against its baseline trading than isolating (median of 200 paired runs: +15.4%)
+- [ ] The same nation does 15%+ better against its baseline trading than isolating (FAIL at Gate 1 review: +15.4% on seeds 1-200 but +14.5% pooled over 800 seeds; docs/gates/GATE-1.md)
 - [x] Isolationists worse off but alive (isolating scores lower in 94% of pairs; 0 dead)
 - [x] Dead states under 2% (0.0%)
 - [ ] No nation tops the score in more than 2x its fair share, 11.8% (FAIL: India 45%, Russia 24%; needs a rule decision, see the prompt 06 log)
 - [x] A trade in 3 taps or fewer (prompt 07: 2 taps from home - open the card, send the offer; checked by touch at 360 px)
 - [x] Gate 0 still passes (determinism 1,000/1,000 Node vs Chromium, purity, save/load; phone speed to re-measure)
 
+Gate 1 verdict: **FAIL** (docs/gates/GATE-1.md, prompt 08): top scorer and trade-gain robustness.
+
 ## Session log
+
+### 2026-09-28 - prompt 08, Gate 1 review (independent)
+**Changed.** docs/gates/GATE-1.md written; no code changed. Verdict **FAIL**.
+The top scorer fails (India tops 34.5-45% of games on every seed range; limit
+11.8%). The trade advantage fails on robustness: it passes on seeds 1-200
+(+15.4%), which it was tuned on, but gives +14.0% and +14.9% on fresh ranges and
++14.5% pooled over 800 seeds. Everything else passes, including invariants, dead
+states, isolationists, 2-tap trades, the depth budget, architecture rules,
+determinism, and a review of seam 8 (the Gate 0 waiver). Also found:
+`npm run harness -- --suite gate1` silently runs the wrong command.
+**How to see it.** Open docs/gates/GATE-1.md; `npm run harness -- gate1 --seed 401`.
+**Left.** Rule change for the top scorer, then re-tune the trade gain on
+out-of-sample seeds; owner phone speed check. See docs/GAPS.md, prompt 08.
 
 ### 2026-09-28 - prompt 07, Phase 1 playable on the phone (lanes U and P)
 **Changed.** Platform: the app now plays the real world (17 nations + 6
