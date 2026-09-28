@@ -1,5 +1,5 @@
 # Progress
-Current phase: 1
+Current phase: 2
 
 ## Gate 0 checklist
 - [x] Sim core has no UI, DOM, network or clock imports (enforced by tsconfig, ESLint and packages/harness/src/purity.test.ts)
@@ -19,13 +19,18 @@ Suite: `npm run harness -- gate1` (200 seeded full-roster games, random strategi
 - [x] The same nation does 15%+ better against its baseline trading than isolating (prompt 10: +17.6-17.7% on each of seeds 1-200, 201-400, 401-600, 601-800, pooled +17.6%, 62.6% of pairs at +15% or more; was +14.5% pooled at the Gate 1 review. confirmed by the second Gate 1 review)
 - [x] Isolationists worse off but alive (isolating scores lower in 94.5-96% of pairs; 0 dead; prompt 09)
 - [x] Dead states under 2% (0.0%)
-- [ ] No nation tops the score in more than 2x its fair share, 11.8% (FAIL after prompt 09's rule change: Egypt 12.5%, Saudi Arabia 13.0%, Russia 15.0%, Saudi Arabia 14.0% on seeds 1-800 in four ranges, pooled Russia 12.6%, was India 34.5-45%; owner decision in docs/balance/gate1-prompt09.md; prompt 13 trade-gain rule graded 12.0 / 12.5 / 13.5 / 14.0% and was reverted, owner waiver recommended in docs/balance/gate1-prompt13.md)
+- [~] No nation tops the score in more than 2x its fair share, 11.8% (WAIVED by the owner, 2026-09-28, carried to Gate 2; FAIL after prompt 09's rule change: Egypt 12.5%, Saudi Arabia 13.0%, Russia 15.0%, Saudi Arabia 14.0% on seeds 1-800 in four ranges, pooled Russia 12.6%, was India 34.5-45%; owner decision in docs/balance/gate1-prompt09.md; prompt 13 trade-gain rule graded 12.0 / 12.5 / 13.5 / 14.0% and was reverted, owner waiver recommended in docs/balance/gate1-prompt13.md)
 - [x] A trade in 3 taps or fewer (prompt 07: 2 taps from home - open the card, send the offer; checked by touch at 360 px)
 - [x] Gate 0 still passes (determinism 1,000/1,000 Node vs Chromium, purity, save/load; phone speed to re-measure)
 
-Gate 1 verdict: **FAIL** (docs/gates/GATE-1.md, second review after prompts 09-10): top scorer only (Egypt 12.5% on seeds 1-200, 12.5-15.0% on every fresh range).
+Gate 1 verdict: **PASS WITH WAIVER** (docs/gates/GATE-1.md): the owner waived the top scorer (12.5-15.0% on seeds 1-800) after prompt 13. The real-phone trade and phone speed check are carried to the Gate 2 playtests.
 
 ## Session log
+
+### 2026-09-28 - Gate 1 closed (owner decision)
+**Changed.** The owner waived Gate 1 criterion 5 (top scorer) in writing and marked
+Gate 1 passed. docs/gates/GATE-1.md carries the waiver table. The real-phone trade and
+the phone speed check move to the Gate 2 playtests. No code changed. Phase 2 can start.
 
 ### 2026-09-28 - prompt 13, Fair trade-gain rule (lanes S, D, H)
 **Changed.** No change to the game. A new trade-gain rule was designed, tested and
