@@ -8,7 +8,15 @@ The reviewer did not build this code. Every result below was produced by
 running it or reading it in this session. docs/PROGRESS.md, docs/balance/ and
 the builders' comments were not taken as evidence. No code was changed.
 
-## Verdict: **FAIL**
+## Verdict: **PASS WITH WAIVER** (owner, 2026-09-28, recorded after prompt 13)
+
+The review's own verdict below was FAIL on criterion 5 only. After prompt 13's
+trade-gain rule also failed it (graded 12.0 / 12.5 / 13.5 / 14.0%, reverted,
+docs/balance/gate1-prompt13.md), the owner waived criterion 5 in writing and
+marked Gate 1 passed so Phase 2 can start. Gate 2 re-grades the same number with
+archetypes. See "Waivers" at the end of this file.
+
+### Reviewer's verdict (prompt 08 re-run): FAIL
 
 One criterion fails: **no nation may top the score in more than 2x its fair
 share of games (11.8%)**. On the graded command (`--suite gate1 --games 200`,
@@ -190,3 +198,16 @@ What was checked in the code:
 2. Owner: the phone speed check with the Phase 1 economy, and one real trade
    sent and accepted on the phone.
 3. Recommended before playtests (not a gate criterion): fix N1.
+
+## Waivers (owner, 2026-09-28)
+
+| # | Criterion | Status after waiver |
+|---|---|---|
+| 5 | No nation tops the score in more than 2x its fair share (11.8%) | **WAIVED.** On main the most frequent top scorer is 12.5-15.0% on seeds 1-800, down from India's 34.5-45% before prompt 09. Prompts 09, 11 and 13 each tried a fix; none held on fresh seeds. Carried to Gate 2, which grades it again ("no archetype over 1.5x fair share", and this criterion through "Gates 0-1 pass") |
+| 6 | A trade in 3 taps or fewer | PASS (2 taps, headless phone at 360 px). The owner's real-phone trade is not yet reported; carried to the Gate 2 playtests |
+| 7 | Gate 0 still passes | PASS on everything automated. The owner's phone speed check with the Phase 1 economy is not yet reported; carried to the Gate 2 playtests |
+
+The owner marked the gate passed without the two phone checks; both belong
+in the first Gate 2 playtest. What is known about the waived criterion, and
+what to try if Gate 2 fails it, is in docs/balance/gate1-prompt13.md
+(sections 4-5) and docs/GAPS.md (prompt 13).
