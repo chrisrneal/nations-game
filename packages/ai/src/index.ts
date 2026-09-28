@@ -7,9 +7,11 @@
  * able to explain its top reasons, and the same code acts as caretaker for an
  * absent human's nation.
  *
- * Phase 0 placeholder: no scoring yet.
+ * Phase 0: only the dummy AI, which picks valid commands at random from a seed.
+ * packages/ai imports @nations/sim for types only (checked by
+ * packages/harness/src/purity.test.ts).
  *
  * Shape to come:
  *   decide(view: View, personality: Personality): { commands: readonly Command[]; reasons: readonly string[] }
  */
-export {};
+export { dummyDecide } from './dummy.ts';
