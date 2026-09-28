@@ -73,6 +73,7 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
     events,
     covered: new Map(),
     gainCbp: new Map(),
+    clearedMilli: new Map(),
     cover: structuralCover(state),
   };
   const draft = (): WorldState => ({ ...state, nations, controllers, offers: ctx.offers });

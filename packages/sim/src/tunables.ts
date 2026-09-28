@@ -150,7 +150,25 @@ export const TUNABLES = {
     value: 40,
     min: 5,
     max: 40,
-    note: 'Monthly output bonus for a nation whose trades clear its whole imbalance: all of its surplus, and its fair share of each deficit (RULES 3.3). Each side gains by the share of its own imbalance cleared, capped at this rate a month. This is the number Gate 1\'s 15% trade advantage is tuned with. Prompt 06: 15 -> 40; prompt 09 re-checked on seeds 1001-1400 under the new rule: 40.',
+    note: 'Monthly output bonus for a nation whose trades clear its whole imbalance: all of its surplus, and its import base (RULES 3.3). Each side gains by the share of its own imbalance cleared, through the payout curves below, never above this rate a month. This is the number Gate 1\'s 15% trade advantage is tuned with. Prompt 06: 15 -> 40; prompt 09 re-checked on seeds 1001-1400 under the new rule: 40.',
+  },
+  tradeGainSellCurve: {
+    value: 2,
+    min: 1,
+    max: 8,
+    note: 'Payout curve on the seller side of the trade gain (RULES 3.3): a nation that sold a share x of its surplus this month earns 1 - (1 - x)^this of the full rate on that side. 1 is a straight line (prompt 09); 2 pays half the surplus sold 75%. Kept gentle: every unit of spare goods is worth about the same. Prompt 13 tuning (seeds 1001-1800 only).',
+  },
+  tradeGainBuyCurve: {
+    value: 6,
+    min: 1,
+    max: 8,
+    note: 'Payout curve on the buyer side of the trade gain (RULES 3.3): covering a share x of the import base earns 1 - (1 - x)^this. Steep because the first units of a deficit avert the worst of a shortfall; it lets deep importers, who can only ever cover part of their share, earn most of the gain. 1 is a straight line (prompt 09). Prompt 13 tuning (seeds 1001-1800 only).',
+  },
+  tradeGainImportFloorBp: {
+    value: 350,
+    min: 0,
+    max: 1000,
+    note: 'Smallest import base, in basis points of the nation\'s own potential output (RULES 3.3), never above its whole deficit. A nation whose fair share of the world\'s supply is a tiny part of its economy has to cover more of its real deficit to earn the full import-side gain, so one small delivery cannot saturate the cap. 0 is the prompt 09 rule. Prompt 13 tuning (seeds 1001-1800 only).',
   },
   autoAcceptTrustThreshold: {
     value: 55,

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Command, Event, TradeOffer } from '@nations/contracts';
 import { structuralCover } from './economy.ts';
 import { step } from './step.ts';
-import { tradeImbalanceMilli } from './trade.ts';
+import { gainSharePpm, tradeGainBases } from './trade.ts';
 import { TUNABLES } from './tunables.ts';
 import { viewFor } from './view.ts';
 import { A, B, C, D, amt, answer, counter, offer, policy, tradeWorld } from './testkit.ts';
@@ -254,14 +254,16 @@ describe('offer validation', () => {
 describe('gains from trade (RULES 3.3)', () => {
   const capacity = (s: WorldState, id: typeof A): number => s.nations[id]?.private.capacityE4 ?? 0;
   /**
-   * Bravo covering `units` of its food deficit: the share of everything it
-   * could clear this month (its energy surplus and its fair share of the food
-   * deficit), capped at the full rate. Prices do not move in the first month.
+   * Bravo covering `units` of its food deficit: its share of everything it
+   * could clear this month (its energy surplus and its food import base),
+   * through the payout curves, never above the full rate. Prices do not move
+   * in the first month.
    */
   const bravoGainForFood = (s0: WorldState, units: number): number => {
     const full = TUNABLES.gainsFromTradeBp.value * 100;
-    const clearable = tradeImbalanceMilli(s0.nations[B]!, s0.prices, structuralCover(s0));
-    return Math.min(full, Math.floor((full * units * s0.prices.food) / clearable));
+    const bases = tradeGainBases(s0.nations[B]!, s0.endowments[B]!, s0.prices, structuralCover(s0));
+    const share = gainSharePpm(bases, 0, units * s0.prices.food, TUNABLES.tradeGainSellCurve.value, TUNABLES.tradeGainBuyCurve.value);
+    return Math.floor((full * share) / 1_000_000);
   };
 
   it('a surplus-to-deficit trade raises both capacities; a credit leg adds nothing more', () => {
