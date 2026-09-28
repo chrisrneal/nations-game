@@ -27,6 +27,17 @@ Gate 1 verdict: **FAIL** (docs/gates/GATE-1.md, second review after prompts 09-1
 
 ## Session log
 
+### 2026-09-28 - prompt 11, Spread AI trade offers (lane A)
+**Changed.** No change to the game. The AI seller now drew its buyers in a seeded order
+weighted by deficit size, with tests (commit 7397c25). On the tuning seeds (1001-1400)
+it and ten other spread variants all made the top scorer worse than main (13.8-22.3%
+against 10.8%). Graded once on seeds 1-800, the candidate failed: top scorer Egypt 16.0%,
+Russia 16.0%, Russia 19.0%, Russia 16.5%, and the trade gain dropped to +14.9% on seeds
+401-600. Reverted in the same pull request (d749508).
+**How to see it.** docs/balance/gate1-prompt11.md.
+**Left.** Gate 1 still fails the top scorer at 12.5-15%. It needs an owner waiver or a
+lane S change to the trade-gain rule; the AI's buyer choice is not the cause.
+
 ### 2026-09-28 - prompt 08 (re-run), Gate 1 review, second pass (independent)
 **Changed.** docs/gates/GATE-1.md rewritten; no code changed. Verdict **FAIL** on one
 criterion: the most frequent top scorer is 12.5-15.0% on seeds 1-200, 201-400,
