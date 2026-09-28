@@ -263,6 +263,40 @@ describe('gains from trade (RULES 3.3)', () => {
     expect(traded.state.nations[B]?.private.last.tradeGainCbp).toBe(TUNABLES.gainsFromTradeBp.value * 100);
   });
 
+  it('the supplier earns on the share of its own surplus sold, the receiver on the share of its deficit covered', () => {
+    const s0 = tradeWorld();
+    const bp = TUNABLES.gainsFromTradeBp.value;
+    const xp = TUNABLES.exportGainsBp.value;
+    const surplus = s0.nations[A]!.public.food.production - s0.nations[A]!.public.food.demand;
+    const deficit = s0.nations[B]!.public.food.demand - s0.nations[B]!.public.food.production;
+    expect(surplus).toBeGreaterThan(deficit);
+    const half = Math.floor(deficit / 2);
+    const traded = step(s0, [offer(A, B, amt('food', half), amt('credit', Math.floor((half * s0.prices.food) / 1000)), 0), answer('acceptOffer', B, 1, 0)]);
+    expect(types(traded.events)).toContain('offerSettled');
+    expect(traded.state.nations[B]?.private.last.tradeGainCbp).toBe(Math.floor((bp * 100 * half) / deficit));
+    expect(traded.state.nations[A]?.private.last.tradeGainCbp).toBe(Math.floor((xp * 100 * half) / surplus));
+    // Delivering more than the receiver lacks earns the supplier nothing extra.
+    const over = step(s0, [offer(A, B, amt('food', surplus), amt('credit', Math.floor((surplus * s0.prices.food) / 1000)), 0), answer('acceptOffer', B, 1, 0)]);
+    expect(over.state.nations[A]?.private.last.tradeGainCbp).toBe(Math.floor((xp * 100 * deficit) / surplus));
+  });
+
+  it('counts each surplus once per tick: selling past it to a second buyer earns the supplier nothing more', () => {
+    const s0 = tradeWorld();
+    const bp = TUNABLES.gainsFromTradeBp.value;
+    const xp = TUNABLES.exportGainsBp.value;
+    const surplus = s0.nations[A]!.public.food.production - s0.nations[A]!.public.food.demand;
+    const deficitB = s0.nations[B]!.public.food.demand - s0.nations[B]!.public.food.production;
+    const deficitD = s0.nations[D]!.public.food.demand - s0.nations[D]!.public.food.production;
+    expect(deficitB + deficitD).toBeGreaterThan(surplus);
+    const pay = (food: number): ReturnType<typeof amt> => amt('credit', Math.floor((food * s0.prices.food) / 1000));
+    const r = step(s0, [offer(A, B, amt('food', deficitB), pay(deficitB), 0), offer(A, D, amt('food', deficitD), pay(deficitD), 0), answer('acceptOffer', B, 1, 0)]);
+    expect(types(r.events).filter((t) => t === 'offerSettled')).toHaveLength(2);
+    expect(r.state.nations[A]?.private.last.tradeGainCbp).toBe(xp * 100);
+    // Each receiver still gains on its own deficit covered.
+    expect(r.state.nations[B]?.private.last.tradeGainCbp).toBe(bp * 100);
+    expect(r.state.nations[D]?.private.last.tradeGainCbp).toBe(bp * 100);
+  });
+
   it('counts each deficit once per tick, and never between two nations with no surplus', () => {
     const s0 = tradeWorld();
     const deficit = s0.nations[B]!.public.food.demand - s0.nations[B]!.public.food.production;

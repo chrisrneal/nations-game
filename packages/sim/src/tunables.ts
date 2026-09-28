@@ -13,8 +13,9 @@ import type { Tunable } from '@nations/contracts';
  *   identical on every machine.
  *
  * Source: docs/RULES.md section 11, transcribed as written (prompt 06). Entries
- * marked "Prompt 06 gap-filler" are numbers the rules need but do not give;
- * each one is logged in docs/GAPS.md for lane D to ratify in RULES.md.
+ * marked "Prompt 06 gap-filler" were numbers the rules needed but did not give;
+ * prompt 10 ratified them in RULES.md. packages/harness/src/rules.test.ts keeps
+ * every value and band here equal to RULES.md.
  */
 export const TUNABLES = {
   // Engine limits
@@ -144,7 +145,13 @@ export const TUNABLES = {
     value: 40,
     min: 5,
     max: 40,
-    note: 'Output bonus per trade, scaled by the share of the receiver\'s deficit covered. This is the number Gate 1\'s 15% trade advantage is tuned with. Prompt 06 gate1 tuning: 15 -> 40 (paired gain +5.4% -> +15.3%).',
+    note: 'Output bonus per trade to the receiver, scaled by the share of its deficit covered. Prompt 06 gate1 tuning: 15 -> 40 (paired gain +5.4% -> +15.3%).',
+  },
+  exportGainsBp: {
+    value: 18,
+    min: 0,
+    max: 40,
+    note: 'Output bonus per trade to the supplier, scaled by the share of its own surplus sold into a deficit (prompt 10). Lets raw exporters, who never pay a shortfall penalty, gain from trade. The main lever on Gate 1\'s trade advantage: each point moves the paired median about one point. Prompt 10 tuning on seeds 1001-1800: 18 (pooled median +19.3%, every 200-seed range >= +19.1%). At 0 only the receiver gains.',
   },
   autoAcceptTrustThreshold: {
     value: 55,

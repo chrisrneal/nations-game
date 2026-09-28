@@ -31,7 +31,7 @@ export interface TradeContext {
   nextOfferId: number;
   ledger: WorldLedger;
   readonly events: Event[];
-  /** Gain-eligible deficit already covered this tick, key `${nation}:${resource}`. */
+  /** Gain-eligible volume already counted this tick: deficit covered, key `${nation}:${resource}`; surplus sold, key `${nation}:${resource}:sold`. */
   readonly covered: Map<string, number>;
   /** Trade gain granted this tick per nation, hundredths of a basis point. */
   readonly gainCbp: Map<NationId, number>;
@@ -90,29 +90,40 @@ function moveStock(nation: NationRecord, amount: ResourceAmount, sign: 1 | -1): 
  * Gains from trade (RULES 3.3) for one leg: `amount` moves from supplier to
  * receiver. It counts only when the supplier has a structural surplus and the
  * receiver a structural deficit of that resource, and only up to the part of
- * the receiver's monthly deficit not already covered this tick, so round trips
- * and repeat deliveries cannot farm it. Both sides gain the same share of
- * their own capacity; the receiver gains more overall because it also avoids
- * the shortfall penalty.
+ * the receiver's monthly deficit not already covered this tick. Each side
+ * earns a bonus on its own capacity times its own share: the receiver
+ * `gainsFromTradeBp` x the share of its deficit covered, the supplier
+ * `exportGainsBp` x the share of its surplus sold into that deficit (each
+ * surplus counted once per tick). So
+ * round trips and repeat deliveries cannot farm it, and an exporter with a
+ * small surplus gains as much from selling all of it as a big one does.
  */
 function applyGains(ctx: TradeContext, supplier: NationId, receiver: NationId, leg: ResourceAmount): void {
   if (leg.resource === 'credit') return;
-  if (structuralBalance(get(ctx, supplier), leg.resource) <= 0) return;
+  const surplus = structuralBalance(get(ctx, supplier), leg.resource);
+  if (surplus <= 0) return;
   const deficit = -structuralBalance(get(ctx, receiver), leg.resource);
   if (deficit <= 0) return;
-  const key = `${receiver}:${leg.resource}`;
-  const already = ctx.covered.get(key) ?? 0;
-  const covered = Math.min(leg.amount, deficit - already);
+  const inKey = `${receiver}:${leg.resource}`;
+  const alreadyIn = ctx.covered.get(inKey) ?? 0;
+  const covered = Math.min(leg.amount, deficit - alreadyIn);
   if (covered <= 0) return;
-  ctx.covered.set(key, already + covered);
-  const bp = TUNABLES.gainsFromTradeBp.value;
-  for (const id of [supplier, receiver]) {
-    const n = get(ctx, id);
-    const gainE4 = mulDiv(mulDiv(n.private.capacityE4, bp, 10_000), covered, deficit);
-    const capacityE4 = Math.min(CAPACITY_CEILING_E4, n.private.capacityE4 + gainE4);
-    ctx.nations[id] = { ...n, private: { ...n.private, capacityE4 } };
-    ctx.gainCbp.set(id, (ctx.gainCbp.get(id) ?? 0) + Math.floor((bp * 100 * covered) / deficit));
-  }
+  ctx.covered.set(inKey, alreadyIn + covered);
+  const outKey = `${supplier}:${leg.resource}:sold`;
+  const alreadyOut = ctx.covered.get(outKey) ?? 0;
+  const sold = Math.max(0, Math.min(covered, surplus - alreadyOut));
+  ctx.covered.set(outKey, alreadyOut + sold);
+  grantGain(ctx, receiver, TUNABLES.gainsFromTradeBp.value, covered, deficit);
+  if (sold > 0) grantGain(ctx, supplier, TUNABLES.exportGainsBp.value, sold, surplus);
+}
+
+/** Raises a nation's capacity by bp x share / whole. */
+function grantGain(ctx: TradeContext, id: NationId, bp: number, share: number, whole: number): void {
+  const n = get(ctx, id);
+  const gainE4 = mulDiv(mulDiv(n.private.capacityE4, bp, 10_000), share, whole);
+  const capacityE4 = Math.min(CAPACITY_CEILING_E4, n.private.capacityE4 + gainE4);
+  ctx.nations[id] = { ...n, private: { ...n.private, capacityE4 } };
+  ctx.gainCbp.set(id, (ctx.gainCbp.get(id) ?? 0) + Math.floor((bp * 100 * share) / whole));
 }
 
 /**

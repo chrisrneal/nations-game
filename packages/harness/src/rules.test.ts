@@ -1,7 +1,7 @@
 /**
  * Checks that the code still says what docs/RULES.md says: every tunable in
- * section 11 exists in packages/sim/src/tunables.ts with the same band and a
- * value inside it, and the section 6 starting-trust invariant holds on the
+ * section 11 exists in packages/sim/src/tunables.ts with the same band and the
+ * same starting value, and every tunable in the code is in RULES, and the section 6 starting-trust invariant holds on the
  * real world data (every playable nation's mean trust in the other 16 lies
  * between 25 and 72).
  */
@@ -24,12 +24,16 @@ describe('tunables match docs/RULES.md section 11', () => {
     expect(rows.length).toBeGreaterThanOrEqual(53);
   });
 
-  it.each(rows.map((r) => [r.id, r] as const))('%s is in tunables.ts with the RULES band', (id, row) => {
+  it.each(rows.map((r) => [r.id, r] as const))('%s is in tunables.ts with the RULES band and starting value', (id, row) => {
     const tunable = (TUNABLES as Record<string, { value: number; min: number; max: number }>)[id];
     expect(tunable, `${id} missing from tunables.ts`).toBeDefined();
     expect([tunable?.min, tunable?.max]).toEqual([row.min, row.max]);
-    expect(tunable?.value).toBeGreaterThanOrEqual(row.min);
-    expect(tunable?.value).toBeLessThanOrEqual(row.max);
+    expect(tunable?.value, `${id}: RULES.md says ${row.value}`).toBe(row.value);
+  });
+
+  it('every tunable in tunables.ts has a RULES row', () => {
+    const documented = new Set(rows.map((r) => r.id));
+    expect(Object.keys(TUNABLES).filter((id) => !documented.has(id))).toEqual([]);
   });
 
   it('drops the Phase 0 placeholders', () => {
