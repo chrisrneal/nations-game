@@ -1,0 +1,5 @@
+{
+  "//": "Root config exists so editors resolve settings anywhere in the repo. Each workspace has its own tsconfig; `npm run typecheck` runs them all.",
+  "extends": "./tsconfig.base.json",
+  "files": []
+}

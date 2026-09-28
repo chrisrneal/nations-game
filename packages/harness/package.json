@@ -1,0 +1,19 @@
+{
+  "name": "@nations/harness",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Headless balance harness and repo invariant checks. Runs in Node.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "start": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@nations/ai": "*",
+    "@nations/contracts": "*",
+    "@nations/sim": "*"
+  }
+}

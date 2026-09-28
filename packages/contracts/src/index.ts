@@ -1,0 +1,14 @@
+/**
+ * @nations/contracts - the shared vocabulary of the game.
+ *
+ * Types only: no runtime code, no dependencies, no DOM, no Node. Every other
+ * package may import this one; this one imports nothing. See CLAUDE.md.
+ */
+export type { ControllerSlot, NationId, Tick } from './nation.ts';
+export type { Command } from './command.ts';
+export type { Event, SimEvent } from './event.ts';
+export type { RngState, State } from './state.ts';
+export type { View } from './view.ts';
+export type { Host, HostUpdate, Pace } from './host.ts';
+export type { SaveFile } from './save.ts';
+export type { Tunable } from './tunable.ts';

@@ -1,0 +1,9 @@
+{
+  "//": "The harness is the one package allowed to touch Node APIs: it runs games headlessly and checks repo invariants.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["node"]
+  },
+  "include": ["src"]
+}

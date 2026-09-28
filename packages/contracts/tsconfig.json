@@ -1,0 +1,9 @@
+{
+  "//": "lib without DOM and types:[] are a purity guard: `document`, `fetch` or node globals here are type errors, not just lint errors. See CLAUDE.md.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": []
+  },
+  "include": ["src"]
+}

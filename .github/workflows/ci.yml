@@ -1,0 +1,27 @@
+name: CI
+
+# Every pull request must be green before it is merged (CLAUDE.md: "Never merge
+# work that fails tests"). Pushes to main are checked too, so a bad merge is
+# visible immediately.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run check
+      - run: npm run build
