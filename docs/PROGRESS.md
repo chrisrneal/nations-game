@@ -14,18 +14,40 @@ Current phase: 1
 Gate 0 verdict: **PASS WITH WAIVERS** (docs/gates/GATE-0.md).
 
 ## Gate 1 checklist
-Suite: `npm run harness -- gate1` (200 seeded full-roster games, random strategies, paired runs). Latest results: docs/balance/gate1-prompt09.md (graded on seeds 1-200, 201-400, 401-600).
+Suite: `npm run harness -- gate1` (200 seeded full-roster games, random strategies, paired runs). Latest results: docs/balance/gate1-prompt10.md (`--ranges 4`: graded on seeds 1-200, 201-400, 401-600, 601-800 and pooled).
 - [x] 200 seeded full-roster games with no crashes (0), no negative stocks (0), sources and sinks in band (food 91.8-92.1%, energy 84.5-84.6% consumed/produced; Credit sinks 0.5% of income; prompt 09, three graded ranges)
-- [ ] The same nation does 15%+ better against its baseline trading than isolating (FAIL at Gate 1 review: +14.5% pooled over 800 seeds. Prompt 09: +17.6-17.7% on all three graded ranges, not tuned on them; to be confirmed by re-review / prompt 10)
+- [x] The same nation does 15%+ better against its baseline trading than isolating (prompt 10: +17.6-17.7% on each of seeds 1-200, 201-400, 401-600, 601-800, pooled +17.6%, 62.6% of pairs at +15% or more; was +14.5% pooled at the Gate 1 review. Needs the re-review to confirm)
 - [x] Isolationists worse off but alive (isolating scores lower in 94.5-96% of pairs; 0 dead; prompt 09)
 - [x] Dead states under 2% (0.0%)
-- [ ] No nation tops the score in more than 2x its fair share, 11.8% (FAIL after prompt 09's rule change: Egypt 12.5%, Saudi Arabia 13.0%, Russia 15.0% on the graded ranges, was India 34.5-45%; owner decision in docs/balance/gate1-prompt09.md)
+- [ ] No nation tops the score in more than 2x its fair share, 11.8% (FAIL after prompt 09's rule change: Egypt 12.5%, Saudi Arabia 13.0%, Russia 15.0%, Saudi Arabia 14.0% on seeds 1-800 in four ranges, pooled Russia 12.6%, was India 34.5-45%; owner decision in docs/balance/gate1-prompt09.md)
 - [x] A trade in 3 taps or fewer (prompt 07: 2 taps from home - open the card, send the offer; checked by touch at 360 px)
 - [x] Gate 0 still passes (determinism 1,000/1,000 Node vs Chromium, purity, save/load; phone speed to re-measure)
 
 Gate 1 verdict: **FAIL** (docs/gates/GATE-1.md, prompt 08): top scorer and trade-gain robustness.
 
 ## Session log
+
+### 2026-09-28 - prompt 10, Robust trade advantage (lanes S, D, H)
+**Changed.** The Gate 1 trade advantage is now clear of the line on every seed range:
++17.6-17.7% on each of seeds 1-200, 201-400, 401-600 and 601-800, with 62.6% of paired
+games above +15% (was +14.0-15.7%, 48.9%). This comes from prompt 09's trade rule,
+merged while this prompt ran. This prompt first built and tuned its own fix for
+exporters (a separate supplier bonus, +18.6-19.2%). When prompt 09 landed with the
+same idea in a more general form, this prompt kept prompt 09's rule, dropped its own
+and confirmed the result. So the prompt's step 2 stop rule applied and no game rule
+or number changed. The harness now refuses unknown flags (exit 2) and accepts
+`--suite gate1`. `--ranges N` reports N seed ranges and all of them pooled, and every
+report shows the share of pairs at +15% or more, per nation too. RULES.md now lists
+every tunable with the value the code uses (five prompt 06 gap-fillers and the engine
+limit added), and a test fails if RULES.md and tunables.ts ever disagree.
+
+**How to see it.** `npm run harness -- gate1 --ranges 4` (about a minute), or read
+docs/balance/gate1-prompt10.md. `npm run harness -- --suite gate1 --gmaes 5` shows
+the new error.
+
+**Left.** The top scorer still fails (12.5-15% per range, limit 11.8%): prompt 09's
+owner decision stands. Japan, Korea and Turkiye still gain only ~5% from trading.
+Gate 1 needs a fresh independent re-review.
 
 ### 2026-09-28 - prompt 09, Top-scorer fairness rule (lanes D, S, H)
 **Changed.** New scoring rule, in RULES.md 2.8, 3.3, 5.1 and 11: (1) each
