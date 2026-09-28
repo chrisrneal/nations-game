@@ -54,3 +54,10 @@ Each entry: prompt number, phase, what is missing, owning lane.
 - 07, Phase 1, The collective multiplier and the game fingerprint reach the interface in `GameUpdate.standing`, beside the View, not in it. The multiplier is public, but it belongs in `NationView` so a RemoteHost does not have to compute it. Lanes C and S.
 - 07, Phase 1, The phone check (`npm run e2e --workspace web`) is still not in CI (needs a Chromium install in the workflow). Architect.
 - 07, Phase 1, Exported files hold the compact save (current state, no replay log), like the slots (prompt 04 gap). Fine for resuming; not for replaying a bug. Lane P.
+
+- 08, Phase 1, **Gate 1 FAIL (docs/gates/GATE-1.md).** Top scorer still India 34.5-45% on every seed range (prompt 06 gap stands). New: the +15% trade advantage is not robust. It is +15.4% on the graded seeds 1-200, which `gainsFromTradeBp` was tuned on, but +14.5% pooled over seeds 1-800, and under 15% for 7 of 17 nations (Australia +4%, Canada +5%, Brazil +7%). Lanes D, S, H.
+- 08, Phase 1, `npm run harness -- --suite gate1` ignores the unknown flag and runs `play`, exiting 0; the CLI should reject unknown flags. Lane H.
+- 08, Phase 1, The e2e check "accepting an offer settles it in the sim" passes on a failed or refused trade too (apps/web/e2e/phone-check.ts:106). Lane P.
+- 08, Phase 1, The end screen recomputes scores in the interface (`standings` in apps/web/src/ui/econ.ts) instead of reading the sim's scoreboard; the game-over table's numbers have no why-sheets. Lanes U, C.
+- 08, Phase 1, RULES.md says `gainsFromTradeBp` starts at 15; the code uses 40. Lane D.
+- 08, Phase 1, Early Gate 2 warning: the trader archetype tops 2.3-2.6x its fair share (limit 1.5x at Gate 2). Lanes S, A, H.
