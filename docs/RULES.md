@@ -444,7 +444,7 @@ output. Then:
   proportional price it inflicted on the world.
 - **`ownScore_i` then falls too.** *i* loses trust with *j* and with every nation
   sharing a bloc with *j* (§6), which lowers the rate at which *i*'s own offers are
-  accepted, which lowers *i*'s `gainsFromTrade`.
+  accepted, which lowers *i*'s gains from trade (§3.3).
 
 So `finalScore_i = scoreScale × ownScore_i × multiplier`, where the hostile act
 leaves the first factor unchanged-then-falling and strictly reduces the second.
@@ -689,6 +689,7 @@ wherever they feed economy maths.
 | `structuralCoverSharePct` | 80 | 50 | 100 | Share of the world's structural surplus counted as reachable when setting each importer's fair share and its baseline (§2.8). 100 assumes every spare unit reaches a buyer; lower allows for goods that never reach market. Prompt 09 tuning (seeds 1001-1400 only) |
 | `maxShortfallPenaltyPct` | 30 | 10 | 60 | Cap on the shortfall penalty, so no nation is killed by one bad tick (Gate 1: dead states under 2%) |
 | `mineralsEnergyBonusBpPer10` | 10 | 0 | 40 | Energy production bonus per 10 points of mineral endowment. Caps at +10% at the starting value |
+| `startingStockTicks` | 1 | 0 | 6 | Starting Food and Energy as months of own production, starting Credit as months of output. Above 0 so nobody starts a game already short |
 | `mineralsOutputBonusBpPer10` | 10 | 0 | 40 | Output bonus per 10 points of refining leverage. Caps at +10%. Set both to 0 to test a world where minerals do not matter |
 
 ### Resilience
@@ -698,6 +699,7 @@ wherever they feed economy maths.
 | `resilienceStartWeightPreparedness` | 50 | 0 | 100 | Percent weight on pandemic preparedness versus inverse climate exposure in the starting level. 50 is a plain average |
 | `resilienceDecayPerTick` | 1 | 0 | 3 | Points lost per tick if unfunded, so neglect is a choice. At 0 resilience becomes a one-time purchase |
 | `resilienceCostPerPoint` | 6 | 2 | 20 | Credit cost of one resilience point. The band decides whether resilience competes with trade for money |
+| `defaultResilienceFloor` | 40 | 0 | 80 | Starting position of the resilience-floor dial (§8.2). 0 turns automatic funding off |
 | `resilienceMax` | 100 | 80 | 120 | Ceiling. Above 100 a nation can over-prepare, which the harness may want to test |
 
 ### Trade
@@ -708,6 +710,8 @@ wherever they feed economy maths.
 | `maxOpenOffersPerNation` | 6 | 2 | 20 | Caps spam from AI and spreadsheet play from humans |
 | `priceBandPct` | 35 | 10 | 60 | Width of the fair-price band either side of the reference price. Narrow bands make hard bargains common and trust volatile |
 | `gainsFromTradeBp` | 40 | 5 | 40 | Monthly output bonus for a nation whose trades clear its whole imbalance: all its surplus and its fair share of each deficit (§3.3). Each side gains by the share of its own imbalance cleared, capped at this rate a month. The number Gate 1's 15% trade advantage is tuned with (prompt 06: 15 -> 40; prompt 09 kept 40) |
+| `foodBasePriceMilli` | 100 | 20 | 500 | Reference price of one food unit in thousandths of a Credit when world supply meets demand (§3.2). 100 puts world food spending near 4% of output |
+| `energyBasePriceMilli` | 60 | 10 | 300 | Reference price of one energy unit in thousandths of a Credit at balance. 60 puts world energy spending near 6% of output |
 | `autoAcceptTrustThreshold` | 55 | 30 | 80 | Trust level at which the trusted-partner standing policy fires |
 
 ### Trust
@@ -775,12 +779,19 @@ wherever they feed economy maths.
 | `aiForgivingImportThreshold` | 60 | 40 | 80 | Import dependence at or above which an AI forgives |
 | `aiExploiterExportThreshold` | 30 | 10 | 50 | Export concentration at or above which an AI will bargain hard |
 | `aiExploiterImportCeiling` | 40 | 20 | 60 | Import dependence below which hard bargaining is safe for it |
+| `aiStockBufferTicks` | 2 | 1 | 6 | Months of own demand the greedy trader keeps in stock before it sells a surplus or stops buying. Higher is safer and trades less |
 
-### Engine limits already in `tunables.ts`
+### Engine limits
 
-`maxCommandsPerNationPerTick` (8, band 1-32) came from prompt 03 and is unchanged.
-`placeholderRollSides` and `placeholderReserveMax` are Phase 0 scaffolding and should
-be removed when the rules above are implemented.
+| id | value | min | max | note |
+|---|---|---|---|---|
+| `maxCommandsPerNationPerTick` | 8 | 1 | 32 | Caps one nation's intent per tick so a buggy or hostile client cannot flood a step; a real player needs a handful at most (prompt 03) |
+
+The five rows added by prompt 10 (`foodBasePriceMilli`, `energyBasePriceMilli`,
+`startingStockTicks`, `defaultResilienceFloor`, `aiStockBufferTicks`) ratify numbers
+prompt 06 had to invent for the code. Every tunable in `tunables.ts` now has a row
+here with the same starting value and band, and `packages/harness/src/rules.test.ts`
+fails if the two ever disagree.
 
 ---
 
