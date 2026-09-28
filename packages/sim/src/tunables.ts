@@ -65,10 +65,16 @@ export const TUNABLES = {
     note: 'The index value at which production equals demand. Moving it shifts the whole world into surplus or deficit.',
   },
   shortfallPenaltyBpPerPct: {
-    value: 40,
+    value: 35,
     min: 10,
     max: 120,
-    note: 'Output cost per percent of unmet demand. At 40, a 10% shortfall costs 4% of output.',
+    note: 'Output cost per percent of unmet demand. At 35, a 10% shortfall costs 3.5% of output. Prompt 09 gate1 tuning (seeds 1001-1400 only): 40 -> 35.',
+  },
+  structuralCoverSharePct: {
+    value: 80,
+    min: 50,
+    max: 100,
+    note: 'Share of the world\'s structural surplus counted as reachable when setting each importer\'s fair share and its baseline (RULES 2.8). 100 assumes every spare unit reaches a buyer; lower allows for goods that never reach market (regions answer offers but never make them). Prompt 09 gate1 tuning (seeds 1001-1400 only): 80.',
   },
   maxShortfallPenaltyPct: {
     value: 30,
@@ -144,7 +150,7 @@ export const TUNABLES = {
     value: 40,
     min: 5,
     max: 40,
-    note: 'Output bonus per trade, scaled by the share of the receiver\'s deficit covered. This is the number Gate 1\'s 15% trade advantage is tuned with. Prompt 06 gate1 tuning: 15 -> 40 (paired gain +5.4% -> +15.3%).',
+    note: 'Monthly output bonus for a nation whose trades clear its whole imbalance: all of its surplus, and its fair share of each deficit (RULES 3.3). Each side gains by the share of its own imbalance cleared, capped at this rate a month. This is the number Gate 1\'s 15% trade advantage is tuned with. Prompt 06: 15 -> 40; prompt 09 re-checked on seeds 1001-1400 under the new rule: 40.',
   },
   autoAcceptTrustThreshold: {
     value: 55,
@@ -353,6 +359,12 @@ export const TUNABLES = {
     min: 100,
     max: 10000,
     note: 'Cosmetic multiplier so final scores read as four digits.',
+  },
+  scoreSmoothingTicks: {
+    value: 12,
+    min: 1,
+    max: 24,
+    note: 'Window of the exponential average ownScore is read from (RULES 5.1): each month moves the score 1/12 of the way. 1 is the old last-month reading, which let one lucky or unlucky final month decide a game. Prompt 09 gate1 tuning (seeds 1001-1400 only): 12.',
   },
 
   // AI

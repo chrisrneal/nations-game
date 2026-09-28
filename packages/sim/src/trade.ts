@@ -8,7 +8,7 @@ import type {
   TradeOffer,
   WorldLedger,
 } from '@nations/contracts';
-import { CAPACITY_CEILING_E4, isFair, mulDiv, structuralBalance } from './economy.ts';
+import { CAPACITY_CEILING_E4, fairShareDeficit, isFair, mulDiv, structuralBalance, type StructuralCover } from './economy.ts';
 import { adjustTrust } from './trust.ts';
 import { TUNABLES } from './tunables.ts';
 
@@ -31,10 +31,16 @@ export interface TradeContext {
   nextOfferId: number;
   ledger: WorldLedger;
   readonly events: Event[];
-  /** Gain-eligible deficit already covered this tick, key `${nation}:${resource}`. */
+  /**
+   * Gain-eligible units already counted this tick: a receiver's deficit
+   * covered, key `${nation}:${resource}:in`, and a supplier's surplus
+   * cleared, key `${nation}:${resource}:out`.
+   */
   readonly covered: Map<string, number>;
   /** Trade gain granted this tick per nation, hundredths of a basis point. */
   readonly gainCbp: Map<NationId, number>;
+  /** This tick's structural cover (RULES 2.8), which sets each importer's fair share. */
+  readonly cover: StructuralCover;
 }
 
 type AnsweredBy = 'command' | 'policy';
@@ -87,31 +93,62 @@ function moveStock(nation: NationRecord, amount: ResourceAmount, sign: 1 | -1): 
 }
 
 /**
+ * What a nation can clear by trade in a month, in thousandths of a Credit at
+ * reference prices (RULES 3.3): its whole structural surplus of each good,
+ * plus its fair share of each structural deficit (RULES 2.8). A nation with
+ * no imbalance has nothing to clear and gains nothing from trade.
+ */
+export function tradeImbalanceMilli(nation: Pick<NationRecord, 'public'>, prices: Prices, cover: StructuralCover): number {
+  let total = 0;
+  for (const good of ['food', 'energy'] as const) {
+    const flow = nation.public[good];
+    const balance = flow.production - flow.demand;
+    total += (balance >= 0 ? balance : fairShareDeficit(flow, cover[good])) * prices[good];
+  }
+  return total;
+}
+
+/**
  * Gains from trade (RULES 3.3) for one leg: `amount` moves from supplier to
  * receiver. It counts only when the supplier has a structural surplus and the
- * receiver a structural deficit of that resource, and only up to the part of
- * the receiver's monthly deficit not already covered this tick, so round trips
- * and repeat deliveries cannot farm it. Both sides gain the same share of
- * their own capacity; the receiver gains more overall because it also avoids
- * the shortfall penalty.
+ * receiver a structural deficit of that resource: up to the part of the
+ * receiver's monthly deficit not already covered this tick, and up to the
+ * part of the supplier's monthly surplus not already sold, so round trips and
+ * repeat deliveries cannot farm it.
+ *
+ * Each side gains by the share of its own imbalance the leg clears, never by
+ * the other side's size: `gainsFromTradeBp` x cleared value / what it can
+ * clear (`tradeImbalanceMilli`), capped at `gainsFromTradeBp` a month. A
+ * nation that trades its whole surplus, or covers its fair share of a
+ * deficit, grows the full rate whatever its size.
  */
 function applyGains(ctx: TradeContext, supplier: NationId, receiver: NationId, leg: ResourceAmount): void {
   if (leg.resource === 'credit') return;
-  if (structuralBalance(get(ctx, supplier), leg.resource) <= 0) return;
+  const surplus = structuralBalance(get(ctx, supplier), leg.resource);
   const deficit = -structuralBalance(get(ctx, receiver), leg.resource);
-  if (deficit <= 0) return;
-  const key = `${receiver}:${leg.resource}`;
-  const already = ctx.covered.get(key) ?? 0;
-  const covered = Math.min(leg.amount, deficit - already);
+  if (surplus <= 0 || deficit <= 0) return;
+  const inKey = `${receiver}:${leg.resource}:in`;
+  const covered = Math.min(leg.amount, deficit - (ctx.covered.get(inKey) ?? 0));
   if (covered <= 0) return;
-  ctx.covered.set(key, already + covered);
-  const bp = TUNABLES.gainsFromTradeBp.value;
-  for (const id of [supplier, receiver]) {
+  ctx.covered.set(inKey, (ctx.covered.get(inKey) ?? 0) + covered);
+  const outKey = `${supplier}:${leg.resource}:out`;
+  const sold = Math.max(0, Math.min(covered, surplus - (ctx.covered.get(outKey) ?? 0)));
+  ctx.covered.set(outKey, (ctx.covered.get(outKey) ?? 0) + sold);
+
+  const fullCbp = TUNABLES.gainsFromTradeBp.value * 100;
+  for (const [id, units] of [
+    [supplier, sold],
+    [receiver, covered],
+  ] as const) {
     const n = get(ctx, id);
-    const gainE4 = mulDiv(mulDiv(n.private.capacityE4, bp, 10_000), covered, deficit);
+    const room = fullCbp - (ctx.gainCbp.get(id) ?? 0);
+    const clearable = tradeImbalanceMilli(n, ctx.prices, ctx.cover);
+    if (units <= 0 || room <= 0 || clearable <= 0) continue;
+    const cbp = Math.min(room, mulDiv(fullCbp, units * ctx.prices[leg.resource], clearable));
+    const gainE4 = mulDiv(n.private.capacityE4, cbp, 1_000_000);
     const capacityE4 = Math.min(CAPACITY_CEILING_E4, n.private.capacityE4 + gainE4);
     ctx.nations[id] = { ...n, private: { ...n.private, capacityE4 } };
-    ctx.gainCbp.set(id, (ctx.gainCbp.get(id) ?? 0) + Math.floor((bp * 100 * covered) / deficit));
+    ctx.gainCbp.set(id, (ctx.gainCbp.get(id) ?? 0) + cbp);
   }
 }
 

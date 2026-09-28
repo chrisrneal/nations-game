@@ -156,6 +156,70 @@ export function shortfallPenaltyBp(unmetFood: number, food: Flow, unmetEnergy: n
   return Math.min(TUNABLES.maxShortfallPenaltyPct.value * 100, raw);
 }
 
+/**
+ * The structural world (RULES 2.8): every nation on its own baseline path,
+ * with no trade gains and no play. For each good, the share of the world's
+ * structural deficit that the world's structural surplus could cover, in
+ * basis points, scaled by `structuralCoverSharePct`. Background regions count
+ * on both sides: their surpluses and deficits are part of the world. A pure
+ * function of the data and the tick, so nothing any player does moves it.
+ */
+export interface StructuralCover {
+  readonly food: number;
+  readonly energy: number;
+}
+
+export function structuralCover(state: {
+  readonly nationOrder: readonly NationId[];
+  readonly nations: Readonly<Record<NationId, NationRecord>>;
+  readonly endowments: Readonly<Record<NationId, NationEndowment>>;
+}): StructuralCover {
+  let foodSurplus = 0;
+  let foodDeficit = 0;
+  let energySurplus = 0;
+  let energyDeficit = 0;
+  for (const id of state.nationOrder) {
+    const e = state.endowments[id] as NationEndowment;
+    const flows = flowsFor(e, (state.nations[id] as NationRecord).private.baselineE4);
+    const food = flows.food.production - flows.food.demand;
+    const energy = flows.energy.production - flows.energy.demand;
+    if (food > 0) foodSurplus += food;
+    else foodDeficit -= food;
+    if (energy > 0) energySurplus += energy;
+    else energyDeficit -= energy;
+  }
+  const share = TUNABLES.structuralCoverSharePct.value;
+  const cover = (surplus: number, deficit: number): number =>
+    deficit <= 0 ? 10_000 : Math.min(10_000, Math.floor((mulDiv(surplus, share, 100) * 10_000) / deficit));
+  return { food: cover(foodSurplus, foodDeficit), energy: cover(energySurplus, energyDeficit) };
+}
+
+/** A nation's fair share of what the world can supply: the part of its structural deficit the cover reaches (RULES 2.8). */
+export function fairShareDeficit(flow: Flow, coverBp: number): number {
+  const deficit = flow.demand - flow.production;
+  return deficit <= 0 ? 0 : mulDiv(deficit, coverBp, 10_000);
+}
+
+/**
+ * The shortfall penalty a nation on its baseline path pays in the structural
+ * world: the penalty on the part of each deficit its fair share cannot cover
+ * (RULES 2.8). Exporters and balanced nations expect none.
+ */
+export function structuralPenaltyBp(e: NationEndowment, baselineE4: number, cover: StructuralCover): number {
+  const flows = flowsFor(e, baselineE4);
+  const unmet = (flow: Flow, coverBp: number): number => Math.max(0, flow.demand - flow.production) - fairShareDeficit(flow, coverBp);
+  return shortfallPenaltyBp(unmet(flows.food, cover.food), flows.food, unmet(flows.energy, cover.energy), flows.energy);
+}
+
+/**
+ * Baseline output (RULES 5.1): baseline potential less the structural
+ * shortfall penalty. The baseline already expects a nation's usual deficit,
+ * so ownScore measures play, not geography.
+ */
+export function baselineOutputFor(e: NationEndowment, baselineE4: number, cover: StructuralCover): number {
+  return mulDiv(potentialOutput(e, baselineE4), 10_000 - structuralPenaltyBp(e, baselineE4, cover), 10_000);
+}
+
 export interface EconomyTickResult {
   readonly nation: NationRecord;
   readonly ledger: WorldLedger;
@@ -166,12 +230,14 @@ export interface EconomyTickResult {
  * penalty, earn Credit, let resilience decay and fund it to the policy floor,
  * then grow capacity and baseline at the baseline rate and refresh the public
  * flows for the next tick. Every unit is accounted for in the ledger.
+ * `cover` is this month's structural cover, for the baseline (RULES 2.8).
  */
 export function economyTick(
   nation: NationRecord,
   e: NationEndowment,
   ledger: WorldLedger,
   tradeGainCbp: number,
+  cover: StructuralCover,
 ): EconomyTickResult {
   const pub = nation.public;
   const priv = nation.private;
@@ -223,7 +289,7 @@ export function economyTick(
         ...pub,
         // Both measured on this tick's capacity, before growth, so ownScore compares like with like.
         output,
-        baselineOutput: potentialOutput(e, priv.baselineE4),
+        baselineOutput: baselineOutputFor(e, priv.baselineE4, cover),
         food: flows.food,
         energy: flows.energy,
       },

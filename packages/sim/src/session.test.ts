@@ -111,8 +111,35 @@ describe('save and load', () => {
     expect(() => migrateSave({})).toThrow(/schemaVersion/);
   });
 
+  /** A version-2 save (before prompt 09's smoothed score) made from a current one. */
+  function asVersion2(save: ReturnType<Session['save']>): Record<string, unknown> {
+    const snapshot: Record<string, unknown> = { ...save.snapshot, schemaVersion: 2 };
+    delete snapshot.scoreTrack;
+    return { ...save, schemaVersion: 2, snapshot, stateHash: hashState(snapshot as never) };
+  }
+
+  it('migrates a compact version-2 save: same position, score smoothing starts from the next month', () => {
+    const session = new Session(world(5));
+    play(session, 5, 0, 12);
+    const v2 = asVersion2(session.save({ compact: true }));
+    const loaded = Session.load(JSON.parse(JSON.stringify(v2)));
+    expect(loaded.state.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(loaded.state.tick).toBe(12);
+    expect(loaded.state.scoreTrack).toEqual({});
+    expect(loaded.state.nations).toEqual(session.state.nations);
+    loaded.advance(1);
+    expect(Object.keys(loaded.state.scoreTrack)).toHaveLength(4);
+  });
+
+  it('refuses a version-2 save that needs its move history replayed, with a message a player can act on', () => {
+    const session = new Session(world(5));
+    play(session, 5, 0, 12);
+    const v2 = asVersion2(session.save());
+    expect(() => Session.load(v2)).toThrow(/scoring rules changed.*Start a new game/);
+  });
+
   it('runs registered migrations in order (stub registry)', () => {
-    expect(Object.keys(MIGRATIONS)).toEqual(['1']);
+    expect(Object.keys(MIGRATIONS)).toEqual(['1', '2']);
     expect(() => migrateSave({ schemaVersion: 1 })).toThrow(/Phase 0 prototype/);
     const migrated = migrateSave(
       { schemaVersion: 1, a: 1 },
