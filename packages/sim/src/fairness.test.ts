@@ -11,7 +11,7 @@ import {
 } from './economy.ts';
 import { ownScoreBp, scoreboard, smoothTowards } from './score.ts';
 import { step } from './step.ts';
-import { answer, amt, offer } from './testkit.ts';
+import { answer, amt, offer, policy } from './testkit.ts';
 import { tradeImbalanceMilli } from './trade.ts';
 import { TUNABLES } from './tunables.ts';
 import { createWorld, NEUTRAL_ENDOWMENT, type RosterEntry, type WorldState } from './world.ts';
@@ -168,6 +168,53 @@ describe('trade gains by own imbalance cleared (RULES 3.3)', () => {
     expect(done.events.filter((e) => e.type === 'offerSettled')).toHaveLength(2);
     expect(nation(done.state, X).private.last.tradeGainCbp).toBe(bpCbp);
     expect(nation(done.state, Y).private.last.tradeGainCbp).toBe(bpCbp);
+  });
+});
+
+describe('a small imbalance never out-earns a large one (prompt 13)', () => {
+  // Same economy for S and L (100 M people, the same GDP). S is short 10 food a month, L 90.
+  // X exports 100, and a region short 100 keeps the world's cover near 40%.
+  const F: RosterEntry[] = [
+    { id: 'xx', name: 'X', endowment: { ...base, foodSelfSufficiency: 100 } },
+    { id: 'ss', name: 'S', endowment: { ...base, foodSelfSufficiency: 45 } },
+    { id: 'll', name: 'L', endowment: { ...base, foodSelfSufficiency: 5 } },
+    { id: 'rr', name: 'R', endowment: { ...base, kind: 'aggregate', foodSelfSufficiency: 0 } },
+  ];
+  const S = id('ss');
+  const L = id('ll');
+  const world = (): WorldState => createWorld({ seed: 3, roster: F });
+  const gainFor = (to: NationId, units: number): number => {
+    const s = world();
+    const credit = Math.max(1, Math.floor((units * s.prices.food) / 1000));
+    // Small sales cannot be priced inside the fair band in whole Credits, so the seller allows hard bargains.
+    const made = step(s, [policy(X, { hardBargains: true }, 0), offer(X, to, amt('food', units), amt('credit', credit), 0)]).state;
+    const done = step(made, [answer('acceptOffer', to, made.nextOfferId - 1, 1)]);
+    expect(done.events.some((e) => e.type === 'offerSettled')).toBe(true);
+    return nation(done.state, to).private.last.tradeGainCbp;
+  };
+  const fair = (n: NationId): number => {
+    const s = world();
+    return fairShareDeficit(nation(s, n).public.food, structuralCover(s).food);
+  };
+  const deficit = (n: NationId): number => {
+    const f = nation(world(), n).public.food;
+    return f.demand - f.production;
+  };
+
+  it('the fixture: same economy, a small and a large deficit, fair shares both below the deficit', () => {
+    const s = world();
+    expect(nation(s, S).public.output).toBe(nation(s, L).public.output);
+    expect([deficit(S), deficit(L)]).toEqual([10, 90]);
+    expect(fair(S)).toBeLessThan(deficit(S));
+    expect(fair(L)).toBeLessThan(deficit(L));
+  });
+
+  it('covering the same share of their fair share, the small one never earns more than the large one', () => {
+    for (const pct of [25, 50, 75, 100]) {
+      const small = gainFor(S, Math.max(1, Math.floor((fair(S) * pct) / 100)));
+      const large = gainFor(L, Math.max(1, Math.floor((fair(L) * pct) / 100)));
+      expect(small, `${pct}% of the fair share`).toBeLessThanOrEqual(large);
+    }
   });
 });
 
