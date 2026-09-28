@@ -5,8 +5,10 @@ alongside about a dozen nations run by the computer. Trade, shared crises and
 keeping your word get you further than conquest. You check in for a couple of
 minutes, make a few decisions, and the world carries on while you are away.
 
-Right now the repo holds the **skeleton only**: no game yet. This document tells
-you how to run what exists and how to get it onto a phone.
+Right now it is the **foundations**: pick a nation, answer sample decisions, watch
+the world clock run with computer-run nations alongside, save and load. The real
+economy arrives in Phase 1. This document tells you how to run it and get it onto
+a phone.
 
 ## What is in here
 
@@ -40,29 +42,27 @@ npm test        # runs the automatic checks; should end in "passed"
 npm run check   # checks the code follows the project's rules
 ```
 
-## Opening it on your phone
+## Installing it on your phone
 
-The app is a **PWA**: a web page that can be installed like an app, with an icon
-on your home screen, and that keeps working without a signal.
+The app is a **PWA**: a web page that installs like an app, with an icon on your
+home screen, and keeps working with no signal. Every merge to `main` is deployed
+by Vercel, and that address is the one to install from (offline mode needs the
+secure `https://` address Vercel gives you).
 
-1. Your phone and your computer must be on the same Wi-Fi.
-2. On the computer, run:
+1. Find the address: in Vercel, open the **nations-game** project; the
+   **Domains** box on its overview page shows the production address, something
+   like `https://nations-game.vercel.app`.
+2. Open it on the phone, with a signal:
+   - **iPhone:** in **Safari** (not Chrome), tap Share, then *Add to Home Screen*.
+   - **Android:** in **Chrome**, tap ⋮, then *Install app* (or *Add to Home screen*).
+3. Open it once from the new home-screen icon while online, so it can store itself.
+4. Turn on airplane mode, close it from the app switcher, and open it again. It
+   should start as normal, and your game continues from its autosave.
 
-   ```bash
-   npm run dev -- --host
-   ```
+Preview addresses that Vercel posts on each pull request work for a quick look,
+but install from the production address so the app updates itself after each merge.
 
-3. It prints two addresses. Take the one that is **not** `localhost` - it looks
-   like `http://192.168.1.42:5173/`. Type that into your phone's browser.
-4. Install it:
-   - **iPhone (Safari):** the Share button, then *Add to Home Screen*.
-   - **Android (Chrome):** the ⋮ menu, then *Install app* or *Add to Home screen*.
-5. Open it from the home-screen icon. Turning Wi-Fi off and reopening it should
-   still show the app - that is the offline part working.
-
-The computer has to be running `npm run dev -- --host` for this. A version you can
-open from anywhere, without your computer, comes later (it needs hosting, which is
-a Phase 5 decision in `docs/ROADMAP.md`).
+To try it on a computer instead: `npm run dev`, then open `http://localhost:5173`.
 
 ## A few words you will see
 

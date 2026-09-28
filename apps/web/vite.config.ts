@@ -16,6 +16,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
+        id: '/',
         name: 'Nations',
         short_name: 'Nations',
         description: 'Run a nation in a staged 2030 world.',
@@ -32,10 +33,16 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Every built file, the worker chunk included, so the app opens in airplane mode.
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+        navigateFallback: 'index.html',
+        cleanupOutdatedCaches: true,
       },
     }),
   ],
+  // The sim runs in a module Web Worker (src/platform/worker.ts). ES format lets
+  // the worker share code-split chunks; module workers run on iOS 15+ and Android.
+  worker: { format: 'es' },
   server: {
     // `npm run dev -- --host` prints a LAN address so a phone on the same
     // Wi-Fi can open it. See README.md.

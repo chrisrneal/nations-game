@@ -4,11 +4,11 @@ Current phase: 0
 ## Gate 0 checklist
 - [x] Sim core has no UI, DOM, network or clock imports (enforced by tsconfig, ESLint and packages/harness/src/purity.test.ts)
 - [x] 1,000 seeds give identical hashes in browser and Node (packages/harness/src/determinism.test.ts, headless Chromium)
-- [ ] Dummy AI and UI use the same command API (AI half done: dummy AI submits ordinary Commands through `Session`; UI half waits for LocalHost)
+- [x] Dummy AI and UI use the same command API (both submit ordinary Commands; the UI through LocalHost in a Web Worker, prompt 04)
 - [x] Save-reload-continue matches an uninterrupted run (property test in packages/sim/src/session.test.ts)
-- [ ] 1,000 catch-up ticks under 2 s on a mid-range phone (desktop: ~14 ms in Node and Chromium; phone not yet measured)
-- [ ] PWA installs and runs offline on iOS and Android
-- [ ] Owner completes three sample decisions one-handed
+- [ ] 1,000 catch-up ticks under 2 s on a mid-range phone (desktop: ~14 ms; the app's Saves tab now has a speed check to run on a real phone)
+- [ ] PWA installs and runs offline on iOS and Android (passes in headless Chromium at 360 px: installable, opens offline; real iPhone and Android still to be tried by the owner)
+- [ ] Owner completes three sample decisions one-handed (three sample cards built and checked by touch at 360 px; waiting on the owner)
 - [ ] Independent review signs off the nine seams
 
 ## Session log
@@ -56,6 +56,36 @@ Chromium on the build machine.
 **Left.** LocalHost in a Worker (lane P) so the UI uses the same command API;
 the phone benchmark; contracts to absorb the sim's extended types. See
 docs/GAPS.md.
+
+### 2026-09-28 - prompt 04, App foundations (lanes P and U)
+**Changed.** Platform (apps/web/src/platform): the sim now runs in a Web Worker
+behind Comlink. `GameEngine` owns the session and the clock (paused, 1x, 4x) and
+runs the dummy AI for all 16 nations the player does not control, through the
+same command API the player uses. `LocalHost` implements the contracts `Host`
+(submit, subscribe, setPace) plus new game, three save slots and an autosave in
+IndexedDB (every 10 ticks and whenever the app is hidden), and an on-device speed
+check. Service worker precaches everything including the worker, so the app opens
+in airplane mode; vercel.json stops the service worker file being cached stale.
+Screens (apps/web/src): start screen (continue, load, choose one of the 17 real
+nations), decision inbox as home with three sample cards (2-3 options, one-line
+consequence each, options in a bottom sheet under the thumb), world map with the
+17 nations and lines sized by structural ties, a four-number resource strip, a
+why-sheet on every number, a live month counter with pause, 1x and 4x, and saves.
+**Proof.** `apps/web/src/boundary.test.ts` fails if any interface file imports the
+sim, the AI, Comlink or a platform internal, or touches Worker or IndexedDB
+directly. Platform tests cover pace, AI ticking, "only your own nation",
+save-close-load continuing the same game hash-for-hash. `npm run build` then
+`npm run e2e --workspace web` drives headless Chromium as a 360 px touch phone:
+21/21 checks - installable, opens offline, no horizontal scroll on any screen,
+three decisions by touch with options in the bottom third, save, close, reopen
+offline, load continues the tick count (13 -> 15), 60.1 fps at 4x with the CPU
+slowed 4x.
+**How to see it.** Open the Vercel production address on the phone (Safari on
+iPhone, Chrome on Android), add it to the home screen, open it once online, then
+try airplane mode. README.md has the steps.
+**Left.** Real-device install test and the owner's one-handed trial; the phone
+speed check reading; cards, resources and trust are placeholders until the Phase 1
+economy (docs/GAPS.md, prompt 04).
 
 ### 2026-09-27 - prompt 02, World 2030 and rules (lane D)
 **Changed.** `data/world-2030.json` replaced: 17 playable nations and 6 background
