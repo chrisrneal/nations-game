@@ -1,24 +1,45 @@
-import type { Command, Event, HostUpdate, NationId, Pace } from '@nations/contracts';
-import { dummyDecide } from '@nations/ai';
+import type { Command, Event, HostUpdate, NationId, NationView, Pace } from '@nations/contracts';
+import { greedyDecide } from '@nations/ai';
 import {
   Session,
+  TUNABLES,
   createWorld,
+  hashState,
+  mix32,
   nationId,
+  rosterFromWorldData,
+  scoreboard,
   viewFor,
-  type NationView,
   type RosterEntry,
   type SimSaveFile,
 } from '@nations/sim';
 import world2030 from '../../../../data/world-2030.json' with { type: 'json' };
 import { PACE_INTERVAL_MS, SUPPORTED_PACES } from './pace.ts';
 
-/** The player's View. Today the sim's NationView; moves to contracts (docs/GAPS.md). */
+/** The player's View: the contracts NationView. */
 export type PlayerView = NationView;
+
+/**
+ * World-level standing the host derives for the interface. Public by nature
+ * (the collective multiplier is the same for every nation); it rides beside the
+ * View until the sim puts it in the View itself (docs/GAPS.md, prompt 07).
+ */
+export interface Standing {
+  /** Collective multiplier x 10,000 (RULES 5.2). */
+  readonly multiplierBp: number;
+  /** Months in a full game. */
+  readonly gameLength: number;
+  /** True once the last month has been played; the clock stops. */
+  readonly over: boolean;
+  /** Fingerprint of the whole game, to prove a save or a file resumes the same game. */
+  readonly fingerprint: string;
+}
 
 /** What the host pushes to the interface: the contracts update plus the pace. */
 export interface GameUpdate extends HostUpdate {
   readonly view: PlayerView;
   readonly pace: Pace;
+  readonly standing: Standing;
 }
 
 /** Everything needed to resume a game: the sim save plus who plays whom. */
@@ -38,15 +59,24 @@ const defaultTimers: Timers = {
   clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
 };
 
-/** The 17 playable nations from data/world-2030.json, in file order. */
-export function playableRoster(): RosterEntry[] {
-  return world2030.nations.filter((n) => n.playable).map((n) => ({ id: n.id, name: n.name }));
+/** The full roster from data/world-2030.json: 17 playable nations, then 6 background regions. */
+export function fullRoster(): RosterEntry[] {
+  return rosterFromWorldData(world2030);
 }
+
+/** The 17 playable nations. */
+export function playableRoster(): RosterEntry[] {
+  return fullRoster().filter((entry) => entry.endowment?.kind === 'playable');
+}
+
+const GAME_LENGTH = TUNABLES.gameLengthTicks.value;
 
 /**
  * One running game, owned by the Web Worker. Holds the sim Session, runs the
- * dummy AI for every nation the player does not control, and owns the clock:
- * nothing else can advance the tick.
+ * greedy trader for every nation the player does not control (including the
+ * player's own nation while it is in the caretaker's hands), and owns the
+ * clock: nothing else can advance the tick. The clock stops at the end of the
+ * game (gameLengthTicks).
  *
  * Deliberately free of Worker and Comlink code so it can be tested in Node and
  * later moved behind a server without change.
@@ -62,10 +92,9 @@ export class GameEngine {
   constructor(private readonly timers: Timers = defaultTimers) {}
 
   newGame(humanId: string, seed: number): GameUpdate {
-    const roster = playableRoster();
-    if (!roster.some((entry) => entry.id === humanId)) throw new Error(`"${humanId}" is not a playable nation`);
-    const state = createWorld({ seed, roster, controllers: { [humanId]: 'human' } });
-    this.start(new Session(state), nationId(humanId), seed);
+    if (!playableRoster().some((entry) => entry.id === humanId)) throw new Error(`"${humanId}" is not a playable nation`);
+    const state = createWorld({ seed, roster: fullRoster(), controllers: { [humanId]: 'human' } });
+    this.start(new Session(state), nationId(humanId), mix32(seed ^ 0x2545f491));
     return this.update([]);
   }
 
@@ -79,11 +108,12 @@ export class GameEngine {
 
   setPace(pace: Pace): GameUpdate {
     if (!SUPPORTED_PACES.includes(pace)) throw new Error(`Pace "${pace}" is not available yet`);
-    this.requireGame();
-    this.pace = pace;
+    const { session } = this.requireGame();
     this.stopTimer();
-    if (pace === 'x1' || pace === 'x4') {
-      this.timer = this.timers.setInterval(() => this.tickOnce(), PACE_INTERVAL_MS[pace]);
+    const next: Pace = session.state.tick >= GAME_LENGTH ? 'paused' : pace;
+    this.pace = next;
+    if (next === 'x1' || next === 'x4') {
+      this.timer = this.timers.setInterval(() => this.tickOnce(), PACE_INTERVAL_MS[next]);
     }
     return this.emit([]);
   }
@@ -92,10 +122,11 @@ export class GameEngine {
     this.listener = listener;
   }
 
-  /** Step `ticks` ticks now, with the AI acting before each one. Also catch-up. */
+  /** Step `ticks` ticks now (never past the end of the game), with the AI acting before each one. Also catch-up. */
   advance(ticks: number): GameUpdate {
+    const { session } = this.requireGame();
     const events: Event[] = [];
-    for (let i = 0; i < ticks; i++) events.push(...this.stepWithAi());
+    for (let i = 0; i < ticks && session.state.tick < GAME_LENGTH; i++) events.push(...this.stepWithAi());
     return this.emit(events);
   }
 
@@ -123,12 +154,12 @@ export class GameEngine {
    * game with the AI everywhere, on a throwaway session. Returns milliseconds.
    */
   benchmark(ticks: number, now: () => number = () => performance.now()): number {
-    const state = createWorld({ seed: 7, roster: playableRoster() });
+    const state = createWorld({ seed: 7, roster: fullRoster() });
     const session = new Session(state);
     const started = now();
     for (let i = 0; i < ticks; i++) {
       for (const id of session.state.nationOrder) {
-        for (const command of dummyDecide(viewFor(session.state, id), 7)) session.submit(command);
+        for (const command of greedyDecide(viewFor(session.state, id), 7).commands) session.submit(command);
       }
       session.advance(1);
     }
@@ -144,7 +175,13 @@ export class GameEngine {
   }
 
   private tickOnce(): void {
-    this.emit(this.stepWithAi());
+    const { session } = this.requireGame();
+    const events = session.state.tick < GAME_LENGTH ? this.stepWithAi() : [];
+    if (session.state.tick >= GAME_LENGTH) {
+      this.stopTimer();
+      this.pace = 'paused';
+    }
+    this.emit(events);
   }
 
   private stepWithAi(): Event[] {
@@ -153,7 +190,7 @@ export class GameEngine {
     for (const id of state.nationOrder) {
       if (state.controllers[id] === 'human') continue;
       // AI nations use the same command API as the player (Gate 0 criterion 3).
-      for (const command of dummyDecide(viewFor(state, id), this.aiSeed)) session.submit(command);
+      for (const command of greedyDecide(viewFor(state, id), this.aiSeed).commands) session.submit(command);
     }
     return session.advance(1);
   }
@@ -167,7 +204,14 @@ export class GameEngine {
   private update(events: readonly Event[]): GameUpdate {
     const { session, humanId } = this.requireGame();
     const visible = events.filter((event) => event.audience.length === 0 || event.audience.includes(humanId));
-    return { view: viewFor(session.state, humanId), events: visible, pace: this.pace };
+    const state = session.state;
+    const standing: Standing = {
+      multiplierBp: scoreboard(state).multiplierBp,
+      gameLength: GAME_LENGTH,
+      over: state.tick >= GAME_LENGTH,
+      fingerprint: hashState(state),
+    };
+    return { view: viewFor(state, humanId), events: visible, pace: this.pace, standing };
   }
 
   private stopTimer(): void {

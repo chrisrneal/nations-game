@@ -9,9 +9,9 @@ import type { GameEngine } from './engine.ts';
 import { LocalHost, type GameHost } from './localHost.ts';
 import { IndexedDbSaveStore } from './saves.ts';
 
-export type { GameUpdate, PlayerView } from './engine.ts';
+export type { GameUpdate, PlayerView, Standing } from './engine.ts';
 export type { SlotSummary } from './saves.ts';
-export { AUTOSAVE_SLOT, MANUAL_SLOTS, type GameHost } from './localHost.ts';
+export { AUTOSAVE_SLOT, FILE_FORMAT, MANUAL_SLOTS, type GameHost } from './localHost.ts';
 export { PACE_INTERVAL_MS } from './pace.ts';
 
 /** Starts the sim in a Web Worker and returns the Host for the interface. */

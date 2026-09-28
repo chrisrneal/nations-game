@@ -51,6 +51,44 @@ describe('LocalHost', () => {
     expect((await store.get(AUTOSAVE_SLOT))?.tick).toBe(AUTOSAVE_EVERY_TICKS);
   });
 
+  it('exports a file that resumes the same game on a device with no saves at all', async () => {
+    const first = host();
+    await first.host.newGame('mexico');
+    first.engine.advance(9);
+    const file = await first.host.exportFile();
+    expect(file.name).toBe('mexico-month-9.json'.replace(/^/, 'nations-'));
+    const before = first.engine.current();
+
+    // "Clear site data": a fresh store and engine, nothing saved.
+    const fresh = host(new MemorySaveStore());
+    const seen: GameUpdate[] = [];
+    fresh.host.subscribe((u) => seen.push(u));
+    await fresh.host.importFile(file.text);
+    expect(seen.at(-1)?.view.tick).toBe(9);
+    expect(seen.at(-1)?.standing.fingerprint).toBe(before?.standing.fingerprint);
+    expect((await fresh.store.get(AUTOSAVE_SLOT))?.tick).toBe(9);
+    // And it keeps playing the same game as the original.
+    first.engine.advance(5);
+    fresh.engine.advance(5);
+    expect(fresh.engine.current()?.standing.fingerprint).toBe(first.engine.current()?.standing.fingerprint);
+  });
+
+  it('refuses a file that is not a save', async () => {
+    const { host: h } = host();
+    await expect(h.importFile('not json')).rejects.toThrow(/not a saved game/);
+    await expect(h.importFile('{"format":"other"}')).rejects.toThrow(/not a saved game/);
+    await expect(h.importFile('{"format":"nations-game-save","version":99,"game":{}}')).rejects.toThrow(/newer/);
+  });
+
+  it('next month steps one tick', async () => {
+    const { host: h } = host();
+    const seen: GameUpdate[] = [];
+    h.subscribe((u) => seen.push(u));
+    await h.newGame('egypt');
+    await h.nextMonth();
+    expect(seen.at(-1)?.view.tick).toBe(1);
+  });
+
   it('loading an empty slot fails loudly', async () => {
     await expect(host().host.loadFrom('slot-3')).rejects.toThrow(/empty/);
   });

@@ -8,6 +8,7 @@ export function StartScreen(props: {
   host: GameHost;
   onStart: (nationId: string) => void;
   onLoad: (slot: string) => void;
+  onImported: () => void;
   onToast: (text: string) => void;
 }): ReactElement {
   const { host } = props;
@@ -56,7 +57,7 @@ export function StartScreen(props: {
           </ul>
         </section>
       )}
-      {mode === 'load' && <Saves host={host} inGame={false} onLoad={props.onLoad} onNewGame={() => setMode('choose')} onToast={props.onToast} />}
+      {mode === 'load' && <Saves host={host} inGame={false} onLoad={props.onLoad} onImported={props.onImported} onNewGame={() => setMode('choose')} onToast={props.onToast} />}
     </main>
   );
 }

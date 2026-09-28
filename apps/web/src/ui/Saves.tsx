@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { AUTOSAVE_SLOT, MANUAL_SLOTS, type GameHost, type SlotSummary } from '../platform/index.ts';
 import { nameOf, tickDate } from '../world/nations.ts';
 import { Num } from './why.tsx';
@@ -54,15 +54,32 @@ function SlotRow(props: {
   );
 }
 
-/** Save slots, a new game, and the on-device speed check. */
+/** Hands the browser a file to save: the player keeps it wherever they like. */
+function download(name: string, text: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/** Save slots, export to and import from a file, a new game, and the on-device speed check. */
 export function Saves(props: {
   host: GameHost;
   inGame: boolean;
+  /** Fingerprint of the running game, shown so a restored file can be checked against it. */
+  fingerprint?: string;
   onLoad: (slot: string) => void;
+  /** Called after a file was imported and the game resumed. */
+  onImported: () => void;
   onNewGame: () => void;
   onToast: (text: string) => void;
 }): ReactElement {
   const { host, onToast } = props;
+  const fileInput = useRef<HTMLInputElement>(null);
   const [slots, setSlots] = useState<ReadonlyMap<string, SlotSummary>>(new Map());
   const [bench, setBench] = useState<number | null>(null);
 
@@ -99,6 +116,68 @@ export function Saves(props: {
           />
         ))}
       </ul>
+      <h2 className="section-subtitle">File</h2>
+      <p className="hint">A file keeps your game safe even if this phone's site data is cleared. Import it on any device.</p>
+      <div className="slot-actions file-actions">
+        {props.inGame && (
+          <button
+            type="button"
+            className="btn btn-small"
+            data-testid="export"
+            onClick={() =>
+              void host.exportFile().then(
+                (file) => {
+                  download(file.name, file.text);
+                  onToast(`Exported ${file.name}`);
+                },
+                (error: unknown) => onToast(String(error)),
+              )
+            }
+          >
+            Export to file
+          </button>
+        )}
+        <button type="button" className="btn btn-small" data-testid="import" onClick={() => fileInput.current?.click()}>
+          Import from file
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept=".json,application/json"
+          hidden
+          data-testid="import-file"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (file === undefined) return;
+            void file
+              .text()
+              .then((text) => host.importFile(text))
+              .then(
+                () => {
+                  onToast('Game restored from file. Paused - press 1× to continue.');
+                  setVersion((v) => v + 1);
+                  props.onImported();
+                },
+                (error: unknown) => onToast(error instanceof Error ? error.message : String(error)),
+              );
+          }}
+        />
+      </div>
+      {props.fingerprint !== undefined && (
+        <p className="hint">
+          Game check:{' '}
+          <Num
+            why={{
+              title: 'Game check',
+              value: props.fingerprint,
+              text: 'A fingerprint of the whole world. A save or file that restores this game shows the same code at the same month.',
+            }}
+          >
+            <span data-testid="fingerprint">{props.fingerprint.slice(0, 8)}</span>
+          </Num>
+        </p>
+      )}
       <h2 className="section-subtitle">Speed check</h2>
       <p className="hint">
         Runs 1,000 months of a throwaway world on this phone. The Gate 0 target is under 2 seconds.

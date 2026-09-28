@@ -1,5 +1,5 @@
 import type { Command, Pace } from '@nations/contracts';
-import type { GameEngine, GameUpdate } from './engine.ts';
+import type { GameEngine, GameUpdate, SavedGame } from './engine.ts';
 import type { SaveStore, SlotSummary } from './saves.ts';
 
 /** The slot written automatically; the three manual slots sit beside it. */
@@ -26,12 +26,22 @@ export interface GameHost {
   autosave(): Promise<void>;
   /** Milliseconds for `ticks` catch-up ticks on this device (Gate 0). */
   benchmark(ticks: number): Promise<number>;
+  /** Play one month now (only while paused makes sense; the clock does the rest). */
+  nextMonth(): Promise<void>;
+  /** The running game as a file: a name and the text to write into it. */
+  exportFile(): Promise<{ name: string; text: string }>;
+  /** Resume the game in an exported file (paused), and autosave it on this device. */
+  importFile(text: string): Promise<void>;
 }
+
+/** Marker and version of an exported save file. */
+export const FILE_FORMAT = 'nations-game-save';
+export const FILE_VERSION = 1;
 
 type Async<T> = T | Promise<T>;
 /** The engine as LocalHost sees it: in-process in tests, a Comlink Remote in the app. */
 export type EngineApi = {
-  [K in 'newGame' | 'submit' | 'setPace' | 'subscribe' | 'exportGame' | 'importGame' | 'current' | 'benchmark']: (
+  [K in 'newGame' | 'submit' | 'setPace' | 'subscribe' | 'exportGame' | 'importGame' | 'current' | 'benchmark' | 'advance']: (
     ...args: Parameters<GameEngine[K]>
   ) => Async<ReturnType<GameEngine[K]>>;
 };
@@ -117,6 +127,38 @@ export class LocalHost implements GameHost {
 
   async benchmark(ticks: number): Promise<number> {
     return this.options.engine.benchmark(ticks);
+  }
+
+  async nextMonth(): Promise<void> {
+    await this.ready;
+    await this.options.engine.advance(1);
+  }
+
+  async exportFile(): Promise<{ name: string; text: string }> {
+    const game = await this.options.engine.exportGame();
+    const exportedAt = this.options.now?.() ?? Date.now();
+    const text = JSON.stringify({ format: FILE_FORMAT, version: FILE_VERSION, exportedAt, game });
+    return { name: `nations-${game.humanId}-month-${game.save.savedAtTick}.json`, text };
+  }
+
+  async importFile(text: string): Promise<void> {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new Error('That file is not a saved game');
+    }
+    const file = parsed as { format?: unknown; version?: unknown; game?: SavedGame };
+    if (typeof parsed !== 'object' || parsed === null || file.format !== FILE_FORMAT || file.game === undefined) {
+      throw new Error('That file is not a saved game');
+    }
+    if (typeof file.version !== 'number' || file.version > FILE_VERSION) {
+      throw new Error('That save file is from a newer version of the game; update the app');
+    }
+    await this.ready;
+    this.publish(await this.options.engine.importGame(file.game));
+    this.lastAutosaveTick = file.game.save.savedAtTick;
+    await this.autosave();
   }
 
   private receive(update: GameUpdate): void {

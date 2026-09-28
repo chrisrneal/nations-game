@@ -1,9 +1,9 @@
 import world2030 from '../../../../data/world-2030.json' with { type: 'json' };
 
 /**
- * Static facts from data/world-2030.json that the interface shows before the
- * sim models them. Names and starting figures only: live numbers come from the
- * View once the Phase 1 economy lands (docs/GAPS.md, prompt 04).
+ * Static facts from data/world-2030.json: names, regions and structural ties
+ * for labels and the map. Every live number (stocks, output, trust) comes from
+ * the View; these are only the published starting facts.
  */
 export interface NationFacts {
   readonly id: string;
@@ -54,8 +54,11 @@ export function facts(id: string): NationFacts {
   return found;
 }
 
+const regionNames = new Map(AGGREGATES.map((a) => [a.id, a.name]));
+
+/** Display name of a nation or a background region. */
 export function nameOf(id: string): string {
-  return byId.get(id)?.name ?? id;
+  return byId.get(id)?.name ?? regionNames.get(id) ?? id;
 }
 
 /** Short display name for tight spaces (the map, chips). */
