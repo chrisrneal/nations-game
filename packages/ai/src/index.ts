@@ -3,15 +3,13 @@
  *
  * Contract: reads only a per-nation View, emits Commands, never writes State and
  * never reads State. No LLM in decisions (D5), so games replay exactly and the
- * balance harness can run hundreds of them headlessly. Every decision must be
- * able to explain its top reasons, and the same code acts as caretaker for an
- * absent human's nation.
+ * balance harness can run hundreds of them headlessly. Every decision explains
+ * itself with numbers, and the same code acts as caretaker for an absent human.
  *
- * Phase 0: only the dummy AI, which picks valid commands at random from a seed.
- * packages/ai imports @nations/sim for types only (checked by
+ * Phase 1: the greedy trader (`greedyDecide`), which swaps surplus for deficit.
+ * The Phase 0 dummy stays for the platform until it switches (docs/GAPS.md).
+ * Runtime imports: contracts types and own files only (checked by
  * packages/harness/src/purity.test.ts).
- *
- * Shape to come:
- *   decide(view: View, personality: Personality): { commands: readonly Command[]; reasons: readonly string[] }
  */
 export { dummyDecide } from './dummy.ts';
+export { GREEDY, greedyDecide, openOffersBy, type Decision, type TraderStyle } from './greedy.ts';

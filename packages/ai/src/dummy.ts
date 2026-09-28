@@ -1,5 +1,5 @@
 import type { Command } from '@nations/contracts';
-import type { NationView } from '@nations/sim';
+import type { NationView } from '@nations/contracts';
 
 /**
  * Phase 0 dummy AI: proves the AI plays through the same command API as the
