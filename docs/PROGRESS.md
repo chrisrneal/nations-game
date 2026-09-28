@@ -16,16 +16,28 @@ Gate 0 verdict: **PASS WITH WAIVERS** (docs/gates/GATE-0.md).
 ## Gate 1 checklist
 Suite: `npm run harness -- gate1` (200 seeded full-roster games, random strategies, paired runs). Latest results: docs/balance/gate1-prompt10.md (`--ranges 4`: graded on seeds 1-200, 201-400, 401-600, 601-800 and pooled).
 - [x] 200 seeded full-roster games with no crashes (0), no negative stocks (0), sources and sinks in band (food 91.8-92.1%, energy 84.5-84.6% consumed/produced; Credit sinks 0.5% of income; prompt 09, three graded ranges)
-- [x] The same nation does 15%+ better against its baseline trading than isolating (prompt 10: +17.6-17.7% on each of seeds 1-200, 201-400, 401-600, 601-800, pooled +17.6%, 62.6% of pairs at +15% or more; was +14.5% pooled at the Gate 1 review. Needs the re-review to confirm)
+- [x] The same nation does 15%+ better against its baseline trading than isolating (prompt 10: +17.6-17.7% on each of seeds 1-200, 201-400, 401-600, 601-800, pooled +17.6%, 62.6% of pairs at +15% or more; was +14.5% pooled at the Gate 1 review. confirmed by the second Gate 1 review)
 - [x] Isolationists worse off but alive (isolating scores lower in 94.5-96% of pairs; 0 dead; prompt 09)
 - [x] Dead states under 2% (0.0%)
 - [ ] No nation tops the score in more than 2x its fair share, 11.8% (FAIL after prompt 09's rule change: Egypt 12.5%, Saudi Arabia 13.0%, Russia 15.0%, Saudi Arabia 14.0% on seeds 1-800 in four ranges, pooled Russia 12.6%, was India 34.5-45%; owner decision in docs/balance/gate1-prompt09.md)
 - [x] A trade in 3 taps or fewer (prompt 07: 2 taps from home - open the card, send the offer; checked by touch at 360 px)
 - [x] Gate 0 still passes (determinism 1,000/1,000 Node vs Chromium, purity, save/load; phone speed to re-measure)
 
-Gate 1 verdict: **FAIL** (docs/gates/GATE-1.md, prompt 08): top scorer and trade-gain robustness.
+Gate 1 verdict: **FAIL** (docs/gates/GATE-1.md, second review after prompts 09-10): top scorer only (Egypt 12.5% on seeds 1-200, 12.5-15.0% on every fresh range).
 
 ## Session log
+
+### 2026-09-28 - prompt 08 (re-run), Gate 1 review, second pass (independent)
+**Changed.** docs/gates/GATE-1.md rewritten; no code changed. Verdict **FAIL** on one
+criterion: the most frequent top scorer is 12.5-15.0% on seeds 1-200, 201-400,
+401-600 and 601-800 (limit 11.8%); only the tuning seeds 1001-1200 pass. Every other
+criterion passes: trade advantage +17.6-17.7% on every range, 0 crashes, 0 negative
+stocks, 0 dead states, 2-tap trade at 360 px, determinism 1,000/1,000, 295 tests.
+New finding: the end screen's winner differs from the sim's in 93 of 200 games,
+because the interface still reads last month's score, not the 12-month average.
+**How to see it.** Open docs/gates/GATE-1.md, or run `npm run harness -- --suite gate1 --games 200`.
+**Left.** Fix the AI's choice of buyers and re-grade, or an owner waiver; the end-screen
+score fix; the owner's phone speed check and one real trade on the phone.
 
 ### 2026-09-28 - prompt 10, Robust trade advantage (lanes S, D, H)
 **Changed.** The Gate 1 trade advantage is now clear of the line on every seed range:
