@@ -17,6 +17,8 @@ import type {
  *    surplus, reject the rest (rejecting is free; ignoring costs trust).
  * 2. Sell: offer spare food or energy to nations with a structural deficit,
  *    asking for their spare resource in a swap when they have one, else Credit.
+ *    Buyers are drawn in a seeded order weighted by deficit size, so every
+ *    importer gets a turn and the biggest are not always first (prompt 11).
  * 3. Buy: ask nations with a structural surplus for what it still lacks, for Credit.
  *
  * Every number it uses comes from `view.rules` (packages/sim/src/tunables.ts),
@@ -93,6 +95,29 @@ function goodsFor(view: NationView, good: Good, other: ResourceAmount, markupPct
   return Math.floor((value(view.prices, other) * 100) / ((100 + markupPct) * view.prices[good]));
 }
 
+/**
+ * Seeded weighted order without replacement: each pick takes a partner with
+ * probability weight / weight still in the draw. Integer weights of at least 1
+ * and integer draws from the hash, so it is deterministic and never uses
+ * Math.random (D5).
+ */
+export function weightedOrder<T>(items: readonly { readonly item: T; readonly weight: number }[], draw: (round: number) => number): T[] {
+  const left = items.map((x) => ({ item: x.item, weight: Math.max(1, Math.floor(x.weight)) }));
+  const out: T[] = [];
+  for (let round = 0; left.length > 0; round++) {
+    const total = left.reduce((sum, x) => sum + x.weight, 0);
+    let r = draw(round) % total;
+    let i = 0;
+    while (r >= (left[i] as { weight: number }).weight) {
+      r -= (left[i] as { weight: number }).weight;
+      i++;
+    }
+    out.push((left[i] as { item: T }).item);
+    left.splice(i, 1);
+  }
+  return out;
+}
+
 export function greedyDecide(view: NationView, seed: number, style: TraderStyle = GREEDY): Decision {
   const self = view.self;
   if (self.public.kind === 'aggregate') return { commands: [], reasons: [] };
@@ -160,13 +185,18 @@ export function greedyDecide(view: NationView, seed: number, style: TraderStyle 
   if (style.sells) {
     for (const good of GOODS) {
       if (spare[good] <= 0) continue;
-      const buyers = view.others
-        .filter((o) => balance(o, good) < 0 && !busy.has(o.id))
-        .map((o) => ({ o, score: -balance(o, good) * (10_000 + jitter(o.id)) }))
-        .sort((a, b) => b.score - a.score || (a.o.id < b.o.id ? -1 : 1));
+      // Weighted by deficit size: a nation short of twice as much is twice as likely to be offered first.
+      const salt = seed ^ hashText(view.selfId) ^ hashText(good) ^ Math.imul(view.tick + 1, 0x9e3779b9);
+      const buyers = weightedOrder(
+        view.others
+          .filter((o) => balance(o, good) < 0 && !busy.has(o.id))
+          .sort((a, b) => (a.id < b.id ? -1 : 1))
+          .map((o) => ({ item: o, weight: -balance(o, good) })),
+        (round) => mix(salt ^ Math.imul(round + 1, 0x27d4eb2d)),
+      );
       let fanout = 0;
       let left = spare[good];
-      for (const { o } of buyers) {
+      for (const o of buyers) {
         if (open >= cap || left <= 0 || fanout >= style.sellFanout * 3) break;
         const amount = Math.min(left, -balance(o, good));
         if (amount <= 0) continue;
