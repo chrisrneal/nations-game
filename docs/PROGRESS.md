@@ -14,18 +14,44 @@ Current phase: 1
 Gate 0 verdict: **PASS WITH WAIVERS** (docs/gates/GATE-0.md).
 
 ## Gate 1 checklist
-Suite: `npm run harness -- gate1` (200 seeded full-roster games, random strategies, paired runs). Latest results: docs/balance/gate1-prompt06.md.
-- [x] 200 seeded full-roster games with no crashes (0), no negative stocks (0), sources and sinks in band (food 92.2%, energy 84.8% consumed/produced; Credit sinks 0.5% of income)
-- [ ] The same nation does 15%+ better against its baseline trading than isolating (FAIL at Gate 1 review: +15.4% on seeds 1-200 but +14.5% pooled over 800 seeds; docs/gates/GATE-1.md)
-- [x] Isolationists worse off but alive (isolating scores lower in 94% of pairs; 0 dead)
+Suite: `npm run harness -- gate1` (200 seeded full-roster games, random strategies, paired runs). Latest results: docs/balance/gate1-prompt09.md (graded on seeds 1-200, 201-400, 401-600).
+- [x] 200 seeded full-roster games with no crashes (0), no negative stocks (0), sources and sinks in band (food 91.8-92.1%, energy 84.5-84.6% consumed/produced; Credit sinks 0.5% of income; prompt 09, three graded ranges)
+- [ ] The same nation does 15%+ better against its baseline trading than isolating (FAIL at Gate 1 review: +14.5% pooled over 800 seeds. Prompt 09: +17.6-17.7% on all three graded ranges, not tuned on them; to be confirmed by re-review / prompt 10)
+- [x] Isolationists worse off but alive (isolating scores lower in 94.5-96% of pairs; 0 dead; prompt 09)
 - [x] Dead states under 2% (0.0%)
-- [ ] No nation tops the score in more than 2x its fair share, 11.8% (FAIL: India 45%, Russia 24%; needs a rule decision, see the prompt 06 log)
+- [ ] No nation tops the score in more than 2x its fair share, 11.8% (FAIL after prompt 09's rule change: Egypt 12.5%, Saudi Arabia 13.0%, Russia 15.0% on the graded ranges, was India 34.5-45%; owner decision in docs/balance/gate1-prompt09.md)
 - [x] A trade in 3 taps or fewer (prompt 07: 2 taps from home - open the card, send the offer; checked by touch at 360 px)
 - [x] Gate 0 still passes (determinism 1,000/1,000 Node vs Chromium, purity, save/load; phone speed to re-measure)
 
 Gate 1 verdict: **FAIL** (docs/gates/GATE-1.md, prompt 08): top scorer and trade-gain robustness.
 
 ## Session log
+
+### 2026-09-28 - prompt 09, Top-scorer fairness rule (lanes D, S, H)
+**Changed.** New scoring rule, in RULES.md 2.8, 3.3, 5.1 and 11: (1) each
+nation's baseline now expects the shortfall it would suffer in a world short of
+food and energy, beyond its fair share of what the world can supply; (2) each side
+of a trade gains by the share of *its own* surplus or deficit the trade clears, not
+by the buyer's deficit, so a giant exporter no longer farms small buyers; (3) the
+score is a 12-month average, not the last month alone. Two new tunables
+(`structuralCoverSharePct` 80, `scoreSmoothingTicks` 12), `shortfallPenaltyBpPerPct`
+40 -> 35. Save format version 3: phone saves carry over; saves that need their
+moves replayed are refused with a plain message. New tests: packages/sim/src/
+fairness.test.ts, save migration, and a harness test that pins the top-scorer
+share to the ROADMAP definition.
+**Result.** Tuned only on seeds 1001-1400, graded on 1-600. The top scorer improved
+from India 34.5-45% to 12.5-15% (Egypt, Saudi Arabia, Russia), still over the 11.8%
+line on all three graded ranges, so the prompt's step 6 applies: best result and
+trade-off written up in docs/balance/gate1-prompt09.md. Every other Gate 1 metric
+passes on all three ranges, and the trade advantage is now +17.6-17.7% everywhere
+(was 14.0-15.7%). Trader archetype tops 2.8-2.9x fair share (was 2.3-2.6x).
+**How to see it.** `npm run harness -- gate1 --seed 401`, or read
+docs/balance/gate1-prompt09.md. In the app, a big importer like Japan now reads
+near 1.00 against its baseline instead of 0.70.
+**Left.** Owner decision on the top scorer (fix the AI's offer spreading next,
+recommended; or waive; or let regions make offers). Japan, Korea and Turkiye now
+gain only ~5% from trading. The interface still computes end-screen scores from
+the last month. See docs/GAPS.md, prompt 09.
 
 ### 2026-09-28 - prompt 08, Gate 1 review (independent)
 **Changed.** docs/gates/GATE-1.md written; no code changed. Verdict **FAIL**.

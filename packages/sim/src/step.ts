@@ -1,6 +1,7 @@
 import type { Command, ControllerSlot, Event, NationId, NationRecord, StandingPolicy } from '@nations/contracts';
 import { asSimCommand, validateCommand } from './commands.ts';
-import { economyTick, referencePrices } from './economy.ts';
+import { economyTick, referencePrices, structuralCover } from './economy.ts';
+import { nextScoreTrack } from './score.ts';
 import {
   acceptOffer,
   counterOffer,
@@ -13,7 +14,7 @@ import {
 } from './trade.ts';
 import { driftTrust } from './trust.ts';
 import { TUNABLES } from './tunables.ts';
-import type { WorldState } from './world.ts';
+import type { ScoreTrack, WorldState } from './world.ts';
 
 export interface StepResult {
   readonly state: WorldState;
@@ -48,7 +49,8 @@ export function canonicalOrder(state: WorldState, commands: readonly Command[]):
  * 2. Standing policies answer offers on their last tick (seam 8), then
  *    anything still unanswered expires.
  * 3. Every nation's economy: produce, consume, shortfall, income, resilience,
- *    growth (docs/RULES.md section 2).
+ *    growth, against a baseline that expects the structural shortfall
+ *    (docs/RULES.md section 2); then each nation's smoothed score track.
  * 4. Trust drifts towards baseTrust; reference prices are refreshed.
  *
  * Pure: never mutates `state` or `commands`, reads no clock and draws
@@ -71,6 +73,7 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
     events,
     covered: new Map(),
     gainCbp: new Map(),
+    cover: structuralCover(state),
   };
   const draft = (): WorldState => ({ ...state, nations, controllers, offers: ctx.offers });
   const perNation = new Map<string, number>();
@@ -178,12 +181,14 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
   expireOffers(ctx);
 
   let ledger = ctx.ledger;
+  const scoreTrack: Record<NationId, ScoreTrack> = { ...state.scoreTrack };
   for (const id of state.nationOrder) {
     const endowment = state.endowments[id];
     if (endowment === undefined) throw new Error(`No endowment for "${id}"`);
-    const result = economyTick(nations[id] as NationRecord, endowment, ledger, ctx.gainCbp.get(id) ?? 0);
+    const result = economyTick(nations[id] as NationRecord, endowment, ledger, ctx.gainCbp.get(id) ?? 0, ctx.cover);
     ledger = result.ledger;
     nations[id] = driftTrust(result.nation, state.nationOrder);
+    scoreTrack[id] = nextScoreTrack(state.scoreTrack[id], result.nation);
     const report = result.nation.private.last;
     if (report.unmetFood > 0 || report.unmetEnergy > 0) {
       events.push({ tick: state.tick, type: 'shortfall', payload: { nationId: id, report }, audience: [id] });
@@ -197,6 +202,7 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
     offers: ctx.offers,
     nextOfferId: ctx.nextOfferId,
     ledger,
+    scoreTrack,
     tick: state.tick + 1,
   };
   return { state: { ...next, prices: referencePrices(next) }, events };

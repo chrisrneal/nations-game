@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { playGame } from './game.ts';
 import { assignStrategies, formatGate1, formatGate1Ranges, runGate1, runGate1Ranges } from './gate1.ts';
 import { loadRoster } from './roster.ts';
 
@@ -51,5 +52,38 @@ describe('gate1 suite', () => {
     expect(text).toContain('seeds 5-6');
     expect(text).toContain('seeds 7-8');
     expect(text).toContain('Pooled, seeds 5-8');
+  });
+
+  it('computes the top-scorer share as the ROADMAP defines it', () => {
+    // ROADMAP "Balance harness": fair share = 1 / playable nations; no nation may top
+    // the score in more than 2x its fair share of games. Regions are never scored.
+    const roster = loadRoster();
+    const playable = roster.filter((r) => r.endowment?.kind === 'playable').map((r) => r.id);
+    const games = 5;
+    const ticks = 12;
+    const report = runGate1({ games, firstSeed: 21, roster, ticks });
+
+    expect(Object.keys(report.topShare).sort()).toEqual([...playable].sort());
+    const sum = Object.values(report.topShare).reduce((a, b) => a + b, 0);
+    expect(sum).toBeCloseTo(1, 10);
+
+    // Each game's top scorer is the playable nation with the highest final score in that game.
+    report.rows.forEach((row) => {
+      const result = playGame({ seed: row.seed, ticks, roster, strategies: assignStrategies(row.seed, playable), humanSwitch: false });
+      let best = result.score.nations[0];
+      for (const n of result.score.nations) if (best === undefined || n.finalScore > best.finalScore) best = n;
+      expect(row.top).toBe(best?.id);
+    });
+    for (const id of playable) {
+      expect(report.topShare[id]).toBe(report.rows.filter((r) => r.top === id).length / games);
+    }
+
+    const metric = report.metrics.find((m) => m.name.startsWith('Most frequent top scorer'));
+    const max = Math.max(...Object.values(report.topShare));
+    const line = 2 / playable.length;
+    expect(metric?.value).toBe(`${(max * 100).toFixed(1)}%`);
+    expect(metric?.passLine).toBe(`<= ${(line * 100).toFixed(1)}% (2x fair share)`);
+    expect(metric?.passLine).toContain('11.8%');
+    expect(metric?.pass).toBe(max <= line);
   });
 });

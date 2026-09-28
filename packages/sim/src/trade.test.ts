@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Command, Event, TradeOffer } from '@nations/contracts';
+import { structuralCover } from './economy.ts';
 import { step } from './step.ts';
+import { tradeImbalanceMilli } from './trade.ts';
 import { TUNABLES } from './tunables.ts';
 import { viewFor } from './view.ts';
 import { A, B, C, D, amt, answer, counter, offer, policy, tradeWorld } from './testkit.ts';
@@ -251,6 +253,16 @@ describe('offer validation', () => {
 
 describe('gains from trade (RULES 3.3)', () => {
   const capacity = (s: WorldState, id: typeof A): number => s.nations[id]?.private.capacityE4 ?? 0;
+  /**
+   * Bravo covering `units` of its food deficit: the share of everything it
+   * could clear this month (its energy surplus and its fair share of the food
+   * deficit), capped at the full rate. Prices do not move in the first month.
+   */
+  const bravoGainForFood = (s0: WorldState, units: number): number => {
+    const full = TUNABLES.gainsFromTradeBp.value * 100;
+    const clearable = tradeImbalanceMilli(s0.nations[B]!, s0.prices, structuralCover(s0));
+    return Math.min(full, Math.floor((full * units * s0.prices.food) / clearable));
+  };
 
   it('a surplus-to-deficit trade raises both capacities; a credit leg adds nothing more', () => {
     const s0 = tradeWorld();
@@ -260,41 +272,7 @@ describe('gains from trade (RULES 3.3)', () => {
     expect(types(traded.events)).toContain('offerSettled');
     expect(capacity(traded.state, A)).toBeGreaterThan(capacity(quiet, A));
     expect(capacity(traded.state, B)).toBeGreaterThan(capacity(quiet, B));
-    expect(traded.state.nations[B]?.private.last.tradeGainCbp).toBe(TUNABLES.gainsFromTradeBp.value * 100);
-  });
-
-  it('the supplier earns on the share of its own surplus sold, the receiver on the share of its deficit covered', () => {
-    const s0 = tradeWorld();
-    const bp = TUNABLES.gainsFromTradeBp.value;
-    const xp = TUNABLES.exportGainsBp.value;
-    const surplus = s0.nations[A]!.public.food.production - s0.nations[A]!.public.food.demand;
-    const deficit = s0.nations[B]!.public.food.demand - s0.nations[B]!.public.food.production;
-    expect(surplus).toBeGreaterThan(deficit);
-    const half = Math.floor(deficit / 2);
-    const traded = step(s0, [offer(A, B, amt('food', half), amt('credit', Math.floor((half * s0.prices.food) / 1000)), 0), answer('acceptOffer', B, 1, 0)]);
-    expect(types(traded.events)).toContain('offerSettled');
-    expect(traded.state.nations[B]?.private.last.tradeGainCbp).toBe(Math.floor((bp * 100 * half) / deficit));
-    expect(traded.state.nations[A]?.private.last.tradeGainCbp).toBe(Math.floor((xp * 100 * half) / surplus));
-    // Delivering more than the receiver lacks earns the supplier nothing extra.
-    const over = step(s0, [offer(A, B, amt('food', surplus), amt('credit', Math.floor((surplus * s0.prices.food) / 1000)), 0), answer('acceptOffer', B, 1, 0)]);
-    expect(over.state.nations[A]?.private.last.tradeGainCbp).toBe(Math.floor((xp * 100 * deficit) / surplus));
-  });
-
-  it('counts each surplus once per tick: selling past it to a second buyer earns the supplier nothing more', () => {
-    const s0 = tradeWorld();
-    const bp = TUNABLES.gainsFromTradeBp.value;
-    const xp = TUNABLES.exportGainsBp.value;
-    const surplus = s0.nations[A]!.public.food.production - s0.nations[A]!.public.food.demand;
-    const deficitB = s0.nations[B]!.public.food.demand - s0.nations[B]!.public.food.production;
-    const deficitD = s0.nations[D]!.public.food.demand - s0.nations[D]!.public.food.production;
-    expect(deficitB + deficitD).toBeGreaterThan(surplus);
-    const pay = (food: number): ReturnType<typeof amt> => amt('credit', Math.floor((food * s0.prices.food) / 1000));
-    const r = step(s0, [offer(A, B, amt('food', deficitB), pay(deficitB), 0), offer(A, D, amt('food', deficitD), pay(deficitD), 0), answer('acceptOffer', B, 1, 0)]);
-    expect(types(r.events).filter((t) => t === 'offerSettled')).toHaveLength(2);
-    expect(r.state.nations[A]?.private.last.tradeGainCbp).toBe(xp * 100);
-    // Each receiver still gains on its own deficit covered.
-    expect(r.state.nations[B]?.private.last.tradeGainCbp).toBe(bp * 100);
-    expect(r.state.nations[D]?.private.last.tradeGainCbp).toBe(bp * 100);
+    expect(traded.state.nations[B]?.private.last.tradeGainCbp).toBe(bravoGainForFood(s0, deficit));
   });
 
   it('counts each deficit once per tick, and never between two nations with no surplus', () => {
@@ -308,7 +286,7 @@ describe('gains from trade (RULES 3.3)', () => {
       answer('acceptOffer', B, 2, 0),
     ]);
     expect(types(twice.events).filter((t) => t === 'offerSettled')).toHaveLength(2);
-    expect(twice.state.nations[B]?.private.last.tradeGainCbp).toBe(TUNABLES.gainsFromTradeBp.value * 100);
+    expect(twice.state.nations[B]?.private.last.tradeGainCbp).toBe(bravoGainForFood(s0, deficit));
     // Charlie is exactly balanced in food: selling it to Bravo is a trade, not a gain.
     // Bravo steps before Charlie in nation order, so it answers on the next tick.
     const made = step(s0, [offer(C, B, amt('food', 10), amt('credit', 1), 0)]).state;
