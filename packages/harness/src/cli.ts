@@ -9,7 +9,11 @@
  *   npm run harness -- bench [--ticks 1000]          time catch-up ticks in Node and Chromium
  *     [--runs 5] [--no-browser]
  *   npm run harness -- gate1 [--games 200]           the Gate 1 suite: seeded full-roster games with
- *     [--seed 1] [--out DIR]                         random strategies plus paired runs; writes gate1.md
+ *     [--seed 1] [--ranges 1] [--ticks T]            random strategies plus paired runs; writes gate1.md.
+ *     [--out DIR]                                    --ranges N plays N consecutive ranges of --games
+ *                                                    seeds and reports each range and all of them pooled
+ *   `--suite gate1` is the same as `gate1`. An unknown command or flag is an
+ *   error (exit 2), never silently ignored.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -19,25 +23,20 @@ import { benchCatchUp, hashSeeds, runGame, type GameMetrics } from './game.ts';
 import { formatSummary, summarize, toCsv } from './metrics.ts';
 import { findChromium, runInBrowser } from './browser.ts';
 import { loadRoster } from './roster.ts';
-import { formatGate1, runGate1 } from './gate1.ts';
+import { formatGate1, formatGate1Ranges, runGate1, runGate1Ranges } from './gate1.ts';
+import { parseArgs, type HarnessCommand, type ParsedArgs } from './args.ts';
 
-const args = process.argv.slice(2);
-const command = args[0] !== undefined && !args[0].startsWith('--') ? args[0] : 'play';
-
-function flag(name: string, fallback: number): number {
-  const index = args.indexOf(`--${name}`);
-  if (index === -1) return fallback;
-  const value = Number(args[index + 1]);
-  if (!Number.isSafeInteger(value) || value < 0) throw new Error(`--${name} needs a whole number`);
-  return value;
+let parsed: ParsedArgs;
+try {
+  parsed = parseArgs(process.argv.slice(2));
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(2);
 }
 
-function option(name: string, fallback: string): string {
-  const index = args.indexOf(`--${name}`);
-  return index === -1 ? fallback : (args[index + 1] ?? fallback);
-}
-
-const useBrowser = !args.includes('--no-browser');
+const flag = (name: string, fallback: number): number => parsed.numbers[name] ?? fallback;
+const option = (name: string, fallback: string): string => parsed.strings[name] ?? fallback;
+const useBrowser = !parsed.switches.includes('no-browser');
 const roster = loadRoster();
 
 function stats(times: readonly number[]): string {
@@ -99,10 +98,13 @@ async function bench(): Promise<void> {
 async function gate1(): Promise<void> {
   const games = flag('games', 200);
   const firstSeed = flag('seed', 1);
+  const ranges = flag('ranges', 1);
+  const ticks = parsed.numbers.ticks;
   const outDir = resolve(option('out', join(fileURLToPath(new URL('..', import.meta.url)), 'out')));
   const start = performance.now();
-  const report = runGate1({ games, firstSeed, roster });
-  const text = formatGate1(report);
+  const options = { games, firstSeed, roster, ...(ticks === undefined ? {} : { ticks }) };
+  const report = ranges === 1 ? runGate1(options) : runGate1Ranges({ ...options, ranges });
+  const text = 'ranges' in report ? formatGate1Ranges(report) : formatGate1(report);
   mkdirSync(outDir, { recursive: true });
   writeFileSync(join(outDir, 'gate1.md'), `${text}\n`);
   console.log(text);
@@ -110,11 +112,5 @@ async function gate1(): Promise<void> {
   if (!report.pass) process.exitCode = 1;
 }
 
-const commands: Record<string, () => Promise<void>> = { play, determinism, bench, gate1 };
-const run = commands[command];
-if (run === undefined) {
-  console.error(`Unknown harness command "${command}". Use play, determinism, bench or gate1.`);
-  process.exitCode = 2;
-} else {
-  await run();
-}
+const commands: Record<HarnessCommand, () => Promise<void>> = { play, determinism, bench, gate1 };
+await commands[parsed.command]();
