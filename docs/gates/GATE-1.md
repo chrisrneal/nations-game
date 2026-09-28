@@ -1,206 +1,192 @@
-# Gate 1 - Economy and trade: independent review
+# Gate 1 - Economy and trade: independent review (second pass)
 
-Prompt 08, 2026-09-28. Reviewed at `main` 8aaf5e1 (after prompt 07 merged).
-The reviewer did not build this code. Every result below was produced by running
-it or reading it in this session. docs/PROGRESS.md, docs/balance/ and the
-builders' comments were not taken as evidence. No code was changed.
+Prompt 08 (re-run), 2026-09-28. Reviewed at `main` 733af1b, after prompts 09
+(top-scorer rule change) and 10 (trade advantage, strict harness CLI) merged.
+The first review (verdict FAIL, at 8aaf5e1) is in git history at b7cd5e8.
+
+The reviewer did not build this code. Every result below was produced by
+running it or reading it in this session. docs/PROGRESS.md, docs/balance/ and
+the builders' comments were not taken as evidence. No code was changed.
 
 ## Verdict: **FAIL**
 
-Two criteria fail:
+One criterion fails: **no nation may top the score in more than 2x its fair
+share of games (11.8%)**. On the graded command (`--suite gate1 --games 200`,
+seeds 1-200) Egypt tops 12.5% (25 of 200 games; the limit allows 23). Every
+other fresh range fails too: Saudi Arabia 13.0% (201-400), Russia 15.0%
+(401-600), Saudi Arabia 14.0% (601-800). Only the builders' tuning seeds pass
+(1001-1200: Indonesia 11.0%). The prompt 09 rule is a large improvement (India
+was 34.5-45%) but it is tuned to its own seeds and does not hold on fresh ones.
 
-1. **Top scorer.** India tops the score in 34.5-45% of games against a limit of
-   11.8%, on every seed range tried. Known since prompt 06. Nothing has changed.
-2. **Trading vs isolating.** The +15% trade advantage passes on the official
-   seeds 1-200 by 0.4 points (+15.4%), and only after `gainsFromTradeBp` was tuned
-   to the top of its band against those same seeds. On fresh seeds it fails: 401-600
-   gives +14.0%, 601-800 gives +14.9%, and all 800 pairs pooled give **+14.5%**.
-   For 7 of the 17 nations trading is worth less than 15%: Australia +4.0%,
-   Canada +4.9%, Brazil +6.6%, Korea +8.6%, South Africa +11.2%, Japan +11.6%,
-   Turkiye +11.9%.
+This is not bad luck. In a perfectly fair game each nation tops 5.9% of games;
+over 200 games the most frequent winner lands near 9%, and reaching 24+ wins
+happens in roughly 1-2% of runs. Four of four fresh ranges at 25-30 wins is a
+real bias.
 
-Everything else held up. That covers the economy invariants, isolationists,
-dead states, the trade taps, the architecture rules, the depth budget and
-Gate 0's automated checks. Two items wait on the owner's phone (see OWNER CHECK).
+The owner could waive this in writing (option 2 in docs/balance/gate1-prompt09.md).
+This review does not recommend it: the largest known cause is fixable in one
+lane (the AI's choice of buyers, below), and Gate 2 will grade the same number
+again with archetypes on top.
 
 | # | Criterion (docs/ROADMAP.md) | Result |
 |---|---|---|
 | 1 | 200 seeded full-roster games: no crashes, no negative stocks, sources and sinks in band | PASS |
-| 2 | Same nation does 15%+ better against its baseline trading than isolating (paired runs) | **FAIL** (not robust: 14.5% pooled) |
+| 2 | Same nation does 15%+ better against its baseline trading than isolating (paired runs) | PASS (+17.6-17.7% on every fresh range) |
 | 3 | Isolationists worse off but alive | PASS |
 | 4 | Dead states under 2% | PASS |
-| 5 | No nation tops the score in more than 2x its fair share (11.8%) | **FAIL** (India 34.5-45%) |
-| 6 | A trade in 3 taps or fewer | PASS (2 taps); OWNER CHECK on a real phone |
+| 5 | No nation tops the score in more than 2x its fair share (11.8%) | **FAIL** (12.5-15.0% on every graded range) |
+| 6 | A trade in 3 taps or fewer | PASS (2 taps, headless phone); OWNER CHECK on a real phone |
 | 7 | Gate 0 still passes | PASS on everything automated; OWNER CHECK: phone speed |
 
 ## What was run
 
 | Command | Result |
 |---|---|
-| `npm ci` | clean install, 0 vulnerabilities |
-| `npm test` | 19 files, 257 tests passed, 0 skipped (Chromium present) |
+| `npm ci` | clean install |
+| `npm test` | 21 files, 295 tests passed, 0 skipped (Chromium present) |
 | `npm run check` | lint + typecheck of every workspace, exit 0 |
-| `npm run harness -- --suite gate1 --games 200` | **Does not run the Gate 1 suite.** The CLI ignores `--suite` and runs the default `play` command (200 games x 200 ticks, 0 rejected, exit 0). See finding F1 |
-| `npm run harness -- gate1 --games 200` (seeds 1-200) | FAIL: every metric passes except the top scorer (India 45.0%); trade gain +15.4%; exit 1 |
-| `npm run harness -- gate1 --games 200 --seed 201` | FAIL: India 42.0%; trade gain +15.7% |
-| `npm run harness -- gate1 --games 200 --seed 401` | FAIL: India 34.5%; trade gain **+14.0%** |
-| `npm run harness -- gate1 --games 200 --seed 601` | FAIL: India 39.0%; trade gain **+14.9%** |
-| Scratch script (deleted after use) pooling the 800 paired runs above via `runGate1` | median +14.5%; 48.9% of pairs at +15% or more |
-| `npm run harness -- determinism` | 1,000/1,000 identical twice in Node and in Node vs HeadlessChrome 141: PASS |
-| `npm run harness -- bench` | 1,000 ticks, 23 nations, greedy AI: median 515 ms in Node, 432 ms in Chromium on the build machine |
+| `npm run harness -- --suite gate1 --games 200` | Runs the Gate 1 suite now (first review's F1 fixed). Seeds 1-200: **FAIL**, exit 1. Only failing line: top scorer Egypt 12.5% |
+| `npm run harness -- gate1 --games 200 --seed 201` | FAIL: Saudi Arabia 13.0%; trade gain +17.6% |
+| `npm run harness -- gate1 --games 200 --seed 401` | FAIL: Russia 15.0%; trade gain +17.6% |
+| `npm run harness -- gate1 --games 200 --seed 601` | FAIL: Saudi Arabia 14.0%; trade gain +17.7% |
+| `npm run harness -- gate1 --games 200 --seed 1001` (builders' tuning seeds) | PASS: Indonesia 11.0%; trade gain +18.0% |
+| `npm run harness -- determinism` | 1,000/1,000 identical, Node repeat and Node vs HeadlessChrome 141: PASS |
+| `npm run harness -- bench` | 1,000 ticks, 23 nations, greedy AI: median 420 ms Node, 376 ms Chromium on the build machine |
 | `npm run build` then `npm run e2e --workspace web` | 33/33 phone checks at 360 px, including "a trade offer in 3 taps or fewer (2 taps)" |
+| Scratch script (deleted after use): seeds 1-200, winner by the end screen's formula vs the sim's scoreboard | **They disagree in 93 of 200 games** (finding N1) |
 
 ## Criterion by criterion
 
 ### 1. 200 games, no crashes, no negative stocks, sources and sinks in band: PASS
-- 200 games of 60 ticks with the real 17 nations and 6 regions, each nation
-  given a random strategy, plus 400 paired games: 0 crashes, 0 rejected commands.
+- Seeds 1-200: 200 games of 60 ticks with the real 17 nations and 6 regions,
+  random strategy per nation, plus 400 paired games. 0 crashes, 0 rejected
+  commands. Same on seeds 201-800.
 - Negative stocks: 0. The suite checks every stock of every nation after every
-  tick (`onTick` in packages/harness/src/game.ts:86, `negativeStocks` in
-  gate1.ts). The property test in packages/sim/src/economy.test.ts also passes.
-  It checks conservation to the unit, no negative stocks and that offers always
-  expire.
-- Sources and sinks: world food consumed/produced 92.2%, energy 84.8% (band
-  75-100%), Credit sinks 0.5% of income (band 0-25%). Seeds 201-800 give the same
-  figures to within a point.
-- Caveat: RULES.md never defined these bands. They first appear in gate1.ts, in
-  the same commit that produced the results. The comment in gate1.ts says they
-  were fixed before any result was seen, and nothing here can prove that. The
-  Credit band's lower edge of 0% cannot fail. Resilience is Phase 1's only
-  Credit sink, and it barely runs. Accepted for Phase 1; Phase 2 crises should
-  set a real lower bound.
+  tick (`onTick` in packages/harness/src/game.ts, `negativeStocks` in gate1.ts).
+  The conservation property test in packages/sim/src/economy.test.ts passes.
+- Sources and sinks: food consumed/produced 91.8-92.1%, energy 84.5-84.8%
+  (band 75-100%), Credit sinks 0.5% of income (band 0-25%) on every range.
+- Caveat from the first review stands: the Credit band's lower edge of 0%
+  cannot fail. Phase 2 crises should give it a real floor.
 
-### 2. Trading beats isolating by 15%+: FAIL
-- The suite picks one nation per seed. That nation plays the greedy trader in
-  one game and the isolationist in the other, and nothing else changes. The
-  metric is the median of trading ownScore / isolating ownScore - 1.
-- Seeds 1-200: +15.4% (pass line 15%). The prompt 06 log records that
-  `gainsFromTradeBp` went from 15 to 40, the top of its RULES band, to move this
-  exact number from +5.4% to +15.4% on these seeds. So the pass comes from tuning
-  against the seeds that grade it.
-- Independent seeds: 201-400 +15.7%, 401-600 +14.0%, 601-800 +14.9%. Pooled over
-  800 pairs: **+14.5%**. Fewer than half the pairs (48.9%) clear 15%.
-- Per nation, pooled: raw exporters and self-sufficient nations barely gain from
-  trade (Australia +4.0%, Canada +4.9%, Brazil +6.6%, Korea +8.6%). Importers gain
-  a lot (India +106%, Indonesia +54%, Germany +44%). The effect is real but
-  unevenly spread, and the median sits on the line.
-- RULES.md still gives `gainsFromTradeBp` a starting value of 15. The code uses
-  40, so the design document and the game disagree.
+### 2. Trading beats isolating by 15%+: PASS
+- Metric definition unchanged since the first review (read in gate1.ts: median
+  of trading ownScore / isolating ownScore - 1, one random nation per seed, all
+  else equal). `gainsFromTradeBp` is still 40; the gain rose because prompt 09
+  changed how trade gains and the baseline are computed.
+- Seeds 1-200 +17.7%, 201-400 +17.6%, 401-600 +17.6%, 601-800 +17.7%, 1001-1200
+  +18.0%. Robust now: 2.6 points clear on every range, where the first review
+  found 14.0-15.7%.
+- Uneven by nation (seeds 1-200): Japan +5.2%, Korea +4.5%, Turkiye +4.6%,
+  South Africa +13.9%, Mexico +14.1%; Australia +15.1% and Canada +15.7% sit on
+  the line. The criterion is the median, so this passes, but a player who picks
+  Japan, Korea or Turkiye learns that trade barely helps (already in GAPS,
+  prompts 09 and 10).
 
 ### 3. Isolationists worse off but alive: PASS
-Isolating scores lower than trading in 94-96% of pairs on every seed range.
-0 isolating runs end dead. The isolationist archetype's mean ownScore is 0.83-0.84
-against the trader's 1.04-1.05.
+Isolating scores lower than trading in 94.5-96.0% of pairs on every range.
+0 isolating runs end dead. Isolationist mean ownScore 0.956 vs trader 1.129.
 
 ### 4. Dead states under 2%: PASS
-0.0% on all 800 seeds. "Dead" is ownScore < 0.50 at game end. The shortfall
-penalty is capped at 30% a month (`maxShortfallPenaltyPct`), so an economy
-cannot collapse inside one 60-month game. That makes the 2% limit easy to meet.
-It should get a harder look once crises exist.
+0.0% on every range. As the first review noted, the 30% monthly penalty cap
+makes this easy to meet; look harder once crises exist.
 
 ### 5. No nation tops the score in more than 2x fair share: FAIL
-| Seeds | Top nation | Share | Next |
+| Seeds | Top nation | Share (wins) | Result |
 |---|---|---|---|
-| 1-200 | India | 45.0% | Russia 24.0%, Indonesia 13.0% |
-| 201-400 | India | 42.0% | Russia 23.5%, Indonesia 19.0% |
-| 401-600 | India | 34.5% | Russia 29.5%, Indonesia 16.0% |
-| 601-800 | India | 39.0% | Russia 29.5%, Indonesia 15.0% |
+| 1-200 (graded command) | Egypt | 12.5% (25) | FAIL |
+| 201-400 | Saudi Arabia | 13.0% (26) | FAIL |
+| 401-600 | Russia | 15.0% (30) | FAIL |
+| 601-800 | Saudi Arabia | 14.0% (28) | FAIL |
+| 1001-1200 (tuning seeds) | Indonesia | 11.0% (22) | pass |
 
-The limit is 2/17 = 11.8%. Three nations exceed it on every range. Six nations
-(China, Egypt, Germany, Japan, Mexico, Turkiye) topped 0 of 200 games on seeds
-1-200. The cause diagnosed in prompt 06 still holds: the world data is short of
-energy and food, so importers always pay some shortfall penalty. The trade bonus
-is also scaled by the deficit it covers, so nations with the biggest deficits
-gain most from trade (India +106%). Tuning within the bands cannot fix this. It
-needs a rule change.
+Limit: 2/17 = 11.8%, i.e. at most 23 wins in 200. Seeds 1-200 full table:
+Egypt 12.5, Russia 12.0, Saudi Arabia 11.0, Brazil 10.0, Nigeria 7.5 ... China
+1.0, India 1.0. Every nation now wins sometimes, which is real progress.
+
+What was checked in the code:
+- The metric is unchanged: the top nation by `finalScore` from the sim's
+  `scoreboard` (gate1.ts). No threshold moved.
+- The prompt 09 tunables (`structuralCoverSharePct` 80, `shortfallPenaltyBpPerPct`
+  35, `scoreSmoothingTicks` 12) live in tunables.ts inside their bands and say
+  they were tuned on seeds 1001-1400. Nothing here can prove that, but the
+  pattern (tuning seeds pass, every other range fails) fits it, and fits a rule
+  that is fitted to its seeds rather than fair in general.
+- Largest remaining driver, confirmed in code: the greedy AI ranks buyers by
+  raw deficit size with at most `aiNoiseBp` jitter
+  (packages/ai/src/greedy.ts, the `buyers` sort in "2. Sell"), so the same
+  importers get the scarce energy game after game. That lives in lane A and no
+  sim rule can undo it.
 
 ### 6. A trade in 3 taps or fewer: PASS (OWNER CHECK on a real phone)
-- Read in code: apps/web/src/ui/cards.ts builds shortfall and spare-goods cards
-  with a one-tap "Buy ... / Offer ..." option that sends a real `offer` Command.
-  Incoming offers have one-tap Accept. Inbox.tsx opens a card in one tap, and the
-  options sit in a bottom sheet. From home that is 2 taps to send an offer and 2
-  taps to accept one.
-- Run: the e2e phone check drove headless Chromium at 360 px. "Offer sent" came
-  after 2 taps, and the first option's centre was at 511 of 740 px (bottom third).
-- Weakness in the evidence: the e2e check "accepting an offer settles it in the
-  sim" passes whenever the toast says "Trade done", "failed" or "Not sent", so it
-  passes even if the trade fails (finding F3). Settlement itself is covered by
-  sim tests.
-- The owner has not yet sent or accepted a trade on a real phone.
-  docs/playtests/ is empty.
+- e2e at 360 px: "Offer sent" after 2 taps (card → option); the first option's
+  centre at 505 of 740 px (bottom third); AI offers arrive as 3 cards; a
+  counter-offer is sent from the trade sheet.
+- Weakness in the evidence still open (first review F3): "accepting an offer
+  settles it in the sim" (apps/web/e2e/phone-check.ts:108) passes on "failed"
+  or "Not sent" as well as "Trade done". Settlement itself is covered by sim tests.
+- The owner has not sent or accepted a trade on a real phone. docs/playtests/
+  is empty.
 
 ### 7. Gate 0 still passes: PASS on everything automated; OWNER CHECK on phone speed
 | Gate 0 criterion | Now |
 |---|---|
-| Sim core has no UI, DOM, network or clock imports | PASS. purity.test.ts (82 checks) passes; grep finds no `Math.random`, `Date`, `document` or `window` in sim, contracts or ai sources |
-| 1,000 seeds identical in browser and Node | PASS. Re-run with the real roster and the greedy AI: 1,000/1,000 |
-| Dummy AI and UI use the same command API | PASS. The UI submits Commands through `Host.submit` (App.tsx `send`). The platform runs `greedyDecide(viewFor(...))` and submits its Commands to the same session (engine.ts:189-193). boundary.test.ts stops the UI importing the sim or the AI |
-| Save-reload-continue matches an uninterrupted run | PASS. The property test in session.test.ts now includes the economy. e2e export → wipe → import restores the same fingerprint and continues |
-| 1,000 catch-up ticks under 2 s on a mid-range phone | **OWNER CHECK.** 515 ms Node / 432 ms Chromium on the build machine, up from ~15 ms in Phase 0. A phone 4x slower would be at the limit. The owner's earlier reading predates the economy |
-| PWA installs and runs offline | PASS in headless Chromium (installable, opens offline). The owner's real-device report predates prompt 07; re-checking is advised but not required |
-| Owner completes three decisions one-handed | Owner reported for Phase 0. The cards are new, so it should be repeated in the Gate 2 playtests |
-| Nine seams (waived at Gate 0 because seam 8 was missing) | **Seam 8 now reviewed: PASS.** Trade offers are State objects with `expiryTick` (contracts/trade.ts). Standing policies answer on the last tick for absent nations (sim/trade.ts `policyAnswer`, lines 184-222). Unanswered offers expire with a trust cost. The View carries only offers involving the viewer (view.ts). The 19 trade tests cover every path, including "with no commands at all, every offer is resolved within its life" |
+| Sim core has no UI, DOM, network or clock imports | PASS. purity.test.ts passes; the only non-relative import in sim and contracts sources is `@nations/contracts` (plus vitest and fast-check in tests); `Math.random`, `Date`, `document`, `window` appear only in comments |
+| 1,000 seeds identical in browser and Node | PASS (1,000/1,000, real roster, greedy AI) |
+| Dummy AI and UI use the same command API | PASS. engine.ts submits `greedyDecide(viewFor(state, id))` Commands to the same session the UI's `Host.submit` reaches |
+| Save-reload-continue matches an uninterrupted run | PASS. session.test.ts property test; schema 3 migration tested; e2e export → wipe → import gives the same fingerprint and continues |
+| 1,000 catch-up ticks under 2 s on a mid-range phone | **OWNER CHECK.** 420 ms Node / 376 ms Chromium on the build machine. A phone 4-5x slower is near the limit; no reading from a phone with the economy yet |
+| PWA installs and runs offline | PASS in headless Chromium (installable, opens offline, continues offline) |
+| Owner completes three decisions one-handed | Owner reported for Phase 0; repeat in Gate 2 playtests |
+| Nine seams | PASS (seam 8 reviewed in the first Gate 1 review; unchanged since) |
 
 ## Architecture rules (CLAUDE.md): hold
-- **Pure sim and contracts:** hold (see Gate 0 row 1). Sim randomness is the
-  seeded RNG. Economy maths is integer basis points and milli-units. The greedy
-  AI's noise is a hash, not `Math.random`.
-- **Commands only:** hold. The UI keeps no game state. Cards are rebuilt from
-  the View on every update, and an offer card exists only while the offer is
-  open in State.
-- **View only:** holds. `viewFor` builds foreign nations field by field and
-  never exposes their stocks, trust or policy. The AI gets only `viewFor(state, id)`.
-  Two items travel beside the View in `GameUpdate.standing`: the collective
-  multiplier and a state-hash fingerprint. Both are public-by-nature and already
-  logged (GAPS, prompt 07).
-- **Controller slots:** `human | ai | caretaker` in contracts, switchable by
-  command, tested.
-- **Interactions with expiry:** hold (seam 8 above).
-- **Tunables:** no inline game numbers found in sim economy, trade, trust or
-  score sources. The only literals are unit conversions (/12, /100) and the
-  50-point defaults for a roster entry with no endowment (world.ts:62-67). Those
-  apply only to hand-made test rosters.
-- **UI only through the Host:** holds (boundary.test.ts, 19 checks).
-- Watch item: `standings()` in apps/web/src/ui/econ.ts:167 recomputes every
-  nation's final score in the interface from View fields. It copies the sim's
-  scoring formula rather than reading the sim's scoreboard, so the end screen
-  could drift from the real score if scoring changes.
+- **Pure sim and contracts:** hold (above). New prompt 09 code (`structuralCover`,
+  `baselineOutputFor`, `nextScoreTrack`) is integer maths from State and tunables.
+- **Commands only / View only:** hold. AI reads `viewFor(state, id)` only;
+  boundary.test.ts keeps the UI off the sim and AI.
+- **Controller slots, interactions with expiry, Host only:** unchanged, hold.
+- **Tunables:** every new number (`structuralCoverSharePct`,
+  `scoreSmoothingTicks`, retuned `shortfallPenaltyBpPerPct`) is in tunables.ts
+  with a band and a note. No new inline game numbers found.
+- **Watch item, now a real bug (N1):** the interface computes scores itself
+  instead of reading the sim's. See below.
 
 ## Mobile depth budget (trade screens): meets it
 | Rule | Evidence | Result |
 |---|---|---|
-| Any decision within 3 taps of home | 2 taps (card → option) for offer, accept, decline, withdraw; 3 for adjust/counter (card → "Adjust…" → Send) | PASS |
-| No horizontal scroll | e2e: 360 px on the inbox, decision sheet, counter-offer sheet, trade sheet, map, game tab and game over | PASS |
-| Tables max 4 columns | The only table is the game-over table: #, Nation, Baseline, Score | PASS |
+| Any decision within 3 taps of home | 2 taps to offer, accept, decline, withdraw; 3 to counter | PASS |
+| No horizontal scroll | e2e at 360 px on inbox, decision sheet, counter-offer sheet, trade sheet, map, game tab, game over | PASS |
+| Tables max 4 columns | Only table: game over (#, Nation, Baseline, Score) | PASS |
 | 3-5 resources in one strip | 4: food, energy, credit, resilience | PASS |
-| Every number actionable or explanatory | Resource chips, price line, output line and multiplier open why-sheets. The game-over table's Baseline % and Score cells do not | Minor gap |
-| Primary actions in the bottom third | First card option at 511/740 px, just inside. The trade sheet's Send button is not measured by the e2e check | PASS, thin margin |
-| Cut list (no ledgers, no deep chains) | No trade history ledger. Trades are one step (goods ↔ goods or credit) | PASS |
+| Every number actionable or explanatory | Trade screens: yes (chips, prices, output line open why-sheets). Outside the trade screens, the output line and end screen now show a number the sim does not score by (N1) | PASS for trade screens; N1 elsewhere |
+| Primary actions in the bottom third | First option at 505/740 px. Trade sheet's Send button still not measured | PASS, thin margin |
+| Cut list | No trade ledger; trades are one step | PASS |
 
 ## Other findings (not gate criteria)
-- **F1 - Harness ignores unknown flags.** `npm run harness -- --suite gate1`
-  silently runs the default `play` command and exits 0, so it looks like a
-  passing Gate 1 run. The real command is `npm run harness -- gate1`. The CLI
-  should reject unknown flags or accept `--suite`. Lane H.
-- **F2 - The trader archetype wins 2.3-2.6x its fair share** (exploiter
-  1.3-1.7x, hoarder and isolationist ~0x). This is not a Gate 1 criterion, but
-  Gate 2 caps any archetype at 1.5x. Expect it to fail there unless the top
-  scorer fix also flattens it.
-- **F3 - Vacuous e2e check.** "accepting an offer settles it in the sim"
-  (apps/web/e2e/phone-check.ts:106-107) passes on "failed" or "Not sent" as well
-  as "Trade done". Lane P.
-- **F4 - AI offers are concentrated** on the biggest importers (already in GAPS,
-  prompt 07). The e2e phone check plays only India, the nation that gets the
-  most offers, so a quiet inbox for Japan or Korea is never exercised.
-- **F5 - No playtest records.** docs/playtests/ is empty. Gate 1 does not
-  require playtests, but Gate 2 needs 10.
+- **N1 - The end screen can name the wrong winner.** Since prompt 09 the sim
+  scores a 12-month average (`WorldState.scoreTrack`), which the View does not
+  carry. `standings()` in apps/web/src/ui/econ.ts and the "% of baseline" line
+  in ResourceStrip.tsx still use last month's output / baseline. Replaying seeds
+  1-200 with the gate1 strategies, the nation that formula ranks first differs
+  from the sim's winner in **93 of 200 games**. The player could be told they
+  won when they did not. The why-sheet also still says the baseline is "the path
+  the IMF projects for you", which is no longer true (RULES 2.8). Logged by the
+  builders in GAPS (prompt 09); should be fixed before any playtest. Lanes C, S, U.
+- **N2 - Vacuous e2e trade check** (first review F3) still open. Lane P.
+- **N3 - Trader archetype tops 2.84x fair share** on seeds 1-200 (hoarder
+  0.42x, isolationist 0.04x, exploiter 0.70x). Gate 2 allows 1.5x. Expect it to
+  fail there.
+- **N4 - No playtest records.** docs/playtests/ is empty. Not a Gate 1
+  requirement; Gate 2 needs 10.
+- First review's F1 (harness ignored `--suite`) is **fixed**: the CLI accepts
+  `--suite gate1` and rejects unknown flags (args.ts, args.test.ts).
 
 ## To pass on re-review
-1. A rule change that brings every nation's top-score share to 11.8% or less
-   over 200 seeds, with thresholds unchanged (fix prompt 09).
-2. After that change, the paired trading gain at +15% or more on seeds 1-200 and
-   on at least two fresh 200-seed ranges, tuned only on seeds outside the graded
-   range (fix prompt 10).
-3. Owner: the phone speed check with the Phase 1 economy (Game tab speed check,
-   or open the app and run a 60-month game at 4x), and one real trade sent and
-   accepted on the phone.
+1. The most frequent top scorer at 11.8% or less on seeds 1-200 **and** on
+   seeds 201-400, 401-600 and 601-800, thresholds unchanged, tuned only on
+   seeds 1001 and above. Criterion 2 must stay at +15% or more on the same
+   ranges. Or: a written owner waiver of criterion 5 in this file.
+2. Owner: the phone speed check with the Phase 1 economy, and one real trade
+   sent and accepted on the phone.
+3. Recommended before playtests (not a gate criterion): fix N1.

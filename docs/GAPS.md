@@ -74,3 +74,6 @@ Each entry: prompt number, phase, what is missing, owning lane.
 - 10, Phase 1, Australia (+15.3% pooled) and Canada (+15.9%) sit right at the 15% line: they export little, so the monthly cap on the trade gain binds early. Fine for the median; watch it if the Gate 1 metric is ever read per nation. Lanes D, S.
 - 10, Phase 1, Top scorer still fails on every graded range (Egypt 12.5%, Saudi Arabia 13.0%, Russia 15.0%, Saudi Arabia 14.0%; pooled Russia 12.6%). Unchanged by prompt 10; see the prompt 09 gap and owner decision. Owner.
 - 10, Phase 1, `gate1 --ranges 4` runs 800 games plus 1,600 paired games in about 50 s on one core; ranges could run in parallel worker threads if CI ever runs it. Lane H.
+
+- 08b, Phase 1, **Gate 1 second review: FAIL on the top scorer only** (Egypt 12.5%, Saudi Arabia 13.0%, Russia 15.0%, Saudi Arabia 14.0% on seeds 1-800 in four ranges; tuning seeds 1001-1200 pass at 11.0%). The greedy AI's buyer ranking by raw deficit (packages/ai/src/greedy.ts, "2. Sell") is the largest remaining driver. Lane A, or an owner waiver.
+- 08b, Phase 1, **The end screen names a different winner than the sim in 93 of 200 games** (seeds 1-200, gate1 strategies): `standings()` in apps/web/src/ui/econ.ts and the resource strip read last month's output/baseline, the sim scores the 12-month `scoreTrack`. Fix before playtests. Lanes C, S, U.
