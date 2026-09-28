@@ -3,8 +3,8 @@ Each entry: prompt number, phase, what is missing, owning lane.
 
 - 01, Phase 0, ~~`data/world-2030.json` is a 6-nation placeholder and `data/SOURCES.md` does not exist.~~ Closed by prompt 02. Lane D.
 - 01, Phase 0, ~~No sim `step()`, seeded RNG or state-hash determinism test yet.~~ Closed by prompt 03. Lane S.
-- 01, Phase 0, No Host implementation: no Web Worker, no Comlink bridge, no IndexedDB saves. `apps/web/src/platform` is empty. Lane P.
-- 01, Phase 0, No jsdom Vitest project, so UI components cannot be tested yet. Add one with the first component worth testing. Lane U.
+- 01, Phase 0, ~~No Host implementation: no Web Worker, no Comlink bridge, no IndexedDB saves.~~ Closed by prompt 04. Lane P.
+- 01, Phase 0, No jsdom Vitest project, so UI components cannot be tested yet. Prompt 04 added `apps/web/src/**/*.test.ts` to the root Vitest include (node environment) for platform and boundary tests; components are checked by the Chromium phone check instead. Lane U.
 - 01, Phase 0, PWA icons are generated flat placeholders (`apps/web/public/pwa-*.png`); the app has no visual identity. Lane P.
 - 01, Phase 0, ~~The balance harness is a placeholder CLI.~~ Seeded runs and metrics rows added in prompt 03; archetypes still missing. Lane H.
 - 01, Phase 0, `State` and `View` carry only tick, RNG, controllers and identity; every later system adds its own fields. Lanes C and S.
@@ -25,3 +25,12 @@ Each entry: prompt number, phase, what is missing, owning lane.
 - 03, Phase 0, Catch-up benchmark measured only on the build machine (~14 ms for 1,000 ticks in Node and headless Chromium), not on a mid-range phone. Needs `npm run harness -- bench` equivalent inside the PWA once LocalHost exists. Lanes P and H.
 - 03, Phase 0, Dummy AI's idle chance (1 in 4) is an inline placeholder in packages/ai/src/dummy.ts, not in tunables.ts; it goes when real AI arrives. Lane A.
 - 03, Phase 0, Harness has no bot archetypes and no balance metrics yet (only command counts and hashes); arrive with the Phase 1 economy. Lane H.
+
+- 04, Phase 0, Pace is a Phase 0 build pace: 1x = one tick a second, 4x = four (apps/web/src/platform/pace.ts). docs/RULES.md section 9 says 1x = one tick per 30 minutes and 4x = one per 7.5 minutes; switch when the economy makes ticks meaningful. `live` pace (advance while closed) is refused for now. Lane P.
+- 04, Phase 0, Decision cards are fake (apps/web/src/ui/cards.ts): generated from the world file every 24 ticks, answered cards remembered only until the app closes, and every option sends the placeholder `ping` command. Real cards must be State objects with expiry ticks (seam 8), exposed in the View. Lanes S, C, then U.
+- 04, Phase 0, The resource strip shows starting indices from data/world-2030.json (food and energy self-sufficiency, PPP GDP, pandemic preparedness), not live stocks; the map draws structural ties, not trust, because trust is not in State and its formula's numbers are not yet in tunables.ts. Both read static data in the interface until the View carries them. Lanes S and C.
+- 04, Phase 0, `PlayerView` is the sim's `NationView`, re-exported by the platform because contracts has no such type (same gap as prompt 03). Lane C.
+- 04, Phase 0, The phone check (`npm run e2e --workspace web`) needs a Chromium binary and is not in CI. Adding it needs a CI browser install, which is an edit to .github/workflows (architect). Architect.
+- 04, Phase 0, ESLint's `@nations/sim` ban in apps/web/src could be widened to `@nations/ai`, `comlink` and platform internals; the boundary test covers these instead because eslint.config.js is architect-owned. Architect.
+- 04, Phase 0, Saves are compact (the current state becomes the snapshot), so an in-app save cannot replay the game from tick 0. Fine for resume; bug-report replay would need the full log kept. Lane P.
+- 04, Phase 0, Real-device checks still open: install on an iPhone and an Android phone from the Vercel production address, airplane-mode reopen, and the in-app speed check reading on a mid-range phone. Owner.
