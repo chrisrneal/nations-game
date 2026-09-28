@@ -5,9 +5,11 @@
  *   npm run harness                                  play 20 seeded games of 200 ticks,
  *     [-- --games N --ticks T --seed S --out DIR]    write games.csv + summary.txt
  *   npm run harness -- determinism [--seeds 1000]    same hashes twice in Node and in Chromium
- *     [--ticks 50] [--no-browser]
+ *     [--ticks 20] [--no-browser]
  *   npm run harness -- bench [--ticks 1000]          time catch-up ticks in Node and Chromium
  *     [--runs 5] [--no-browser]
+ *   npm run harness -- gate1 [--games 200]           the Gate 1 suite: seeded full-roster games with
+ *     [--seed 1] [--out DIR]                         random strategies plus paired runs; writes gate1.md
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -17,6 +19,7 @@ import { benchCatchUp, hashSeeds, runGame, type GameMetrics } from './game.ts';
 import { formatSummary, summarize, toCsv } from './metrics.ts';
 import { findChromium, runInBrowser } from './browser.ts';
 import { loadRoster } from './roster.ts';
+import { formatGate1, runGate1 } from './gate1.ts';
 
 const args = process.argv.slice(2);
 const command = args[0] !== undefined && !args[0].startsWith('--') ? args[0] : 'play';
@@ -64,7 +67,7 @@ async function play(): Promise<void> {
 
 async function determinism(): Promise<void> {
   const seeds = flag('seeds', 1000);
-  const ticks = flag('ticks', 50);
+  const ticks = flag('ticks', 20);
   const first = hashSeeds(1, seeds, ticks, roster);
   const second = hashSeeds(1, seeds, ticks, roster);
   const repeatMismatch = first.filter((hash, i) => hash !== second[i]).length;
@@ -83,7 +86,7 @@ async function determinism(): Promise<void> {
 async function bench(): Promise<void> {
   const ticks = flag('ticks', 1000);
   const runs = flag('runs', 5);
-  console.log(`catch-up benchmark: ${ticks} ticks, ${roster.length} nations, dummy AI for every nation`);
+  console.log(`catch-up benchmark: ${ticks} ticks, ${roster.length} nations, greedy trader for every nation`);
   benchCatchUp(ticks, 1, roster, () => performance.now()); // warm-up
   console.log(`node:     ${stats(benchCatchUp(ticks, runs, roster, () => performance.now()))}`);
   if (useBrowser && findChromium() !== undefined) {
@@ -93,10 +96,24 @@ async function bench(): Promise<void> {
   console.log('budget:   2000 ms on a mid-range phone (Gate 0); phones are typically several times slower than this machine');
 }
 
-const commands: Record<string, () => Promise<void>> = { play, determinism, bench };
+async function gate1(): Promise<void> {
+  const games = flag('games', 200);
+  const firstSeed = flag('seed', 1);
+  const outDir = resolve(option('out', join(fileURLToPath(new URL('..', import.meta.url)), 'out')));
+  const start = performance.now();
+  const report = runGate1({ games, firstSeed, roster });
+  const text = formatGate1(report);
+  mkdirSync(outDir, { recursive: true });
+  writeFileSync(join(outDir, 'gate1.md'), `${text}\n`);
+  console.log(text);
+  console.log(`wall time ${Math.round(performance.now() - start)} ms; wrote ${join(outDir, 'gate1.md')}`);
+  if (!report.pass) process.exitCode = 1;
+}
+
+const commands: Record<string, () => Promise<void>> = { play, determinism, bench, gate1 };
 const run = commands[command];
 if (run === undefined) {
-  console.error(`Unknown harness command "${command}". Use play, determinism or bench.`);
+  console.error(`Unknown harness command "${command}". Use play, determinism, bench or gate1.`);
   process.exitCode = 2;
 } else {
   await run();

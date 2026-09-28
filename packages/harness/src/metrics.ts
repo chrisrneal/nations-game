@@ -7,7 +7,9 @@ export const CSV_COLUMNS = [
   'submitted',
   'rejectedAtSubmit',
   'rejectedAtStep',
-  'pings',
+  'tradesSettled',
+  'offersExpired',
+  'offersFailed',
   'controllerSwitches',
   'finalHash',
 ] as const satisfies readonly (keyof GameMetrics)[];
@@ -23,7 +25,7 @@ export interface Summary {
   readonly ticksPerGame: number;
   readonly submitted: number;
   readonly rejected: number;
-  readonly pings: number;
+  readonly tradesSettled: number;
   readonly meanCommandsPerGame: number;
   readonly distinctHashes: number;
   readonly elapsedMs: number;
@@ -37,7 +39,7 @@ export function summarize(games: readonly GameMetrics[], elapsedMs: number): Sum
     ticksPerGame: games[0]?.ticks ?? 0,
     submitted,
     rejected: sum((g) => g.rejectedAtSubmit + g.rejectedAtStep),
-    pings: sum((g) => g.pings),
+    tradesSettled: sum((g) => g.tradesSettled),
     meanCommandsPerGame: games.length === 0 ? 0 : Math.round(submitted / games.length),
     distinctHashes: new Set(games.map((g) => g.finalHash)).size,
     elapsedMs: Math.round(elapsedMs),
@@ -49,7 +51,7 @@ export function formatSummary(summary: Summary): string {
     `games played:        ${summary.games} x ${summary.ticksPerGame} ticks`,
     `commands submitted:  ${summary.submitted} (mean ${summary.meanCommandsPerGame} per game)`,
     `commands rejected:   ${summary.rejected}`,
-    `pings delivered:     ${summary.pings}`,
+    `trades settled:      ${summary.tradesSettled}`,
     `distinct end states: ${summary.distinctHashes}`,
     `wall time:           ${summary.elapsedMs} ms`,
   ].join('\n');

@@ -103,9 +103,9 @@ describe('pure packages stay pure', () => {
 
 /**
  * packages/ai must be deterministic (D5) and must not be able to reach State:
- * it may import contracts and its own files, and `import type` from the sim
- * (for NationView). A runtime import of @nations/sim could call `step` or read
- * a whole world, so it is forbidden outside tests.
+ * it may import contracts (where NationView lives since prompt 06) and its own
+ * files, nothing else. Any import of @nations/sim - even a type - is forbidden
+ * outside tests, so the AI cannot even name the full State.
  */
 const aiFiles = listTypeScriptFiles(join(repoRoot, 'packages/ai/src')).filter(
   (file) => !file.includes('.test.'),
@@ -121,16 +121,12 @@ describe('AI stays deterministic and View-only', () => {
   });
 
   it.each(aiFiles.map((file) => [relative(repoRoot, file), file] as const))(
-    '%s imports only contracts, relative files and sim types',
+    '%s imports only contracts and relative files',
     (name, file) => {
       const code = stripComments(readFileSync(file, 'utf8'));
-      const typeOnly = new Set(
-        [...code.matchAll(/\bimport\s+type\s[^;]*?\bfrom\s*['"]([^'"]+)['"]/g)].map((m) => m[0]),
-      );
       for (const match of code.matchAll(/\b(?:import|export)\s[^;]*?\bfrom\s*['"]([^'"]+)['"]/g)) {
         const specifier = match[1] ?? '';
-        const allowed =
-          ALLOWED_IMPORTS.test(specifier) || (specifier === '@nations/sim' && typeOnly.has(match[0]));
+        const allowed = ALLOWED_IMPORTS.test(specifier);
         expect(allowed, `${name} imports "${specifier}" at runtime. The AI reads only a View (CLAUDE.md).`).toBe(true);
       }
       expect(/\b(?:import|require)\s*\(/.test(code), `${name} uses a dynamic import`).toBe(false);

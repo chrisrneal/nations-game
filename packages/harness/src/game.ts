@@ -1,16 +1,26 @@
 /**
- * One headless game with the dummy AI. Browser-safe on purpose (no Node
- * imports): the determinism check runs this exact module in Node and in
- * Chromium and compares the hashes.
+ * One headless game. Browser-safe on purpose (no Node imports): the
+ * determinism check runs this exact module in Node and in Chromium and
+ * compares the hashes.
  */
-import type { Command, Event } from '@nations/contracts';
-import { dummyDecide } from '@nations/ai';
-import { Session, createWorld, hashState, mix32, viewFor, type RosterEntry } from '@nations/sim';
+import type { Command, Event, NationId } from '@nations/contracts';
+import { Session, createWorld, hashState, mix32, scoreboard, viewFor, type RosterEntry, type Scoreboard, type WorldState } from '@nations/sim';
+import { botDecide, type Strategy } from './bots.ts';
 
 export interface GameOptions {
   readonly seed: number;
   readonly ticks: number;
   readonly roster: readonly RosterEntry[];
+  /** Strategy per nation id; nations not listed play the greedy trader. */
+  readonly strategies?: Readonly<Record<string, Strategy>>;
+  /**
+   * First nation starts `human` (idle, as if away), hands itself to the
+   * caretaker a third of the way in and takes itself back at two thirds
+   * (seam 7). On by default; the balance suite turns it off.
+   */
+  readonly humanSwitch?: boolean;
+  /** Called after every tick, e.g. for invariant checks. */
+  readonly onTick?: (state: WorldState, events: readonly Event[]) => void;
 }
 
 export interface GameMetrics {
@@ -20,28 +30,31 @@ export interface GameMetrics {
   readonly submitted: number;
   readonly rejectedAtSubmit: number;
   readonly rejectedAtStep: number;
-  readonly pings: number;
+  readonly tradesSettled: number;
+  readonly offersExpired: number;
+  readonly offersFailed: number;
   readonly controllerSwitches: number;
   readonly finalHash: string;
 }
 
-/**
- * Plays `ticks` ticks at full speed. Every nation in an `ai` or `caretaker`
- * slot is played by the dummy AI through its View. The first nation starts
- * `human` (idle, as if the player is away), hands itself to the caretaker a
- * third of the way in and takes itself back at two thirds (seam 7).
- */
-export function runGame(options: GameOptions): GameMetrics {
+export interface GameResult {
+  readonly metrics: GameMetrics;
+  readonly state: WorldState;
+  readonly score: Scoreboard;
+}
+
+export function playGame(options: GameOptions): GameResult {
   const { seed, ticks, roster } = options;
+  const humanSwitch = options.humanSwitch ?? true;
   const firstId = roster[0]?.id;
   const state0 = createWorld({
     seed,
     roster,
-    ...(firstId === undefined ? {} : { controllers: { [firstId]: 'human' as const } }),
+    ...(humanSwitch && firstId !== undefined ? { controllers: { [firstId]: 'human' as const } } : {}),
   });
   const session = new Session(state0);
   const aiSeed = mix32(seed ^ 0x2545f491);
-  const human = state0.nationOrder[0];
+  const human: NationId | undefined = humanSwitch ? state0.nationOrder[0] : undefined;
   const handOff = Math.floor(ticks / 3);
   const takeBack = Math.floor((2 * ticks) / 3);
 
@@ -53,16 +66,7 @@ export function runGame(options: GameOptions): GameMetrics {
   };
 
   let rejectedAtStep = 0;
-  let pings = 0;
   let controllerSwitches = 0;
-  const count = (events: readonly Event[]): void => {
-    for (const event of events) {
-      if (event.type === 'commandRejected') rejectedAtStep++;
-      else if (event.type === 'pinged') pings++;
-      else if (event.type === 'controllerChanged') controllerSwitches++;
-    }
-  };
-
   for (let t = 0; t < ticks; t++) {
     const state = session.state;
     if (human !== undefined && (t === handOff || t === takeBack)) {
@@ -71,22 +75,40 @@ export function runGame(options: GameOptions): GameMetrics {
     }
     for (const id of state.nationOrder) {
       if (state.controllers[id] === 'human') continue;
-      for (const command of dummyDecide(viewFor(state, id), aiSeed)) submit(command);
+      const strategy = options.strategies?.[id] ?? 'trader';
+      for (const command of botDecide(strategy, viewFor(state, id), aiSeed)) submit(command);
     }
-    count(session.advance(1));
+    const events = session.advance(1);
+    for (const event of events) {
+      if (event.type === 'commandRejected') rejectedAtStep++;
+      else if (event.type === 'controllerChanged') controllerSwitches++;
+    }
+    options.onTick?.(session.state, events);
   }
 
+  const final = session.state;
   return {
-    seed,
-    ticks,
-    nations: roster.length,
-    submitted,
-    rejectedAtSubmit,
-    rejectedAtStep,
-    pings,
-    controllerSwitches,
-    finalHash: hashState(session.state),
+    state: final,
+    score: scoreboard(final),
+    metrics: {
+      seed,
+      ticks,
+      nations: roster.length,
+      submitted,
+      rejectedAtSubmit,
+      rejectedAtStep,
+      tradesSettled: final.ledger.tradesSettled,
+      offersExpired: final.ledger.offersExpired,
+      offersFailed: final.ledger.offersFailed,
+      controllerSwitches,
+      finalHash: hashState(final),
+    },
   };
+}
+
+/** Plays a game with every AI nation on the greedy trader. */
+export function runGame(options: GameOptions): GameMetrics {
+  return playGame(options).metrics;
 }
 
 /** Final hashes for seeds [firstSeed, firstSeed + count). */
