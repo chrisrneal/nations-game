@@ -20,10 +20,41 @@ Suite: `npm run harness -- gate1` (200 seeded full-roster games, random strategi
 - [x] Isolationists worse off but alive (isolating scores lower in 94% of pairs; 0 dead)
 - [x] Dead states under 2% (0.0%)
 - [ ] No nation tops the score in more than 2x its fair share, 11.8% (FAIL: India 45%, Russia 24%; needs a rule decision, see the prompt 06 log)
-- [ ] A trade in 3 taps or fewer (interface, prompt 07)
+- [x] A trade in 3 taps or fewer (prompt 07: 2 taps from home - open the card, send the offer; checked by touch at 360 px)
 - [x] Gate 0 still passes (determinism 1,000/1,000 Node vs Chromium, purity, save/load; phone speed to re-measure)
 
 ## Session log
+
+### 2026-09-28 - prompt 07, Phase 1 playable on the phone (lanes U and P)
+**Changed.** Platform: the app now plays the real world (17 nations + 6
+regions from data/world-2030.json) with the greedy AI trader for every other
+nation, stops the clock at month 60, exports the running game to a file and
+imports it back (then autosaves it), steps one month on demand, and uses a
+play-test pace (1x = a month every 10 s, 4x = every 2.5 s). Interface: a live
+resource strip (food, energy, credit, resilience) with why-sheets built from
+real stocks, production and demand; output against baseline in the header;
+decision cards built from the View - offers other nations send you (accept,
+counter, decline), next month's shortfalls (buy in one tap), spare goods to sell
+(offer in one tap), and your own offers waiting (withdraw); a trade sheet to
+make or counter any offer with a live fair-price check; a world map drawn from
+live trust with "Propose a trade" on every nation and region; standing-policy
+switches; export and import buttons with a game fingerprint; and an end-of-game
+table of all 17 nations. The Phase 0 sample cards are gone.
+**Proof.** 257 tests pass (new: file export/import resumes the same game after a
+wiped store, end of game, cards from the View, two-tap trades). Phone check at
+360 px in headless Chromium, 33/33: no horizontal scroll on any screen or sheet;
+a trade offer in 2 taps; AI offers arrive as cards and accepting one settles it;
+a counter-offer; why-sheets on all four resources; 60 fps at 4x with the CPU
+slowed 4x; policies reach the sim; export, clear site data, import restores the
+same month and fingerprint and continues; reopens offline; a full game as India
+plays to the month-60 end screen.
+**How to see it.** Open the app on the phone, start a new game (any nation),
+answer cards from Decisions, tap ⏭ to move a month or 1x/4x to run. Game tab:
+policies, Export to file, Import from file.
+**Left.** Small importers (Japan, Korea, Germany...) receive almost no AI
+offers, because the AI trader only sells to the biggest deficits; they can still
+buy through their own cards. Phone re-check of speed and install by the owner.
+See docs/GAPS.md, prompt 07.
 
 ### 2026-09-28 - prompt 06, Economy and trade engine (lanes C, S, A, H)
 **Changed.** Gate 0 recorded as PASS WITH WAIVERS on the owner's word

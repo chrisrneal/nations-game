@@ -110,9 +110,10 @@ export class GameEngine {
     if (!SUPPORTED_PACES.includes(pace)) throw new Error(`Pace "${pace}" is not available yet`);
     const { session } = this.requireGame();
     this.stopTimer();
-    this.pace = session.state.tick >= GAME_LENGTH ? 'paused' : pace;
-    if (this.pace === 'x1' || this.pace === 'x4') {
-      this.timer = this.timers.setInterval(() => this.tickOnce(), PACE_INTERVAL_MS[pace]);
+    const next: Pace = session.state.tick >= GAME_LENGTH ? 'paused' : pace;
+    this.pace = next;
+    if (next === 'x1' || next === 'x4') {
+      this.timer = this.timers.setInterval(() => this.tickOnce(), PACE_INTERVAL_MS[next]);
     }
     return this.emit([]);
   }

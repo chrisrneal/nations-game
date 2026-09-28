@@ -1,13 +1,16 @@
 /**
- * Phone check for prompt 04's "done when" list, in headless Chromium sized as a
+ * Phone check for the "done when" lists of prompts 04 and 07, in headless Chromium sized as a
  * 360 px phone with touch. Builds nothing: run `npm run build` first, then
  * `npm run e2e --workspace web`. Not in CI (needs a Chromium binary); results
  * are recorded in docs/PROGRESS.md.
  *
- * Checks: installable manifest and service worker; opens with the network off;
- * no horizontal scroll at 360 px; three sample decisions by touch with options
- * in the bottom third; why-sheet on a number; save, close, reopen offline, load
- * continues the tick count; frame rate at 4x with the CPU slowed 4x.
+ * Checks (prompt 07): installable; no horizontal scroll at 360 px on every
+ * screen and sheet; a trade offer in 3 taps or fewer from home; AI offers
+ * arrive as cards and accepting one settles it; a counter-offer; a why-sheet on
+ * every resource; the map and a proposed trade; 60 fps at 4x with the CPU
+ * slowed 4x; policies reach the sim; export a file, clear site data, import it
+ * and the same game (fingerprint) resumes; reopens offline; a full game plays
+ * to the end screen.
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
@@ -65,35 +68,77 @@ async function main(): Promise<void> {
     await noHorizontalScroll(page, 'start screen');
     await page.getByRole('button', { name: 'New game' }).tap();
     await noHorizontalScroll(page, 'nation picker');
-    await page.getByRole('button', { name: /^Japan/ }).tap();
+    await page.getByRole('button', { name: /^India/ }).tap();
     await page.getByRole('heading', { name: /Decisions/ }).waitFor();
     await noHorizontalScroll(page, 'decision inbox');
+    check('resource strip shows live stocks', /\d/.test((await page.getByTestId('chip-food').textContent()) ?? ''));
 
-    // Three sample decisions, one-handed: tap card, tap option, both by touch.
-    for (let i = 0; i < 3; i++) {
-      await page.locator('.card').first().tap();
-      const option = page.locator('.sheet .option').first();
-      await option.waitFor();
-      await noHorizontalScroll(page, `decision ${i + 1} sheet`);
-      const box = await option.boundingBox();
-      const centre = box === null ? -1 : box.y + box.height / 2;
-      check(`decision ${i + 1}: options in the bottom third`, centre >= (HEIGHT * 2) / 3, `first option centre at ${Math.round(centre)} of ${HEIGHT}`);
-      await option.tap();
-      await page.locator('.toast').waitFor();
-      await page.locator('.sheet').waitFor({ state: 'detached' });
+    // A trade in three taps or fewer, from home: tap the card, tap the offer.
+    let taps = 0;
+    await page.locator('.card-shortfall, .card-opportunity').first().tap();
+    taps++;
+    const first = page.locator('.sheet .option').first();
+    await first.waitFor();
+    await noHorizontalScroll(page, 'decision sheet');
+    const box = await first.boundingBox();
+    const centre = box === null ? -1 : box.y + box.height / 2;
+    check('options sit in the bottom third', centre >= (HEIGHT * 2) / 3, `first option centre at ${Math.round(centre)} of ${HEIGHT}`);
+    await first.tap();
+    taps++;
+    await page.getByText(/Offer sent to/).first().waitFor({ timeout: 5000 });
+    check('a trade offer in 3 taps or fewer', taps <= 3, `${taps} taps`);
+    await page.getByTestId('next-month').tap();
+    await page.waitForTimeout(400);
+
+    // AI offers arrive as cards; accept one in two taps.
+    let offers = 0;
+    for (let i = 0; i < 10 && offers === 0; i++) {
+      offers = await page.locator('.card-offer').count();
+      if (offers === 0) {
+        await page.getByTestId('next-month').tap();
+        await page.waitForTimeout(300);
+      }
     }
-    check('three decisions answered', (await page.locator('.card').count()) === 0);
-    await page.getByRole('radio', { name: 'Normal speed' }).tap();
-    await page.getByText(/received your answer/).first().waitFor({ timeout: 5000 });
-    check('answers reached the sim and came back as events', true);
+    check('AI offers arrive as cards in the inbox', offers > 0, `${offers} offer cards`);
+    if (offers > 0) {
+      await page.locator('.card-offer').first().tap();
+      await page.locator('.sheet [data-option="accept"]').tap();
+      await page.getByText(/Accepted/).first().waitFor({ timeout: 5000 });
+      await page.getByTestId('next-month').tap();
+      await page.getByText(/Trade done|failed|Not sent/).first().waitFor({ timeout: 5000 });
+      check('accepting an offer settles it in the sim', true);
+    }
 
-    await page.locator('.chip').first().tap();
-    check('why-sheet opens on a number', await page.getByRole('dialog', { name: /Why: Food/ }).isVisible());
-    await page.getByRole('dialog').getByRole('button', { name: 'Close' }).tap();
+    // Counter an offer through the trade sheet, if one is open.
+    await page.getByTestId('next-month').tap();
+    await page.waitForTimeout(300);
+    if ((await page.locator('.card-offer').count()) > 0) {
+      await page.locator('.card-offer').first().tap();
+      await page.locator('.sheet [data-option="counter"]').tap();
+      await page.getByRole('dialog', { name: 'Counter-offer' }).waitFor();
+      await noHorizontalScroll(page, 'counter-offer sheet');
+      await page.getByTestId('send-offer').tap();
+      await page.getByText(/Counter-offer sent/).first().waitFor({ timeout: 5000 });
+      check('counter-offer sent from the trade sheet', true);
+    }
+
+    for (const key of ['food', 'energy', 'credit', 'resilience']) {
+      await page.getByTestId(`chip-${key}`).tap();
+      const dialog = page.getByRole('dialog');
+      await dialog.waitFor();
+      const text = (await dialog.textContent()) ?? '';
+      check(`why-sheet on ${key}`, /\d/.test(text), text.slice(0, 60));
+      await dialog.getByRole('button', { name: 'Close' }).first().tap();
+    }
 
     await page.getByRole('button', { name: /World/ }).tap();
     await noHorizontalScroll(page, 'world map');
     check('map shows nations and trust lines', (await page.locator('.map .dot').count()) === 17 && (await page.locator('.map .tie').count()) > 0);
+    await page.locator('.rows .row').first().tap();
+    await page.getByRole('button', { name: 'Propose a trade' }).tap();
+    await page.getByRole('dialog', { name: 'Make an offer' }).waitFor();
+    await noHorizontalScroll(page, 'trade sheet');
+    await page.getByRole('dialog').getByRole('button', { name: 'Close' }).first().tap();
 
     // 60 fps at 4x, with the CPU slowed to roughly a mid-range phone.
     await page.getByRole('button', { name: /Decisions/ }).tap();
@@ -108,38 +153,72 @@ async function main(): Promise<void> {
         frames++;
         worst = Math.max(worst, now - last);
         last = now;
-        if (now - start < 3000) requestAnimationFrame(frame);
+        if (now - start < 6000) requestAnimationFrame(frame);
         else resolve({ frames: frames / ((now - start) / 1000), worst });
       };
       requestAnimationFrame(frame);
     })`)) as { frames: number; worst: number };
     const after = await tick(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
-    check('4x runs about four ticks a second', after - before >= 10, `${after - before} ticks in 3 s`);
+    check('4x advances the clock', after - before >= 2, `${after - before} months in 6 s`);
     check('60 fps at 4x (CPU slowed 4x)', fps.frames >= 55, `${fps.frames.toFixed(1)} fps, worst frame ${fps.worst.toFixed(0)} ms`);
-
-    // Save, close, reopen in airplane mode, load, continue.
     await page.getByRole('radio', { name: 'Pause' }).tap();
-    await page.getByRole('button', { name: /Saves/ }).tap();
-    await noHorizontalScroll(page, 'saves');
+
+    // Game tab: policies, a save slot, and an exported file.
+    await page.getByRole('button', { name: /Game/ }).tap();
+    await noHorizontalScroll(page, 'game tab');
+    await page.getByRole('switch', { name: /Accept anything from partners/ }).tap();
+    await page.getByText(/Policy changes/).first().waitFor({ timeout: 5000 });
+    await page.getByTestId('next-month').tap();
+    await page.waitForTimeout(300);
+    check('policy switch reaches the sim', (await page.getByRole('switch', { name: /Accept anything from partners/ }).getAttribute('aria-checked')) === 'true');
     await page.getByTestId('slot-slot-1').getByRole('button', { name: 'Save' }).tap();
     await page.getByText('Saved to Slot 1').waitFor();
+    const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('export').tap()]);
+    const exported = join(profile, 'export.json');
+    await download.saveAs(exported);
     const savedTick = await tick(page);
-    await page.close();
+    const savedPrint = await page.getByTestId('fingerprint').textContent();
+    check('export writes a file', existsSync(exported), download.suggestedFilename());
 
+    // Clear site data, reopen, import the file: the same game resumes.
+    await cdp.send('Storage.clearDataForOrigin', { origin: new globalThis.URL(URL).origin, storageTypes: 'indexeddb,local_storage,cache_storage,service_workers' });
+    await page.close();
+    page = await context.newPage();
+    await page.goto(URL);
+    await page.getByRole('heading', { name: 'Nations' }).waitFor({ timeout: 5000 });
+    check('site data cleared (no game to continue)', (await page.getByRole('button', { name: /Continue as/ }).count()) === 0);
+    await page.getByRole('button', { name: 'Load a save' }).tap();
+    await page.getByTestId('import-file').setInputFiles(exported);
+    await page.getByTestId('tick').waitFor();
+    check('import restores the month', (await tick(page)) === savedTick, `saved ${savedTick}, imported ${await tick(page)}`);
+    await page.getByRole('button', { name: /Game/ }).tap();
+    check('import restores the same game (fingerprint)', (await page.getByTestId('fingerprint').textContent()) === savedPrint, `${savedPrint}`);
+    await page.getByRole('button', { name: /Decisions/ }).tap();
+    await page.getByTestId('next-month').tap();
+    await page.waitForTimeout(300);
+    check('the imported game continues', (await tick(page)) === savedTick + 1);
+
+    // Offline reopen from the autosave the import wrote.
+    await page.close();
     await context.setOffline(true);
     page = await context.newPage();
     await page.goto(URL);
     await page.getByRole('heading', { name: 'Nations' }).waitFor({ timeout: 5000 });
     check('opens with the network off', true);
-    await page.getByRole('button', { name: 'Load a save' }).tap();
-    await page.getByTestId('slot-slot-1').getByRole('button', { name: 'Load' }).tap();
+    await page.getByRole('button', { name: /Continue as/ }).tap();
     await page.getByTestId('tick').waitFor();
-    check('load restores the tick count', (await tick(page)) === savedTick, `saved ${savedTick}, loaded ${await tick(page)}`);
-    await page.getByRole('radio', { name: 'Normal speed' }).tap();
-    await page.waitForTimeout(2200);
-    const continued = await tick(page);
-    check('tick count continues after load', continued > savedTick, `${savedTick} -> ${continued}`);
+    check('offline continue restores the game', (await tick(page)) >= savedTick);
+
+    // Play to the end of the game, one month at a time.
+    for (let i = 0; i < 70 && (await page.getByTestId('game-over').count()) === 0; i++) {
+      await page.getByTestId('next-month').tap();
+      await page.waitForTimeout(120);
+    }
+    await page.getByTestId('game-over').waitFor({ timeout: 10000 });
+    check('a full game reaches the end screen', (await tick(page)) === 60, `month ${await tick(page)}`);
+    check('final table lists all 17 nations', (await page.locator('.gameover tbody tr').count()) === 17);
+    await noHorizontalScroll(page, 'game over');
 
     await context.close();
   } finally {

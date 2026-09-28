@@ -11,11 +11,19 @@ const PACES: readonly { pace: Pace; label: string; name: string }[] = [
 ];
 
 /** Live tick counter and pace control, in the thumb zone. */
-export function PaceBar(props: { tick: number; pace: Pace; onPace: (pace: Pace) => void }): ReactElement {
-  const speed =
-    props.pace === 'x1' || props.pace === 'x4'
-      ? `Running at ${props.pace === 'x1' ? '1x' : '4x'}: one month every ${PACE_INTERVAL_MS[props.pace] / 1000} s in this early build.`
-      : 'Paused: nothing moves until you press 1× or 4×.';
+export function PaceBar(props: {
+  tick: number;
+  gameLength: number;
+  over: boolean;
+  pace: Pace;
+  onPace: (pace: Pace) => void;
+  onNextMonth: () => void;
+}): ReactElement {
+  const speed = props.over
+    ? 'The game is over: the clock has stopped at 2035.'
+    : props.pace === 'x1' || props.pace === 'x4'
+      ? `Running at ${props.pace === 'x1' ? '1x' : '4x'}: one month every ${PACE_INTERVAL_MS[props.pace] / 1000} s in this play-test build.`
+      : 'Paused: nothing moves until you press 1×, 4× or ⏭ for one month.';
   return (
     <div className="pacebar">
       <Num
@@ -23,7 +31,7 @@ export function PaceBar(props: { tick: number; pace: Pace; onPace: (pace: Pace) 
         why={{
           title: 'World clock',
           value: `Month ${props.tick} · ${tickDate(props.tick)}`,
-          text: `One tick is one world month, starting January 2030; a full game is 60 months. ${speed}`,
+          text: `One tick is one world month, starting January 2030; a full game is ${props.gameLength} months (${props.gameLength - props.tick} left). ${speed}`,
         }}
       >
         <span className="tick-count" data-testid="tick">
@@ -45,6 +53,9 @@ export function PaceBar(props: { tick: number; pace: Pace; onPace: (pace: Pace) 
             {p.label}
           </button>
         ))}
+        <button type="button" className="pace-btn" aria-label="Next month" data-testid="next-month" disabled={props.over} onClick={props.onNextMonth}>
+          ⏭
+        </button>
       </div>
     </div>
   );
