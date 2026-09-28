@@ -13,13 +13,11 @@ describe('step', () => {
     expect(step(step(s0, []).state, [ping(A, B, 1)]).state.tick).toBe(2);
   });
 
-  it('applies the placeholder ping: sender private count, target public count, one RNG draw', () => {
+  it('applies the placeholder ping: sender private count, target public count, no RNG draw', () => {
     const { state, events } = step(world(), [ping(A, B, 0)]);
     expect(state.nations[A]?.private.pingsSent).toBe(1);
-    expect(state.nations[A]?.private.lastRoll).toBeGreaterThanOrEqual(1);
-    expect(state.nations[A]?.private.lastRoll).toBeLessThanOrEqual(TUNABLES.placeholderRollSides.value);
     expect(state.nations[B]?.public.pingsReceived).toBe(1);
-    expect(state.rng.counter).toBe(world().rng.counter + 1);
+    expect(state.rng).toEqual(world().rng);
     expect(events).toEqual([{ tick: 0, type: 'pinged', payload: { from: A, to: B }, audience: [A, B] }]);
   });
 
@@ -44,7 +42,7 @@ describe('step', () => {
     const { state, events } = step(s0, bad);
     expect(events.map((e) => e.type)).toEqual(Array(bad.length).fill('commandRejected'));
     expect(events.find((e) => (e.payload as { reason: string }).reason === 'wrong tick')?.audience).toEqual([A]);
-    expect(hashState({ ...state, tick: 0 })).toBe(hashState(s0));
+    expect(hashState(state)).toBe(hashState(step(s0, []).state));
   });
 
   it('enforces the per-nation per-tick command limit', () => {

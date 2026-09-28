@@ -7,24 +7,29 @@ import { loadRoster } from './roster.ts';
 const roster = loadRoster();
 
 describe('harness games', () => {
-  it('loads the roster from data/world-2030.json in a stable order', () => {
-    expect(roster.length).toBeGreaterThanOrEqual(2);
-    expect(roster.map((r) => r.id)).toEqual([...roster.map((r) => r.id)].sort());
+  it('loads the real roster from data/world-2030.json: 17 nations then 6 regions, each sorted', () => {
+    const playable = roster.filter((r) => r.endowment?.kind === 'playable').map((r) => r.id);
+    const regions = roster.filter((r) => r.endowment?.kind === 'aggregate').map((r) => r.id);
+    expect(playable).toHaveLength(17);
+    expect(regions).toHaveLength(6);
+    expect(roster.map((r) => r.id)).toEqual([...[...playable].sort(), ...[...regions].sort()]);
+    expect(playable).toContain('united-states');
+    expect(roster.map((r) => r.id)).not.toContain('schemaVersion');
   });
 
-  it('1,000 seeds give identical hashes on repeat runs, and different seeds differ', () => {
-    const first = hashSeeds(1, 1000, 50, roster);
-    const second = hashSeeds(1, 1000, 50, roster);
+  it('200 seeds give identical hashes on repeat runs, and different seeds differ (1,000 in determinism.test.ts)', () => {
+    const first = hashSeeds(1, 200, 30, roster);
+    const second = hashSeeds(1, 200, 30, roster);
     expect(second).toEqual(first);
-    expect(new Set(first).size).toBe(1000);
-  });
+    expect(new Set(first).size).toBe(200);
+  }, 60_000);
 
-  it('a game of dummy AI has no rejected commands and switches a controller twice', () => {
+  it('a game of greedy traders has no rejected commands, trades, and switches a controller twice', () => {
     const game = runGame({ seed: 7, ticks: 120, roster });
     expect(game.rejectedAtSubmit).toBe(0);
     expect(game.rejectedAtStep).toBe(0);
     expect(game.controllerSwitches).toBe(2);
-    expect(game.pings).toBe(game.submitted - game.controllerSwitches);
+    expect(game.tradesSettled).toBeGreaterThan(100);
   });
 
   it('writes one CSV row per game plus a header', () => {

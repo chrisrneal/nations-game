@@ -1,17 +1,70 @@
 # Progress
-Current phase: 0
+Current phase: 1
 
 ## Gate 0 checklist
 - [x] Sim core has no UI, DOM, network or clock imports (enforced by tsconfig, ESLint and packages/harness/src/purity.test.ts)
 - [x] 1,000 seeds give identical hashes in browser and Node (packages/harness/src/determinism.test.ts, headless Chromium)
 - [x] Dummy AI and UI use the same command API (both submit ordinary Commands; the UI through LocalHost in a Web Worker, prompt 04)
 - [x] Save-reload-continue matches an uninterrupted run (property test in packages/sim/src/session.test.ts)
-- [ ] 1,000 catch-up ticks under 2 s on a mid-range phone (desktop: ~14 ms; the app's Saves tab now has a speed check to run on a real phone)
-- [ ] PWA installs and runs offline on iOS and Android (passes in headless Chromium at 360 px: installable, opens offline; real iPhone and Android still to be tried by the owner)
-- [ ] Owner completes three sample decisions one-handed (three sample cards built and checked by touch at 360 px; waiting on the owner)
-- [ ] Independent review signs off the nine seams
+- [x] 1,000 catch-up ticks under 2 s on a mid-range phone (owner reported, 2026-09-28; re-measure with the Phase 1 economy)
+- [x] PWA installs and runs offline on iOS and Android (owner reported, 2026-09-28)
+- [x] Owner completes three sample decisions one-handed (owner reported, 2026-09-28)
+- [~] Independent review signs off the nine seams (WAIVED by the owner; seam 8 built in prompt 06, not yet re-reviewed)
+
+Gate 0 verdict: **PASS WITH WAIVERS** (docs/gates/GATE-0.md).
+
+## Gate 1 checklist
+Suite: `npm run harness -- gate1` (200 seeded full-roster games, random strategies, paired runs). Latest results: docs/balance/gate1-prompt06.md.
+- [x] 200 seeded full-roster games with no crashes (0), no negative stocks (0), sources and sinks in band (food 92.2%, energy 84.8% consumed/produced; Credit sinks 0.5% of income)
+- [x] The same nation does 15%+ better against its baseline trading than isolating (median of 200 paired runs: +15.4%)
+- [x] Isolationists worse off but alive (isolating scores lower in 94% of pairs; 0 dead)
+- [x] Dead states under 2% (0.0%)
+- [ ] No nation tops the score in more than 2x its fair share, 11.8% (FAIL: India 45%, Russia 24%; needs a rule decision, see the prompt 06 log)
+- [ ] A trade in 3 taps or fewer (interface, prompt 07)
+- [x] Gate 0 still passes (determinism 1,000/1,000 Node vs Chromium, purity, save/load; phone speed to re-measure)
 
 ## Session log
+
+### 2026-09-28 - prompt 06, Economy and trade engine (lanes C, S, A, H)
+**Changed.** Gate 0 recorded as PASS WITH WAIVERS on the owner's word
+(docs/gates/GATE-0.md). Contracts: resources, stocks, endowments, flows,
+standing policies, trade offers with expiry ticks, trade commands, economy
+event payloads, and the nation View (`NationView` now lives in contracts, so the
+AI imports contracts only). Sim: the RULES section 2 economy in integers
+(output, food, energy, credit, minerals, resilience, shortfalls, baseline
+growth), reference prices from world scarcity, starting trust from structural
+ties, the whole trade system (offer, accept, reject, counter, withdraw, settle,
+renege, expire) with standing policies answering for anyone away and background
+regions answering at once, scoring (own baseline x a Phase 1 collective
+multiplier), `rosterFromWorldData` for the real 17 nations + 6 regions, all 54
+RULES tunables in tunables.ts with their bands, save schema 2 (Phase 0 saves are
+refused with a clear message). AI: `greedyDecide`, a View-only greedy trader
+with a numeric reason for every command. Harness: real roster (Gate 0 finding
+F1 fixed), hoarder / isolationist / exploiter bots, `npm run harness -- gate1`.
+**Results.** 244 tests pass, including conservation and no-negative-stock
+property tests, every trade path (including an offer its maker can no longer
+pay, by command and by policy), and determinism 1,000/1,000 in Node and
+Chromium. Gate 1 suite, 200 games: every metric passes except "no nation tops
+the score in more than 2x fair share" (India 45.0%). Tuning moved
+`gainsFromTradeBp` 15 -> 40, the top of its band (paired trading gain +5.4% ->
++15.4%).
+**Why the top-scorer metric cannot be tuned away.** The world data is short of
+energy (world production is 82% of demand) and food (87%), so a nation that
+imports is always partly short and pays the shortfall penalty, while a
+self-sufficient exporter never is. Scores therefore sort by structure, not play:
+every combination of tunables inside their bands left one structural exporter on
+top in 18-52% of games (sweeps of pivot, gains, price band, offer cap, buffer,
+penalty). A diagnostic that changed how trade gains are split (receiver only, or
+exporter capped) still left 18-43%. It needs a rule change, for example
+measuring shortfalls against a nation's share of what the world can supply, or
+normalising the world data so supply meets demand. That is the owner's or
+architect's call (docs/GAPS.md, prompt 06).
+**How to see it.** `npm run harness -- gate1` prints the results table;
+`npm test`. Nothing new on the phone yet: the app still plays the Phase 0 dummy
+until the interface prompt connects the economy.
+**Left.** The top-scorer rule decision; the interface (prompt 07); phone speed
+re-measure (1,000 ticks now ~630 ms on the build machine); gap-filler tunables
+to ratify in RULES.md. See docs/GAPS.md, prompt 06.
 
 ### 2026-09-27 - prompt 01, Repo setup (architect)
 **Changed.** npm workspaces monorepo: packages/contracts (types only, one doc

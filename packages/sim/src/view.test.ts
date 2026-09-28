@@ -58,7 +58,7 @@ describe('per-nation View', () => {
     const nations = { ...base.nations };
     IDS.forEach((id, i) => {
       const n = nations[id];
-      if (n !== undefined) nations[id] = { ...n, private: { ...n.private, reserve: 7_770_000 + i } };
+      if (n !== undefined) nations[id] = { ...n, private: { ...n.private, stocks: { ...n.private.stocks, credit: 7_770_000 + i } } };
     });
     const state: WorldState = { ...base, nations };
     for (const [i, id] of IDS.entries()) {

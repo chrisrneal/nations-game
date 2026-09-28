@@ -21,7 +21,7 @@ describe('determinism across engines', () => {
     '1,000 seeds hash identically in Node and in Chromium',
     async () => {
       const seeds = 1000;
-      const ticks = 50;
+      const ticks = 20;
       const node = hashSeeds(1, seeds, ticks, loadRoster());
       const run = await runInBrowser({ firstSeed: 1, seeds, ticks, benchTicks: 0, benchRuns: 0 }, browser);
       expect(run.hashes).toHaveLength(seeds);

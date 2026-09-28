@@ -4,7 +4,14 @@ Prompt 05, 2026-09-28. Reviewed at `main` 63cd18a (after prompt 04 merged).
 The reviewer did not build this code. Every result below was produced by running
 it or reading it in this session; docs/PROGRESS.md was not taken as evidence.
 
-## Verdict: **FAIL**
+## Verdict: **PASS WITH WAIVERS** (owner, 2026-09-28, recorded in prompt 06)
+
+The review's own verdict below was FAIL. On 2026-09-28 the owner reported the
+three OWNER CHECK items (criteria 5-7) done on their phone and chose to waive
+criterion 8 so Phase 1 could start, on the condition that seam 8 is built as
+the first part of Phase 1. See "Waivers" at the end of this file.
+
+### Reviewer's verdict (prompt 05): FAIL
 
 Seven of the eight criteria pass or are waiting only on the owner's phone.
 Criterion 8 fails: seam 8 (interactions are State objects with expiry ticks) has
@@ -157,3 +164,30 @@ recommend waiving it.
 | Logic in packages/contracts | none; types only |
 | Inline tunables in sim | none; `TUNABLES` only. Dummy AI's `IDLE_CHANCE_IN_4` is inline (logged gap, placeholder) |
 | `Math.random` / `Date.now` in platform | `LocalHost.newGame` seed and save timestamps; allowed (host side, seed is stored in the save) |
+
+## Waivers (owner, 2026-09-28)
+
+| # | Criterion | Status after waiver |
+|---|-----------|--------|
+| 5 | 1,000 catch-up ticks under 2 s on a mid-range phone | PASS - reported by the owner from the app's speed check |
+| 6 | PWA installs and runs offline on iOS and Android | PASS - reported by the owner |
+| 7 | Owner completes three sample decisions one-handed | PASS - reported by the owner |
+| 8 | Independent review signs off the nine seams | **WAIVED** - seam 8 was built in prompt 06, but no independent review has signed it off |
+
+What prompt 06 did about the waiver and the findings:
+- **Seam 8:** trade offers are State objects (`WorldState.offers`, contracts
+  `TradeOffer`) with `createdTick` and `expiryTick`, visible only to the two
+  parties through the View. Standing policies (contracts `StandingPolicy`, in
+  State) answer every offer on its last tick for anyone who is away; background
+  regions answer the tick an offer arrives; anything unanswered expires and
+  costs the ignorer trust. Tests: packages/sim/src/trade.test.ts. The decision
+  inbox cards are still React state until the interface prompt connects them
+  (docs/GAPS.md, prompt 06, lane U).
+- **F1 fixed:** packages/harness/src/roster.ts reads `data.nations` and
+  `data.aggregates` through the sim's `rosterFromWorldData`. Every harness game,
+  the benchmark and the built-in determinism check now run the real 17 nations
+  plus 6 regions, and the determinism check plays the greedy trader.
+- **Re-measure:** criterion 5 was passed on the Phase 0 sim. With the Phase 1
+  economy and the greedy trader, 1,000 ticks for 23 nations take about 630 ms in
+  Node on the build machine (was about 15 ms). The owner should rerun the phone
+  speed check once the app plays Phase 1; see docs/GAPS.md.

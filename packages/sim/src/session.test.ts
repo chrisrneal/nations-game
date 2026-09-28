@@ -112,7 +112,8 @@ describe('save and load', () => {
   });
 
   it('runs registered migrations in order (stub registry)', () => {
-    expect(Object.keys(MIGRATIONS)).toHaveLength(0);
+    expect(Object.keys(MIGRATIONS)).toEqual(['1']);
+    expect(() => migrateSave({ schemaVersion: 1 })).toThrow(/Phase 0 prototype/);
     const migrated = migrateSave(
       { schemaVersion: 1, a: 1 },
       {
