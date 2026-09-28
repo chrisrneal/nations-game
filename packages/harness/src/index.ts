@@ -7,8 +7,11 @@
  * check the invariants that must hold on every build - conservation, no negative
  * stocks, stable state hash.
  *
- * Phase 0: the purity invariant is real (see purity.test.ts); the game runner is
- * a placeholder until the sim has a step function.
+ * Phase 0: seeded games with the dummy AI, CSV metrics, the Node-vs-browser
+ * determinism check and the 1,000-tick catch-up benchmark. Archetype bots
+ * arrive with the economy.
  */
-export const HARNESS_PLACEHOLDER_MESSAGE =
-  'harness: placeholder - no sim to run yet (Phase 0)';
+export { benchCatchUp, hashSeeds, runGame, type GameMetrics, type GameOptions } from './game.ts';
+export { CSV_COLUMNS, formatSummary, summarize, toCsv, type Summary } from './metrics.ts';
+export { loadRoster } from './roster.ts';
+export { findChromium, runInBrowser, type BrowserRun, type BrowserRunOptions } from './browser.ts';
