@@ -61,6 +61,27 @@ export interface ForeignNation {
 }
 
 /**
+ * One playable nation's score (RULES 5), as the sim's scoreboard computes it.
+ * Public: it follows from output and baseline output, which are public, and
+ * every player sees the same table.
+ */
+export interface NationScore {
+  readonly id: NationId;
+  /** Smoothed realised output over smoothed baseline output, x 10,000 (RULES 5.1). */
+  readonly ownScoreBp: number;
+  /** ownScore x the collective multiplier x the score scale (RULES 5.3). */
+  readonly finalScore: number;
+}
+
+/** The world's scoreboard as every nation sees it. */
+export interface ScoresView {
+  /** Collective multiplier x 10,000 (RULES 5.2), the same for every nation. */
+  readonly multiplierBp: number;
+  /** Every playable nation, in the world's nation order. */
+  readonly nations: readonly NationScore[];
+}
+
+/**
  * One nation's picture of the world: the contracts `View` plus this nation's
  * own record, every other nation's public face, the offers it is party to and
  * the reference prices.
@@ -74,6 +95,8 @@ export interface NationView extends View {
   /** Open offers this nation made or received, by id. */
   readonly offers: readonly TradeOffer[];
   readonly prices: Prices;
+  /** The sim's own scoreboard, so no interface or AI recomputes a score. */
+  readonly scores: ScoresView;
   /**
    * The value of every tunable, by id: the public rules of this game. An AI
    * reads its numbers here, never from its own constants, so tuning one file
