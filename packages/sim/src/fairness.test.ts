@@ -12,15 +12,14 @@ import {
 import { ownScoreBp, scoreboard, smoothTowards } from './score.ts';
 import { step } from './step.ts';
 import { answer, amt, offer } from './testkit.ts';
-import { curvePpm, gainSharePpm, tradeGainBases } from './trade.ts';
+import { tradeImbalanceMilli } from './trade.ts';
 import { TUNABLES } from './tunables.ts';
 import { createWorld, NEUTRAL_ENDOWMENT, type RosterEntry, type WorldState } from './world.ts';
 
 /**
  * The top-scorer fairness rule (prompt 09, RULES 2.8, 3.3 and 5.1):
  * - the baseline expects the shortfall the world's structure implies;
- * - each side of a trade gains by the share of its own imbalance it cleared,
- *   through a payout curve, with a floor on a small import base (prompt 13);
+ * - each side of a trade gains by the share of its own imbalance it cleared;
  * - ownScore is read from a smoothed path, not one month.
  */
 const id = (raw: string): NationId => raw as NationId;
@@ -120,56 +119,41 @@ describe('structural baseline (RULES 2.8, 5.1)', () => {
 
 describe('trade gains by own imbalance cleared (RULES 3.3)', () => {
   const bpCbp = TUNABLES.gainsFromTradeBp.value * 100;
-  const sellCurve = TUNABLES.tradeGainSellCurve.value;
-  const buyCurve = TUNABLES.tradeGainBuyCurve.value;
-  /** The payout curve in plain floating point, for expectations: 1 - (1 - share)^power. */
-  const curve = (share: number, power: number): number => 1 - (1 - Math.min(1, share)) ** power;
   const sell = (s: WorldState, to: NationId, units: number, tick = 0) => {
     const credit = Math.max(1, Math.floor((units * s.prices.food) / 1000));
     const made = step(s, [offer(X, to, amt('food', units), amt('credit', credit), tick)]).state;
     return step(made, [answer('acceptOffer', to, made.nextOfferId - 1, tick + 1)]).state;
   };
-  const bases = (s: WorldState, n: NationId) => tradeGainBases(nation(s, n), s.endowments[n]!, s.prices, structuralCover(s));
 
-  it('the seller gains by the gentle curve on the share of its own surplus sold, whatever the size of the buyer', () => {
+  it('the seller gains by the share of its own surplus sold, whatever the size of the buyer', () => {
     const s = fresh();
     const surplus = nation(s, X).public.food.production - nation(s, X).public.food.demand;
     expect(surplus).toBe(100);
     const toSmall = sell(s, Y, 20);
     const toLarge = sell(s, Z, 20);
-    // 20 of a 100 surplus, to a small or a ten-times-larger buyer alike.
-    const expected = bpCbp * curve(0.2, sellCurve);
-    expect(Math.abs(nation(toSmall, X).private.last.tradeGainCbp - expected)).toBeLessThanOrEqual(2);
-    expect(nation(toLarge, X).private.last.tradeGainCbp).toBe(nation(toSmall, X).private.last.tradeGainCbp);
+    // 20 of a 100 surplus: a fifth of the full monthly gain, to a small or a ten-times-larger buyer alike.
+    expect(nation(toSmall, X).private.last.tradeGainCbp).toBe(bpCbp / 5);
+    expect(nation(toLarge, X).private.last.tradeGainCbp).toBe(bpCbp / 5);
   });
 
-  it('the buyer gains by the steep curve on the share of its import base covered: the first units pay most', () => {
+  it('the buyer gains by the share of its fair-share deficit covered, capped at the full rate', () => {
     const s = fresh();
-    const base = bases(s, Y).importMilli;
-    const units = Math.floor(base / 2 / s.prices.food);
-    const some = sell(s, Y, units);
-    const share = (units * s.prices.food) / base;
-    const got = nation(some, Y).private.last.tradeGainCbp;
-    expect(Math.abs(got - bpCbp * curve(share, buyCurve))).toBeLessThanOrEqual(2);
-    // Diminishing returns: half the base covered earns well over half the gain.
-    expect(got).toBeGreaterThan(bpCbp * share);
+    const yFood = nation(s, Y).public.food;
+    const fair = fairShareDeficit(yFood, structuralCover(s).food);
+    const half = Math.floor(fair / 2);
+    const some = sell(s, Y, half);
+    expect(nation(some, Y).private.last.tradeGainCbp).toBe(Math.floor((bpCbp * half * s.prices.food) / (fair * s.prices.food)));
+    // Covering the whole deficit is more than the fair share: the gain stops at the full rate.
+    const all = sell(s, Y, yFood.demand - yFood.production);
+    expect(nation(all, Y).private.last.tradeGainCbp).toBe(bpCbp);
   });
 
-  it('the import base is the fair share, raised to a floor of own output, never above the whole deficit', () => {
+  it('the imbalance a nation can clear is its surplus plus its fair share of each deficit, at reference prices', () => {
     const s = fresh();
     const cover = structuralCover(s);
-    const floorOf = (n: NationId): number =>
-      Math.floor((potentialOutput(s.endowments[n]!, nation(s, n).private.capacityE4) * 1000 * TUNABLES.tradeGainImportFloorBp.value) / 10_000);
-    // An exporter: its whole surplus, no import base.
-    expect(bases(s, X)).toEqual({ exportMilli: 100 * s.prices.food, importMilli: 0 });
-    // Y's fair share is under the floor and its deficit above it: the floor.
+    expect(tradeImbalanceMilli(nation(s, X), s.prices, cover)).toBe(100 * s.prices.food);
     const yFood = nation(s, Y).public.food;
-    expect(fairShareDeficit(yFood, cover.food) * s.prices.food).toBeLessThan(floorOf(Y));
-    expect((yFood.demand - yFood.production) * s.prices.food).toBeGreaterThan(floorOf(Y));
-    expect(bases(s, Y)).toEqual({ exportMilli: 0, importMilli: floorOf(Y) });
-    // Z is a ten-times-larger economy whose whole deficit is under the floor: its whole deficit.
-    const zFood = nation(s, Z).public.food;
-    expect(bases(s, Z)).toEqual({ exportMilli: 0, importMilli: (zFood.demand - zFood.production) * s.prices.food });
+    expect(tradeImbalanceMilli(nation(s, Y), s.prices, cover)).toBe(fairShareDeficit(yFood, cover.food) * s.prices.food);
   });
 
   it('never pays more than the full rate in a month, however much is sold', () => {
@@ -184,79 +168,6 @@ describe('trade gains by own imbalance cleared (RULES 3.3)', () => {
     expect(done.events.filter((e) => e.type === 'offerSettled')).toHaveLength(2);
     expect(nation(done.state, X).private.last.tradeGainCbp).toBe(bpCbp);
     expect(nation(done.state, Y).private.last.tradeGainCbp).toBe(bpCbp);
-    expect(nation(done.state, Z).private.last.tradeGainCbp).toBe(bpCbp);
-  });
-
-  it('curve 1 and no floor are exactly the prompt 09 rule: the share of everything the nation could clear', () => {
-    const b = { exportMilli: 6_000, importMilli: 2_000 };
-    expect(gainSharePpm(b, 3_000, 1_000, 1, 1)).toBe(500_000);
-    expect(gainSharePpm(b, 6_000, 2_000, 1, 1)).toBe(1_000_000);
-    expect(gainSharePpm(b, 0, 0, 3, 3)).toBe(0);
-    // A curve pays more for the same partial clear, and the same for a full one.
-    expect(gainSharePpm(b, 3_000, 1_000, 2, 6)).toBeGreaterThan(500_000);
-    expect(gainSharePpm(b, 6_000, 2_000, 2, 6)).toBe(1_000_000);
-    expect(curvePpm(500_000, 2)).toBe(750_000);
-    expect(curvePpm(1_000_000, 6)).toBe(1_000_000);
-    expect(curvePpm(0, 6)).toBe(0);
-  });
-});
-
-describe('a small imbalance never out-earns a large one (prompt 13)', () => {
-  // Same economy for S and L (100 M people, the same GDP). S is short 10 food a month, L 90.
-  // X exports 100, and a region short 100 keeps the world's cover near 40%, so both have a fair share below their deficit.
-  const F: RosterEntry[] = [
-    { id: 'xx', name: 'X', endowment: { ...base, foodSelfSufficiency: 100 } },
-    { id: 'ss', name: 'S', endowment: { ...base, foodSelfSufficiency: 45 } },
-    { id: 'll', name: 'L', endowment: { ...base, foodSelfSufficiency: 5 } },
-    { id: 'rr', name: 'R', endowment: { ...base, kind: 'aggregate', foodSelfSufficiency: 0 } },
-  ];
-  const S = id('ss');
-  const L = id('ll');
-  const world = (): WorldState => createWorld({ seed: 3, roster: F });
-  const gainFor = (to: NationId, units: number): number => {
-    const s = world();
-    const credit = Math.max(1, Math.floor((units * s.prices.food) / 1000));
-    const made = step(s, [offer(X, to, amt('food', units), amt('credit', credit), 0)]).state;
-    const done = step(made, [answer('acceptOffer', to, made.nextOfferId - 1, 1)]).state;
-    return nation(done, to).private.last.tradeGainCbp;
-  };
-  const fair = (n: NationId): number => {
-    const s = world();
-    return fairShareDeficit(nation(s, n).public.food, structuralCover(s).food);
-  };
-  const deficit = (n: NationId): number => {
-    const f = nation(world(), n).public.food;
-    return f.demand - f.production;
-  };
-
-  it('the fixture: same economy, a small and a large deficit, fair shares both below the deficit', () => {
-    const s = world();
-    expect(nation(s, S).public.output).toBe(nation(s, L).public.output);
-    expect(deficit(S)).toBe(10);
-    expect(deficit(L)).toBe(90);
-    expect(fair(S)).toBeLessThan(deficit(S));
-    expect(fair(L)).toBeLessThan(deficit(L));
-  });
-
-  it('covering the same share of their fair share, the small one earns less than the large one', () => {
-    // Half of each fair share.
-    expect(gainFor(S, fair(S) / 2)).toBeLessThan(gainFor(L, fair(L) / 2));
-  });
-
-  it('covering the same share of their whole deficit, the small one never earns more', () => {
-    for (const pct of [10, 20, 30, 50, 70, 100]) {
-      const small = gainFor(S, Math.max(1, Math.floor((deficit(S) * pct) / 100)));
-      const large = gainFor(L, Math.max(1, Math.floor((deficit(L) * pct) / 100)));
-      expect(small, `${pct}% of the deficit`).toBeLessThanOrEqual(large);
-    }
-  });
-
-  it('a tiny import cannot earn the full rate from its fair share alone; covering its whole deficit can', () => {
-    const full = TUNABLES.gainsFromTradeBp.value * 100;
-    expect(gainFor(S, fair(S))).toBeLessThan(full);
-    expect(gainFor(S, deficit(S))).toBe(full);
-    // The large importer's fair share is above the floor: its fair share is enough.
-    expect(gainFor(L, fair(L))).toBe(full);
   });
 });
 
