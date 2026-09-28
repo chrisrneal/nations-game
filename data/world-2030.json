@@ -1,0 +1,38 @@
+{
+  "China": {
+    "capital": "Beijing",
+    "population": 1444210000,
+    "area": 9640000,
+    "languages": ["Chinese"]
+  },
+  "Germany": {
+    "capital": "Berlin",
+    "population": 83240500,
+    "area": 357022,
+    "languages": ["German"]
+  },
+  "Brazil": {
+    "capital": "Brasília",
+    "population": 216160000,
+    "area": 8515840,
+    "languages": ["Portuguese"]
+  },
+  "India": {
+    "capital": "New Delhi",
+    "population": 1393408000,
+    "area": 3287263,
+    "languages": ["Hindi", "English"]
+  },
+  "Canada": {
+    "capital": "Ottawa",
+    "population": 38005200,
+    "area": 9984670,
+    "languages": ["English", "French"]
+  },
+  "Australia": {
+    "capital": "Canberra",
+    "population": 26650000,
+    "area": 7692034,
+    "languages": ["English"]
+  }
+}
