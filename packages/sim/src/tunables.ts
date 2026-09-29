@@ -382,6 +382,12 @@ export const TUNABLES = {
     max: 100,
     note: 'Phase 2 prompt 09: share of its own fair share a nation must pay in a round to count as a contributor for the bonuses, so one token Credit cannot farm them.',
   },
+  nonPayerCoverPct: {
+    value: 50,
+    min: 0,
+    max: 100,
+    note: 'Prompt 14: percent of the pool\'s cover that reaches a nation that paid none of its own share; the cover scales in a straight line up to all of it at a full share (RULES 4.3 rule 1). 100 is the old rule, where paying was optional and free-riding cost nothing (GATE-2 F3). Tuned on seeds 1001-1400 only.',
+  },
   defaultContributionBp: {
     value: 110,
     min: 0,

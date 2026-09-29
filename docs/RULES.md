@@ -312,9 +312,12 @@ Starting at 20 and ramping 8 a year, the first event is severity 20 and the last
 
 ```
 damage_i = severity * climate.exposureIndex_i / 100
-           * (1 - poolCover)
+           * (1 - ownCover_i)
            - resilience_i / 2
 ```
+
+where `ownCover_i` is the pool's cover as it reaches nation *i* (§4.3 rule 1): all of
+`poolCover` for a nation that paid its share, less for one that did not.
 
 and is spread over `climateDamageSpreadTicks` (6) as an output penalty. Slow means
 you see it coming and you feel it for half a year.
@@ -330,7 +333,7 @@ one in 60 ticks, so roughly one per game) and resolves inside
 
 ```
 damage_i = pandemicBaseSeverity * (100 - pandemic.preparednessIndex_i) / 100
-           * (1 - poolCover)
+           * (1 - ownCover_i)
 ```
 
 applied at once to output and to population growth. Egypt's preparedness of 28 takes
@@ -352,14 +355,38 @@ poolCover  = min(poolCoverMaxPct, 100 * pooled / poolTarget) / 100
 
 Three rules make it collective rather than a market:
 
-1. **The pool pays out by exposure, not by contribution.** A nation that put nothing
-   in is still protected by `poolCover`. Free-riding works, and it is supposed to.
+1. **The pool pays out by exposure, and only in proportion to what you paid.**
+   Damage is cut by how full the pool is, and it is still shared out by exposure, so
+   a nation that put nothing in is not left with nothing. But the cut a nation gets is
+   scaled by how much of its own appeal share (§4.4) it paid into that pool this
+   round. *(Prompt 14: until then a nation was protected whatever it paid, so skipping
+   the pools was free: GATE-2 F3.)*
+
+   ```
+   keep_i     = nonPayerCoverPct + (100 - nonPayerCoverPct) * min(paid_i, share_i) / share_i     (percent)
+   ownCover_i = poolCover * keep_i / 100
+   ```
+
+   A nation that paid its whole share gets the whole `poolCover`. One that paid
+   nothing gets `nonPayerCoverPct`% of it. In between it is a straight line. A nation
+   with no share (nothing was asked of it) keeps all of it. `paid_i` is everything the
+   nation put into that pool since the pool last locked: its monthly contribution, an
+   appeal answer, a pledge collected. Free-riding is still possible, still visible,
+   and now costs the free-rider its own protection, not only other nations' trust.
 2. **You can never buy full immunity.** `poolCoverMaxPct` caps at 80%. Some damage
    always lands, so resilience and trade still matter.
 3. **Contributing is separately rewarded.** `contributorResilienceBonus` (3) and
    `contributorTrustBonus` (2) go to contributors only, and every nation's crisis
    card lists who contributed and who did not. Free-riding is possible, visible, and
    remembered by the AI (§7).
+
+The rule adds no dial, card or screen (the depth budget). The **decision card** is the
+appeal card that already exists: *Pay your share* now says the full pool cover reaches
+you; *Decline* says how much of it does not. The **standing policies** are the
+existing ones: the monthly contribution (§8.2 dial 3, default `defaultContributionBp`)
+already pays a nation's share several times over before a deadline, so a player who is
+away, or never touches the dial, keeps full cover. Only a nation that turns its
+contribution off *and* answers every appeal with no takes the loss.
 
 ### 4.4 Appeals, pledges and the crisis rule *(Phase 2 prompt 09)*
 
@@ -399,9 +426,13 @@ conversation (S8).
   a **success** when the pool reaches full cover (counted money at least
   `poolCoverMaxPct`% of the target), a **partial success** at `crisisPartialPct`% or
   more, and a **failure** below that. Contributors are those that paid at least
-  `contributorMinSharePct`% of their share this round.
+  `contributorMinSharePct`% of their share this round. Success, partial success and
+  failure grade the pool, not any one nation, so the rule in §4.3 rule 1 does not
+  change them.
 - **Damage.** In basis points of output, per month it lasts:
-  `severity x exposure x (1 - poolCover) x (200 - resilience) / 200`, so resilience
+  `severity x exposure x (1 - ownCover) x (200 - resilience) / 200`, where `ownCover`
+  is the nation's own cover from §4.3 rule 1 (the whole `poolCover` for a nation that
+  paid its share), so resilience
   100 halves it (the §4.1 "- resilience / 2" read as a proportional cut, because
   subtracting it outright cancelled almost every event). Climate damage lasts
   `climateDamageSpreadTicks` (6) months from the lock; a pandemic hits the lock
@@ -410,8 +441,12 @@ conversation (S8).
   baseline never expects it.
 
 **Gate metric.** Gate 2: crisis success between 40% and 75% of events; reciprocal
-cooperators finish ahead of free-riders. Gate 3: crisis success stays in band once
-joint projects exist.
+cooperators finish ahead of free-riders, and free-riding must not pay: a nation that
+pays nothing into the pools but trades normally must not top the score in more than
+1.5x its fair share, must finish below the cooperator in at least 70% of paired games
+by a median of at least 3%, and a stealth spoiler (trades like the cooperator, pays
+nothing, pledges and withdraws) must finish strictly below the cooperator (prompt 14).
+Gate 3: crisis success stays in band once joint projects exist.
 
 ---
 
@@ -511,6 +546,13 @@ The derivative is negative for every *i*, at every position on the board. A
 **trailing** nation is not an exception: it cannot close a gap by widening it,
 because its score is measured against its own baseline and nobody else's, so pulling
 *j* down moves *i*'s score down and leaves *i*'s target where it was.
+
+The crisis pools add a quieter form of the same act, and prompt 14 prices it. A
+nation that trades normally but pays nothing into the pools, and pledges only to
+withdraw, hurts no one directly, so the argument above says it gains nothing, but it
+also used to lose almost nothing (GATE-2 F3). Under §4.3 rule 1 it now keeps only
+`nonPayerCoverPct`% of the pool's cover, so its own crisis damage rises, and the world
+"damage avoided" goals it shares fall with it.
 
 Two constraints this places on future work:
 
@@ -818,6 +860,7 @@ wherever they feed economy maths.
 | `contributorTrustBonus` | 2 | 0 | 6 | Trust gained with every other contributor |
 | `crisisPartialPct` | 50 | 25 | 90 | Share of the target, in percent, a pool must reach for a crisis to count as a partial success rather than a failure. Reaching full cover is a success (§4.3). Phase 2 prompt 09 |
 | `contributorMinSharePct` | 50 | 10 | 100 | Share of its own fair share a nation must pay in a round to count as a contributor for the bonuses, so one token Credit cannot farm them. Phase 2 prompt 09 |
+| `nonPayerCoverPct` | 50 | 0 | 100 | Percent of the pool's cover that reaches a nation that paid none of its own share; the cover scales in a straight line up to all of it at a full share (§4.3 rule 1). 100 is the old rule, where paying was optional. Prompt 14 (starting value; tuned on seeds 1001-1400 only) |
 | `defaultContributionBp` | 110 | 0 | 200 | Starting position of the monthly contribution dial (§8.2 dial 3), in basis points of income, split between the pools. Steady funding is what fills the health pool before a pandemic. Phase 2 prompt 09; gate2 tuning (seeds 1001-1100 only): 20 -> 110, the main lever on crisis success |
 | `reciprocalMatchPct` | 50 | 25 | 100 | How much of its target the world must have met in a pool's last round, in percent, for a reciprocal policy to pay its full share this round. Below it, it pays in proportion. Phase 2 prompt 09 |
 | `maxPledgeTicks` | 12 | 3 | 24 | Furthest ahead a pledge deadline may be set. A year: long enough to promise for the next climate event, short enough that a promise is soon tested. Phase 2 prompt 09 |

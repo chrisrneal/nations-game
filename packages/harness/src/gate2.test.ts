@@ -39,6 +39,34 @@ describe('gate2 suite', () => {
     expect(text).toContain('## Sample away recap');
   });
 
+  it('grades the prompt 14 lines separately, and reports the cooperator\'s own share for the owner\'s ruling', () => {
+    const report = runGate2({ games: 2, firstSeed: 1, roster, ticks: 24, absenceSeeds: 1, skipGate1: true });
+    const line = (needle: string) => report.metrics.find((m) => m.name.includes(needle));
+    const graded = ['Free-rider tops / fair share (prompt 14)', 'Free-rider tops below the cooperator (prompt 14)', 'Cooperator ahead of the free-rider (prompt 14)', 'Cooperator vs free-rider median gap (prompt 14)', 'Stealth spoiler strictly below the cooperator (prompt 14)'];
+    for (const needle of graded) expect(typeof line(needle)?.pass, needle).toBe('boolean');
+    expect(line('Free-rider tops / fair share (prompt 14)')?.passLine).toBe('<= 1.50x');
+    expect(line('Cooperator ahead of the free-rider (prompt 14)')?.passLine).toBe('>= 70%');
+    expect(line('Cooperator vs free-rider median gap (prompt 14)')?.passLine).toBe('>= +3%');
+    const own = line('Cooperator\'s own tops / fair share');
+    expect(own).toBeDefined();
+    expect(own?.pass).toBeNull();
+    expect(own?.value).toMatch(/^\d+\.\d{2}x$/);
+  }, 30_000);
+
+  it('the prompt 14 lines follow the numbers: the free-rider\'s share and the cooperator\'s lead', () => {
+    const report = runGate2({ games: 3, firstSeed: 1, roster, ticks: 24, absenceSeeds: 1, skipGate1: true });
+    const total = Object.values(report.archetypes).reduce((sum, a) => sum + a.assigned, 0);
+    const ratio = (name: string): number => {
+      const a = report.archetypes[name]!;
+      return a.assigned === 0 ? 0 : a.tops / report.games / (a.assigned / total);
+    };
+    const value = (needle: string): string => report.metrics.find((m) => m.name.includes(needle))!.value;
+    expect(value('Free-rider tops / fair share (prompt 14)')).toBe(`${ratio('freeRider').toFixed(2)}x`);
+    expect(value('Cooperator\'s own tops / fair share')).toBe(`${ratio('trader').toFixed(2)}x`);
+    const ahead = report.freeRiderPairs.filter((p) => p.coop > p.other).length / report.freeRiderPairs.length;
+    expect(value('Cooperator ahead of the free-rider (prompt 14)')).toBe(`${(ahead * 100).toFixed(1)}%`);
+  }, 30_000);
+
   it('the absence runs leave nothing unanswered and recap in a few short lines', () => {
     const report = runGate2({ games: 1, firstSeed: 3, roster, ticks: 60, absenceSeeds: 2, skipGate1: true });
     for (const run of report.absence) {

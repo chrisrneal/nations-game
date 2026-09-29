@@ -18,6 +18,8 @@
  *                                                    test, and the Gate 1 suite again; writes gate2.md
  *   npm run harness -- predictions                   prediction accuracy (Gate 2) from saves exported on
  *     [--files a.json,b.json] [--dir DIR] [--out DIR] the phone with prediction mode on; writes predictions.md
+ *   `--set id=value[,id=value]` (play, gate1, gate2) replaces sim tunables for that run, inside
+ *   their bands, for tuning sweeps (overrides.ts).
  *   `--suite gate1` is the same as `gate1`. An unknown command or flag is an
  *   error (exit 2), never silently ignored.
  */
@@ -32,11 +34,23 @@ import { loadRoster } from './roster.ts';
 import { formatGate1, formatGate1Ranges, runGate1, runGate1Ranges } from './gate1.ts';
 import { formatGate2, runGate2 } from './gate2.ts';
 import { parseArgs, type HarnessCommand, type ParsedArgs } from './args.ts';
+import { applyOverrides, parseOverrides } from './overrides.ts';
 import { formatPredictionReport, parsePredictionFile, predictionReport } from './predictions.ts';
 
 let parsed: ParsedArgs;
 try {
   parsed = parseArgs(process.argv.slice(2));
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(2);
+}
+
+try {
+  const overrides = parseOverrides(parsed.strings.set ?? '');
+  if (Object.keys(overrides).length > 0) {
+    applyOverrides(overrides);
+    console.log(`tunables set for this run: ${Object.entries(overrides).map(([id, v]) => `${id}=${v}`).join(', ')}`);
+  }
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(2);
