@@ -131,3 +131,6 @@ Each entry: prompt number, phase, what is missing, owning lane.
 - 11, Phase 2, Chromium headless fires `beforeinstallprompt`, so the phone check sees the install banner; iOS shows the Share instructions instead (untested here, no Safari). Owner, on an iPhone.
 - 11, Phase 2, The phone check (`npm run e2e --workspace web`) now covers prompt 11 (53 checks) but is still not in CI. Architect.
 
+- Opus review, Phase 2, The away recap's ranking (`weigh()` in apps/web/src/platform/recap.ts) regex-matches the English wording of the sim's recap sentences, and no test pins which phrase gets which weight, so rewording a sim sentence silently reorders the recap. A structured field on `RecapLine`, or at least a phrase-to-weight test, would fix it. Lanes C, S, P.
+- Opus review, Phase 2, The `ping` command, `pingsSent`/`pingsReceived` and the dummy AI now exist only for tests; removing them needs a save-schema bump and migration. Lanes C, S, A.
+- Opus review, Phase 2, The harness Gate 2 report label (packages/harness/src/gate2.ts, "48 at single-player 1x") uses RULES 9's name for what the app calls the live clock. Rename once the owner rules on RULES Q3. Lane H.

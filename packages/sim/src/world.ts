@@ -79,9 +79,9 @@ export interface WorldState extends State {
 }
 
 /**
- * One roster entry. `endowment` carries the nation's data; rosters without it
- * (the Phase 0 platform passes only id and name) get `NEUTRAL_ENDOWMENT`, a
- * balanced placeholder economy, until the host passes real data (docs/GAPS.md).
+ * One roster entry. `endowment` carries the nation's data; entries without it
+ * (small test rosters that give only id and name) get `NEUTRAL_ENDOWMENT`, a
+ * balanced placeholder economy. The platform and the harness pass real data.
  */
 export interface RosterEntry {
   readonly id: string;

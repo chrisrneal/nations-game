@@ -8,8 +8,9 @@ names the **gate metric** that proves it works, because a rule nobody can test i
 wish. Every number here has a starting value and a band, collected in
 [Tunables](#11-tunables) in the shape `packages/sim/src/tunables.ts` expects.
 
-Read it in order. Sections 2 to 9 are the game; section 10 is what it looks like on
-a phone; section 12 is what the owner still has to decide.
+Read it in order. Sections 2 to 7 and 9 are the game; section 8 is what it looks
+like on a phone; section 11 lists every tunable; section 12 is what the owner still
+has to decide.
 
 ---
 

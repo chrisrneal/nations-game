@@ -1,5 +1,5 @@
 /**
- * Phone check for the "done when" lists of prompts 04 and 07, in headless Chromium sized as a
+ * Phone check for the "done when" lists of prompts 04, 07, 11 and 12, in headless Chromium sized as a
  * 360 px phone with touch. Builds nothing: run `npm run build` first, then
  * `npm run e2e --workspace web`. Not in CI (needs a Chromium binary); results
  * are recorded in docs/PROGRESS.md.

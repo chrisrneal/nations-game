@@ -40,6 +40,17 @@ Suite: `npm run harness -- gate2` (200 seeded games with random archetypes, coop
 
 ## Session log
 
+### 2026-09-29 - Opus 5.5 instruction review (owner request, no prompt number; text only)
+**Changed.** A text-only pass over every instruction in the repo. There are no LLM
+prompts (D5), so the game plays exactly as before. CLAUDE.md now says each rule once
+(tests-must-pass had been stated three times) and gives the architecture rules their
+reason and how they are enforced. About ten stale or wrong comments and docs are fixed:
+the AI Gate 2 helper said the sim had no crises, RULES.md pointed to the wrong section for
+the phone, and the README still described Phase 0. Only comment lines changed in code.
+**Checked.** 444 tests pass (Node-vs-Chromium determinism included), check and build pass.
+**How to see it.** `REVIEW_REPORT.md` (what changed and why) and `REVIEW_INVENTORY.md`.
+**Left.** Out-of-scope findings are logged in docs/GAPS.md under "Opus review".
+
 ### 2026-09-29 - prompt 11, MVP on the phone (lanes U and P, plus the prediction report in lane H)
 **Changed.** The phone now plays the whole MVP. The app runs the new layered AI
 (prompt 10) instead of the Phase 1 greedy trader, and saves its memory with the game,

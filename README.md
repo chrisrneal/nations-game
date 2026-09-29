@@ -1,14 +1,14 @@
 # Nations
 
 A game you play on your phone. You run one real nation in a world set in 2030,
-alongside about a dozen nations run by the computer. Trade, shared crises and
+alongside sixteen other nations run by the computer. Trade, shared crises and
 keeping your word get you further than conquest. You check in for a couple of
 minutes, make a few decisions, and the world carries on while you are away.
 
-Right now it is the **foundations**: pick a nation, answer sample decisions, watch
-the world clock run with computer-run nations alongside, save and load. The real
-economy arrives in Phase 1. This document tells you how to run it and get it onto
-a phone.
+Right now it is the **MVP** (Phase 2): trade, shared crises, computer-run nations
+that explain their decisions, a live clock that keeps running while the app is
+closed, and an away recap. `docs/PROGRESS.md` says what is left before Gate 2.
+This document tells you how to run it and get it onto a phone.
 
 ## What is in here
 
@@ -19,7 +19,7 @@ a phone.
 | `packages/ai` | The computer-run nations' decision making. |
 | `packages/contracts` | The shared vocabulary (what a "command", a "nation", a "save file" is). |
 | `packages/harness` | A robot that plays hundreds of games with no screen, to check the game is balanced. |
-| `docs/` | The plan (`ROADMAP.md`), the reasoning (`DECISIONS.md`), the running log (`PROGRESS.md`), known shortcuts (`GAPS.md`). |
+| `docs/` | The plan (`ROADMAP.md`), the reasoning (`DECISIONS.md`), the game rules (`RULES.md`), how the computer nations think (`AI_DESIGN.md`), the running log (`PROGRESS.md`), known shortcuts (`GAPS.md`). |
 | `data/` | The real-world 2030 numbers the game starts from. |
 | `CLAUDE.md` | The rules every AI session must follow when building this. |
 
@@ -63,6 +63,9 @@ Preview addresses that Vercel posts on each pull request work for a quick look,
 but install from the production address so the app updates itself after each merge.
 
 To try it on a computer instead: `npm run dev`, then open `http://localhost:5173`.
+For a quick look on a phone on the same Wi-Fi without deploying, run
+`npm run dev -- --host` and open the network address it prints (it will not work
+offline or install from there).
 
 ## A few words you will see
 
