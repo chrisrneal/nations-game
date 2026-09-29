@@ -559,7 +559,7 @@ export const TUNABLES = {
     value: 70,
     min: 40,
     max: 100,
-    note: 'A hard bargainer skips a pledge once the pool is this percent funded, because the pool pays out by exposure anyway (RULES 4.3). 100 means it never free-rides.',
+    note: 'A hard bargainer skips a pledge once the pool is this percent funded. Its monthly contribution still pays part of its share, which is what keeps its cover (RULES 4.3 rule 1). 100 means it never free-rides.',
   },
 } as const satisfies Readonly<Record<string, Tunable>>;
 
