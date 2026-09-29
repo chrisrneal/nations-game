@@ -4,8 +4,8 @@
  * Plays `games` seeded full-roster games (17 nations + 6 regions, a full
  * game length each) with every playable nation assigned a strategy at random,
  * plus a paired run per seed in which one randomly chosen nation plays the
- * greedy trader in one game and the isolationist in the other, everyone else
- * unchanged. Reports every Gate 1 metric with its pass line.
+ * trader (the shipped AI since prompt 13) in one game and the isolationist in
+ * the other, everyone else unchanged. Reports every Gate 1 metric with its pass line.
  *
  * Pass lines, fixed before any result was seen (ROADMAP gate rules):
  * - crashes 0; negative stocks 0.

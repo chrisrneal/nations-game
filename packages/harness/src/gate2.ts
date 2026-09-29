@@ -10,9 +10,14 @@
  * 2. A cooperator / free-rider pair: one randomly chosen nation plays the
  *    trader (the reciprocal cooperator) in one game and the free-rider in the
  *    other, everyone else unchanged.
- * 3. A spoiler pair: the nation trailing (lowest ownScore) at mid-game in the
- *    main game plays the trader from mid-game in one game and the spoiler
- *    (closes trade, pays nothing, pledges and breaks) in the other.
+ * 3. Spoiler runs: the nation trailing (lowest ownScore) at mid-game in the
+ *    main game plays, from mid-game, the trader in one game, the spoiler
+ *    (closes trade, pays nothing, pledges and breaks) in another, and the
+ *    stealth spoiler (keeps the AI's trade, pays nothing, pledges twice its
+ *    share and breaks) in a third. The stealth pair is reported, not graded
+ *    (prompt 13, from the Gate 2 review's adversarial check).
+ * The trader and the free-rider are the shipped AI (`AiDirector`), as on the
+ * phone, since prompt 13; the other archetypes are the harness bots.
  * Plus a 24-hour absence test on its own seeds.
  *
  * Pass lines, fixed before any result was seen (ROADMAP gate rules):
@@ -78,6 +83,9 @@ export interface PairScore {
   /** Crises that reached full cover in each run. */
   readonly coopSuccesses: number;
   readonly otherSuccesses: number;
+  /** The nation's final rank among the playable nations in each run (1 = top score). */
+  readonly coopRank: number;
+  readonly otherRank: number;
 }
 
 export interface AbsenceRun {
@@ -105,6 +113,8 @@ export interface Gate2Report {
   readonly topShare: Readonly<Record<string, number>>;
   readonly freeRiderPairs: readonly PairScore[];
   readonly spoilerPairs: readonly PairScore[];
+  /** The same trailing nation from mid-game: cooperator vs stealth spoiler. */
+  readonly stealthPairs: readonly PairScore[];
   readonly absence: readonly AbsenceRun[];
   readonly gate1: Gate1Report | null;
   readonly pass: boolean;
@@ -191,6 +201,12 @@ function finalOf(result: ReturnType<typeof playGame>, id: string): number {
   return result.score.nations.find((n) => n.id === (id as NationId))?.finalScore ?? 0;
 }
 
+/** 1 for the top final score; ties share the better rank. */
+function rankOf(result: ReturnType<typeof playGame>, id: string): number {
+  const mine = finalOf(result, id);
+  return 1 + result.score.nations.filter((n) => n.finalScore > mine).length;
+}
+
 /** One 24-hour absence: `nation` walks away for [from, to) after pledging, and must come back to a short recap with nothing lapsed. */
 function absenceRun(seed: number, roster: readonly RosterEntry[], ticks: number, nation: string, from: number, to: number, strategies: Record<string, Strategy>): AbsenceRun {
   let before: NationView | undefined;
@@ -267,6 +283,7 @@ export function runGate2(options: Gate2Options): Gate2Report {
   const archetypes: Record<string, { assigned: number; tops: number; finalSum: number }> = Object.fromEntries(ARCHETYPES.map((a) => [a, { assigned: 0, tops: 0, finalSum: 0 }]));
   const freeRiderPairs: PairScore[] = [];
   const spoilerPairs: PairScore[] = [];
+  const stealthPairs: PairScore[] = [];
 
   for (let g = 0; g < options.games; g++) {
     const seed = options.firstSeed + g;
@@ -314,12 +331,16 @@ export function runGate2(options: Gate2Options): Gate2Report {
         otherMultiplierBp: b.score.multiplierBp,
         coopSuccesses: a.state.ledger.crisesSucceeded,
         otherSuccesses: b.state.ledger.crisesSucceeded,
+        coopRank: rankOf(a, who),
+        otherRank: rankOf(b, who),
       });
       const who = playable[mix32(seed ^ 0x0c0ffee) % playable.length] as string;
       const as = (s: Strategy) => playGame({ seed, ticks, roster, strategies: { ...strategies, [who]: s }, humanSwitch: false });
       freeRiderPairs.push(pair(who, as('trader'), as('freeRider')));
       const from = (s: Strategy) => playGame({ seed, ticks, roster, strategies, humanSwitch: false, switches: [{ tick: mid, nation: trailing, strategy: s }] });
-      spoilerPairs.push(pair(trailing, from('trader'), from('spoiler')));
+      const coopFromMid = from('trader');
+      spoilerPairs.push(pair(trailing, coopFromMid, from('spoiler')));
+      stealthPairs.push(pair(trailing, coopFromMid, from('stealthSpoiler')));
     } catch (error) {
       crashes++;
       console.error(`seed ${seed} crashed:`, error);
@@ -366,6 +387,15 @@ export function runGate2(options: Gate2Options): Gate2Report {
   const spoilerAhead = spoilerPairs.length === 0 ? 0 : spoilerPairs.filter((p) => p.other > p.coop).length / spoilerPairs.length;
   const sank = spoilerPairs.length === 0 ? 0 : spoilerPairs.filter((p) => p.otherSuccesses < p.coopSuccesses).length / spoilerPairs.length;
   const multDrop = median(spoilerPairs.map((p) => (p.otherMultiplierBp - p.coopMultiplierBp) / 10_000));
+  const share = (pairs: readonly PairScore[], test: (p: PairScore) => boolean): number => (pairs.length === 0 ? 0 : pairs.filter(test).length / pairs.length);
+  const stealthMedian = median(stealthPairs.map((p) => p.other));
+  const stealthAhead = share(stealthPairs, (p) => p.other > p.coop);
+  const stealthLevel = share(stealthPairs, (p) => p.other >= p.coop);
+  const stealthRankUp = share(stealthPairs, (p) => p.otherRank < p.coopRank);
+  const stealthRankDown = share(stealthPairs, (p) => p.otherRank > p.coopRank);
+  const stealthSank = share(stealthPairs, (p) => p.otherSuccesses < p.coopSuccesses);
+  const stealthMult = median(stealthPairs.map((p) => (p.otherMultiplierBp - p.coopMultiplierBp) / 10_000));
+  const ranks = (pairs: readonly PairScore[], pick: (p: PairScore) => number): string => median(pairs.map(pick)).toFixed(1);
   const deadRate = nationGames === 0 ? 0 : dead / nationGames;
   const creditRatio = income === 0 ? 0 : sinks / income;
   const lapsed = absence.reduce((s, a) => s + a.offersLapsed, 0);
@@ -395,6 +425,15 @@ export function runGate2(options: Gate2Options): Gate2Report {
     { name: 'Spoiler pairs where sabotage paid', value: pct(spoilerAhead), passLine: 'info', pass: null },
     { name: 'Spoiler pairs where it sank a shared goal (fewer crises at full cover)', value: pct(sank), passLine: 'info', pass: null },
     { name: 'World multiplier change from one spoiler (median)', value: `${multDrop >= 0 ? '+' : ''}${multDrop.toFixed(3)}`, passLine: 'info', pass: null },
+    { name: 'Trailing nation: stealth spoiler (keeps trading) vs cooperator from mid-game (median finalScore)', value: `${stealthMedian.toFixed(0)} vs ${coopSpoiler.toFixed(0)}`, passLine: 'info', pass: null },
+    { name: 'Stealth spoiler pairs where sabotage paid (scores higher; same or higher)', value: `${pct(stealthAhead)}; ${pct(stealthLevel)}`, passLine: 'info', pass: null },
+    {
+      name: 'Stealth spoiler rank change vs cooperator (better / worse; median rank)',
+      value: `${pct(stealthRankUp)} / ${pct(stealthRankDown)}; ${ranks(stealthPairs, (p) => p.otherRank)} vs ${ranks(stealthPairs, (p) => p.coopRank)} (spoiler ${ranks(spoilerPairs, (p) => p.otherRank)})`,
+      passLine: 'info',
+      pass: null,
+    },
+    { name: 'Stealth spoiler pairs where it sank a shared goal; world multiplier change (median)', value: `${pct(stealthSank)}; ${stealthMult >= 0 ? '+' : ''}${stealthMult.toFixed(3)}`, passLine: 'info', pass: null },
     { name: 'Dead states (ownScore < 0.50 at game end)', value: pct(deadRate), passLine: '< 2%', pass: deadRate < 0.02 },
     { name: 'Credit sinks / Credit income (resilience + crises)', value: pct(creditRatio), passLine: '0-25%', pass: creditRatio >= 0 && creditRatio <= 0.25 },
     {
@@ -425,10 +464,24 @@ export function runGate2(options: Gate2Options): Gate2Report {
     topShare,
     freeRiderPairs,
     spoilerPairs,
+    stealthPairs,
     absence,
     gate1,
     pass: metrics.every((m) => m.pass !== false),
   };
+}
+
+function sabotageRows(report: Gate2Report): string[] {
+  const coop = report.spoilerPairs;
+  if (coop.length === 0) return [];
+  const rate = (pairs: readonly PairScore[], test: (p: PairScore) => boolean): string => pct(pairs.filter(test).length / Math.max(1, pairs.length));
+  const row = (label: string, pairs: readonly PairScore[]): string =>
+    `| ${label} | ${median(pairs.map((p) => p.other)).toFixed(0)} | ${median(pairs.map((p) => p.otherRank)).toFixed(1)} | ${rate(pairs, (p) => p.other > p.coop)} | ${rate(pairs, (p) => p.otherRank < p.coopRank)} / ${rate(pairs, (p) => p.otherRank > p.coopRank)} | ${rate(pairs, (p) => p.otherSuccesses < p.coopSuccesses)} |`;
+  return [
+    `| cooperator (the AI) | ${median(coop.map((p) => p.coop)).toFixed(0)} | ${median(coop.map((p) => p.coopRank)).toFixed(1)} | - | - | - |`,
+    row('spoiler (closes trade)', report.spoilerPairs),
+    row('stealth spoiler (keeps trading)', report.stealthPairs),
+  ];
 }
 
 export function formatGate2(report: Gate2Report): string {
@@ -451,6 +504,12 @@ export function formatGate2(report: Gate2Report): string {
       const fair = total === 0 ? 0 : a.assigned / total;
       return `| ${k} | ${a.assigned} | ${a.tops} | ${(share / Math.max(1e-9, fair)).toFixed(2)}x | ${a.meanFinal} |`;
     }),
+    '',
+    `## Sabotage from mid-game (the nation trailing at mid-game, ${report.stealthPairs.length} seeds)`,
+    '',
+    '| Trailing nation plays | Median final score | Median rank (1 = top) | Scores above the cooperator | Rank better / worse than as cooperator | Fewer crises at full cover |',
+    '|---|---|---|---|---|---|',
+    ...sabotageRows(report),
     '',
     '## Top scorer share by nation',
     '',

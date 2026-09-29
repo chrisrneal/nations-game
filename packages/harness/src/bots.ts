@@ -5,9 +5,16 @@ import { GREEDY, greedyDecide, type TraderStyle } from '@nations/ai';
  * Balance-harness strategies (docs/ROADMAP.md, "Balance harness"). Each reads
  * only its View and plays through ordinary commands, like any AI or player.
  *
- * Trade (Gate 1):
- * - trader: the greedy trader from packages/ai, with the default crisis
- *   policies (reciprocal rule, monthly contribution): the reciprocal cooperator.
+ * Played by the shipped AI (`AiDirector`, packages/ai), the AI the phone runs
+ * (prompt 13, GATE-2 F1). game.ts runs one director per game:
+ * - trader: the AI in its data-derived style (the reciprocal cooperator).
+ * - freeRider: the AI with paying switched off: trades exactly like the
+ *   trader, pays nothing into any pool. Fixed for the whole game.
+ * - stealthSpoiler: the AI's trade, but pays nothing and pledges twice its
+ *   share to every appeal only to withdraw it (GATE-2 criterion 4 and the
+ *   reviewer's check: sabotage without closing trade). Used from mid-game.
+ *
+ * Bots (Phase 1 greedy trader underneath, kept as they were):
  * - hoarder: buys what it lacks, never sells or pays in goods, sits on surplus,
  *   and hoards Credit too: pays nothing into the crisis pools.
  * - isolationist: sets the reject-everything policy and never trades. Crisis
@@ -15,9 +22,6 @@ import { GREEDY, greedyDecide, type TraderStyle } from '@nations/ai';
  * - exploiter: sells only as hard bargains above the fair band and promises
  *   the same goods to two buyers at once, so some of its deals fail; in a
  *   crisis it pledges its share and withdraws the pledge the next month.
- *
- * Crises (Gate 2):
- * - freeRider: trades exactly like the trader, but pays nothing into any pool.
  * - spoiler: the saboteur of RULES 5.3. Closes its trade, pays nothing, and
  *   pledges twice its share to every appeal only to withdraw it, to sink the
  *   shared goal. Used from mid-game by the Gate 2 spoiler scenario.
@@ -25,7 +29,11 @@ import { GREEDY, greedyDecide, type TraderStyle } from '@nations/ai';
 export const STRATEGIES = ['trader', 'hoarder', 'isolationist', 'exploiter'] as const;
 /** The Gate 2 archetypes, assigned at random: Gate 1's four plus the free-rider. */
 export const ARCHETYPES = [...STRATEGIES, 'freeRider'] as const;
-export type Strategy = (typeof ARCHETYPES)[number] | 'spoiler';
+export type Strategy = (typeof ARCHETYPES)[number] | 'spoiler' | 'stealthSpoiler';
+
+/** The strategies the shipped AI plays; the rest are bots. */
+export const AI_STRATEGIES: readonly Strategy[] = ['trader', 'freeRider', 'stealthSpoiler'];
+export const playedByAi = (strategy: Strategy): boolean => AI_STRATEGIES.includes(strategy);
 
 const HOARDER: TraderStyle = { ...GREEDY, sells: false, paysGoods: false };
 
@@ -62,14 +70,33 @@ function pledgeAndBreak(view: NationView, multiple: number): Command[] {
   return out;
 }
 
+/**
+ * What an AI-played nation sends this tick, given the director's commands for it.
+ * The trader and the free-rider send the AI's commands unchanged (the free-rider's
+ * mind was built never to pay). The stealth spoiler drops the AI's crisis answers
+ * and crisis dials, and pledges-then-breaks instead.
+ */
+export function aiDecide(strategy: Strategy, view: NationView, aiCommands: readonly Command[]): Command[] {
+  if (strategy !== 'stealthSpoiler') return [...aiCommands];
+  const limit = view.rules.maxCommandsPerNationPerTick ?? 8;
+  const trade = aiCommands.flatMap((c): Command[] => {
+    if (c.type === 'contribute' || c.type === 'declineAppeal') return [];
+    if (c.type !== 'setPolicy') return [c];
+    const rest = Object.fromEntries(Object.entries(c.payload as Record<string, unknown>).filter(([k]) => !(k in PAYS_NOTHING)));
+    return Object.keys(rest).length === 0 ? [] : [{ ...c, payload: rest }];
+  });
+  return [...ensurePolicy(view, PAYS_NOTHING), ...pledgeAndBreak(view, 2), ...trade].slice(0, limit);
+}
+
+/** The bots' moves. The AI strategies are played by the director (`aiDecide`), never here. */
 export function botDecide(strategy: Strategy, view: NationView, seed: number): Command[] {
   const limit = view.rules.maxCommandsPerNationPerTick ?? 8;
   const fit = (commands: Command[]): Command[] => commands.slice(0, limit);
   switch (strategy) {
     case 'trader':
-      return [...greedyDecide(view, seed).commands];
     case 'freeRider':
-      return fit([...ensurePolicy(view, PAYS_NOTHING), ...greedyDecide(view, seed).commands]);
+    case 'stealthSpoiler':
+      throw new Error(`${strategy} is played by the AI director (aiDecide), not by a bot`);
     case 'hoarder':
       return fit([...ensurePolicy(view, PAYS_NOTHING), ...greedyDecide(view, seed, HOARDER).commands]);
     case 'isolationist':
