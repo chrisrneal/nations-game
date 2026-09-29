@@ -38,7 +38,25 @@ Suite: `npm run harness -- gate2` (200 seeded games with random archetypes, coop
 - [x] Gates 0-1 pass (determinism 1,000/1,000 Node vs Chromium; Gate 1 rerun passes every line but the waived top scorer, Egypt 12.0%, trade advantage +17.6%)
 - [ ] Gate 1's waived top-scorer line re-graded with archetypes (FAIL: Saudi Arabia 23.5%, limit 11.8%. Not caused by crises: 24.5% with crises switched off. Needs a RULES 2.8 change or a second waiver)
 
+Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): the archetype line (free-rider 2.21x, shipped AI 1.64x; cooperator 2.92x) and the re-graded top scorer (Saudi Arabia 23.5%, shipped AI 24.0%) fail; the predictions and the 10 playtests have not been done (docs/playtests/ is empty). The harness still grades the greedy trader, and a paid-in-full AI nation is shown as "declined".
+
 ## Session log
+
+### 2026-09-29 - prompt 12, Gate 2 review (independent; docs only)
+**Changed.** docs/gates/GATE-2.md written; no code changed. Verdict **FAIL**. Crisis
+success (55.3%; shipped AI 57.9%), cooperators beating free-riders, sabotage never
+paying, the 24-hour absence test, the depth budget and 60 fps (headless), and Gates 0-1
+(with their waivers) pass. The archetype line and the re-graded top scorer fail. The
+prediction and playtest criteria have no data yet. The review also found that the
+harness still grades the old greedy trader, not the AI the phone plays; that 98% of the
+AI's crisis "declines" are nations that had already paid in full (it misleads cards and
+prediction scoring); and that a spoiler who keeps trading loses nothing in over half of
+games. The review signs off the nine seams, closing Gate 0's waiver.
+**Checked.** 444 tests, check, 53/53 phone checks and CI on main all pass; the gate2
+suite reproduces the builders' numbers exactly.
+**How to see it.** docs/gates/GATE-2.md.
+**Left.** Fixes for the two failing lines and findings F1-F2; the owner's ruling on the
+archetype wording; 10 playtests in docs/playtests/. See docs/GAPS.md, prompt 12 (Phase 2).
 
 ### 2026-09-29 - Opus 5.5 instruction review (owner request, no prompt number; text only)
 **Changed.** A text-only pass over every instruction in the repo. There are no LLM
