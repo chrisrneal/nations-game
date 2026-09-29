@@ -788,7 +788,7 @@ wherever they feed economy maths.
 | `aiGrudgePerSkip` | 20 | 0 | 60 | Grievance for skipping a crisis pledge the AI paid into. 0 forgets crisis free-riding in trade |
 | `aiTrustPriceBpPerPoint` | 20 | 0 | 60 | Price generosity per point of trust above `baseTrust` (stricter below). At 20, trust 75 accepts 8% worse terms |
 | `aiCounterRangePct` | 20 | 0 | 40 | How far below its reservation price an offer still gets a counter rather than a rejection. 0 turns counters off |
-| `aiExploiterMarkupPct` | 20 | 0 | 50 | Markup a hard-bargaining AI asks over the reference price. Above `priceBandPct` its offers become hard bargains |
+| `aiExploiterMarkupPct` | 0 | 0 | 50 | Markup a hard-bargaining AI asks over the reference price. Above `priceBandPct` its offers become hard bargains. Prompt 10 tuning (seeds 1001-1400 only): 20 -> 0 |
 | `aiBudgetUnitsPerTick` | 4000 | 500 | 20000 | Work units the whole AI roster may spend per tick; due nations that do not fit wait a tick |
 | `aiPledgeMaxIncomePct` | 10 | 0 | 30 | Most of one month's income an AI pledges to a crisis pool at once |
 | `aiConditionalPledgePct` | 50 | 20 | 80 | A strict reciprocator pledges its full fair share only when at least this percent of nations paid into the last crisis |

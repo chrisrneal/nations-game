@@ -61,6 +61,23 @@ describe('negotiation: accept, counter, reject, shifted by trust', () => {
   });
 });
 
+describe('repeat offences escalate', () => {
+  it('a second break inside memory doubles the retaliation, a third triples it, then it stops growing', () => {
+    const view = viewWithTrust(50);
+    const punish = view.rules.aiPunishTicks!;
+    const memory = new Map([[SELLER, emptyMemory()]]);
+    const brk = (tick: number) => remember(memory, [{ kind: 'broken', partner: SELLER, tick, offer: offer(5) }], 'strict', view, tick + 1);
+    brk(0);
+    expect(memory.get(SELLER)!.punishUntil).toBe(1 + punish);
+    brk(10);
+    expect(memory.get(SELLER)!.punishUntil).toBe(11 + 2 * punish);
+    brk(40);
+    expect(memory.get(SELLER)!.punishUntil).toBe(41 + 3 * punish);
+    brk(80);
+    expect(memory.get(SELLER)!.punishUntil).toBe(81 + 3 * punish);
+  });
+});
+
 describe('memory fades', () => {
   it('a grievance decays by aiMemoryDecayPct a tick and the offence count resets once it is gone', () => {
     const view = viewWithTrust(50);

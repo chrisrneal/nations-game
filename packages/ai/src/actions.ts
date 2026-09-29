@@ -1,7 +1,7 @@
 import type { NationId, NationView, ResourceAmount } from '@nations/contracts';
 import { grudgePoints, punishing, type PartnerBelief, type PartnerMemory } from './beliefs.ts';
 import { goodsByGoal, type Goal } from './goals.ts';
-import type { Ledger } from './negotiation.ts';
+import { grievanceSurchargePct, type Ledger } from './negotiation.ts';
 import type { Personality } from './personality.ts';
 import { creditFor, goodsFor, isFair, noiseBp, rule, show, type Good } from './util.ts';
 
@@ -49,9 +49,7 @@ function partnerScore(ctx: ActionContext, b: PartnerBelief, amount: number): num
 
 function markupFor(ctx: ActionContext, partner: NationId): number {
   if (ctx.p.reciprocity !== 'exploiter') return 0;
-  const markup = rule(ctx.view, 'aiExploiterMarkupPct');
-  const m = ctx.memory.get(partner);
-  return markup + Math.min(markup, m === undefined ? 0 : Math.floor(grudgePoints(m) / 2));
+  return rule(ctx.view, 'aiExploiterMarkupPct') + grievanceSurchargePct(ctx.view, ctx.memory.get(partner));
 }
 
 /** Sell spare goods to the best-scoring partners short of them, in goal order. */

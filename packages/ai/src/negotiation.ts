@@ -38,6 +38,14 @@ export type Answer =
     };
 
 /**
+ * A hard bargainer does not refuse an offender, it charges: one percent per two
+ * points of remembered grievance, never beyond the fair price band.
+ */
+export function grievanceSurchargePct(view: Pick<NationView, 'rules'>, memory: PartnerMemory | undefined): number {
+  return memory === undefined ? 0 : Math.min(rule(view, 'priceBandPct'), Math.floor(grudgePoints(memory) / 2));
+}
+
+/**
  * What this nation will accept, as the value it receives over the value it
  * pays, in basis points (10,000 = even at reference prices).
  */
@@ -46,11 +54,7 @@ export function reservationBp(view: NationView, p: Personality, trust: number, m
   // Trust above the no-ties level buys better terms, below it worse; cooperative nations round in your favour.
   let bp = 10_000 - (trust - rule(view, 'baseTrust')) * perPoint - p.cooperativeness * 10;
   if (urgent) bp -= p.inputs.importDependence * 20; // up to 20% worse terms when a deficit bites
-  if (p.reciprocity === 'exploiter') {
-    const markup = rule(view, 'aiExploiterMarkupPct');
-    const surcharge = Math.min(markup, memory === undefined ? 0 : Math.floor(grudgePoints(memory) / 2));
-    bp += (markup + surcharge) * 100;
-  }
+  if (p.reciprocity === 'exploiter') bp += (rule(view, 'aiExploiterMarkupPct') + grievanceSurchargePct(view, memory)) * 100;
   return bp;
 }
 

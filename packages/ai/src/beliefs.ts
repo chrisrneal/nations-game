@@ -118,7 +118,8 @@ export function decayMemory(memory: Map<NationId, PartnerMemory>, view: Pick<Nat
  * offence starts a retaliation (docs/AI_DESIGN.md "Reciprocity"):
  *
  * - strict: every broken deal starts `aiPunishTicks` of refused trade at once;
- *   a skipped pledge it paid into starts half that.
+ *   a skipped pledge it paid into starts half that. A second offence still in
+ *   memory doubles the length, a third or later triples it.
  * - forgiving: lets `aiForgiveLimit` offences inside its memory pass (and says
  *   so), then retaliates like a strict one.
  * - exploiter: never refuses; it remembers, and charges the grievance as a
@@ -184,8 +185,10 @@ export function remember(
     if (style === 'exploiter') continue;
     const retaliate = style === 'strict' || m.offences > forgiveLimit;
     if (retaliate) {
+      // Repeat offences inside memory escalate: two in memory cost twice as long, three or more three times.
+      const unforgiven = style === 'strict' ? m.offences : m.offences - forgiveLimit;
       if (now >= m.punishUntil) m.punishFrom = now;
-      m.punishUntil = Math.max(m.punishUntil, now + length);
+      m.punishUntil = Math.max(m.punishUntil, now + length * Math.min(3, Math.max(1, unforgiven)));
       m.pending.push('suspend');
     } else {
       m.pending.push('forgive');

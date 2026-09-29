@@ -460,10 +460,10 @@ export const TUNABLES = {
     note: 'How far below its reservation price an offer can be and still get a counter rather than a flat rejection. 0 turns counters off.',
   },
   aiExploiterMarkupPct: {
-    value: 20,
+    value: 0,
     min: 0,
     max: 50,
-    note: 'Markup a hard-bargaining AI asks over the reference price. At or below priceBandPct its offers stay fair; above it they are hard bargains.',
+    note: 'Markup a hard-bargaining AI asks over the reference price. At or below priceBandPct its offers stay fair; above it they are hard bargains. Prompt 10 AI gate2 tuning (seeds 1001-1400 only): 20 -> 0, because every markup let the exporters that sell first top more games; hard bargainers still differ by whom they favour, surcharges on offenders and pool free-riding.',
   },
   aiBudgetUnitsPerTick: {
     value: 4000,
