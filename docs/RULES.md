@@ -155,7 +155,7 @@ stocks, and sources and sinks in band. The conservation invariant is: for each
 resource, total production plus imports equals total consumption plus exports plus
 named sinks, every tick, exactly, in integers.
 
-### 2.8 The structural world and each nation's fair share
+### 2.8 The structural world, each nation's fair share, and the cover its baseline expects
 
 *(Prompt 09, the top-scorer fairness rule.)* The 2030 world is net short: world
 Energy production covers about 82% of demand and Food about 87%. So in any game
@@ -192,6 +192,54 @@ Nigeria 6%; South Africa 1%.
 The actual shortfall penalty (§2.7) is unchanged: a nation that goes short still
 loses that output, and the world still loses it. What changes is the yardstick
 it is scored against (§5.1).
+
+**The cover a baseline expects** *(prompt 15)*. The fair share above is what the
+world *could* supply to each importer alike, and it is still the yardstick of the
+trade gain (§3.3). The baseline (§5.1) instead expects the cover a nation that
+trades can **normally** get, and in play that depends on how it pays. Measured on
+seeds 1001-1400 with the shipped AI trading, a nation that can swap its own spare
+goods for its imports (Saudi Arabia, Nigeria, Indonesia: spare energy for food;
+India: spare food for energy) got 37-77% of its deficit covered. A nation that
+must pay in Credit got 13-35%. The fair share said about 35-40% for everyone. So
+the swappers beat their baseline every time they traded (Saudi Arabia by 26% on
+average, up to 34%, and it topped 24% of games), and the Credit buyers (Egypt,
+Mexico, Germany) trailed theirs and almost never won.
+
+So each importer's baseline expects:
+
+```
+credit_good   = cover_good * baselineCreditCoverPct / 100
+fund_good     = min(1, value of own structural surplus of the other good
+                       / value of own structural deficit of this good)       (at base prices)
+expected_good = credit_good + (1 - credit_good) * baselineInKindCoverPct / 100 * fund_good
+structuralUnmet_good = deficit_good * (1 - expected_good)
+structuralPenalty    = the §2.7 penalty on structuralUnmet (food and energy together)
+```
+
+- A nation that must buy with Credit expects `baselineCreditCoverPct`% (45) of the
+  world's cover.
+- A nation whose spare goods of the other kind could pay for its whole deficit
+  also expects `baselineInKindCoverPct`% (60) of the rest; one whose spare goods
+  pay for part of it, that share of that. A nation with no spare goods adds nothing.
+- `baselineCreditCoverPct` 100 and `baselineInKindCoverPct` 0 are the prompt 09 rule.
+
+At the start of the real game, with the §11 values:
+
+| Nation | Pays with | Expected cover | Expected penalty (prompt 09 rule) |
+|---|---|---|---|
+| Saudi Arabia | spare energy, all of its food deficit | food 66% | 11.3% (20.8%) |
+| Nigeria, Indonesia | spare energy, all of it | food 66% | 3.1-3.2% (5.9-6.0%) |
+| South Africa | spare energy, all of it | food 66% | 0.5% (1.0%) |
+| India | spare food, 43% of its energy deficit | energy 39% | 11.5% (11.4%) |
+| China | Credit | food 16%, energy 18% | 15.5% (11.6%) |
+| Egypt, Mexico | Credit | food 16%, energy 18% | 26.4-27.8% (20.0-21.2%) |
+| Germany | Credit | energy 18% | 23.6% (17.4%) |
+| Japan, Korea, Turkiye | Credit | food 16%, energy 18% | 30% cap (30% cap) |
+
+Exporters and balanced nations still expect no shortfall. Every term is the
+nation's own structural flows, the world cover (baseline paths only) and
+tunables, so nothing any player does moves a baseline (§5.3). Base prices value
+the swap, not reference prices, for the same reason.
 
 ---
 
@@ -465,8 +513,9 @@ baselineOutput_i = baseline potential_i * (1 - structuralPenalty_i)
 
 So the baseline already expects a nation's usual deficit: Japan's baseline knows
 Japan imports its energy in a world that is short of it. ownScore then measures
-play, not geography. An importer that covers exactly its fair share, and an
-exporter that sells nothing, both sit at 1.00 before trade gains.
+play, not geography. An importer that gets exactly the cover its baseline
+expects (§2.8, by how it pays), and an exporter that sells nothing, both sit at
+1.00 before trade gains.
 
 ownScore is read from a smoothed path, not from the final month alone. Every month
 the sim moves each nation's smoothed output and smoothed baseline output
@@ -540,7 +589,8 @@ leaves the first factor unchanged-then-falling and strictly reduces the second.
 
 The §2.8 baseline does not open a way round this. Structural cover is computed
 from every nation's baseline path, which no play can move, so starving *j* never
-lowers *i*'s baseline. And a trade gain (§3.3) depends only on the share of *i*'s
+lowers *i*'s baseline. The cover a baseline expects (prompt 15) adds only *i*'s
+own structural flows and fixed base prices, so the same holds. And a trade gain (§3.3) depends only on the share of *i*'s
 own imbalance it clears, never on anyone else's position.
 The derivative is negative for every *i*, at every position on the board. A
 **trailing** nation is not an exception: it cannot close a gap by widening it,
@@ -776,6 +826,8 @@ wherever they feed economy maths.
 | `selfSufficiencyPivot` | 50 | 40 | 60 | The index value at which production equals demand. Moving it shifts the whole world into surplus or deficit |
 | `shortfallPenaltyBpPerPct` | 35 | 10 | 120 | Output cost per percent of unmet demand. At 35, a 10% shortfall costs 3.5% of output. Prompt 09 tuning (seeds 1001-1400 only): 40 -> 35 |
 | `structuralCoverSharePct` | 80 | 50 | 100 | Share of the world's structural surplus counted as reachable when setting each importer's fair share and its baseline (§2.8). 100 assumes every spare unit reaches a buyer; lower allows for goods that never reach market. Prompt 09 tuning (seeds 1001-1400 only) |
+| `baselineCreditCoverPct` | 45 | 25 | 100 | Percent of the world's structural cover the baseline expects for a deficit a nation must buy with Credit (§2.8). 100 is the prompt 09 rule, where every importer expects the same share covered. Prompt 15 tuning (seeds 1001-1400 only): 100 -> 45. With in-kind at 60, 50 leaves Saudi Arabia and Brazil topping 12.3% and 40 lets China top 13.3% (docs/balance/gate2-prompt15.md) |
+| `baselineInKindCoverPct` | 60 | 0 | 100 | Percent of the rest of a deficit the baseline expects covered when the nation's own spare goods of the other kind could pay for all of it, in proportion when they pay for part (§2.8). 0 is the prompt 09 rule. Prompt 15 tuning (seeds 1001-1400 only): 0 -> 60. With credit at 45, 55 leaves Saudi Arabia topping 13.5% and 65 hands its wins to Canada (12.8%) |
 | `maxShortfallPenaltyPct` | 30 | 10 | 60 | Cap on the shortfall penalty, so no nation is killed by one bad tick (Gate 1: dead states under 2%) |
 | `mineralsEnergyBonusBpPer10` | 10 | 0 | 40 | Energy production bonus per 10 points of mineral endowment. Caps at +10% at the starting value |
 | `startingStockTicks` | 1 | 0 | 6 | Starting Food and Energy as months of own production, starting Credit as months of output. Above 0 so nobody starts a game already short |
