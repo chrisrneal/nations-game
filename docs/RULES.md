@@ -269,7 +269,10 @@ Every nation has standing policies, and they are the default answer (S8):
   worse but survivable.
 - **Cover deficit priority** — Food before Energy, or the reverse.
 
-A player who never opens the app still trades, because their policies do.
+A player who never opens the app still trades, because their policies do. Since
+Phase 2 prompt 09, a policy **answers every offer** on its last month: an offer
+that meets no auto-accept condition is declined with its reason, never left to
+lapse, so an absent nation never pays the ignored-offer trust cost.
 
 ### 3.5 Trust from trading
 
@@ -357,6 +360,54 @@ Three rules make it collective rather than a market:
    card lists who contributed and who did not. Free-riding is possible, visible, and
    remembered by the AI (§7).
 
+### 4.4 Appeals, pledges and the crisis rule *(Phase 2 prompt 09)*
+
+Every crisis is an **appeal**: a State object with a deadline, never a
+conversation (S8).
+
+- **Opening.** A climate appeal opens in month `climateFirstOpenTick` of every
+  world year (months 3, 15, 27, 39, 51) and locks `crisisResponseTicks` (3) later.
+  A pandemic opens on a seeded roll of `pandemicChanceBpPerTick` whenever none is
+  open, and locks `pandemicWindowTicks` (3) later. Every nation, background regions
+  too, is asked for its **share**: its part of `sum(exposure_i / 100 x output_i)`,
+  where exposure is `climate.exposureIndex` for the adaptation pool and
+  `100 - pandemic.preparednessIndex` for the health pool. The **target** is that sum
+  x `poolTargetScaleBp` / 10,000 (the `/ 100` on the index was implicit in §4.3).
+- **Answering.** A nation answers by paying (`contribute`), promising (`pledge`) or
+  saying no (`declineAppeal`). On the deadline month, its standing **crisis rule**
+  answers for it if it has not: `fairShare` pays what it still owes of its share;
+  `reciprocal` (the default) pays in full if the world met at least
+  `reciprocalMatchPct` of this pool's target last round, and in proportion below it;
+  `none` pays nothing. Money a nation paid this round (including its monthly
+  contribution) counts towards its share.
+- **Monthly contribution.** Dial 3 of §8.2: `contributionBp` of each month's income
+  (default `defaultContributionBp`) goes to one pool or is split between both. It is
+  the only steady way to fill the health pool before a pandemic.
+- **Pledges.** A promise to pay an amount into a pool by a deadline at most
+  `maxPledgeTicks` ahead, one open pledge per pool per nation. Money paid into that
+  pool counts towards it. On the deadline month the rest is **collected
+  automatically** if the nation holds the Credit, so an absent player keeps their
+  word. A pledge paid in full is **honoured**: every other nation trusts the pledger
+  `trustPerPledgeHonoured` more. A pledge withdrawn, or unpaid because the Credit is
+  not there, is **broken**: every other nation trusts the pledger
+  `trustPerPledgeBroken` less. Like all trust, the damage fades by
+  `trustDecayPerTick` a month.
+- **Locking.** On the deadline month the pool is spent up to its target (late
+  pandemic money at `lateContributionEffectPct`; leftover money stays for the next
+  round). `poolCover = min(poolCoverMaxPct, 100 x counted / target)`. The crisis is
+  a **success** when the pool reaches full cover (counted money at least
+  `poolCoverMaxPct`% of the target), a **partial success** at `crisisPartialPct`% or
+  more, and a **failure** below that. Contributors are those that paid at least
+  `contributorMinSharePct`% of their share this round.
+- **Damage.** In basis points of output, per month it lasts:
+  `severity x exposure x (1 - poolCover) x (200 - resilience) / 200`, so resilience
+  100 halves it (the §4.1 "- resilience / 2" read as a proportional cut, because
+  subtracting it outright cancelled almost every event). Climate damage lasts
+  `climateDamageSpreadTicks` (6) months from the lock; a pandemic hits the lock
+  month only. Population growth is not modelled, so a pandemic lands on output
+  alone (docs/GAPS.md). Crisis damage is on top of the shortfall penalty and the
+  baseline never expects it.
+
 **Gate metric.** Gate 2: crisis success between 40% and 75% of events; reciprocal
 cooperators finish ahead of free-riders. Gate 3: crisis success stays in band once
 joint projects exist.
@@ -411,7 +462,9 @@ Four world-level goals, each scored 0 to 1:
 | Nations above their own baseline | share of playable nations with `ownScore ≥ baselineToleranceBp/10000` (0.95) |
 | Deficits met | 1 − (world unmet Food and Energy demand / world demand), averaged over the game |
 
-`collective` is their mean. Then:
+Both crisis goals are measured in output lost over the game so far, against the
+same crises with empty pools; before the first crisis locks, or in a game with no
+pandemic, that goal counts as met. `collective` is their mean. Then:
 
 ```
 multiplier = (collectiveFloorBp + (collectiveCeilingBp - collectiveFloorBp) * collective) / 10000
@@ -731,6 +784,8 @@ wherever they feed economy maths.
 | `trustPerIgnoredOffer` | 1 | 0 | 3 | Lost when an offer is left to expire. Ignoring is an answer |
 | `trustPerRenege` | 12 | 5 | 30 | Lost for accepting and then failing to deliver. Six trades to repair at the starting values |
 | `trustDecayPerTick` | 1 | 0 | 3 | Drift back towards `baseTrust`, so memory fades (the roadmap's decaying belief) |
+| `trustPerPledgeHonoured` | 2 | 0 | 6 | Trust every other nation gains in a pledger who pays in full by the deadline (§4.4). Small, like a completed trade, because keeping a promise is expected. Phase 2 prompt 09 |
+| `trustPerPledgeBroken` | 12 | 5 | 30 | Trust every other nation loses in a pledger who withdraws or cannot pay (§4.4). Matches `trustPerRenege`: six kept pledges repair one broken. Phase 2 prompt 09 |
 
 ### Climate
 
@@ -740,6 +795,8 @@ wherever they feed economy maths.
 | `climateBaseSeverity` | 20 | 10 | 40 | Severity of the first event |
 | `climateRampPerYear` | 8 | 0 | 20 | Added severity per world year, which is what makes climate a ratchet rather than weather. At 0 it stops ratcheting |
 | `climateDamageSpreadTicks` | 6 | 1 | 12 | Ticks over which damage is felt. Six months is what makes climate the slow crisis |
+| `climateFirstOpenTick` | 3 | 0 | 11 | Month of each world year in which the climate appeal opens (tick modulo `climateEventIntervalTicks`). 3 lets the last event of a 60-month game lock and land inside the game. Phase 2 prompt 09 |
+| `crisisResponseTicks` | 3 | 1 | 6 | Months from a climate appeal opening to its pool locking. Long enough for an absent player's policy to answer; short enough that the appeal is news. Phase 2 prompt 09 |
 
 ### Pandemic
 
@@ -758,6 +815,11 @@ wherever they feed economy maths.
 | `poolTargetScaleBp` | 1000 | 500 | 2000 | Scales how much Credit a full pool needs relative to world exposure and output. The main lever on Gate 2's 40-75% crisis success band |
 | `contributorResilienceBonus` | 3 | 0 | 10 | Resilience given to contributors only, so cooperating pays something private |
 | `contributorTrustBonus` | 2 | 0 | 6 | Trust gained with every other contributor |
+| `crisisPartialPct` | 50 | 25 | 90 | Share of the target, in percent, a pool must reach for a crisis to count as a partial success rather than a failure. Reaching full cover is a success (§4.3). Phase 2 prompt 09 |
+| `contributorMinSharePct` | 50 | 10 | 100 | Share of its own fair share a nation must pay in a round to count as a contributor for the bonuses, so one token Credit cannot farm them. Phase 2 prompt 09 |
+| `defaultContributionBp` | 110 | 0 | 200 | Starting position of the monthly contribution dial (§8.2 dial 3), in basis points of income, split between the pools. Steady funding is what fills the health pool before a pandemic. Phase 2 prompt 09; gate2 tuning (seeds 1001-1100 only): 20 -> 110, the main lever on crisis success |
+| `reciprocalMatchPct` | 50 | 25 | 100 | How much of its target the world must have met in a pool's last round, in percent, for a reciprocal policy to pay its full share this round. Below it, it pays in proportion. Phase 2 prompt 09 |
+| `maxPledgeTicks` | 12 | 3 | 24 | Furthest ahead a pledge deadline may be set. A year: long enough to promise for the next climate event, short enough that a promise is soon tested. Phase 2 prompt 09 |
 
 ### Scoring
 
@@ -786,6 +848,8 @@ wherever they feed economy maths.
 | id | value | min | max | note |
 |---|---|---|---|---|
 | `maxCommandsPerNationPerTick` | 8 | 1 | 32 | Caps one nation's intent per tick so a buggy or hostile client cannot flood a step; a real player needs a handful at most (prompt 03) |
+| `crisisHistoryKept` | 12 | 4 | 24 | Locked crises kept in State and the View for crisis cards and recaps. Not balance: a 1,000-month stress run must not grow State without end. Phase 2 prompt 09 |
+| `recapMaxLines` | 6 | 3 | 10 | Most lines an away recap shows. Six short sentences read in well under a minute (Gate 2 absence test). Phase 2 prompt 09 |
 
 The five rows added by prompt 10 (`foodBasePriceMilli`, `energyBasePriceMilli`,
 `startingStockTicks`, `defaultResilienceFloor`, `aiStockBufferTicks`) ratify numbers

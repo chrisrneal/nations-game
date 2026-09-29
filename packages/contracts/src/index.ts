@@ -26,7 +26,29 @@ export type {
   WorldLedger,
 } from './economy.ts';
 export type {
+  AppealAnswer,
+  ContributionTarget,
+  CrisesView,
+  Crisis,
+  CrisisHit,
+  CrisisKind,
+  CrisisOutcome,
+  CrisisResult,
+  CrisisRule,
+  Pledge,
+  Pool,
+  PoolKind,
+} from './crisis.ts';
+export type {
   AcceptOfferCommand,
+  ContributeCommand,
+  CrisisEventPayloads,
+  CrisisEventType,
+  DeclineAppealCommand,
+  PledgeCommand,
+  Recap,
+  RecapLine,
+  WithdrawPledgeCommand,
   CounterOfferCommand,
   CounterOfferPayload,
   EconomyEventPayloads,
@@ -44,4 +66,4 @@ export type {
   TradeOffer,
   WithdrawOfferCommand,
 } from './trade.ts';
-export type { ForeignNation, NationPrivate, NationPublic, NationRecord, NationScore, NationView, ScoresView } from './nations.ts';
+export type { CollectiveGoals, ForeignNation, NationPrivate, NationPublic, NationRecord, NationScore, NationView, ScoresView } from './nations.ts';

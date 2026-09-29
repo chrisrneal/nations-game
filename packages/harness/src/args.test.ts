@@ -24,9 +24,15 @@ describe('harness command line', () => {
   });
 
   it('rejects an unknown command, an unknown suite and a stray word', () => {
-    expect(() => parseArgs(['gate2'])).toThrow(/Unknown harness command "gate2"/);
-    expect(() => parseArgs(['--suite', 'gate2'])).toThrow(/Unknown suite "gate2"/);
+    expect(() => parseArgs(['gate3'])).toThrow(/Unknown harness command "gate3"/);
+    expect(() => parseArgs(['--suite', 'gate3'])).toThrow(/Unknown suite "gate3"/);
     expect(() => parseArgs(['gate1', '200'])).toThrow(/Unexpected argument "200"/);
+  });
+
+  it('accepts gate2 and --suite gate2 with its flags', () => {
+    expect(parseArgs(['gate2', '--games', '50', '--absence', '5'])).toMatchObject({ command: 'gate2', numbers: { games: 50, absence: 5 } });
+    expect(parseArgs(['--suite', 'gate2']).command).toBe('gate2');
+    expect(() => parseArgs(['gate2', '--games', '0'])).toThrow(/at least 1/);
   });
 
   it('rejects a command given twice, even through --suite', () => {

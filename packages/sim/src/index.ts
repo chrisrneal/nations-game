@@ -38,15 +38,22 @@ export {
   valueMilli,
 } from './economy.ts';
 export { startingTrust } from './trust.ts';
-export { policyAnswer } from './trade.ts';
+export { policyAnswer, type PolicyAnswer } from './trade.ts';
 export { ownScoreBp, scoreboard, type NationScore, type Scoreboard } from './score.ts';
+export { POOL_OF, exposureFor, hitBp, rulePayment } from './crisis.ts';
+export { buildRecap } from './recap.ts';
 export {
   COMMAND_TYPES,
+  MAX_CONTRIBUTION_BP,
   RESOURCES,
   validateCommand,
   validateCommandShape,
   type AcceptOfferCommand,
+  type ContributeCommand,
   type CounterOfferCommand,
+  type DeclineAppealCommand,
+  type PledgeCommand,
+  type WithdrawPledgeCommand,
   type FundResilienceCommand,
   type MakeOfferCommand,
   type PingCommand,

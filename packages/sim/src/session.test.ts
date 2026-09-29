@@ -42,7 +42,7 @@ describe('command queue via Session', () => {
     session.advance(3);
     expect(session.state.nations[B]?.public.pingsReceived).toBe(0);
     const events = session.advance(1);
-    expect(events.map((e) => e.type)).toEqual(['pinged']);
+    expect(events.filter((e) => e.type === 'pinged')).toHaveLength(1);
     expect(session.state.nations[B]?.public.pingsReceived).toBe(1);
   });
 
@@ -111,12 +111,59 @@ describe('save and load', () => {
     expect(() => migrateSave({})).toThrow(/schemaVersion/);
   });
 
+  /** A version-3 save (before Phase 2's crises) made from a current one: no pools, crises, pledges or crisis policy. */
+  function asVersion3(save: ReturnType<Session['save']>): Record<string, unknown> {
+    const snapshot: Record<string, unknown> = { ...save.snapshot, schemaVersion: 3 };
+    for (const key of ['pools', 'crises', 'recentCrises', 'pledges', 'hits', 'nextCrisisId', 'nextPledgeId']) delete snapshot[key];
+    const nations: Record<string, unknown> = {};
+    for (const [id, n] of Object.entries(save.snapshot.nations)) {
+      const drop = (o: object, keys: string[]): Record<string, unknown> => Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)));
+      const priv = drop(n.private, ['pledgesHonoured', 'pledgesBroken', 'pooledTotal']);
+      const policy = drop(n.private.policy, ['crisisRule', 'contributionBp', 'contributionTo']);
+      const last = drop(n.private.last, ['crisisPct', 'contributed']);
+      nations[id] = { ...n, private: { ...priv, policy, last } };
+    }
+    snapshot.nations = nations;
+    return { ...save, schemaVersion: 3, snapshot, stateHash: hashState(snapshot as never) };
+  }
+
   /** A version-2 save (before prompt 09's smoothed score) made from a current one. */
   function asVersion2(save: ReturnType<Session['save']>): Record<string, unknown> {
-    const snapshot: Record<string, unknown> = { ...save.snapshot, schemaVersion: 2 };
+    const v3 = asVersion3(save);
+    const snapshot: Record<string, unknown> = { ...(v3.snapshot as object), schemaVersion: 2 };
     delete snapshot.scoreTrack;
-    return { ...save, schemaVersion: 2, snapshot, stateHash: hashState(snapshot as never) };
+    return { ...v3, schemaVersion: 2, snapshot, stateHash: hashState(snapshot as never) };
   }
+
+  /** Nations with the Phase 2 counters and crisis report zeroed, as a migrated save has them. */
+  function phase1View(nations: Session['state']['nations']): unknown {
+    return Object.fromEntries(
+      Object.entries(nations).map(([id, n]) => [
+        id,
+        { ...n, private: { ...n.private, pledgesHonoured: 0, pledgesBroken: 0, pooledTotal: 0, last: { ...n.private.last, crisisPct: 0, contributed: 0 } } },
+      ]),
+    );
+  }
+
+  it('migrates a compact version-3 save: same position, no crises open, default crisis policy', () => {
+    const session = new Session(world(5));
+    play(session, 5, 0, 12);
+    const v3 = asVersion3(session.save({ compact: true }));
+    const loaded = Session.load(JSON.parse(JSON.stringify(v3)));
+    expect(loaded.state.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(loaded.state.tick).toBe(12);
+    expect(loaded.state.crises).toEqual([]);
+    expect(loaded.state.pools.adaptation.balance).toBe(0);
+    expect(loaded.state.nations).toEqual(phase1View(session.state.nations));
+    loaded.advance(1);
+    expect(loaded.state.tick).toBe(13);
+  });
+
+  it('refuses a version-3 save that needs its move history replayed', () => {
+    const session = new Session(world(5));
+    play(session, 5, 0, 12);
+    expect(() => Session.load(asVersion3(session.save()))).toThrow(/crises changed the rules.*Start a new game/);
+  });
 
   it('migrates a compact version-2 save: same position, score smoothing starts from the next month', () => {
     const session = new Session(world(5));
@@ -126,7 +173,7 @@ describe('save and load', () => {
     expect(loaded.state.schemaVersion).toBe(SCHEMA_VERSION);
     expect(loaded.state.tick).toBe(12);
     expect(loaded.state.scoreTrack).toEqual({});
-    expect(loaded.state.nations).toEqual(session.state.nations);
+    expect(loaded.state.nations).toEqual(phase1View(session.state.nations));
     loaded.advance(1);
     expect(Object.keys(loaded.state.scoreTrack)).toHaveLength(4);
   });
@@ -139,7 +186,7 @@ describe('save and load', () => {
   });
 
   it('runs registered migrations in order (stub registry)', () => {
-    expect(Object.keys(MIGRATIONS)).toEqual(['1', '2']);
+    expect(Object.keys(MIGRATIONS)).toEqual(['1', '2', '3']);
     expect(() => migrateSave({ schemaVersion: 1 })).toThrow(/Phase 0 prototype/);
     const migrated = migrateSave(
       { schemaVersion: 1, a: 1 },

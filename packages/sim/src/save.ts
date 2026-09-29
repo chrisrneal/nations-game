@@ -1,7 +1,7 @@
 import type { Command, SaveFile } from '@nations/contracts';
 import { hashState } from './hash.ts';
 import { step } from './step.ts';
-import { SCHEMA_VERSION, type WorldState } from './world.ts';
+import { EMPTY_LEDGER, EMPTY_REPORT, SCHEMA_VERSION, defaultPolicy, emptyPools, type WorldState } from './world.ts';
 
 /**
  * A save (seam 9): snapshot plus every command since it, plus where to stop.
@@ -49,11 +49,74 @@ function migrate2to3(save: Record<string, unknown>): Record<string, unknown> {
   return { ...save, schemaVersion: 3, snapshot: upgraded, stateHash: hashState(upgraded) };
 }
 
+/** True when a save's command log must be replayed from its snapshot to reach the saved position. */
+function needsReplay(save: Record<string, unknown>): boolean {
+  const snapshot = save.snapshot as Record<string, unknown> | undefined;
+  const log = save.commandLog;
+  if (typeof snapshot !== 'object' || snapshot === null || !Array.isArray(log)) {
+    throw new Error('Save is missing its snapshot or command log');
+  }
+  const savedAtTick = save.savedAtTick;
+  return snapshot.tick !== savedAtTick || (log as { tick?: unknown }[]).some((c) => typeof c.tick === 'number' && c.tick < (savedAtTick as number));
+}
+
+/**
+ * 3 -> 4 (Phase 2 prompt 09: crises, pools, pledges, crisis policies). Like
+ * 2 -> 3, a save with nothing to replay keeps its position: the world gains
+ * empty pools and no open crises (the first appeal opens on the next
+ * schedule), each nation gains the default crisis policy and zero pledge
+ * counters, and the hash is re-recorded. A save that must replay is refused:
+ * crises now draw from the RNG every month, so it would replay differently.
+ */
+function migrate3to4(save: Record<string, unknown>): Record<string, unknown> {
+  if (needsReplay(save)) {
+    throw new Error('This save needs its moves replayed, and crises changed the rules since it was made, so they would not replay to the same position. Start a new game.');
+  }
+  const snapshot = save.snapshot as Record<string, unknown>;
+  const nations = (snapshot.nations ?? {}) as Record<string, Record<string, unknown>>;
+  const upgradedNations: Record<string, unknown> = {};
+  const policyDefaults = defaultPolicy();
+  for (const [id, n] of Object.entries(nations)) {
+    const priv = n.private as Record<string, unknown>;
+    upgradedNations[id] = {
+      ...n,
+      private: {
+        ...priv,
+        policy: {
+          ...(priv.policy as object),
+          crisisRule: policyDefaults.crisisRule,
+          contributionBp: policyDefaults.contributionBp,
+          contributionTo: policyDefaults.contributionTo,
+        },
+        last: { ...EMPTY_REPORT, ...(priv.last as object) },
+        pledgesHonoured: 0,
+        pledgesBroken: 0,
+        pooledTotal: 0,
+      },
+    };
+  }
+  const upgraded = {
+    ...snapshot,
+    schemaVersion: 4,
+    nations: upgradedNations,
+    ledger: { ...EMPTY_LEDGER, ...(snapshot.ledger as object) },
+    pools: emptyPools(),
+    crises: [],
+    recentCrises: [],
+    pledges: [],
+    hits: [],
+    nextCrisisId: 1,
+    nextPledgeId: 1,
+  } as unknown as WorldState;
+  return { ...save, schemaVersion: 4, snapshot: upgraded, stateHash: hashState(upgraded) };
+}
+
 export const MIGRATIONS: Readonly<Record<number, (save: Record<string, unknown>) => Record<string, unknown>>> = {
   1: () => {
     throw new Error('This save is from the Phase 0 prototype, which had no economy. Start a new game.');
   },
   2: migrate2to3,
+  3: migrate3to4,
 };
 
 /** Brings a parsed save up to the current schema, or throws loudly. */

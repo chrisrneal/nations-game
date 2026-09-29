@@ -1,4 +1,5 @@
 import type { NationId } from './nation.ts';
+import type { ContributionTarget, CrisisRule } from './crisis.ts';
 
 /**
  * The three tradable stocks (docs/RULES.md section 2). Resilience is the fourth
@@ -67,11 +68,18 @@ export interface Flow {
 
 /**
  * Standing policies: the answer a nation gives while nobody is at the controls
- * (seam 8, RULES sections 3.4 and 8.2).
+ * (seam 8, RULES sections 3.4, 4.4 and 8.2).
  *
  * Multiplayer need: every interaction must resolve with the other side offline.
- * These dials are stored in State, so an absent player's nation keeps trading
- * exactly as they set it, on every machine.
+ * These dials are stored in State and changed only by the `setPolicy` command,
+ * so an absent player's nation keeps trading and answering crises exactly as
+ * they set it, on every machine.
+ *
+ * The three groups the rules name:
+ * - trade posture: `rejectAll` (closed) and `hardBargains` (how it offers);
+ * - auto-accept conditions: `acceptFairDeficit` and `acceptTrusted`; an offer
+ *   that meets none of them is declined on its last tick, never left to lapse;
+ * - crisis contribution rule: `crisisRule`, `contributionBp` and `contributionTo`.
  */
 export interface StandingPolicy {
   /** Auto-accept fair offers that cover a structural deficit. On by default. */
@@ -86,6 +94,12 @@ export interface StandingPolicy {
   readonly resilienceFloor: number;
   /** Whether this nation may send offers outside the fair price band. */
   readonly hardBargains: boolean;
+  /** How it answers a crisis appeal it has not answered itself, on the deadline tick. */
+  readonly crisisRule: CrisisRule;
+  /** Share of each month's income paid into the pools, in basis points (RULES 8.2 dial 3). */
+  readonly contributionBp: number;
+  /** Which pool the monthly contribution goes to; `split` halves it. */
+  readonly contributionTo: ContributionTarget;
 }
 
 /** What happened to one nation's economy in the tick just stepped. Private. */
@@ -101,6 +115,10 @@ export interface EconomyReport {
   readonly resilienceSpent: number;
   /** Capacity gained from trade this tick, in hundredths of a basis point. */
   readonly tradeGainCbp: number;
+  /** Output lost to crisis damage this tick, whole percent. */
+  readonly crisisPct: number;
+  /** Credit paid into the pools this tick by the standing contribution. */
+  readonly contributed: number;
 }
 
 /**
@@ -130,6 +148,19 @@ export interface WorldLedger {
   readonly tradesSettled: number;
   readonly offersExpired: number;
   readonly offersFailed: number;
+  /** Credit paid into the crisis pools (a transfer, not yet a sink). */
+  readonly creditPooled: number;
+  /** Credit spent by pools when crises locked: the crisis sink. */
+  readonly creditSpentCrises: number;
+  /** Output lost to climate damage, and what it would have been with empty pools (RULES 5.2). */
+  readonly climateLoss: number;
+  readonly climateLossUnpooled: number;
+  readonly pandemicLoss: number;
+  readonly pandemicLossUnpooled: number;
+  readonly crisesLocked: number;
+  readonly crisesSucceeded: number;
+  readonly pledgesHonoured: number;
+  readonly pledgesBroken: number;
 }
 
 /** A per-nation map, e.g. one nation's trust in each other nation (5-90). */
