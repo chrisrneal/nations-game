@@ -55,7 +55,7 @@ export type WithdrawOfferCommand = Command<'withdrawOffer', OfferRefPayload>;
 export type SetPolicyCommand = Command<'setPolicy', Partial<StandingPolicy>>;
 /** Spend Credit on resilience now, `points` at `resilienceCostPerPoint` each. */
 export type FundResilienceCommand = Command<'fundResilience', { readonly points: number }>;
-/** Phase 0 placeholder kept for the interface's sample cards. No game meaning. */
+/** Phase 0 placeholder with no game meaning; only the dummy AI and tests send it now. */
 export type PingCommand = Command<'ping', { readonly target: NationId }>;
 /** Seam 7: hand the nation to the caretaker AI, or take it back. */
 export type SetControllerCommand = Command<'setController', { readonly controller: ControllerSlot }>;

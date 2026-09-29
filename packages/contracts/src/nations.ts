@@ -19,7 +19,7 @@ import type { View } from './view.ts';
  */
 export interface NationPublic {
   readonly kind: NationKind;
-  /** Phase 0 placeholder counter used by the interface's sample cards. */
+  /** Phase 0 placeholder counter with no game meaning; only the dummy AI and tests send pings now. */
   readonly pingsReceived: number;
   /** Realised output last tick: the scoreboard (RULES section 2). */
   readonly output: number;
