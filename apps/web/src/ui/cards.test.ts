@@ -75,4 +75,91 @@ describe('decision cards from the View', () => {
     expect(rows[0]!.id).toBe(simTop.id);
     for (const row of rows) expect(row.score).toBe(end.view.scores.nations.find((n) => n.id === row.id)!.finalScore);
   });
+
+  it('a crisis appeal becomes a card: paying the share is two taps and answers the appeal, with other nations\' reasons on it', () => {
+    const engine = new GameEngine();
+    engine.newGame('japan', 7);
+    let update = engine.advance(1);
+    for (let i = 0; i < 12 && !cardsFor(update.view, new Set(), update).some((c) => c.id.startsWith('crisis:')); i++) update = engine.advance(1);
+    const card = cardsFor(update.view, new Set(), update).find((c) => c.id.startsWith('crisis:'));
+    expect(card).toBeDefined();
+    expect(card!.options.length).toBeGreaterThanOrEqual(2);
+    expect(card!.options.length).toBeLessThanOrEqual(3);
+    for (const o of card!.options) expect(o.consequence.length).toBeGreaterThan(0);
+    expect(card!.reasons?.length).toBeGreaterThan(0);
+    const crisisId = Number(card!.id.split(':')[1]);
+    const pay = card!.options.find((o) => o.id === 'pay')!;
+    send(engine, update.view, pay.action);
+    update = engine.advance(1);
+    const answered = update.events.find((e) => e.type === 'appealAnswered' && (e.payload as { nationId: string; crisisId: number }).nationId === 'japan');
+    expect(answered?.payload).toMatchObject({ crisisId, by: 'command' });
+    expect(cardsFor(update.view, new Set(), update).some((c) => c.id === `crisis:${crisisId}`)).toBe(false);
+  });
+
+  it('declining an appeal is one command the sim accepts', () => {
+    const engine = new GameEngine();
+    engine.newGame('brazil', 7);
+    let update = engine.advance(1);
+    for (let i = 0; i < 12 && !cardsFor(update.view, new Set(), update).some((c) => c.id.startsWith('crisis:')); i++) update = engine.advance(1);
+    const card = cardsFor(update.view, new Set(), update).find((c) => c.id.startsWith('crisis:'))!;
+    send(engine, update.view, card.options.find((o) => o.id === 'decline')!.action);
+    update = engine.advance(1);
+    expect(update.events.some((e) => e.type === 'appealAnswered' && (e.payload as { nationId: string; answer: string }).nationId === 'brazil' && (e.payload as { answer: string }).answer === 'declined')).toBe(true);
+  });
+
+  it('every card over a whole game resolves in 3 taps or fewer, with 2-3 options and a one-line consequence each', () => {
+    const kinds = new Set<string>();
+    // Egypt gets few AI offers (docs/GAPS.md, prompt 07); India many.
+    for (const nation of ['egypt', 'india']) {
+      const engine = new GameEngine();
+      engine.newGame(nation, 9);
+      engine.setPredictionMode(true);
+      let update = engine.advance(1);
+      for (let month = 0; month < 59; month++) {
+        for (const card of cardsFor(update.view, new Set(), update)) {
+          kinds.add(card.kind);
+          expect(card.options.length, card.title).toBeGreaterThanOrEqual(2);
+          expect(card.options.length, card.title).toBeLessThanOrEqual(3);
+          for (const option of card.options) {
+            expect(option.consequence, `${card.title} / ${option.label}`).not.toMatch(/\n/);
+            expect(option.consequence.length).toBeGreaterThan(0);
+            // Open the card (1), pick the option (2); a compose option adds the send in the trade sheet (3).
+            const taps = option.action.kind === 'compose' ? 3 : 2;
+            expect(taps).toBeLessThanOrEqual(3);
+          }
+        }
+        update = engine.advance(1);
+      }
+    }
+    expect([...kinds]).toEqual(expect.arrayContaining(['crisis', 'offer', 'shortfall']));
+  });
+
+  it('AI offer cards carry the maker\'s explanation, or a placeholder until it arrives', () => {
+    const engine = new GameEngine();
+    engine.newGame('india', 3);
+    let update = engine.advance(1);
+    for (let i = 0; i < 8 && !update.view.offers.some((o) => o.to === 'india'); i++) update = engine.advance(1);
+    const card = cardsFor(update.view, new Set(), update).find((c) => c.kind === 'offer')!;
+    expect(card.reasons?.[0]).toMatch(/\d/);
+    expect(card.reasons?.[0]).not.toMatch(/has not said why/);
+    const bare = cardsFor(update.view, new Set()).find((c) => c.kind === 'offer')!;
+    expect(bare.reasons?.[0]).toMatch(/has not said why yet/);
+  });
+
+  it('prediction cards ask before the answer is shown, and guessing resolves them in two taps', () => {
+    const engine = new GameEngine();
+    engine.newGame('japan', 7);
+    engine.setPredictionMode(true);
+    let update = engine.advance(1);
+    for (let i = 0; i < 20 && update.predictions.pending.length === 0; i++) update = engine.advance(1);
+    const card = cardsFor(update.view, new Set(), update).find((c) => c.kind === 'predict')!;
+    expect(card.title).toMatch(/^What will .+ do\?$/);
+    const option = card.options[0]!;
+    expect(option.action.kind).toBe('predict');
+    if (option.action.kind !== 'predict') return;
+    const result = engine.predict(option.action.id, option.action.choice);
+    expect(result.guess).toBe(option.action.choice);
+    const after = engine.current()!;
+    expect(cardsFor(after.view, new Set(), after).some((c) => c.id === card.id)).toBe(false);
+  });
 });

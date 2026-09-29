@@ -1,4 +1,4 @@
-import type { Command, ForeignNation, NationView, Resource, ResourceAmount, StandingPolicy, TradeOffer } from '@nations/contracts';
+import type { Command, Crisis, CrisisKind, ForeignNation, NationView, PoolKind, Resource, ResourceAmount, StandingPolicy, TradeOffer } from '@nations/contracts';
 
 /**
  * Pure helpers that turn the player's View into numbers the screens show and
@@ -121,13 +121,17 @@ export function spare(view: NationView, good: Good): number {
   return Math.max(0, Math.min(stock, stock + production - demand) - promised);
 }
 
-/** What the player's standing policy will do with an offer if they do not answer (mirrors the sim, RULES 3.4). */
-export function policyWill(view: NationView, offer: TradeOffer): 'accept' | 'reject' | 'expire' {
+/**
+ * What the player's standing policy will do with an offer if they do not
+ * answer (mirrors the sim's policyAnswer, RULES 3.4): it accepts or declines
+ * on the offer's last month; nothing is left to lapse (Phase 2 prompt 09).
+ */
+export function policyWill(view: NationView, offer: TradeOffer): 'accept' | 'reject' {
   const policy: StandingPolicy = view.self.private.policy;
   if (policy.rejectAll) return 'reject';
   const pays = offer.get;
   const keep = pays.resource === 'credit' ? 0 : view.self.public[pays.resource].demand;
-  if (view.self.private.stocks[pays.resource] - pays.amount < keep) return 'expire';
+  if (view.self.private.stocks[pays.resource] - pays.amount < keep) return 'reject';
   const trust = view.self.private.trust[offer.from] ?? 0;
   if (policy.acceptTrusted && trust >= rule(view, 'autoAcceptTrustThreshold')) return 'accept';
   const gets = offer.give.resource;
@@ -135,7 +139,7 @@ export function policyWill(view: NationView, offer: TradeOffer): 'accept' | 'rej
     const deficit = -balance(view.self, gets);
     if (deficit > 0 && view.self.private.stocks[gets] < deficit) return 'accept';
   }
-  return 'expire';
+  return 'reject';
 }
 
 /** Command builders: the only things the interface ever sends. `tick` is stamped at send time. */
@@ -164,7 +168,54 @@ export const commands = {
     type: 'setPolicy',
     payload,
   }),
+  contribute: (view: NationView, pool: PoolKind, amount: number) => (tick: number): Command => ({
+    nationId: view.selfId,
+    tick,
+    type: 'contribute',
+    payload: { pool, amount },
+  }),
+  pledge: (view: NationView, pool: PoolKind, amount: number, deadlineTick: number) => (tick: number): Command => ({
+    nationId: view.selfId,
+    tick,
+    type: 'pledge',
+    payload: { pool, amount, deadlineTick },
+  }),
+  declineAppeal: (view: NationView, crisisId: number) => (tick: number): Command => ({
+    nationId: view.selfId,
+    tick,
+    type: 'declineAppeal',
+    payload: { crisisId },
+  }),
+  withdrawPledge: (view: NationView, pledgeId: number) => (tick: number): Command => ({
+    nationId: view.selfId,
+    tick,
+    type: 'withdrawPledge',
+    payload: { pledgeId },
+  }),
+  fundResilience: (view: NationView, points: number) => (tick: number): Command => ({
+    nationId: view.selfId,
+    tick,
+    type: 'fundResilience',
+    payload: { points },
+  }),
 };
+
+/** A pool's name in plain words. */
+export const POOL_NAME: Readonly<Record<PoolKind, string>> = { adaptation: 'climate adaptation', health: 'health' };
+export const CRISIS_NAME: Readonly<Record<CrisisKind, string>> = { climate: 'Climate', pandemic: 'Pandemic' };
+
+/** How much of its target a crisis pool holds now, whole percent. */
+export function fundedPct(view: NationView, crisis: Crisis): number {
+  const pool = view.crises.pools.find((p) => p.kind === crisis.pool);
+  return crisis.target <= 0 || pool === undefined ? 100 : Math.floor((pool.balance * 100) / crisis.target);
+}
+
+/** What the player still owes of their share of an open crisis: share less what they paid into its pool this round (the sim's rule). */
+export function owedShare(view: NationView, crisis: Crisis): { share: number; paid: number; owed: number } {
+  const share = crisis.shares[view.selfId] ?? 0;
+  const paid = view.crises.pools.find((p) => p.kind === crisis.pool)?.round[view.selfId] ?? 0;
+  return { share, paid, owed: Math.max(0, share - paid) };
+}
 
 /** One row of the final table: every playable nation's result against its own baseline. */
 export interface Standing {

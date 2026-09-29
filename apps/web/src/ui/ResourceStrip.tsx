@@ -17,20 +17,31 @@ function goodWhy(view: NationView, good: Good): Why {
   };
 }
 
+/**
+ * The score why-sheet: the sim's own numbers broken down (RULES 5): your
+ * output against your baseline, times the world multiplier, and the four
+ * world goals behind the multiplier.
+ */
+export function scoreWhy(view: NationView): Why {
+  const pct = scoreOf(view, view.selfId)?.ownPct ?? lastMonthPct(view.self);
+  const final = scoreOf(view, view.selfId)?.finalScore ?? 0;
+  const last = view.self.private.last;
+  const g = view.scores.goals;
+  const goal = (bp: number): string => `${Math.floor(bp / 100)}%`;
+  const rank = [...view.scores.nations].sort((a, b) => b.finalScore - a.finalScore).findIndex((n) => n.id === view.selfId) + 1;
+  return {
+    title: 'Your score',
+    value: `${pct}% of baseline × ${multiplierText(view)} = ${fmt(final)} (#${rank} of ${view.scores.nations.length})`,
+    text: `${pct}% is your output against your own baseline over about the last year (last month alone: ${fmt(view.self.public.output)} against ${fmt(view.self.public.baselineOutput)}). ${baselineNote(true)} It is multiplied by the world's ×${multiplierText(view)}, set by four shared goals: climate damage avoided ${goal(g.climateAvoidedBp)}, pandemic damage avoided ${goal(g.pandemicAvoidedBp)}, nations at their baseline ${goal(g.atBaselineBp)}, food and energy demand met ${goal(g.deficitsMetBp)}. Last month shortfalls cost ${last.penaltyPct}% of output and crises ${last.crisisPct}%.`,
+  };
+}
+
 /** Your score against your own baseline, above the strip: the sim's own number (RULES 5). */
 export const OutputLine = memo(function OutputLine(props: { view: NationView }): ReactElement {
   const { view } = props;
   const pct = scoreOf(view, view.selfId)?.ownPct ?? lastMonthPct(view.self);
-  const last = view.self.private.last;
   return (
-    <Num
-      className="output"
-      why={{
-        title: 'Your score',
-        value: `${pct}% of baseline`,
-        text: `Your output against your own baseline over about the last year (last month alone: ${fmt(view.self.public.output)} against ${fmt(view.self.public.baselineOutput)}, ${lastMonthPct(view.self)}%). ${baselineNote(true)} Your final score is this times the world multiplier (now × ${multiplierText(view)}). Shortfalls cost ${last.penaltyPct}% last month; trade adds lasting growth.`,
-      }}
-    >
+    <Num className="output" why={scoreWhy(view)}>
       <span data-testid="output">{pct}%</span> of baseline
     </Num>
   );
@@ -54,7 +65,7 @@ export const ResourceStrip = memo(function ResourceStrip(props: { view: NationVi
       why: {
         title: 'Credit',
         value: `${fmt(p.stocks.credit)} credit`,
-        text: `Money. You earned ${fmt(p.last.income)} last month (your output) and spent ${fmt(p.last.resilienceSpent)} on resilience. It pays for imports now and crisis pools later; it can reach zero but never go below.`,
+        text: `Money. You earned ${fmt(p.last.income)} last month (your output) and spent ${fmt(p.last.resilienceSpent)} on resilience. You paid ${fmt(p.last.contributed)} into the crisis pools. It pays for imports and crisis pools; it can reach zero but never go below.`,
       },
     },
     {
@@ -66,7 +77,7 @@ export const ResourceStrip = memo(function ResourceStrip(props: { view: NationVi
       why: {
         title: 'Resilience',
         value: `${p.resilience} / ${rule(view, 'resilienceMax')}`,
-        text: `How well you absorb a crisis. It slips ${rule(view, 'resilienceDecayPerTick')} a month; your policy refills it from Credit to ${p.policy.resilienceFloor} at ${rule(view, 'resilienceCostPerPoint')} credit a point. Crises arrive in the next phase.`,
+        text: `How well you absorb a crisis. It slips ${rule(view, 'resilienceDecayPerTick')} a month; your policy refills it from Credit to ${p.policy.resilienceFloor} at ${rule(view, 'resilienceCostPerPoint')} credit a point. Higher resilience cuts crisis damage.`,
       },
     },
   ];

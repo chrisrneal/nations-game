@@ -1,5 +1,6 @@
 import type { Command, Pace } from '@nations/contracts';
 import type { GameEngine, GameUpdate, SavedGame } from './engine.ts';
+import type { ResolvedPrediction } from './predictions.ts';
 import type { SaveStore, SlotSummary } from './saves.ts';
 
 /** The slot written automatically; the three manual slots sit beside it. */
@@ -32,6 +33,16 @@ export interface GameHost {
   exportFile(): Promise<{ name: string; text: string }>;
   /** Resume the game in an exported file (paused), and autosave it on this device. */
   importFile(text: string): Promise<void>;
+  /** The app was hidden or closed: save, and remember what the player last saw for the away recap. */
+  away(): Promise<void>;
+  /** The app is visible again: a live game catches up by wall time and writes the away recap. */
+  back(): Promise<void>;
+  /** The player has read the away recap. */
+  dismissRecap(): Promise<void>;
+  /** Prediction mode: ask "What will they do?" before an AI answer is shown. */
+  setPredictionMode(on: boolean): Promise<void>;
+  /** The player's guess; resolves to the real answer and the AI's reasons. */
+  predict(id: number, choice: string): Promise<ResolvedPrediction>;
 }
 
 /** Marker and version of an exported save file. */
@@ -41,7 +52,21 @@ export const FILE_VERSION = 1;
 type Async<T> = T | Promise<T>;
 /** The engine as LocalHost sees it: in-process in tests, a Comlink Remote in the app. */
 export type EngineApi = {
-  [K in 'newGame' | 'submit' | 'setPace' | 'subscribe' | 'exportGame' | 'importGame' | 'current' | 'benchmark' | 'advance']: (
+  [K in
+    | 'newGame'
+    | 'submit'
+    | 'setPace'
+    | 'subscribe'
+    | 'exportGame'
+    | 'importGame'
+    | 'current'
+    | 'benchmark'
+    | 'advance'
+    | 'markAway'
+    | 'markBack'
+    | 'dismissRecap'
+    | 'setPredictionMode'
+    | 'predict']: (
     ...args: Parameters<GameEngine[K]>
   ) => Async<ReturnType<GameEngine[K]>>;
 };
@@ -107,8 +132,11 @@ export class LocalHost implements GameHost {
     await this.ready;
     const record = await this.options.store.get(slot);
     if (record === undefined) throw new Error('That save slot is empty');
-    this.publish(await this.options.engine.importGame(record.game));
+    // Only "Continue" (the autosave) resumes a live game where the wall clock says it should be;
+    // a manual slot is a bookmark and resumes paused where it was saved.
+    this.publish(await this.options.engine.importGame(record.game, { resumeLive: slot === AUTOSAVE_SLOT }));
     this.lastAutosaveTick = record.tick;
+    if (slot === AUTOSAVE_SLOT && record.game.live !== undefined) await this.autosave();
   }
 
   listSaves(): Promise<SlotSummary[]> {
@@ -159,6 +187,29 @@ export class LocalHost implements GameHost {
     this.publish(await this.options.engine.importGame(file.game));
     this.lastAutosaveTick = file.game.save.savedAtTick;
     await this.autosave();
+  }
+
+  async away(): Promise<void> {
+    await this.ready;
+    await this.options.engine.markAway();
+    await this.autosave();
+  }
+
+  async back(): Promise<void> {
+    await this.ready;
+    await this.options.engine.markBack();
+  }
+
+  async dismissRecap(): Promise<void> {
+    await this.options.engine.dismissRecap();
+  }
+
+  async setPredictionMode(on: boolean): Promise<void> {
+    await this.options.engine.setPredictionMode(on);
+  }
+
+  async predict(id: number, choice: string): Promise<ResolvedPrediction> {
+    return this.options.engine.predict(id, choice);
   }
 
   private receive(update: GameUpdate): void {

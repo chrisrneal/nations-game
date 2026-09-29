@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import type { Command, Event, Pace, StandingPolicy, TradeOffer } from '@nations/contracts';
-import type { GameHost, GameUpdate } from './platform/index.ts';
+import type { GameHost, GameUpdate, InstallPrompt } from './platform/index.ts';
 import { nameOf } from './world/nations.ts';
 import type { CardAction } from './ui/cards.ts';
 import { amountText, commands, type TradeDraft } from './ui/econ.ts';
 import { Inbox } from './ui/Inbox.tsx';
+import { InstallBanner } from './ui/Install.tsx';
+import { Settings } from './ui/Settings.tsx';
 import { PaceBar } from './ui/PaceBar.tsx';
 import { Policies } from './ui/Policies.tsx';
 import { OutputLine, ResourceStrip } from './ui/ResourceStrip.tsx';
@@ -25,14 +27,19 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** One line for a trade event the player should hear about, or null. */
-function tradeNews(event: Event, selfId: string): string | null {
+/**
+ * One line for a trade event the player should hear about, or null. In
+ * prediction mode the answers to the player's own offers stay hidden: a
+ * "What will they do?" card asks first.
+ */
+function tradeNews(event: Event, selfId: string, predicting: boolean): string | null {
   const p = event.payload as { offer?: TradeOffer; reneger?: string; by?: string; reason?: string };
   const offer = p.offer;
   if (event.type === 'commandRejected') return `Not sent: ${p.reason ?? 'rejected'}`;
   if (offer === undefined) return null;
   const other = nameOf(offer.from === selfId ? offer.to : offer.from);
   const mine = offer.from === selfId;
+  if (predicting && mine && (event.type === 'offerSettled' || event.type === 'offerRejected' || event.type === 'offerFailed')) return null;
   switch (event.type) {
     case 'offerSettled':
       return mine
@@ -55,7 +62,7 @@ function tradeNews(event: Event, selfId: string): string | null {
  * The whole interface. It holds no game state of its own: it renders the
  * latest View pushed by the Host and turns taps into Commands (seams 2, 3, 6).
  */
-export function App(props: { host: GameHost }): ReactElement {
+export function App(props: { host: GameHost; install?: InstallPrompt }): ReactElement {
   const { host } = props;
   const [update, setUpdate] = useState<GameUpdate | null>(null);
   const [starting, setStarting] = useState(true);
@@ -75,7 +82,7 @@ export function App(props: { host: GameHost }): ReactElement {
       host.subscribe((next) => {
         latest.current = next;
         setUpdate(next);
-        const news = next.events.map((e) => tradeNews(e, next.view.selfId)).filter((line): line is string => line !== null);
+        const news = next.events.map((e) => tradeNews(e, next.view.selfId, next.predictions.mode)).filter((line): line is string => line !== null);
         if (news.length > 0) setToast(news.length === 1 ? (news[0] as string) : `${news[0] as string} (+${news.length - 1} more)`);
       }),
     [host],
@@ -141,7 +148,16 @@ export function App(props: { host: GameHost }): ReactElement {
     [run, send],
   );
 
-  const setPace = useCallback((pace: Pace) => run(host.setPace(pace)), [host, run]);
+  const setPace = useCallback(
+    (pace: Pace) => run(host.setPace(pace), pace === 'live' ? () => setToast('Live clock: a month every 30 minutes, even while the app is closed.') : undefined),
+    [host, run],
+  );
+  const predict = useCallback((id: number, choice: string) => host.predict(id, choice), [host]);
+  const dismissRecap = useCallback(() => run(host.dismissRecap()), [host, run]);
+  const setPredictionMode = useCallback(
+    (on: boolean) => run(host.setPredictionMode(on), () => setToast(on ? 'Prediction mode on: guess before AI answers are shown.' : 'Prediction mode off.')),
+    [host, run],
+  );
   const newGame = useCallback(() => run(host.setPace('paused'), () => setStarting(true)), [host, run]);
 
   if (starting || update === null) {
@@ -149,6 +165,7 @@ export function App(props: { host: GameHost }): ReactElement {
       <WhyProvider>
         <StartScreen
           host={host}
+          install={props.install}
           onToast={setToast}
           onStart={(id) => run(host.newGame(id), () => setStarting(false))}
           onLoad={(slot) => run(host.loadFrom(slot), () => setStarting(false))}
@@ -171,11 +188,13 @@ export function App(props: { host: GameHost }): ReactElement {
           <ResourceStrip view={view} />
         </header>
         <main className="content">
-          {tab === 'inbox' && <Inbox update={update} onAction={act} onNewGame={newGame} />}
-          {tab === 'world' && <WorldMap view={view} onTrade={(draft) => setTrade({ draft, counterOf: null })} />}
+          {tab === 'inbox' && <Inbox update={update} onAction={act} onPredict={predict} onDismissRecap={dismissRecap} onNewGame={newGame} />}
+          {tab === 'world' && <WorldMap view={view} journal={update.journal} onTrade={(draft) => setTrade({ draft, counterOf: null })} />}
           {tab === 'game' && (
             <>
+              <InstallBanner install={props.install} onToast={setToast} />
               <Policies view={view} onChange={setPolicy} />
+              <Settings predictions={update.predictions} onPredictionMode={setPredictionMode} />
               <Saves
                 host={host}
                 inGame
@@ -196,6 +215,7 @@ export function App(props: { host: GameHost }): ReactElement {
             pace={pace}
             onPace={setPace}
             onNextMonth={() => run(host.nextMonth())}
+            nextTickAt={update.live?.nextTickAt ?? null}
           />
           <nav className="tabs" aria-label="Screens">
             {TABS.map((t) => (

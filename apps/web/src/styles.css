@@ -765,3 +765,126 @@ h2 {
   color: var(--accent);
   font-weight: 700;
 }
+
+/* ---- prompt 11: crisis, alert and prediction cards, reasons, recap, settings, install ---- */
+:root {
+  --gold: #f2c14e;
+  --warn: #f08a5d;
+  --violet: #b59cf5;
+}
+
+.card-crisis {
+  border-left: 4px solid var(--warn);
+}
+
+.card-alert {
+  border-left: 4px solid var(--gold);
+}
+
+.card-predict {
+  border-left: 4px solid var(--violet);
+}
+
+.card-reason {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reasons {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--violet);
+  background: var(--panel-2);
+  border-radius: 0 10px 10px 0;
+  font-size: 0.85rem;
+  font-style: italic;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  overflow-wrap: anywhere;
+}
+
+.reason-line {
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.recap {
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 14px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.recap-title {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.recap-lines {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+}
+
+.recap-line {
+  display: flex;
+  gap: 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.group-title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 0.9rem 0 0.4rem;
+}
+
+/* Dials wrap their control under the label when a phone is narrow: never a horizontal scroll. */
+.slot {
+  flex-wrap: wrap;
+}
+
+.seg .seg-btn {
+  padding: 0 0.55rem;
+  font-size: 0.85rem;
+}
+
+.map .trade {
+  stroke: var(--gold);
+  stroke-dasharray: 3 2;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.row-traded {
+  color: var(--gold);
+}
+
+.install {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.75rem;
+  border-radius: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  font-size: 0.85rem;
+}
+
+.install-text {
+  flex: 1;
+  min-width: 0;
+}

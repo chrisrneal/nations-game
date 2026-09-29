@@ -8,6 +8,7 @@ const PACES: readonly { pace: Pace; label: string; name: string }[] = [
   { pace: 'paused', label: '❚❚', name: 'Pause' },
   { pace: 'x1', label: '1×', name: 'Normal speed' },
   { pace: 'x4', label: '4×', name: 'Fast' },
+  { pace: 'live', label: '🕒', name: 'Live clock' },
 ];
 
 /** Live tick counter and pace control, in the thumb zone. */
@@ -18,12 +19,21 @@ export function PaceBar(props: {
   pace: Pace;
   onPace: (pace: Pace) => void;
   onNextMonth: () => void;
+  /** Wall-clock time the next live month is due, while live. */
+  nextTickAt?: number | null;
 }): ReactElement {
+  const liveMinutes = PACE_INTERVAL_MS.live / 60_000;
+  const next =
+    props.nextTickAt === null || props.nextTickAt === undefined
+      ? ''
+      : ` The next month is due at ${new Date(props.nextTickAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}.`;
   const speed = props.over
     ? 'The game is over: the clock has stopped at 2035.'
     : props.pace === 'x1' || props.pace === 'x4'
       ? `Running at ${props.pace === 'x1' ? '1x' : '4x'}: one month every ${PACE_INTERVAL_MS[props.pace] / 1000} s in this play-test build.`
-      : 'Paused: nothing moves until you press 1×, 4× or ⏭ for one month.';
+      : props.pace === 'live'
+        ? `Live clock: one month every ${liveMinutes} minutes of real time, even while the app is closed; when you come back it catches up and shows what happened.${next}`
+        : 'Paused: nothing moves until you press 1×, 4×, 🕒 (live clock) or ⏭ for one month.';
   return (
     <div className="pacebar">
       <Num
