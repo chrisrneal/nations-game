@@ -46,7 +46,8 @@ The events that matter, and what they mean to the mind:
 | `offerFailed` (partner is the reneger) | the partner **broke a deal** |
 | `offerExpired` (my offer) | the partner ignored me |
 | `offerRejected` (my offer) | the partner declined me |
-| `crisisClosed` (proposed, section 6) | each nation **paid** or **skipped** the pledge |
+| `crisisLocked` | each nation with a share **paid** (contributors) or **skipped** (free-riders) |
+| `pledgeBroken` | the pledger **broke a promise to the world** (RULES 4.4) |
 
 ### 1.2 Beliefs and memory
 **Memory** (`PartnerMemory`, per partner, integers only): deals kept and broken,
@@ -137,32 +138,38 @@ part of the tick, which the budget never defers, so it always lands inside
 `aiRetaliationWindowTicks` (2) of the offence.
 
 ### 1.8 Crisis pledges
-`pledge.ts`. Fair share = what the pool still lacks, split by exposure x output
-across the playable nations (both public). Then by style: forgiving pays
+`pledge.ts`. The sim sets each nation's fair share of an appeal (exposure x
+output). The AI answers each appeal itself, the first month it can, with a
+`contribute` (pays now) or a `declineAppeal` (public). What it still owes is its
+share less what it paid into that pool this round. By style: forgiving pays
 (50 + cooperativeness)% of it whatever others do; strict pays all of it when at
-least `aiConditionalPledgePct` (50%) of nations paid into the last crisis, and
-only that proportion otherwise (a conditional cooperator); an exploiter skips
-once the pool is `aiFreeRideCoverPct` (70%) funded and pays a token share
-before. Never more than `aiPledgeMaxIncomePct` of a month's income. Decided once
-per crisis, the first tick it is seen; public, like the crisis card.
+least `aiConditionalPledgePct` (50%) of nations paid into the last crisis of that
+kind, and only that proportion otherwise (a conditional cooperator); an exploiter
+declines once the pool is `aiFreeRideCoverPct` (70%) funded and pays a token share
+before. Never more than `aiPledgeMaxIncomePct` of a month's output. Its standing
+crisis rule matches its style (strict `reciprocal`, forgiving `fairShare`,
+exploiter `none`) in case an appeal is ever left to its policy. Skipping a crisis
+it paid into, or breaking a pledge, counts as an offence (section 1.7).
 
 ### 1.9 Explanation
-Every command an AI sends comes with exactly one `aiExplained` event, and
-retaliation, forgiveness, resumption and skipped pledges are announced too. The
-event is a contracts `Event` with an audience: the two parties for anything
-about a trade, everyone for pledges, the nation itself for its own policies. A
-host delivers each one to its audience like any sim event. Examples from real
+Every command an AI sends carries its sentences as the command's `why`; the sim
+checks them (1-3 lines, each with a number) and relays them as an `explanation`
+event to the nation and the partner the decision concerns, so they reach players
+through the ordinary event stream. The director also returns an `aiExplained`
+event per decision, and for the announcements that have no command
+(retaliation, forgiveness, resumption); a host delivers those to their audience:
+the two parties for trade, everyone for crisis answers. Examples from real
 games:
 
 - `declined: you broke the deal in month 1 (95 energy for 9 credit); no trade with you until month 9`
-- `suspended trade with you until month 10: you skipped the flood relief in month 3`
 - `forgave the deal in month 1 (95 energy for 9 credit): 1 of 1 allowed; the next one counts`
 - `resumed trade with you in month 9 after you broke the deal in month 1 (95 energy for 9 credit)`
 - `countered: for 3 credit I give 28 food, not 31 (your terms are 8% under my price)`
 - `accepted: 410 energy covers my energy need of 618 at 103% of reference value`
 - `offered 404 food for 46 credit: your food deficit is 404`
-- `pledged 100 credit to the flood relief (month 3): first crisis: I pay my full share`
-- `no pledge to the flood relief (month 3): the pool is 75% funded and pays out by exposure`
+- `paid 100 credit to the climate relief (month 3): first climate appeal: I pay my full share of 100`
+- `declined the climate relief (month 3): the pool is 75% funded and pays out by exposure`
+- `suspended trade with you until month 10: you skipped the climate relief in month 3`
 
 Each text is one short sentence starting with the verb, built from numbers only
 (RULES 7.4), at most 140 characters, with up to three ranked reasons behind it
@@ -215,7 +222,8 @@ const director = new AiDirector({ endowments: endowmentsOf(roster), seed });
 // each tick, before stepping:
 const out = director.decide(state.tick, (id) => state.controllers[id], (id) => viewFor(state, id));
 for (const c of out.commands) session.submit(c);
-// deliver out.explanations to their audiences, like sim events
+// command explanations arrive as sim `explanation` events; deliver the director's
+// announcements (suspend / forgive / resume) to their audiences too
 const events = session.advance(1);
 director.observe(events);
 // saving: store director.snapshot() beside the sim save; loading: AiDirector.restore(options, snapshot)
@@ -270,29 +278,14 @@ State written through a command instead.
 
 ---
 
-## 6. Crisis contract (proposed, for lanes C and S)
+## 6. Crises
 
-The sim does not model crises yet. The AI reads them through `crisesIn(view)`
-and returns nothing until they exist, so today it never pledges. When RULES 4 is
-built, the smallest shape the AI needs is:
-
-```ts
-// NationView.crises: open crises, public
-interface CrisisSeen {
-  id: number; kind: 'climate' | 'pandemic'; label: string;   // "flood relief"
-  openedTick: number; closesTick: number;                      // pledges count up to closesTick
-  pooled: number; target: number;                              // Credit (RULES 4.3)
-  pledges: { nationId: NationId; amount: number }[];           // public (RULES 4.3 rule 3)
-}
-// command the AI sends
-{ type: 'pledge', payload: { crisisId: number, amount: number } }
-// public event when a crisis closes
-{ type: 'crisisClosed', payload: { crisis: CrisisSeen }, audience: [] }
-```
-
-If lane C chooses other names, only `perception.ts` changes.
-
----
+Built against the contract prompt 09 merged (packages/contracts/src/crisis.ts):
+the AI reads `view.crises` (open appeals with shares and answers, pools with
+this round's payments, recent results with contributors and free-riders, open
+pledges), sends `contribute` and `declineAppeal`, and remembers `crisisLocked`
+and `pledgeBroken`. It does not make pledges of its own: paying at once is
+simpler to explain and cannot be broken.
 
 ## 7. Caretaker mode (design on paper only)
 
@@ -367,57 +360,52 @@ from `view.rules`.
 
 ## 8. Gate 2 check (prompt 10)
 
-The harness has no `gate2` suite yet and the sim has no crises (docs/GAPS.md,
-prompt 10), so `packages/ai/src/gate2.test.ts` measures every Gate 2 criterion
-the AI can move today, built like the Gate 1 suite: 200 seeded full-roster games
-with every playable nation assigned an archetype at random (cooperator = this
-AI in its data-derived style; hoarder, isolationist and trade exploiter = the
-harness bots), plus four paired runs per seed (one random nation as cooperator,
-isolationist, trade exploiter and betrayer, everyone else unchanged). CI runs 5
-seeds; the full run is on demand (section 5, step 8).
+Two suites. The harness `gate2` suite (prompt 09, `npm run harness -- gate2`)
+still drives the Phase 1 greedy trader until lane H switches it to this AI; it
+gives the same results as prompt 09's report (crisis success 55.3%, sabotage
+never pays, free-rider 2.21x, Saudi Arabia 23.5%). `packages/ai/src/gate2.test.ts`
+measures this AI: 200 seeded full-roster games with every playable nation
+assigned at random to cooperator (this AI in its data-derived style), free-rider
+(this AI that never pays into a pool), or the harness's hoarder, isolationist and
+trade exploiter; plus five paired runs per seed (one random nation as cooperator,
+isolationist, trade exploiter, betrayer and free-rider, everyone else unchanged).
+CI runs 5 seeds; the full run is on demand (section 5, step 8).
 
-**Tuning** (seeds 1001-1400 only, before grading): variants of
-`aiExploiterMarkupPct` (0, 5, 10, 20, 35), `aiNoiseBp` (1000),
-`aiStockBufferTicks` (3, 4), `aiTrustPriceBpPerPoint` (0, 40) and
-`aiCounterRangePct` (0, 40). Only the markup moved the top scorer beyond noise:
-pooled over 400 seeds, Brazil tops 15.5% at 20 and 13.5% at 0, and the trade gain
-rises (+16.0% to +16.9%). A 3-month stock buffer looked better still (11.0% on
-1001-1200, 13.5% on 1201-1400), but that tunable is shared with the Gate 1
-greedy bots and pushed their top scorer from 11.0% to 14.5%, so it stays at 2.
-Chosen: `aiExploiterMarkupPct` 20 -> 0.
+**Tuning** (seeds 1001-1400 only, before grading, before crises were merged):
+`aiExploiterMarkupPct` (0-35), `aiNoiseBp`, `aiStockBufferTicks`,
+`aiTrustPriceBpPerPoint`, `aiCounterRangePct`. Only the markup moved the top
+scorer beyond noise (Brazil 15.5% -> 13.5% pooled over 400 seeds); a 3-month stock
+buffer looked better still but is shared with the Gate 1 greedy bots and pushed
+their top scorer from 11.0% to 14.5%, so it stays at 2. Chosen:
+`aiExploiterMarkupPct` 20 -> 0. Nothing was re-tuned after crises arrived.
 
-**Graded once, seeds 1-200** (1,000 games):
+**Graded once, seeds 1-200** (1,200 games, crises on, final code):
 
 | Criterion | Result | Pass line | Verdict |
 |---|---|---|---|
-| Crisis success 40-75% | sim has no crises yet | 40-75% | n/a |
-| No archetype over 1.5x fair share (random assignment) | worst bot trade exploiter 0.58x (hoarder 0.34x, isolationist 0.02x); cooperative AI 3.06x | bots <= 1.50x | PASS |
-| Reciprocal cooperators beat trade exploiters (paired) | cooperator ahead in 75.5% of pairs, median +6.3% | > 50%, median > 0 | PASS |
-| Reciprocal cooperators beat free-riders | free-riding is a crisis act; no crises yet | cooperators ahead | n/a |
-| Trailing nation gains nothing by sabotage | no sabotage action exists (RULES 5.3) | saboteur lower | n/a |
-| No nation tops more than 2x fair share (Gate 1, waived) | Brazil 16.0% | <= 11.8% | FAIL |
-| Trading beats isolating (Gate 1 carried, paired) | median +15.9% | >= +15% | PASS |
-| Keeping deals beats breaking them (paired, betrayer) | cooperator ahead in 95.5% of pairs, median +9.6% | > 50%, median > 0 | PASS |
-| Strict AI retaliates within the window after a broken deal | 120 of 120 (plus 355 breaks against forgiving AIs) | all, within 2 ticks | PASS |
-| Every visible AI decision is explained, with a number | 355,460 of 355,460 commands; all texts numeric | all | PASS |
-| Per-tick compute budget | peak 924 of 4,000 units, 0 deferred thinks; 0.36 ms/tick (build machine), 3.1 ms (4x-throttled Chromium) | <= 4,000, 0 deferred | PASS |
-| AI commands accepted by the sim | 0 rejected of 355,460 | 0 | PASS |
-| Determinism (repeat runs; save + AI snapshot reload) | 10 of 10 identical; reload test identical | all | PASS |
+| Crisis success 40-75% | 57.9% of 1,182 crises | 40-75% | PASS |
+| No archetype over 1.5x fair share (random assignment) | free-rider 1.64x (hoarder 0.31x, exploiter 0.20x, isolationist 0.00x); cooperative AI 2.92x | bots <= 1.50x | FAIL |
+| Reciprocal cooperators beat free-riders (paired) | cooperator ahead in 69.0% of pairs, median +1.8% | > 50%, median > 0 | PASS |
+| Reciprocal cooperators beat trade exploiters (paired) | 87.0% of pairs, median +10.9% | > 50%, median > 0 | PASS |
+| Trailing nation gains nothing by sabotage | harness suite: spoiler 1,073 vs cooperator 1,235, paid in 0 of 200 | saboteur lower | PASS (harness) |
+| No nation tops more than 2x fair share (Gate 1, waived) | Saudi Arabia 24.0% | <= 11.8% | FAIL |
+| Trading beats isolating (paired) | median +17.2% | >= +15% | PASS |
+| Keeping deals beats breaking them (paired, betrayer) | 97.5% of pairs, median +9.9% | > 50%, median > 0 | PASS |
+| Strict AI retaliates within the window after a broken deal | 53 of 53 (plus 290 against forgiving AIs) | all, within 2 ticks | PASS |
+| Every visible AI decision is explained, with a number | 606,676 of 606,676 commands | all | PASS |
+| Per-tick compute budget | peak 1,333 of 4,000 units, 0 deferred; 0.62 ms/tick build machine | <= 4,000, 0 deferred | PASS |
+| AI commands the sim refuses as invalid | 0 of 606,676 (2,996 same-month races: the other side answered first) | 0 invalid | PASS |
+| Determinism (repeat runs; save + AI snapshot reload) | identical | all | PASS |
 
-Median ownScore by archetype: cooperator 113.4%, trade exploiter 103.7%, hoarder
-100.0%, isolationist 100.0%. Top scorers: Brazil 16.0%, Russia 11.5%, Saudi
-Arabia 10.0%, Egypt 9.5%, Japan 9.0%, the rest 6.5% or less.
+Median ownScore by archetype: cooperator 112.2%, free-rider 110.0%, exploiter
+99.7%, hoarder 98.2%, isolationist 94.8%.
 
-**Reading of the archetype criterion.** ROADMAP names the archetypes as hoarder,
-isolationist, trade exploiter and free-rider; the cooperative AI is what they
-are measured against, so the 1.5x line is applied to the bots. The cooperative
-AI tops 3.06x its fair share - collaboration beating the alternatives, which is
-the game's premise. If the architect reads the criterion as including the
-cooperator, it fails (the Gate 1 greedy trader was at 2.8-2.9x for the same
-reason). This is an owner decision (docs/GAPS.md, prompt 10).
-
-**The top scorer** was already waived at Gate 1 (12.5-15.0% with the greedy
-trader) and prompt 13 traced it to structural near-ties between exporters that
-sell their whole surplus. With this AI, Brazil - a food and energy exporter
-that sells from month 1 - is the most frequent winner. No AI tunable in band
-moved it below about 12.5% on the tuning seeds.
+**The two fails are the same two prompt 09 reported for the greedy trader**, both
+smaller with this AI: the free-rider tops 1.64x (greedy 2.21x) and Saudi Arabia
+24.0% (23.5%). A free-rider saves what a cooperator pays and the pool protects it
+anyway (RULES 4.3 rule 1), so it wins whenever its trade is as good as the
+cooperator's; the AI makes the gap smaller by remembering free-riders in trade,
+but the remedy is in the crisis rules (lane S) or a ruling on the criterion.
+**Reading of the archetype criterion:** the 1.5x line is applied to the bots, not
+to the cooperative AI (2.92x), because the cooperator is what the archetypes are
+measured against; if it counts, the criterion fails by design (docs/GAPS.md).

@@ -21,7 +21,7 @@ describe('AI director on the full roster (17 nations, 6 regions, 60 months)', ()
 
   it('every visible decision carries exactly one explanation, with a number, for the nations that see it', () => {
     // Commands and explanations are emitted pairwise per decision; announcements have no command.
-    const decisions = game.explanations.filter((e) => !['suspend', 'forgive', 'resume', 'skipPledge'].includes(e.payload.decision));
+    const decisions = game.explanations.filter((e) => !['suspend', 'forgive', 'resume'].includes(e.payload.decision));
     expect(decisions).toHaveLength(game.commands.length);
     const kindOf: Record<string, string> = {
       acceptOffer: 'accept',
@@ -30,7 +30,8 @@ describe('AI director on the full roster (17 nations, 6 regions, 60 months)', ()
       makeOffer: 'offer',
       withdrawOffer: 'withdraw',
       setPolicy: 'policy',
-      pledge: 'pledge',
+      contribute: 'pledge',
+      declineAppeal: 'skipPledge',
     };
     game.commands.forEach((command, i) => {
       const e = decisions[i]!;
@@ -43,7 +44,18 @@ describe('AI director on the full roster (17 nations, 6 regions, 60 months)', ()
       expect(e.payload.text.length).toBeLessThanOrEqual(140);
       // A trade decision is seen by both parties and nobody else.
       if (e.payload.partner !== null) expect([...e.audience].sort()).toEqual([command.nationId, e.payload.partner].sort());
+      // The same sentences ride on the command, and the sim relays them to the same nations.
+      expect(command.why?.[0]).toBe(e.payload.text);
     });
+    const relayed = game.events.filter((e) => e.type === 'explanation' && (e.payload as { by: string }).by === 'command');
+    expect(relayed).toHaveLength(game.commands.length);
+  });
+
+  it('answers every crisis appeal itself, by paying or declining', () => {
+    const opened = game.events.filter((e) => e.type === 'crisisOpened').length;
+    expect(opened).toBeGreaterThan(3);
+    const answered = game.events.filter((e) => e.type === 'appealAnswered' && (e.payload as { by: string }).by === 'command').length;
+    expect(answered).toBe(opened * 17);
   });
 
   it('stays inside the per-tick compute budget, with thinking staggered across ticks', () => {

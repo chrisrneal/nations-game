@@ -1,5 +1,4 @@
-import type { NationView } from '@nations/contracts';
-import type { CrisisSeen } from './perception.ts';
+import type { Crisis, NationView } from '@nations/contracts';
 import type { Personality } from './personality.ts';
 import { balanceOf, GOODS, type Good } from './util.ts';
 
@@ -21,7 +20,7 @@ export interface Goal {
   readonly reason: string;
 }
 
-export function scoreGoals(view: NationView, p: Personality, crises: readonly CrisisSeen[]): Goal[] {
+export function scoreGoals(view: NationView, p: Personality, crises: readonly Crisis[]): Goal[] {
   const goals: Goal[] = [];
   const self = view.self;
   for (const good of GOODS) {

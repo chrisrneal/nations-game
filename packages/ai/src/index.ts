@@ -18,6 +18,6 @@ export { AiDirector, endowmentsOf, type AiDirectorOptions, type DirectorOutput, 
 export { NationMind, type MindSnapshot } from './mind.ts';
 export { personalityFor, stanceLabel, structuralInputs, type Personality, type Reciprocity, type StructuralInputs } from './personality.ts';
 export { EXPLANATION_EVENT, hasNumber, type DecisionKind, type Explanation, type ExplanationEvent } from './explain.ts';
-export { CRISIS_CLOSED_EVENT, PLEDGE_COMMAND, crisesIn, visibleTo, type CrisisSeen } from './perception.ts';
+export { crisisLabel, lastPaidPct, openAppeals, visibleTo } from './perception.ts';
 export type { Goal, GoalId } from './goals.ts';
 export type { PartnerMemory } from './beliefs.ts';

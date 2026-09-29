@@ -27,6 +27,8 @@ export interface AiDirectorOptions {
   readonly endowments: readonly NationEndowment[];
   /** Seed for scoring noise; the host derives it from the game seed. */
   readonly seed: number;
+  /** Nations the AI plays without ever paying into a pool (the free-rider in the AI's Gate 2 check). */
+  readonly freeRiders?: readonly string[];
 }
 
 export interface TickUsage {
@@ -63,11 +65,10 @@ export class AiDirector {
 
   constructor(options: AiDirectorOptions) {
     const world = options.endowments.reduce((sum, e) => sum + e.gdpPppBn, 0);
-    const exposure = new Map<NationId, number>(options.endowments.map((e) => [e.id as NationId, e.climateExposure]));
     for (const e of options.endowments) {
       if (e.kind !== 'playable') continue;
       const id = e.id as NationId;
-      this.minds.set(id, new NationMind(id, e, world, exposure, options.seed));
+      this.minds.set(id, new NationMind(id, e, world, options.seed, !(options.freeRiders ?? []).includes(id)));
       this.order.push(id);
     }
   }

@@ -1,5 +1,5 @@
 import type { NationView, ResourceAmount, TradeOffer } from '@nations/contracts';
-import { grudgePoints, punishing, type PartnerMemory } from './beliefs.ts';
+import { grudgePoints, offenceText, punishing, type PartnerMemory } from './beliefs.ts';
 import type { Personality } from './personality.ts';
 import { isFair, month, rule, show, valueOf, type Good } from './util.ts';
 
@@ -65,7 +65,7 @@ export function answerOffer(view: NationView, p: Personality, offer: TradeOffer,
 
   if (punishing(memory, now) && memory?.lastOffence !== null && memory !== undefined) {
     const o = memory.lastOffence!;
-    const why = o.kind === 'broken' ? `you broke ${o.what}` : `you skipped ${o.what}`;
+    const why = offenceText(o);
     return {
       kind: 'reject',
       text: `declined: ${why}; no trade with you until month ${month(memory.punishUntil)}`,

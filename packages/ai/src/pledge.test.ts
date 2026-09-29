@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import type { Event, NationId, NationView } from '@nations/contracts';
+import type { Crisis, CrisisResult, CrisesView, Event, NationId, NationView, Pledge } from '@nations/contracts';
 import { NEUTRAL_ENDOWMENT, createWorld, viewFor, type RosterEntry } from '@nations/sim';
 import { AiDirector, endowmentsOf } from './director.ts';
-import { CRISIS_CLOSED_EVENT, PLEDGE_COMMAND, type CrisisSeen } from './perception.ts';
 import { personalityFor, type Personality } from './personality.ts';
-import { decidePledge, fairShare } from './pledge.ts';
+import { decidePledge, owedShare } from './pledge.ts';
 
 /**
- * Crisis pledges are decided against the crisis contract the AI expects
- * (perception.ts, docs/AI_DESIGN.md). The sim does not model crises yet, so
- * these tests put crises into the View by hand.
+ * Answering crisis appeals (RULES 4). The appeal, pools and results are put
+ * into the View by hand here, so each rule can be checked alone; the full-roster
+ * games in director.test.ts and gate2.test.ts run them against the real sim.
  */
 const base = { ...NEUTRAL_ENDOWMENT, gdpPppBn: 24_000, population: 100_000_000 };
 const ROSTER: RosterEntry[] = [
@@ -19,33 +18,41 @@ const ROSTER: RosterEntry[] = [
   { id: 'rider', name: 'Rider', endowment: { ...base, climateExposure: 50 } },
 ];
 const S = 'strict' as NationId;
-const state = createWorld({ seed: 1, roster: ROSTER });
-const exposure = new Map(ROSTER.map((r) => [r.id as NationId, r.endowment!.climateExposure]));
+const RIDER = 'rider' as NationId;
+const state = { ...createWorld({ seed: 1, roster: ROSTER }), tick: 3 };
 const world = ROSTER.reduce((s, r) => s + r.endowment!.gdpPppBn, 0);
+const ids = ROSTER.map((r) => r.id as NationId);
 
-function crisis(pooled: number, target: number): CrisisSeen {
-  return { id: 7, kind: 'climate', label: 'flood relief', openedTick: 2, closesTick: 5, pooled, target, pledges: [] };
+function appeal(target = 400): Crisis {
+  return { id: 7, kind: 'climate', pool: 'adaptation', severity: 20, openedTick: 2, deadlineTick: 5, target, shares: Object.fromEntries(ids.map((id) => [id, target / 4])), answers: {} };
 }
-function withCrisis(id: string, c: CrisisSeen): NationView {
-  return { ...viewFor(state, id as NationId), crises: [c] } as NationView;
+function lockedResult(contributors: NationId[], freeRiders: NationId[]): CrisisResult {
+  return { id: 3, kind: 'climate', severity: 20, openedTick: 0, deadlineTick: 1, target: 400, effective: 0, coverBp: 0, outcome: 'partial', contributors, freeRiders };
+}
+function crisesView(open: Crisis[], opts: { balance?: number; paid?: number; recent?: CrisisResult[] } = {}): CrisesView {
+  const pool = (kind: 'adaptation' | 'health') => ({ kind, balance: kind === 'adaptation' ? (opts.balance ?? 0) : 0, late: 0, round: kind === 'adaptation' && opts.paid ? { [S]: opts.paid } : {}, lastFundedBp: 10_000 });
+  return { pools: [pool('adaptation'), pool('health')], open, recent: opts.recent ?? [], pledges: [], hits: [] };
+}
+function viewWith(id: string, crises: CrisesView): NationView {
+  return { ...viewFor(state, id as NationId), crises };
 }
 const personality = (id: string): Personality => personalityFor(ROSTER.find((r) => r.id === id)!.endowment!, world, viewFor(state, S).rules);
+const input = (id: string, crises: CrisesView) => ({ view: viewWith(id, crises), p: personality(id), crisis: crises.open[0]!, creditFree: 10_000 });
 
-describe('crisis pledges by reciprocity style', () => {
-  const c = crisis(0, 400);
-  const input = (id: string, lastPaidPct: number | null) => ({ view: withCrisis(id, c), p: personality(id), crisis: c, exposure, lastPaidPct, creditFree: 10_000 });
-
-  it('splits the pool gap by exposure x output', () => {
-    expect(fairShare(withCrisis('strict', c), c, exposure)).toBe(100);
+describe('answering a crisis appeal, by reciprocity style', () => {
+  it('owes its share less what it already paid into the pool this round', () => {
+    expect(owedShare(viewWith('strict', crisesView([appeal()])), appeal())).toBe(100);
+    expect(owedShare(viewWith('strict', crisesView([appeal()], { paid: 30 })), appeal())).toBe(70);
   });
 
-  it('strict pays its full share at the first crisis, and only matches others after a poor turnout', () => {
+  it('strict pays its full share at the first appeal, and only matches others after a poor turnout', () => {
     expect(personality('strict').reciprocity).toBe('strict');
-    const first = decidePledge(input('strict', null));
+    const first = decidePledge(input('strict', crisesView([appeal()])));
     expect(first.amount).toBe(100);
-    expect(first.text).toBe('pledged 100 credit to the flood relief (month 3): first crisis: I pay my full share');
-    expect(decidePledge(input('strict', 75)).amount).toBe(100);
-    const poor = decidePledge(input('strict', 25));
+    expect(first.text).toBe('paid 100 credit to the climate relief (month 3): first climate appeal: I pay my full share of 100');
+    const good = crisesView([appeal()], { recent: [lockedResult([S, RIDER, 'hard' as NationId], ['forgiving' as NationId])] });
+    expect(decidePledge(input('strict', good)).amount).toBe(100);
+    const poor = decidePledge(input('strict', crisesView([appeal()], { recent: [lockedResult([S], ['hard', 'rider', 'forgiving'] as NationId[])] })));
     expect(poor.amount).toBe(25);
     expect(poor.text).toMatch(/only 25% of nations paid last time/);
   });
@@ -53,51 +60,66 @@ describe('crisis pledges by reciprocity style', () => {
   it('forgiving pays whatever others did', () => {
     const p = personality('forgiving');
     expect(p.reciprocity).toBe('forgiving');
-    expect(decidePledge(input('forgiving', 0)).amount).toBe(Math.floor((100 * (50 + p.cooperativeness)) / 100));
+    const none = crisesView([appeal()], { recent: [lockedResult([], ids)] });
+    expect(decidePledge(input('forgiving', none)).amount).toBe(Math.floor((100 * (50 + p.cooperativeness)) / 100));
   });
 
   it('a hard bargainer free-rides on a well-funded pool and pays a token otherwise', () => {
     expect(personality('hard').reciprocity).toBe('exploiter');
-    const funded = crisis(300, 400);
-    const skip = decidePledge({ ...input('hard', null), view: withCrisis('hard', funded), crisis: funded });
+    const skip = decidePledge(input('hard', crisesView([appeal()], { balance: 300 })));
     expect(skip.amount).toBe(0);
-    expect(skip.text).toBe('no pledge to the flood relief (month 3): the pool is 75% funded and pays out by exposure');
-    expect(decidePledge(input('hard', null)).amount).toBeGreaterThan(0);
-    expect(decidePledge(input('hard', null)).amount).toBeLessThan(50);
+    expect(skip.text).toBe('declined the climate relief (month 3): the pool is 75% funded and pays out by exposure');
+    const token = decidePledge(input('hard', crisesView([appeal()])));
+    expect(token.amount).toBeGreaterThan(0);
+    expect(token.amount).toBeLessThan(50);
   });
 
-  it('never pledges more than aiPledgeMaxIncomePct of a month of output', () => {
-    const huge = crisis(0, 10_000_000);
-    const view = withCrisis('strict', huge);
-    const d = decidePledge({ ...input('strict', null), view, crisis: huge });
+  it('never pays more than aiPledgeMaxIncomePct of a month of output', () => {
+    const huge = crisesView([appeal(40_000_000)]);
+    const d = decidePledge(input('strict', huge));
+    const view = viewWith('strict', huge);
     expect(d.amount).toBe(Math.floor((view.self.public.output * view.rules.aiPledgeMaxIncomePct!) / 100));
   });
 });
 
-describe('crisis memory reaches trade: "declined: you skipped the flood relief"', () => {
-  it('a strict nation that paid declines offers from a nation that skipped', () => {
+describe('the director answers appeals with commands the sim relays as explanations', () => {
+  it('pays with `contribute` or answers no with `declineAppeal`, once per appeal, each with a numeric why', () => {
+    const director = new AiDirector({ endowments: endowmentsOf(ROSTER), seed: 1, freeRiders: ['rider'] });
+    const cv = crisesView([appeal()]);
+    const out = director.decide(3, () => 'ai', (id) => viewWith(id, cv));
+    const answers = out.commands.filter((c) => c.type === 'contribute' || c.type === 'declineAppeal');
+    expect(answers.map((c) => `${c.nationId}:${c.type}`).sort()).toEqual(['forgiving:contribute', 'hard:contribute', 'rider:declineAppeal', 'strict:contribute']);
+    for (const c of answers) {
+      expect(c.why?.length).toBeGreaterThan(0);
+      for (const line of c.why ?? []) expect(line).toMatch(/\d/);
+    }
+    expect(out.explanations.filter((e) => e.payload.crisisId === 7).every((e) => e.audience.length === 0)).toBe(true);
+    const again = director.decide(4, () => 'ai', (id) => viewWith(id, cv));
+    expect(again.commands.filter((c) => c.type === 'contribute' || c.type === 'declineAppeal')).toEqual([]);
+  });
+});
+
+describe('crisis memory reaches trade', () => {
+  const tick6 = { ...state, tick: 6 };
+  const decideAfter = (event: Event) => {
     const director = new AiDirector({ endowments: endowmentsOf(ROSTER), seed: 1 });
-    const closed = { ...crisis(400, 400), pledges: [{ nationId: S, amount: 100 }, { nationId: 'forgiving' as NationId, amount: 100 }] };
-    const event: Event = { tick: 5, type: CRISIS_CLOSED_EVENT, payload: { crisis: closed }, audience: [] };
-    const tick6 = { ...state, tick: 6 };
     director.observe([event]);
-    const out = director.decide(6, (id) => (id === 'rider' ? 'human' : 'ai'), (id) => viewFor(tick6, id));
-    const suspend = out.explanations.find((e) => e.payload.nationId === S && e.payload.partner === 'rider');
-    expect(suspend?.payload.text).toBe('suspended trade with you until month 10: you skipped the flood relief in month 3');
-    // The forgiving nation also paid, but lets it pass; the hard bargainer never punishes.
-    expect(out.explanations.find((e) => e.payload.nationId === 'forgiving' && e.payload.partner === 'rider')?.payload.decision).toBe('forgive');
-    expect(out.explanations.find((e) => e.payload.nationId === 'hard' && e.payload.partner === 'rider')).toBeUndefined();
+    return director.decide(6, (id) => (id === RIDER ? 'human' : 'ai'), (id) => viewFor(tick6, id));
+  };
+  const about = (out: ReturnType<typeof decideAfter>, from: string) => out.explanations.find((e) => e.payload.nationId === from && e.payload.partner === RIDER);
+
+  it('a strict nation that paid suspends trade with a free-rider: "you skipped the climate relief"', () => {
+    const result = { ...lockedResult([S, 'forgiving' as NationId], [RIDER, 'hard' as NationId]), openedTick: 2 };
+    const out = decideAfter({ tick: 5, type: 'crisisLocked', payload: { result }, audience: [] });
+    expect(about(out, 'strict')?.payload.text).toBe('suspended trade with you until month 10: you skipped the climate relief in month 3');
+    // The forgiving nation also paid, but lets it pass; the hard bargainer paid nothing, so holds nothing.
+    expect(about(out, 'forgiving')?.payload.decision).toBe('forgive');
+    expect(about(out, 'hard')).toBeUndefined();
   });
 
-  it('pledges go out as public commands, one per open crisis, each explained to everyone', () => {
-    const director = new AiDirector({ endowments: endowmentsOf(ROSTER), seed: 1 });
-    const c = crisis(0, 400);
-    const out = director.decide(3, () => 'ai', (id) => withCrisis(id, { ...c }));
-    const pledges = out.commands.filter((x) => x.type === PLEDGE_COMMAND);
-    expect(pledges.map((x) => x.nationId).sort()).toEqual(['forgiving', 'hard', 'rider', 'strict']);
-    for (const e of out.explanations.filter((x) => x.payload.decision === 'pledge')) expect(e.audience).toEqual([]);
-    // Decided once: the next tick sends no second pledge for the same crisis.
-    const again = director.decide(4, () => 'ai', (id) => withCrisis(id, { ...c }));
-    expect(again.commands.filter((x) => x.type === PLEDGE_COMMAND)).toEqual([]);
+  it('a broken promise to the world is remembered by everyone', () => {
+    const pledge: Pledge = { id: 4, nationId: RIDER, pool: 'health', amount: 200, paid: 0, createdTick: 1, deadlineTick: 5 };
+    const out = decideAfter({ tick: 5, type: 'pledgeBroken', payload: { pledge, reason: 'withdrawn' }, audience: [] });
+    expect(about(out, 'strict')?.payload.text).toBe('suspended trade with you until month 10: you broke your pledge of 200 credit to the health pool in month 2');
   });
 });

@@ -1,5 +1,5 @@
 import type { NationId, NationView } from '@nations/contracts';
-import type { Observation } from './perception.ts';
+import { crisisLabel, type Observation } from './perception.ts';
 import type { Reciprocity } from './personality.ts';
 import { balanceOf, GOODS, month, rule, type Good } from './util.ts';
 
@@ -14,7 +14,7 @@ import { balanceOf, GOODS, month, rule, type Good } from './util.ts';
  * it (the sim's own trust ledger, which the View carries).
  */
 
-export type OffenceKind = 'broken' | 'skipped';
+export type OffenceKind = 'broken' | 'skipped' | 'brokePledge';
 
 export interface Offence {
   readonly kind: OffenceKind;
@@ -41,6 +41,12 @@ export interface PartnerMemory {
   punishFrom: number;
   /** Announcements waiting to be explained to the partner on the next react. */
   pending: ('suspend' | 'forgive' | 'resume')[];
+}
+
+/** "you broke the deal in month 12 (...)", "you skipped the climate relief in month 25". */
+export function offenceText(o: Offence | null): string {
+  if (o === null) return 'your record';
+  return o.kind === 'skipped' ? `you skipped ${o.what}` : `you broke ${o.what}`;
 }
 
 export function emptyMemory(): PartnerMemory {
@@ -173,7 +179,16 @@ export function remember(
         if (!obs.iPaid) break;
         grudge = rule(view, 'aiGrudgePerSkip');
         if (grudge > 0) {
-          offence = { kind: 'skipped', tick: obs.tick, what: `the ${obs.crisis.label} in month ${month(obs.crisis.openedTick)}` };
+          offence = { kind: 'skipped', tick: obs.tick, what: `the ${crisisLabel(obs.crisis.kind)} in month ${month(obs.crisis.openedTick)}` };
+          length = Math.max(1, Math.floor(punishTicks / 2));
+        }
+        break;
+      case 'brokePledge':
+        // A promise to the whole world broken (RULES 4.4): remembered like a skipped pledge.
+        m.skipped++;
+        grudge = rule(view, 'aiGrudgePerSkip');
+        if (grudge > 0) {
+          offence = { kind: 'brokePledge', tick: obs.tick, what: `your pledge of ${obs.pledge.amount} credit to the ${obs.pledge.pool} pool in month ${month(obs.pledge.createdTick)}` };
           length = Math.max(1, Math.floor(punishTicks / 2));
         }
         break;

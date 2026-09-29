@@ -1,10 +1,10 @@
 import type { Command, Event, NationEndowment, NationId, NationView, ResourceAmount, TradeOffer } from '@nations/contracts';
 import { proposePurchases, proposeSales, type Proposal } from './actions.ts';
-import { believe, decayMemory, emptyMemory, punishing, remember, type PartnerBelief, type PartnerMemory } from './beliefs.ts';
-import { explanationEvent, type DecisionKind, type ExplanationEvent } from './explain.ts';
+import { believe, decayMemory, emptyMemory, offenceText, punishing, remember, type PartnerBelief, type PartnerMemory } from './beliefs.ts';
+import { explanationEvent, hasNumber, type DecisionKind, type ExplanationEvent } from './explain.ts';
 import { scoreGoals, type Goal } from './goals.ts';
 import { answerOffer, type Ledger } from './negotiation.ts';
-import { CRISIS_CLOSED_EVENT, crisesIn, observe, PLEDGE_COMMAND, visibleTo } from './perception.ts';
+import { observe, openAppeals, visibleTo } from './perception.ts';
 import { personalityFor, type Personality } from './personality.ts';
 import { decidePledge } from './pledge.ts';
 import { clamp, GOODS, month, rule, show, type Good } from './util.ts';
@@ -21,6 +21,10 @@ import { clamp, GOODS, month, rule, show, type Good } from './util.ts';
  * Every command it returns has exactly one explanation, addressed to the
  * nations that will see the decision.
  */
+/** The sim's limits on a command's `why` (packages/sim/src/commands.ts). */
+const WHY_MAX_LINES = 3;
+const WHY_MAX_LENGTH = 200;
+
 export interface MindSnapshot {
   readonly id: string;
   readonly memory: readonly (readonly [string, PartnerMemory])[];
@@ -29,7 +33,6 @@ export interface MindSnapshot {
   readonly beliefs: readonly PartnerBelief[];
   readonly lastThink: number;
   readonly lastDecay: number;
-  readonly lastPaidPct: number | null;
   readonly decidedCrises: readonly number[];
   readonly policySet: boolean;
 }
@@ -52,7 +55,6 @@ export class NationMind {
   private beliefs: PartnerBelief[] = [];
   private lastThink = -1;
   private lastDecay = -1;
-  private lastPaidPct: number | null = null;
   private decidedCrises = new Set<number>();
   private policySet = false;
 
@@ -60,8 +62,9 @@ export class NationMind {
     readonly id: NationId,
     private readonly endowment: Omit<NationEndowment, 'id' | 'name'>,
     private readonly worldGdpPppBn: number,
-    private readonly exposure: ReadonlyMap<NationId, number>,
     private readonly seed: number,
+    /** False only for the free-rider in the AI's Gate 2 check: never pays into a pool. */
+    private readonly pays = true,
   ) {}
 
   /** Personality is fixed by the data; the thresholds come from the View's rules. */
@@ -92,15 +95,7 @@ export class NationMind {
     }
     const mine = events.filter((e) => visibleTo(e, this.id));
     if (mine.length === 0) return;
-    const observations = observe(this.id, mine, view.knownNations);
-    remember(this.memory, observations, p.reciprocity, view, view.tick);
-    for (const e of mine) {
-      if (e.type !== CRISIS_CLOSED_EVENT) continue;
-      const playable = view.others.filter((o) => o.public.kind === 'playable').map((o) => o.id);
-      const paid = new Set(observations.filter((o) => o.kind === 'pledged' && o.tick === e.tick).map((o) => o.partner));
-      const total = playable.length;
-      if (total > 0) this.lastPaidPct = Math.floor((playable.filter((id) => paid.has(id)).length * 100) / total);
-    }
+    remember(this.memory, observe(this.id, mine), p.reciprocity, view, view.tick);
   }
 
   act(view: NationView, options: ActOptions): MindOutput {
@@ -120,9 +115,24 @@ export class NationMind {
         ),
       );
     };
-    const push = (command: Omit<Command, 'nationId' | 'tick'>): boolean => {
+    /**
+     * Sends a command and explains it: the explanation event for the host, and
+     * the same sentences as the command's `why`, which the sim relays to the
+     * nations the decision concerns (RULES 7.4). False when the tick's command cap is full.
+     */
+    const decide = (
+      command: Omit<Command, 'nationId' | 'tick' | 'why'>,
+      decision: DecisionKind,
+      partner: NationId | null,
+      text: string,
+      reasons: readonly string[],
+      extra: { offerId?: number; crisisId?: number } = {},
+      audience?: readonly NationId[],
+    ): boolean => {
       if (commands.length >= maxCommands) return false;
-      commands.push({ ...command, nationId: this.id, tick: now } as Command);
+      const why = [text, ...reasons].filter(hasNumber).map((line) => line.slice(0, WHY_MAX_LENGTH)).slice(0, WHY_MAX_LINES);
+      commands.push({ ...command, nationId: this.id, tick: now, ...(why.length > 0 ? { why } : {}) } as Command);
+      say(decision, partner, text, reasons, extra, audience);
       return true;
     };
 
@@ -132,11 +142,11 @@ export class NationMind {
       const deficit = (g: Good): number => Math.max(0, view.self.public[g].demand - view.self.public[g].production);
       const coverPriority: Good = deficit('energy') > deficit('food') ? 'energy' : 'food';
       const hardBargains = p.reciprocity === 'exploiter';
-      if (push({ type: 'setPolicy', payload: { hardBargains, coverPriority, resilienceFloor: floor } })) {
-        say('policy', null, `set policies: resilience floor ${floor}, ${coverPriority} first${hardBargains ? ', hard bargains on' : ''}`, [
-          `time horizon ${p.timeHorizon}`,
-          `food deficit ${deficit('food')}, energy deficit ${deficit('energy')}`,
-        ]);
+      // The crisis rule its standing policy uses if it ever leaves an appeal unanswered, by style.
+      const crisisRule = !this.pays ? 'none' : p.reciprocity === 'strict' ? 'reciprocal' : p.reciprocity === 'forgiving' ? 'fairShare' : 'none';
+      const payload = { hardBargains, coverPriority, resilienceFloor: floor, crisisRule, ...(this.pays ? {} : { contributionBp: 0 }) };
+      const text = `set policies: resilience floor ${floor}, ${coverPriority} first, crisis rule ${crisisRule}${hardBargains ? ', hard bargains on' : ''}`;
+      if (decide({ type: 'setPolicy', payload }, 'policy', null, text, [`time horizon ${p.timeHorizon}`, `food deficit ${deficit('food')}, energy deficit ${deficit('energy')}`])) {
         this.policySet = true;
       }
     }
@@ -152,13 +162,12 @@ export class NationMind {
       const pending = m.pending.splice(0);
       for (const kind of pending) {
         const o = m.lastOffence;
-        const why = o === null ? 'your record' : o.kind === 'broken' ? `you broke ${o.what}` : `you skipped ${o.what}`;
+        const why = offenceText(o);
         if (kind === 'suspend' && punishing(m, now)) {
           say('suspend', partner, `suspended trade with you until month ${month(m.punishUntil)}: ${why}`, [why, `${m.broken} broken deal${m.broken === 1 ? '' : 's'}, ${m.kept} kept`]);
           for (const offer of mineOpen.filter((x) => x.to === partner && !withdrawn.has(x.id))) {
-            if (!push({ type: 'withdrawOffer', payload: { offerId: offer.id } })) break;
+            if (!decide({ type: 'withdrawOffer', payload: { offerId: offer.id } }, 'withdraw', partner, `withdrew my offer of ${show(offer.give)}: ${why}`, [why], { offerId: offer.id })) break;
             withdrawn.add(offer.id);
-            say('withdraw', partner, `withdrew my offer of ${show(offer.give)}: ${why}`, [why], { offerId: offer.id });
           }
         } else if (kind === 'forgive') {
           const limit = rule(view, 'aiForgiveLimit');
@@ -176,14 +185,16 @@ export class NationMind {
     const buffer = rule(view, 'aiStockBufferTicks');
     const need = { food: 0, energy: 0 };
     const spare = { food: 0, energy: 0 };
+    // Goods in an offer withdrawn this tick stay promised until next month: the partner may accept it
+    // earlier in the same step (commands run in nation order), and then they are gone.
     for (const good of GOODS) {
       const flow = self.public[good];
       const pendingIn = open.filter((o) => o.get.resource === good).reduce((s, o) => s + o.get.amount, 0);
-      const pendingOut = open.filter((o) => o.give.resource === good).reduce((s, o) => s + o.give.amount, 0);
+      const pendingOut = mineOpen.filter((o) => o.give.resource === good).reduce((s, o) => s + o.give.amount, 0);
       need[good] = Math.max(0, flow.demand - flow.production - stocks[good] - pendingIn);
       spare[good] = Math.max(0, Math.min(stocks[good], stocks[good] + flow.production - flow.demand * buffer) - pendingOut);
     }
-    const creditPromised = open.filter((o) => o.give.resource === 'credit').reduce((s, o) => s + o.give.amount, 0);
+    const creditPromised = mineOpen.filter((o) => o.give.resource === 'credit').reduce((s, o) => s + o.give.amount, 0);
     const ledger: Ledger = { need, spare, stocks, creditFree: stocks.credit - creditPromised, open: open.length };
 
     // --- React: answer every offer made to me. Offenders first, so retaliation is never crowded out.
@@ -199,33 +210,27 @@ export class NationMind {
     for (const offer of incoming) {
       options.spend(2);
       const answer = answerOffer(view, p, offer, this.memory.get(offer.from), ledger);
+      const ref = { offerId: offer.id };
       if (answer.kind === 'accept') {
-        if (!push({ type: 'acceptOffer', payload: { offerId: offer.id } })) break;
+        if (!decide({ type: 'acceptOffer', payload: ref }, 'accept', offer.from, answer.text, answer.reasons, ref)) break;
         this.settleInLedger(ledger, offer);
-        say('accept', offer.from, answer.text, answer.reasons, { offerId: offer.id });
       } else if (answer.kind === 'counter') {
-        if (!push({ type: 'counterOffer', payload: { offerId: offer.id, give: answer.give, get: answer.get } })) break;
+        if (!decide({ type: 'counterOffer', payload: { ...ref, give: answer.give, get: answer.get } }, 'counter', offer.from, answer.text, answer.reasons, ref)) break;
         this.promise(ledger, answer.give, answer.get);
-        say('counter', offer.from, answer.text, answer.reasons, { offerId: offer.id });
-      } else {
-        if (!push({ type: 'rejectOffer', payload: { offerId: offer.id } })) break;
-        say('reject', offer.from, answer.text, answer.reasons, { offerId: offer.id });
-      }
+      } else if (!decide({ type: 'rejectOffer', payload: ref }, 'reject', offer.from, answer.text, answer.reasons, ref)) break;
     }
 
-    // --- Crisis pledges: decided once per crisis, the first tick it is seen. Public, like the crisis card.
-    for (const crisis of crisesIn(view)) {
-      if (this.decidedCrises.has(crisis.id) || now > crisis.closesTick) continue;
+    // --- Crisis appeals: answered the first tick they can be, by paying or declining. Public, like the crisis card.
+    for (const crisis of openAppeals(view)) {
+      if (this.decidedCrises.has(crisis.id)) continue;
       options.spend(view.others.length);
-      const d = decidePledge({ view, p, crisis, exposure: this.exposure, lastPaidPct: this.lastPaidPct, creditFree: ledger.creditFree });
+      const d = decidePledge({ view, p, crisis, creditFree: ledger.creditFree, pays: this.pays });
+      const ref = { crisisId: crisis.id };
       if (d.amount > 0) {
-        if (!push({ type: PLEDGE_COMMAND, payload: { crisisId: crisis.id, amount: d.amount } })) break;
+        if (!decide({ type: 'contribute', payload: { pool: crisis.pool, amount: d.amount } }, 'pledge', null, d.text, d.reasons, ref, [])) break;
         ledger.creditFree -= d.amount;
         ledger.stocks.credit -= d.amount;
-        say('pledge', null, d.text, d.reasons, { crisisId: crisis.id }, []);
-      } else {
-        say('skipPledge', null, d.text, d.reasons, { crisisId: crisis.id }, []);
-      }
+      } else if (!decide({ type: 'declineAppeal', payload: ref }, 'skipPledge', null, d.text, d.reasons, ref, [])) break;
       this.decidedCrises.add(crisis.id);
     }
 
@@ -233,7 +238,7 @@ export class NationMind {
     if (options.think || this.lastThink < 0) {
       options.spend(view.others.length * 4);
       this.beliefs = believe(view);
-      this.goals = scoreGoals(view, p, crisesIn(view));
+      this.goals = scoreGoals(view, p, openAppeals(view));
       this.lastThink = now;
     }
 
@@ -254,8 +259,7 @@ export class NationMind {
       const proposals: Proposal[] = proposeSales(ctx, room());
       proposals.push(...proposePurchases(ctx, room() - proposals.length));
       for (const prop of proposals) {
-        if (!push({ type: 'makeOffer', payload: { to: prop.to, give: prop.give, get: prop.get } })) break;
-        say('offer', prop.to, prop.text, prop.reasons);
+        if (!decide({ type: 'makeOffer', payload: { to: prop.to, give: prop.give, get: prop.get } }, 'offer', prop.to, prop.text, prop.reasons)) break;
       }
     }
     return { commands, explanations };
@@ -287,7 +291,6 @@ export class NationMind {
       beliefs: this.beliefs.map((b) => ({ ...b, need: { ...b.need }, surplus: { ...b.surplus } })),
       lastThink: this.lastThink,
       lastDecay: this.lastDecay,
-      lastPaidPct: this.lastPaidPct,
       decidedCrises: [...this.decidedCrises].sort((a, b) => a - b),
       policySet: this.policySet,
     };
@@ -298,7 +301,6 @@ export class NationMind {
     this.goals = s.goals.map((g) => ({ ...g }));
     this.lastThink = s.lastThink;
     this.lastDecay = s.lastDecay;
-    this.lastPaidPct = s.lastPaidPct;
     this.decidedCrises = new Set(s.decidedCrises);
     this.policySet = s.policySet;
     this.beliefs = s.beliefs.map((b) => ({ ...b, need: { ...b.need }, surplus: { ...b.surplus } }));
