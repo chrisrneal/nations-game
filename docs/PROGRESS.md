@@ -26,11 +26,11 @@ Suite: `npm run harness -- gate1` (200 seeded full-roster games, random strategi
 Gate 1 verdict: **PASS WITH WAIVER** (docs/gates/GATE-1.md): the owner waived the top scorer (12.5-15.0% on seeds 1-800) after prompt 13. The real-phone trade and phone speed check are carried to the Gate 2 playtests.
 
 ## Gate 2 checklist
-Suite: `npm run harness -- gate2` (200 seeded games with random archetypes, cooperator / free-rider and spoiler pairs, 40 absence runs, and the Gate 1 suite again). Latest results: docs/balance/gate2-prompt13.md (seeds 1-200, the shipped AI as trader and free-rider, not tuned).
+Suite: `npm run harness -- gate2` (200 seeded games with random archetypes, cooperator / free-rider and spoiler pairs, 40 absence runs, and the Gate 1 suite again). Latest results: docs/balance/gate2-prompt14.md (seeds 1-200, the shipped AI as trader and free-rider; the free-riding rule tuned on seeds 1001-1400 only, graded once).
 - [x] Crisis success 40-75% (prompt 13, shipped AI: 56.4% of 1,182 crises; climate 549 / 377 / 74, pandemic 118 / 22 / 42 success / partial / failure)
-- [ ] No archetype over 1.5x fair share, nations assigned at random (FAIL, prompt 13 with the shipped AI: trader 3.22x, free-rider 1.47x. Cannot pass while Gate 1 requires trading to beat isolating; owner or architect ruling needed)
-- [x] Reciprocal cooperators beat free-riders (prompt 13, shipped AI: cooperator ahead in 73% of same-nation pairs, median +1.41%)
-- [x] A trailing nation gains nothing by sabotage (prompt 13: spoiler median 1,066 vs 1,156 as a cooperator, paid in 0 of 200 pairs. Reported only: a stealth spoiler that keeps trading has median 1,116 but beats the cooperator in 19% of pairs)
+- [ ] No archetype over 1.5x fair share, nations assigned at random (FAIL, prompt 14 with the shipped AI: free-rider 1.05x, now inside the line and below the cooperator, but the cooperator is 3.90x (3.22x before). Cannot pass while Gate 1 requires trading to beat isolating; owner or architect ruling needed)
+- [x] Reciprocal cooperators beat free-riders (prompt 14, shipped AI: cooperator ahead in 90.5% of same-nation pairs, median +5.47%; was 73.0% and +1.41% before the free-riding rule)
+- [x] A trailing nation gains nothing by sabotage (prompt 14: spoiler median 978 vs 1,105 as a cooperator, paid in 1 of 200 pairs. The stealth spoiler that keeps trading has median 1,042 and beats the cooperator in 8.5% of pairs, was 19%; now graded strictly below the cooperator by the suite, which it is)
 - [ ] Owner predicts AI responses 70%+ after one game (owner; prompt 11 built prediction mode in the Game tab and `npm run harness -- predictions --files <exported saves>`, which grades it)
 - [~] 24 h absence test with a recap readable in under a minute (engine PASS: 40 runs, 0 offers lapsed, 0 appeals or pledges unanswered, recaps at most 6 lines and 121 words; prompt 11 phone check PASS: a live game closed 24 hours catches up in 86 ms on a 4x-slowed Chromium and shows a 6-line, 73-word ranked recap; the owner still reads one on a real phone)
 - [ ] 10 playtests, 3+ by others, most want another game (owner)
@@ -41,6 +41,28 @@ Suite: `npm run harness -- gate2` (200 seeded games with random archetypes, coop
 Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): the archetype line (free-rider 2.21x, shipped AI 1.64x; cooperator 2.92x) and the re-graded top scorer (Saudi Arabia 23.5%, shipped AI 24.0%) fail; the predictions and the 10 playtests have not been done (docs/playtests/ is empty). Prompt 13 fixed findings F1 (the harness now grades the shipped AI) and F2 (paid-in-full nations are no longer shown as "declined"); the failing lines still fail with the shipped AI.
 
 ## Session log
+
+### 2026-09-29 - prompt 14, free-riding must not pay (lanes D, S, H)
+**Changed.** A nation that pays nothing into a crisis pool now gets only half of the
+pool's protection (RULES 4.3 rule 1). Protection scales in a straight line with the
+share of your own appeal you paid; a full share gets it all. The standing contribution
+(default on) already pays a share several times over, so players on the defaults and
+absent players are not touched. No new dial, card or screen. The away recap says when
+only part of the cover reached you. The harness suite now grades the free-rider and
+stealth-spoiler lines separately and reports the cooperator's own share, and takes
+`--set id=value` for tuning sweeps.
+**Results (seeds 1-200, graded once; number tuned on seeds 1001-1400).** The free-rider
+tops 1.05x its fair share (was 1.47x), below the cooperator. The cooperator beats it in
+90.5% of pairs, median +5.47% (was 73.0%, +1.41%). The stealth spoiler's median is
+1,042 vs 1,105 (was 1,116 vs 1,156) and it beats the cooperator in 8.5% of pairs (was
+19.0%). Crisis success 56.6%, Gate 1 trade gain +17.1%, absence test unchanged.
+**Not fixed.** The cooperator itself now tops 3.90x fair share (was 3.22x), because
+the others lose more: the archetype line still fails, and is the owner's ruling. Saudi
+Arabia tops 21.0%. One trade-closing spoiler in 200 still beat its cooperative game.
+**Checked.** 468 tests (1,000-seed Node-vs-Chromium determinism included) and check pass.
+**How to see it.** docs/balance/gate2-prompt14.md.
+**Left.** Card and why-sheet wording (lane U), the AI's comments (lane A) and the owner
+rulings. See docs/GAPS.md, prompt 14.
 
 ### 2026-09-29 - prompt 13, the harness grades the shipped AI (lanes H, A, S)
 **Changed.** The balance harness now plays the same AI as the phone. Its cooperator

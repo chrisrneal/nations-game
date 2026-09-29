@@ -108,7 +108,13 @@ function crisisLine(r: CrisisResult, self: NationId, seen: readonly Event[]): st
   const damage = hit === undefined ? 'no damage to you' : (() => {
     const h = (hit.payload as CrisisEventPayloads['crisisHit']).hit;
     const months = h.toTick - h.fromTick + 1;
-    return `your output -${(h.bp / 100).toFixed(1)}% for ${months} month${months === 1 ? '' : 's'}`;
+    // Cover that reached you is what the damage was cut by; less than the pool's own means you paid less than your share (RULES 4.3 rule 1).
+    const fullCover = Math.floor((h.bpUnpooled * (10_000 - r.coverBp)) / 10_000);
+    const reached =
+      r.coverBp > 0 && h.bp > fullCover + 1
+        ? `, only ${Math.round(((h.bpUnpooled - h.bp) * 10_000) / (h.bpUnpooled * r.coverBp / 100))}% of the pool's cover reached you`
+        : '';
+    return `your output -${(h.bp / 100).toFixed(1)}% for ${months} month${months === 1 ? '' : 's'}${reached}`;
   })();
   const role = r.contributors.includes(self)
     ? paid > 0

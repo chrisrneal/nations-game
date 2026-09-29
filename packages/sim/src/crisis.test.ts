@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Command, CrisisEventPayloads, Event, NationId, NationRecord, StandingPolicy } from '@nations/contracts';
-import { hitBp } from './crisis.ts';
+import { hitBp, ownCoverBp } from './crisis.ts';
 import { buildRecap } from './recap.ts';
 import { scoreboard } from './score.ts';
 import { step } from './step.ts';
@@ -59,6 +59,18 @@ const cmd = (nationId: NationId, tick: number, type: string, payload: unknown): 
 
 /** Nobody pays anything unless told to: no monthly contribution, no appeal answers. */
 const SILENT: Partial<StandingPolicy> = { crisisRule: 'none', contributionBp: 0 };
+
+/** Runs `fn` with a tunable set to `value`, then puts it back. TUNABLES is one module per test file, so this cannot leak. */
+function withTunable<T>(name: 'nonPayerCoverPct', value: number, fn: () => T): T {
+  const tunable = TUNABLES[name] as unknown as { value: number };
+  const before = tunable.value;
+  tunable.value = value;
+  try {
+    return fn();
+  } finally {
+    tunable.value = before;
+  }
+}
 
 describe('climate appeal: opens on schedule, sized by exposure (RULES 4.1, 4.3)', () => {
   it('opens in month climateFirstOpenTick with the RULES 4.3 target and exposure-weighted shares', () => {
@@ -231,13 +243,6 @@ describe('pool outcomes: success, partial success and failure (RULES 4.3)', () =
     expect(hi.toTick - hi.fromTick + 1).toBe(TUNABLES.climateDamageSpreadTicks.value);
   });
 
-  it('the pool protects by exposure, not by contribution: a free-rider is covered like a payer', () => {
-    const { result, events } = lockWith(150);
-    const hits = of(events, 'crisisHit').map((h) => h.hit);
-    for (const h of hits) expect(h.bp).toBe(Math.floor((h.bpUnpooled * (10_000 - result.coverBp)) / 10_000));
-    expect(result.freeRiders).toContain(LO);
-  });
-
   it('damage lands as an output penalty for climateDamageSpreadTicks months, then stops', () => {
     const failed = lockWith(0).state;
     const e = failed.endowments[HI]!;
@@ -259,6 +264,150 @@ describe('pool outcomes: success, partial success and failure (RULES 4.3)', () =
     expect(nation(paid, LO).private.resilience).toBe(nation(none, LO).private.resilience);
     expect(trust(paid, HI, MID)).toBe(trust(none, HI, MID) + TUNABLES.contributorTrustBonus.value);
     expect(trust(paid, HI, LO)).toBe(trust(none, HI, LO));
+  });
+});
+
+describe('the pool pays out in proportion to what a nation paid (RULES 4.3 rule 1, prompt 14)', () => {
+  const KEEP = (): number => TUNABLES.nonPayerCoverPct.value;
+  type Hit = CrisisEventPayloads['crisisHit']['hit'];
+  const landed = (h: Hit, ownBp: number): number => Math.floor((h.bpUnpooled * (10_000 - ownBp)) / 10_000);
+
+  /**
+   * Silent world with the pool filled to 150% of its target by HI (who so pays
+   * more than its own share), MID paying `midPct`% of its own share, and LO and
+   * the region paying nothing.
+   */
+  function lockWithMid(midPct: number): { result: CrisisEventPayloads['crisisLocked']['result']; hits: Hit[]; shares: Record<string, number> } {
+    const opened = runTo(world({ ...SILENT, resilienceFloor: 0 }), OPEN + 1);
+    const crisis = opened.state.crises.find((c) => c.kind === 'climate')!;
+    const midPays = Math.floor((crisis.shares[MID]! * midPct) / 100);
+    const script = {
+      [OPEN + 1]: [
+        cmd(HI, OPEN + 1, 'contribute', { pool: 'adaptation', amount: Math.floor((crisis.target * 3) / 2) }),
+        ...(midPays > 0 ? [cmd(MID, OPEN + 1, 'contribute', { pool: 'adaptation', amount: midPays })] : []),
+      ],
+    };
+    const r = runTo(opened.state, DEADLINE + 1, script);
+    return {
+      result: of(r.events, 'crisisLocked')[0]!.result,
+      hits: of(r.events, 'crisisHit').map((h) => h.hit),
+      shares: crisis.shares,
+    };
+  }
+
+  it('a nation that paid its whole share gets the pool\'s whole cover; one that paid nothing keeps nonPayerCoverPct% of it', () => {
+    const { result, hits } = lockWithMid(100);
+    expect(result.coverBp).toBe(TUNABLES.poolCoverMaxPct.value * 100);
+    const at = (n: NationId): Hit => hits.find((h) => h.nationId === n)!;
+    expect(at(MID).bp).toBe(landed(at(MID), result.coverBp));
+    expect(at(HI).bp).toBe(landed(at(HI), result.coverBp));
+    const kept = Math.floor((result.coverBp * KEEP()) / 100);
+    expect(at(LO).bp).toBe(landed(at(LO), kept));
+    expect(at(REG).bp).toBe(landed(at(REG), kept));
+    // The free-rider takes strictly more damage than a payer with the same exposure would (LO is the least exposed, so compare per unit).
+    expect(at(LO).bp).toBeGreaterThan(landed(at(LO), result.coverBp));
+  });
+
+  it('in between, cover is a straight line in the share paid', () => {
+    const { result, hits, shares } = lockWithMid(50);
+    const mid = hits.find((h) => h.nationId === MID)!;
+    const paid = Math.floor((shares[MID]! * 50) / 100);
+    const keepBp = KEEP() * 100 + Math.floor(((100 - KEEP()) * 100 * paid) / shares[MID]!);
+    expect(mid.bp).toBe(landed(mid, Math.floor((result.coverBp * keepBp) / 10_000)));
+    const none = lockWithMid(0).hits.find((h) => h.nationId === MID)!;
+    const full = lockWithMid(100).hits.find((h) => h.nationId === MID)!;
+    expect(full.bp).toBeLessThan(mid.bp);
+    expect(mid.bp).toBeLessThan(none.bp);
+  });
+
+  it('paying more than its share earns no extra cover', () => {
+    const { result, hits } = lockWithMid(100);
+    const hi = hits.find((h) => h.nationId === HI)!;
+    expect(hi.bp).toBe(landed(hi, result.coverBp));
+    expect(result.coverBp).toBeLessThanOrEqual(TUNABLES.poolCoverMaxPct.value * 100);
+  });
+
+  it('nonPayerCoverPct 100 is the old rule: everyone is covered alike; 0 leaves a non-payer with no cover', () => {
+    const old = withTunable('nonPayerCoverPct', 100, () => lockWithMid(0));
+    for (const h of old.hits) expect(h.bp).toBe(landed(h, old.result.coverBp));
+    const none = withTunable('nonPayerCoverPct', 0, () => lockWithMid(0));
+    const lo = none.hits.find((h) => h.nationId === LO)!;
+    expect(lo.bp).toBe(lo.bpUnpooled);
+    const hi = none.hits.find((h) => h.nationId === HI)!;
+    expect(hi.bp).toBe(landed(hi, none.result.coverBp));
+  });
+
+  it('grades the pool, not the nation: cover, outcome and contributors do not depend on the rule', () => {
+    const a = withTunable('nonPayerCoverPct', 0, () => lockWithMid(50));
+    const b = withTunable('nonPayerCoverPct', 100, () => lockWithMid(50));
+    expect(a.result).toEqual(b.result);
+    expect(a.hits.map((h) => h.bpUnpooled)).toEqual(b.hits.map((h) => h.bpUnpooled));
+  });
+
+  it('ownCoverBp: a straight line from the floor to the pool\'s whole cover, and a nation with no share keeps all of it', () => {
+    withTunable('nonPayerCoverPct', 50, () => {
+      expect(ownCoverBp(8_000, 0, 100)).toBe(4_000);
+      expect(ownCoverBp(8_000, 50, 100)).toBe(6_000);
+      expect(ownCoverBp(8_000, 100, 100)).toBe(8_000);
+      expect(ownCoverBp(8_000, 250, 100)).toBe(8_000);
+      expect(ownCoverBp(8_000, 0, 0)).toBe(8_000);
+      expect(ownCoverBp(0, 0, 100)).toBe(0);
+    });
+  });
+
+  it('a nation on the default policies is never touched: its monthly contribution and reciprocal rule pay its share', () => {
+    const { events } = runTo(world(), DEADLINE + 1);
+    const result = of(events, 'crisisLocked')[0]!.result;
+    expect(result.freeRiders).toEqual([]);
+    for (const h of of(events, 'crisisHit').map((x) => x.hit)) expect(h.bp).toBe(landed(h, result.coverBp));
+  });
+
+  it('a nation that paid its share into the monthly contribution and answers no is still fully covered', () => {
+    // 10% of income a month into the adaptation pool pays HI's share several times over before the appeal opens.
+    let s = world(SILENT);
+    s = step(s, [cmd(HI, 1, 'setPolicy', { crisisRule: 'none', contributionBp: 1_000, contributionTo: 'adaptation' })]).state;
+    const opened = runTo(s, OPEN + 1);
+    const crisis = opened.state.crises[0]!;
+    const filler = cmd(MID, OPEN + 1, 'contribute', { pool: 'adaptation', amount: crisis.target });
+    const r = runTo(opened.state, DEADLINE + 1, { [OPEN + 1]: [filler] });
+    const result = of(r.events, 'crisisLocked')[0]!.result;
+    const hi = of(r.events, 'crisisHit').map((x) => x.hit).find((h) => h.nationId === HI)!;
+    expect(result.contributors).toContain(HI);
+    expect(hi.bp).toBe(landed(hi, result.coverBp));
+  });
+
+  it('a pandemic works the same way: late money counts at face value for the payer, and a non-payer keeps only part of the cover', () => {
+    const s = (() => {
+      for (let seed = 1; seed < 400; seed++) {
+        let w = world({ ...SILENT, resilienceFloor: 0 }, seed);
+        for (let t = 0; t < 60; t++) {
+          w = step(w, []).state;
+          if (w.crises.some((c) => c.kind === 'pandemic')) return w;
+        }
+      }
+      throw new Error('no pandemic in 400 seeds');
+    })();
+    const p = s.crises.find((c) => c.kind === 'pandemic')!;
+    const fill = cmd(HI, s.tick, 'contribute', { pool: 'health', amount: p.target * 3 });
+    const pay = cmd(MID, s.tick, 'contribute', { pool: 'health', amount: p.shares[MID]! });
+    const r = runTo(s, p.deadlineTick + 1, { [s.tick]: [fill, pay] });
+    const result = of(r.events, 'crisisLocked').find((l) => l.result.kind === 'pandemic')!.result;
+    expect(result.coverBp).toBeGreaterThan(0);
+    const hits = of(r.events, 'crisisHit').map((h) => h.hit).filter((h) => h.kind === 'pandemic');
+    const mid = hits.find((h) => h.nationId === MID)!;
+    const lo = hits.find((h) => h.nationId === LO)!;
+    expect(mid.bp).toBe(landed(mid, result.coverBp));
+    expect(lo.bp).toBe(landed(lo, Math.floor((result.coverBp * KEEP()) / 100)));
+  });
+
+  it('the recap tells a nation that took more damage than the pool\'s cover why', () => {
+    const opened = runTo(world({ ...SILENT, resilienceFloor: 0 }), OPEN + 1);
+    const crisis = opened.state.crises[0]!;
+    const before = viewFor(opened.state, LO);
+    const r = runTo(opened.state, DEADLINE + 1, { [OPEN + 1]: [cmd(HI, OPEN + 1, 'contribute', { pool: 'adaptation', amount: crisis.target * 2 })] });
+    const seen = r.events.filter((e) => e.audience.length === 0 || e.audience.includes(LO));
+    const line = buildRecap(before, viewFor(r.state, LO), seen).lines.find((l) => l.kind === 'crisis')!;
+    expect(line.text).toContain(`only ${KEEP()}% of the pool's cover reached you`);
   });
 });
 

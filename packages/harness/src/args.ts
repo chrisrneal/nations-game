@@ -15,11 +15,11 @@ interface FlagSpec {
 }
 
 const FLAGS: Record<HarnessCommand, FlagSpec> = {
-  play: { numbers: ['games', 'ticks', 'seed'], strings: ['out'], switches: [] },
+  play: { numbers: ['games', 'ticks', 'seed'], strings: ['out', 'set'], switches: [] },
   determinism: { numbers: ['seeds', 'ticks'], strings: [], switches: ['no-browser'] },
   bench: { numbers: ['ticks', 'runs'], strings: [], switches: ['no-browser'] },
-  gate1: { numbers: ['games', 'seed', 'ranges', 'ticks'], strings: ['out'], switches: [], positive: ['ranges'] },
-  gate2: { numbers: ['games', 'seed', 'ticks', 'absence'], strings: ['out'], switches: [], positive: ['games'] },
+  gate1: { numbers: ['games', 'seed', 'ranges', 'ticks'], strings: ['out', 'set'], switches: [], positive: ['ranges'] },
+  gate2: { numbers: ['games', 'seed', 'ticks', 'absence'], strings: ['out', 'set'], switches: [], positive: ['games'] },
   predictions: { numbers: [], strings: ['files', 'dir', 'out'], switches: [] },
 };
 

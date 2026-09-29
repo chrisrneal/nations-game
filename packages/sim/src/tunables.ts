@@ -382,6 +382,12 @@ export const TUNABLES = {
     max: 100,
     note: 'Phase 2 prompt 09: share of its own fair share a nation must pay in a round to count as a contributor for the bonuses, so one token Credit cannot farm them.',
   },
+  nonPayerCoverPct: {
+    value: 50,
+    min: 0,
+    max: 100,
+    note: 'Prompt 14: percent of the pool\'s cover that reaches a nation that paid none of its own share; the cover scales in a straight line up to all of it at a full share (RULES 4.3 rule 1). 100 is the old rule, where paying was optional and free-riding cost nothing (GATE-2 F3). Tuning (seeds 1001-1400 only): 100 (old rule) -> 50. 75 leaves the free-rider at 1.61x fair share; 25 and 0 only push the cooperator\'s share of tops higher.',
+  },
   defaultContributionBp: {
     value: 110,
     min: 0,
@@ -553,7 +559,7 @@ export const TUNABLES = {
     value: 70,
     min: 40,
     max: 100,
-    note: 'A hard bargainer skips a pledge once the pool is this percent funded, because the pool pays out by exposure anyway (RULES 4.3). 100 means it never free-rides.',
+    note: 'A hard bargainer skips a pledge once the pool is this percent funded. Its monthly contribution still pays part of its share, which is what keeps its cover (RULES 4.3 rule 1). 100 means it never free-rides.',
   },
 } as const satisfies Readonly<Record<string, Tunable>>;
 

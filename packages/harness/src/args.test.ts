@@ -55,4 +55,11 @@ describe('harness command line', () => {
     expect(parseArgs(['predictions', '--files', 'a.json,b.json', '--dir', 'saves'])).toMatchObject({ command: 'predictions', strings: { files: 'a.json,b.json', dir: 'saves' } });
     expect(() => parseArgs(['predictions', '--games', '3'])).toThrow(/Unknown flag --games for "predictions"/);
   });
+  it('reads --set for the commands that play games, and rejects it elsewhere', () => {
+    expect(parseArgs(['gate2', '--games', '50', '--set', 'nonPayerCoverPct=40'])).toMatchObject({ command: 'gate2', strings: { set: 'nonPayerCoverPct=40' } });
+    expect(parseArgs(['gate1', '--set', 'a=1,b=2']).strings).toEqual({ set: 'a=1,b=2' });
+    expect(parseArgs(['play', '--set', 'a=1']).strings).toEqual({ set: 'a=1' });
+    expect(() => parseArgs(['bench', '--set', 'a=1'])).toThrow(/Unknown flag --set for "bench"/);
+    expect(() => parseArgs(['gate2', '--set'])).toThrow(/--set needs a value/);
+  });
 });

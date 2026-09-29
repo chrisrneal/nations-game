@@ -28,7 +28,8 @@ import { TUNABLES } from './tunables.ts';
  * a crisis appeal a nation has not answered is answered by its standing
  * policy on the deadline tick; a pledge not yet paid is collected on its
  * deadline tick if the Credit is there, and broken if not. Damage lands on
- * each nation by its own exposure, whoever paid (RULES 4.3 rule 1).
+ * each nation by its own exposure, and the pool's cover reaches it in
+ * proportion to how much of its own share it paid (RULES 4.3 rule 1).
  *
  * Works on the step's mutable draft (`CrisisContext`), never on input State.
  */
@@ -364,7 +365,8 @@ export function answerAppeals(ctx: CrisisContext): void {
  * Locks every crisis whose deadline is this tick (RULES 4.3): spends the pool
  * up to its target (late pandemic money at `lateContributionEffectPct`), sets
  * the cover, grades the outcome, rewards contributors, and schedules each
- * nation's damage by its own exposure and resilience.
+ * nation's damage by its own exposure and resilience, less the share of the
+ * pool's cover its own payments earned (`ownCoverBp`).
  */
 export function lockCrises(ctx: CrisisContext): void {
   for (const crisis of ctx.crises.filter((c) => c.deadlineTick <= ctx.tick)) {
@@ -435,7 +437,7 @@ export function lockCrises(ctx: CrisisContext): void {
         crisisId: crisis.id,
         kind: crisis.kind,
         nationId: id,
-        bp: mulDiv(bpUnpooled, 10_000 - coverBp, 10_000),
+        bp: mulDiv(bpUnpooled, 10_000 - ownCoverBp(coverBp, pool.round[id] ?? 0, crisis.shares[id] ?? 0), 10_000),
         bpUnpooled,
         fromTick: ctx.tick,
         toTick: ctx.tick + lasts - 1,
@@ -444,6 +446,20 @@ export function lockCrises(ctx: CrisisContext): void {
       ctx.events.push({ tick: ctx.tick, type: 'crisisHit', payload: { hit }, audience: [id] });
     }
   }
+}
+
+/**
+ * How much of a pool's cover reaches one nation (RULES 4.3 rule 1): all of it
+ * for a nation that paid its whole share, `nonPayerCoverPct`% of it for one
+ * that paid nothing, a straight line between. Paying more than the share earns
+ * nothing extra, and a nation that was asked for nothing keeps all of it.
+ * Basis points in, basis points out.
+ */
+export function ownCoverBp(poolCoverBp: number, paid: number, share: number): number {
+  if (share <= 0) return poolCoverBp;
+  const floorBp = TUNABLES.nonPayerCoverPct.value * 100;
+  const keepBp = floorBp + mulDiv(10_000 - floorBp, Math.min(Math.max(0, paid), share), share);
+  return mulDiv(poolCoverBp, keepBp, 10_000);
 }
 
 /**

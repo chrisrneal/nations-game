@@ -31,6 +31,13 @@
  * - reciprocal cooperators beat free-riders: over the pairs, the median of
  *   cooperator finalScore / free-rider finalScore - 1 is above 0, and the
  *   cooperator scores higher in more than half the pairs.
+ * - free-riding must not pay (prompt 14, fixed before its graded run): the
+ *   free-rider tops in at most 1.5x its fair share and below the cooperator's
+ *   share; the cooperator scores higher in at least 70% of the pairs with a
+ *   median gap of at least +3%; the stealth spoiler's median finalScore is
+ *   strictly below the cooperator's. The cooperator's own share of tops is
+ *   reported next to them and not graded: whether it counts under the 1.5x
+ *   line is the owner's ruling (GATE-2 criterion 2).
  * - a trailing nation gains nothing by sabotage: the spoiler's median
  *   finalScore is strictly below the cooperator's (RULES 5.3), paired.
  * - 24-hour absence: over every absence run, nothing addressed to the absent
@@ -379,6 +386,9 @@ export function runGate2(options: Gate2Options): Gate2Report {
   const totalAssigned = Object.values(archetypes).reduce((s, a) => s + a.assigned, 0);
   const ratio = (a: { assigned: number; tops: number }): number => (a.assigned === 0 || games <= 0 ? 0 : a.tops / games / (a.assigned / totalAssigned));
   const worstArchetype = Object.entries(archetypes).sort((a, b) => ratio(b[1]) - ratio(a[1]))[0] ?? ['', { assigned: 0, tops: 0 }];
+  const archetypeRatio = (name: string): number => ratio(archetypes[name] ?? { assigned: 0, tops: 0 });
+  const freeRiderShare = archetypeRatio('freeRider');
+  const cooperatorShare = archetypeRatio('trader');
   const gap = (p: PairScore): number => p.coop / Math.max(1, p.other) - 1;
   const coopMedian = median(freeRiderPairs.map(gap));
   const coopAhead = freeRiderPairs.length === 0 ? 0 : freeRiderPairs.filter((p) => p.coop > p.other).length / freeRiderPairs.length;
@@ -418,14 +428,20 @@ export function runGate2(options: Gate2Options): Gate2Report {
     { name: 'Broken pledges (of all pledges resolved)', value: rate(crises.pledgesBroken, crises.pledgesBroken + crises.pledgesHonoured), passLine: 'info', pass: null },
     { name: 'Retaliation rate (reciprocal answers scaled down after a short round)', value: rate(crises.retaliations, crises.reciprocalAnswers), passLine: 'info', pass: null },
     { name: `Most winning archetype (${worstArchetype[0]}), tops / fair share`, value: `${ratio(worstArchetype[1]).toFixed(2)}x`, passLine: '<= 1.50x', pass: ratio(worstArchetype[1]) <= 1.5 },
+    { name: 'Free-rider tops / fair share (prompt 14)', value: `${freeRiderShare.toFixed(2)}x`, passLine: '<= 1.50x', pass: freeRiderShare <= 1.5 },
+    { name: 'Free-rider tops below the cooperator (prompt 14)', value: `${freeRiderShare.toFixed(2)}x vs ${cooperatorShare.toFixed(2)}x`, passLine: 'free-rider < cooperator', pass: freeRiderShare < cooperatorShare },
+    { name: 'Cooperator\'s own tops / fair share (whether it counts under 1.5x is the owner\'s ruling)', value: `${cooperatorShare.toFixed(2)}x`, passLine: 'info', pass: null },
     { name: `Most frequent top scorer (${maxTop[0]})`, value: pct(maxTop[1]), passLine: `<= ${pct(2 * fairShare)} (2x fair share)`, pass: maxTop[1] <= 2 * fairShare },
     { name: 'Reciprocal cooperator vs free-rider, same nation (median finalScore gap)', value: signed(coopMedian), passLine: '> 0', pass: coopMedian > 0 },
     { name: 'Pairs where the cooperator scores higher', value: pct(coopAhead), passLine: '> 50%', pass: coopAhead > 0.5 },
+    { name: 'Cooperator ahead of the free-rider (prompt 14): share of pairs', value: pct(coopAhead), passLine: '>= 70%', pass: coopAhead >= 0.7 },
+    { name: 'Cooperator vs free-rider median gap (prompt 14)', value: signed(coopMedian), passLine: '>= +3%', pass: coopMedian >= 0.03 },
     { name: 'Trailing nation: spoiler vs cooperator from mid-game (median finalScore)', value: `${spoilerMedian.toFixed(0)} vs ${coopSpoiler.toFixed(0)}`, passLine: 'spoiler strictly lower', pass: spoilerMedian < coopSpoiler },
     { name: 'Spoiler pairs where sabotage paid', value: pct(spoilerAhead), passLine: 'info', pass: null },
     { name: 'Spoiler pairs where it sank a shared goal (fewer crises at full cover)', value: pct(sank), passLine: 'info', pass: null },
     { name: 'World multiplier change from one spoiler (median)', value: `${multDrop >= 0 ? '+' : ''}${multDrop.toFixed(3)}`, passLine: 'info', pass: null },
     { name: 'Trailing nation: stealth spoiler (keeps trading) vs cooperator from mid-game (median finalScore)', value: `${stealthMedian.toFixed(0)} vs ${coopSpoiler.toFixed(0)}`, passLine: 'info', pass: null },
+    { name: 'Stealth spoiler strictly below the cooperator (prompt 14): median finalScore from mid-game', value: `${stealthMedian.toFixed(0)} vs ${coopSpoiler.toFixed(0)}`, passLine: 'stealth spoiler strictly lower', pass: stealthMedian < coopSpoiler },
     { name: 'Stealth spoiler pairs where sabotage paid (scores higher; same or higher)', value: `${pct(stealthAhead)}; ${pct(stealthLevel)}`, passLine: 'info', pass: null },
     {
       name: 'Stealth spoiler rank change vs cooperator (better / worse; median rank)',
