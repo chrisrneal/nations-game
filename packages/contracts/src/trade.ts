@@ -1,6 +1,7 @@
 import type { Command } from './command.ts';
 import type { ControllerSlot, NationId, Tick } from './nation.ts';
 import type { EconomyReport, ResourceAmount, StandingPolicy } from './economy.ts';
+import type { AppealAnswer, Crisis, CrisisHit, CrisisResult, CrisisRule, Pledge, PoolKind } from './crisis.ts';
 
 /**
  * A bilateral trade offer: a State object with an expiry tick, never a
@@ -59,6 +60,15 @@ export type PingCommand = Command<'ping', { readonly target: NationId }>;
 /** Seam 7: hand the nation to the caretaker AI, or take it back. */
 export type SetControllerCommand = Command<'setController', { readonly controller: ControllerSlot }>;
 
+/** Pay Credit into a pool now. Counts towards the nation's open pledges to that pool and answers its open appeal. */
+export type ContributeCommand = Command<'contribute', { readonly pool: PoolKind; readonly amount: number }>;
+/** Promise Credit to a pool by `deadlineTick` (at most `maxPledgeTicks` ahead). Answers the pool's open appeal. */
+export type PledgeCommand = Command<'pledge', { readonly pool: PoolKind; readonly amount: number; readonly deadlineTick: Tick }>;
+/** Take back an open pledge. It counts as broken. */
+export type WithdrawPledgeCommand = Command<'withdrawPledge', { readonly pledgeId: number }>;
+/** Answer an open crisis appeal with no. Visible to every nation, like any answer. */
+export type DeclineAppealCommand = Command<'declineAppeal', { readonly crisisId: number }>;
+
 export type GameCommand =
   | PingCommand
   | SetControllerCommand
@@ -68,7 +78,11 @@ export type GameCommand =
   | CounterOfferCommand
   | WithdrawOfferCommand
   | SetPolicyCommand
-  | FundResilienceCommand;
+  | FundResilienceCommand
+  | ContributeCommand
+  | PledgeCommand
+  | WithdrawPledgeCommand
+  | DeclineAppealCommand;
 
 /**
  * Event payloads, by event type. Trade events go to both parties only; the
@@ -90,3 +104,56 @@ export interface EconomyEventPayloads {
   readonly policyChanged: { readonly nationId: NationId; readonly policy: StandingPolicy };
 }
 export type EconomyEventType = keyof EconomyEventPayloads;
+
+/**
+ * Crisis, pledge and explanation event payloads (RULES 4). Crisis, appeal,
+ * contribution and pledge events are public, because RULES 4.3 wants
+ * free-riding visible; damage goes to the nation hit only; an explanation goes
+ * to the nation that acted and the nation its decision concerns.
+ */
+export interface CrisisEventPayloads {
+  readonly crisisOpened: { readonly crisis: Crisis };
+  /** A nation answered an appeal. `rule` is the standing policy that answered for it, if any. */
+  readonly appealAnswered: { readonly crisisId: number; readonly nationId: NationId; readonly share: number; readonly rule: CrisisRule | null } & AppealAnswer;
+  readonly contributed: { readonly nationId: NationId; readonly pool: PoolKind; readonly amount: number; readonly late: boolean; readonly by: 'command' | 'policy' | 'standing' };
+  readonly pledgeMade: { readonly pledge: Pledge };
+  /** Paid in full by the deadline; `by: 'policy'` when the rest was collected automatically on the deadline tick. */
+  readonly pledgeHonoured: { readonly pledge: Pledge; readonly by: 'command' | 'policy' };
+  /** Withdrawn, or unpaid on the deadline tick. Every other nation trusts the pledger less. */
+  readonly pledgeBroken: { readonly pledge: Pledge; readonly reason: 'withdrawn' | 'unpaid' };
+  readonly crisisLocked: { readonly result: CrisisResult };
+  readonly crisisHit: { readonly hit: CrisisHit };
+  /**
+   * Why a nation decided something, in sentences built from numbers (RULES
+   * 7.4). Sent by the sim for every automatic answer (`by: 'policy'`), and
+   * relayed from a command's `why` (`by: 'command'`, e.g. an AI nation).
+   */
+  readonly explanation: {
+    readonly nationId: NationId;
+    /** The command type, or the automatic answer: 'answerOffer', 'answerAppeal', 'collectPledge'. */
+    readonly decision: string;
+    /** The offer, crisis or pledge it concerns, if any. */
+    readonly subject: number | null;
+    readonly reasons: readonly string[];
+    readonly by: 'command' | 'policy';
+  };
+}
+export type CrisisEventType = keyof CrisisEventPayloads;
+
+/** One line of an away recap: what kind of news it is, and one plain sentence with numbers. */
+export interface RecapLine {
+  readonly kind: 'score' | 'crisis' | 'pledge' | 'trade' | 'trust' | 'policy';
+  readonly text: string;
+}
+
+/**
+ * What happened to one nation while it was away (RULES 8.1, the away recap
+ * card): a handful of plain sentences, most important first, short enough to
+ * read in under a minute (Gate 2's 24-hour absence test).
+ */
+export interface Recap {
+  readonly nationId: NationId;
+  readonly fromTick: Tick;
+  readonly toTick: Tick;
+  readonly lines: readonly RecapLine[];
+}

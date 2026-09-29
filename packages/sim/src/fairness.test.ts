@@ -28,7 +28,8 @@ const Y = id('yy');
 const Z = id('zz');
 
 // 100 M people each, so food demand is 100 a month and an index of 50 is balanced.
-const base = { ...NEUTRAL_ENDOWMENT, population: 100_000_000, gdpPppBn: 1_200 };
+// No crisis exposure, so crisis damage (RULES 4) never blurs these economy checks.
+const base = { ...NEUTRAL_ENDOWMENT, population: 100_000_000, gdpPppBn: 1_200, climateExposure: 0, pandemicPreparedness: 100 };
 /** X exports food; Y is a small food importer; Z a large one; R a background region short of food. */
 const ROSTER: RosterEntry[] = [
   { id: 'xx', name: 'X', endowment: { ...base, foodSelfSufficiency: 100 } },

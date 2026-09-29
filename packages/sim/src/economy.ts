@@ -223,6 +223,8 @@ export function baselineOutputFor(e: NationEndowment, baselineE4: number, cover:
 export interface EconomyTickResult {
   readonly nation: NationRecord;
   readonly ledger: WorldLedger;
+  /** Output after shortfalls and before crisis damage: what crisis losses are measured against. */
+  readonly preCrisisOutput: number;
 }
 
 /**
@@ -231,6 +233,8 @@ export interface EconomyTickResult {
  * then grow capacity and baseline at the baseline rate and refresh the public
  * flows for the next tick. Every unit is accounted for in the ledger.
  * `cover` is this month's structural cover, for the baseline (RULES 2.8).
+ * `crisisBp` is this month's crisis damage (RULES 4), an output penalty on
+ * top of the shortfall penalty; the baseline never expects it.
  */
 export function economyTick(
   nation: NationRecord,
@@ -238,6 +242,7 @@ export function economyTick(
   ledger: WorldLedger,
   tradeGainCbp: number,
   cover: StructuralCover,
+  crisisBp = 0,
 ): EconomyTickResult {
   const pub = nation.public;
   const priv = nation.private;
@@ -251,7 +256,9 @@ export function economyTick(
   const penaltyBp = shortfallPenaltyBp(unmetFood, pub.food, unmetEnergy, pub.energy);
 
   const potential = potentialOutput(e, priv.capacityE4);
-  const output = mulDiv(potential, 10_000 - penaltyBp, 10_000);
+  const preCrisisOutput = mulDiv(potential, 10_000 - penaltyBp, 10_000);
+  const crisis = Math.max(0, Math.min(10_000, crisisBp));
+  const output = mulDiv(preCrisisOutput, 10_000 - crisis, 10_000);
   let credit = priv.stocks.credit + output;
 
   const max = TUNABLES.resilienceMax.value;
@@ -280,9 +287,12 @@ export function economyTick(
     income: output,
     resilienceSpent,
     tradeGainCbp,
+    crisisPct: Math.floor(crisis / 100),
+    contributed: 0,
   };
 
   return {
+    preCrisisOutput,
     nation: {
       ...nation,
       public: {

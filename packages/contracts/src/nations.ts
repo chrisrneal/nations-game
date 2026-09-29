@@ -9,6 +9,7 @@ import type {
   Stocks,
 } from './economy.ts';
 import type { TradeOffer } from './trade.ts';
+import type { CrisesView } from './crisis.ts';
 import type { View } from './view.ts';
 
 /**
@@ -44,6 +45,11 @@ export interface NationPrivate {
   readonly last: EconomyReport;
   readonly tradesSettled: number;
   readonly reneges: number;
+  /** Pledges this nation kept and broke, over the game. */
+  readonly pledgesHonoured: number;
+  readonly pledgesBroken: number;
+  /** Credit this nation has paid into the crisis pools over the game. */
+  readonly pooledTotal: number;
 }
 
 export interface NationRecord {
@@ -73,10 +79,20 @@ export interface NationScore {
   readonly finalScore: number;
 }
 
+/** The four collective goals of RULES 5.2, each in basis points (10,000 = fully met). */
+export interface CollectiveGoals {
+  readonly climateAvoidedBp: number;
+  readonly pandemicAvoidedBp: number;
+  readonly atBaselineBp: number;
+  readonly deficitsMetBp: number;
+}
+
 /** The world's scoreboard as every nation sees it. */
 export interface ScoresView {
   /** Collective multiplier x 10,000 (RULES 5.2), the same for every nation. */
   readonly multiplierBp: number;
+  /** The four world goals behind it, each 0-10,000 (RULES 5.2). */
+  readonly goals: CollectiveGoals;
   /** Every playable nation, in the world's nation order. */
   readonly nations: readonly NationScore[];
 }
@@ -97,6 +113,8 @@ export interface NationView extends View {
   readonly prices: Prices;
   /** The sim's own scoreboard, so no interface or AI recomputes a score. */
   readonly scores: ScoresView;
+  /** Pools, open crisis appeals, recent results and open pledges (public), plus this nation's own damage. */
+  readonly crises: CrisesView;
   /**
    * The value of every tunable, by id: the public rules of this game. An AI
    * reads its numbers here, never from its own constants, so tuning one file

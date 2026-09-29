@@ -24,6 +24,18 @@ export const TUNABLES = {
     max: 32,
     note: 'Caps one nation\'s intent per tick so a buggy or hostile client cannot flood a step; a real player needs a handful at most.',
   },
+  crisisHistoryKept: {
+    value: 12,
+    min: 4,
+    max: 24,
+    note: 'Phase 2 prompt 09: locked crises kept in State and the View for crisis cards and recaps. Not balance: a 1,000-month stress run must not grow State without end.',
+  },
+  recapMaxLines: {
+    value: 6,
+    min: 3,
+    max: 10,
+    note: 'Phase 2 prompt 09: most lines an away recap shows. Six short sentences read in well under a minute (Gate 2 absence test).',
+  },
 
   // Time and scale
   tickMonths: {
@@ -256,6 +268,18 @@ export const TUNABLES = {
     max: 3,
     note: 'Drift back towards baseTrust, so memory fades (the roadmap\'s decaying belief).',
   },
+  trustPerPledgeHonoured: {
+    value: 2,
+    min: 0,
+    max: 6,
+    note: 'Phase 2 prompt 09: trust every other nation gains in a pledger who pays in full by the deadline (RULES 4.4). Small, like a completed trade, because keeping a promise is expected.',
+  },
+  trustPerPledgeBroken: {
+    value: 12,
+    min: 5,
+    max: 30,
+    note: 'Phase 2 prompt 09: trust every other nation loses in a pledger who withdraws or cannot pay (RULES 4.4). Matches trustPerRenege: six kept pledges repair one broken.',
+  },
 
   // Climate (Phase 2)
   climateEventIntervalTicks: {
@@ -281,6 +305,18 @@ export const TUNABLES = {
     min: 1,
     max: 12,
     note: 'Ticks over which damage is felt. Six months is what makes climate the slow crisis.',
+  },
+  climateFirstOpenTick: {
+    value: 3,
+    min: 0,
+    max: 11,
+    note: 'Phase 2 prompt 09: month of each world year in which the climate appeal opens (tick modulo climateEventIntervalTicks). 3 lets the last event of a 60-month game lock and land inside the game.',
+  },
+  crisisResponseTicks: {
+    value: 3,
+    min: 1,
+    max: 6,
+    note: 'Phase 2 prompt 09: months from a climate appeal opening to its pool locking. Long enough for an absent player\'s policy to answer; short enough that the appeal is news.',
   },
 
   // Pandemic (Phase 2)
@@ -333,6 +369,36 @@ export const TUNABLES = {
     min: 0,
     max: 6,
     note: 'Trust gained with every other contributor.',
+  },
+  crisisPartialPct: {
+    value: 50,
+    min: 25,
+    max: 90,
+    note: 'Phase 2 prompt 09: share of the target, in percent, a pool must reach for a crisis to count as a partial success rather than a failure. Reaching the whole target is a success (RULES 4.3).',
+  },
+  contributorMinSharePct: {
+    value: 50,
+    min: 10,
+    max: 100,
+    note: 'Phase 2 prompt 09: share of its own fair share a nation must pay in a round to count as a contributor for the bonuses, so one token Credit cannot farm them.',
+  },
+  defaultContributionBp: {
+    value: 20,
+    min: 0,
+    max: 200,
+    note: 'Phase 2 prompt 09: starting position of the monthly contribution dial (RULES 8.2 dial 3), in basis points of income, split between the pools. Steady funding is what fills the health pool before a pandemic.',
+  },
+  reciprocalMatchPct: {
+    value: 50,
+    min: 25,
+    max: 100,
+    note: 'Phase 2 prompt 09: how much of its target the world must have met in a pool\'s last round, in percent, for a reciprocal policy to pay its full share this round. Below it, it pays in proportion.',
+  },
+  maxPledgeTicks: {
+    value: 12,
+    min: 3,
+    max: 24,
+    note: 'Phase 2 prompt 09: furthest ahead a pledge deadline may be set. A year: long enough to promise for the next climate event, short enough that a promise is soon tested.',
   },
 
   // Scoring

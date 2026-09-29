@@ -17,4 +17,11 @@ export interface Command<TType extends string = string, TPayload = unknown> {
   readonly tick: Tick;
   readonly type: TType;
   readonly payload: TPayload;
+  /**
+   * Optional reasons, built from numbers (RULES 7.4): why an AI or caretaker
+   * sent this. The sim checks and relays them as an `explanation` event to the
+   * nations the command concerns, so a player can read why the AI did it.
+   * Never used to decide anything.
+   */
+  readonly why?: readonly string[];
 }
