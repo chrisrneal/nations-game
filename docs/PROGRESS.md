@@ -40,6 +40,37 @@ Suite: `npm run harness -- gate2` (200 seeded games with random archetypes, coop
 
 ## Session log
 
+### 2026-09-29 - prompt 10, AI nations (lane A, plus docs/AI_DESIGN.md)
+**Changed.** packages/ai now has a layered AI (`AiDirector`). Perception uses only the
+nation's own View and the events it may see. It remembers deals kept and broken,
+crisis appeals paid and skipped, and broken pledges, and the memory fades. Personality
+comes from each nation's data row; the RULES 7 worked examples are reproduced exactly.
+Goals are re-scored every 3 months, staggered across nations. Partners are scored
+using trust and seeded noise. It accepts, counters or rejects, at prices that move
+with trust, and answers every real crisis appeal (merged from prompt 09) itself, by
+style. Every command carries its explanation as the command's `why`, which the sim
+relays to the nations concerned ("declined: you broke the deal in month 1 (95 energy
+for 9 credit); no trade with you until month 9"). Strict nations retaliate the next
+month and resume after 6 months. Forgiving nations let one offence pass. Hard
+bargainers charge instead of refusing. Repeat offences escalate. 13 AI tunables were
+added to tunables.ts and RULES 11; `aiExploiterMarkupPct` was tuned 20 -> 0 on seeds
+1001-1400. The AI's Gate 2 check was graded once on seeds 1-200:
+- Pass: crisis success 57.9%, cooperators beat free-riders (69% of pairs), exploiters
+  and betrayers, 53 of 53 broken deals answered inside the window, every one of
+  606,676 commands explained, peak 1,333 of 4,000 budget units, 0 invalid commands,
+  deterministic including save + AI snapshot reload.
+- Fail, as with the greedy trader in prompt 09: the free-rider tops 1.64x fair share
+  (greedy 2.21x) and Saudi Arabia 24.0% (greedy 23.5%).
+
+About 3 ms a month for all 17 nations on a 4x-throttled Chromium. 39 AI tests. No new
+dependency.
+**How to see it.** Not on the phone yet: the app and the harness still run the
+Phase 1 greedy trader until lanes P and H switch to `AiDirector` (docs/AI_DESIGN.md
+section 3). Read docs/AI_DESIGN.md, or run
+`AI_GATE2_GAMES=200 npx vitest run packages/ai/src/gate2.test.ts` for the table.
+**Left.** Wiring into the app and harness, saving AI memory with the game, and owner
+rulings on the archetype line and the top scorer. See docs/GAPS.md, prompt 10.
+
 ### 2026-09-29 - Phase 2 prompt 09, Crisis, trust and scoring engine (lanes C, S, H)
 **Changed.** Phase 2 has started. The world now has two crises. A climate appeal
 opens once a world year and gets worse each year; a pandemic can fire any month.
@@ -65,6 +96,7 @@ cards, pledge buttons and recap card are lane U's next prompt.
 **Left.** Owner rulings on the two failing lines; crisis screens and the recap
 card (lane U); the AI pledging, contributing and explaining itself (lane A). See
 docs/GAPS.md, P2-09.
+
 
 ### 2026-09-28 - Gate 1 closed (owner decision)
 **Changed.** The owner waived Gate 1 criterion 5 (top scorer) in writing and marked

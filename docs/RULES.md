@@ -842,6 +842,19 @@ wherever they feed economy maths.
 | `aiExploiterExportThreshold` | 30 | 10 | 50 | Export concentration at or above which an AI will bargain hard |
 | `aiExploiterImportCeiling` | 40 | 20 | 60 | Import dependence below which hard bargaining is safe for it |
 | `aiStockBufferTicks` | 2 | 1 | 6 | Months of own demand the greedy trader keeps in stock before it sells a surplus or stops buying. Higher is safer and trades less |
+| `aiRetaliationWindowTicks` | 2 | 1 | 6 | Latest tick, counted from a broken deal, by which a strict reciprocator has visibly retaliated (prompt 10, docs/AI_DESIGN.md) |
+| `aiPunishTicks` | 6 | 2 | 24 | Months of refused trade after a broken deal, half that after a skipped crisis pledge |
+| `aiForgiveLimit` | 1 | 0 | 3 | Offences a forgiving AI lets pass inside its memory before it retaliates. Above 1 becomes farmable |
+| `aiMemoryDecayPct` | 4 | 1 | 20 | Percent of remembered grievance fading each tick; 4 halves a grudge in about 17 months |
+| `aiGrudgePerBreak` | 40 | 10 | 100 | Grievance for a deal broken against the AI; at or above this level a partner counts as an unforgiven offender |
+| `aiGrudgePerSkip` | 20 | 0 | 60 | Grievance for skipping a crisis pledge the AI paid into. 0 forgets crisis free-riding in trade |
+| `aiTrustPriceBpPerPoint` | 20 | 0 | 60 | Price generosity per point of trust above `baseTrust` (stricter below). At 20, trust 75 accepts 8% worse terms |
+| `aiCounterRangePct` | 20 | 0 | 40 | How far below its reservation price an offer still gets a counter rather than a rejection. 0 turns counters off |
+| `aiExploiterMarkupPct` | 0 | 0 | 50 | Markup a hard-bargaining AI asks over the reference price. Above `priceBandPct` its offers become hard bargains. Prompt 10 tuning (seeds 1001-1400 only): 20 -> 0 |
+| `aiBudgetUnitsPerTick` | 4000 | 500 | 20000 | Work units the whole AI roster may spend per tick; due nations that do not fit wait a tick |
+| `aiPledgeMaxIncomePct` | 10 | 0 | 30 | Most of one month's income an AI pledges to a crisis pool at once |
+| `aiConditionalPledgePct` | 50 | 20 | 80 | A strict reciprocator pledges its full fair share only when at least this percent of nations paid into the last crisis |
+| `aiFreeRideCoverPct` | 70 | 40 | 100 | A hard bargainer skips a pledge once the pool is this percent funded. 100 never free-rides |
 
 ### Engine limits
 
