@@ -12,6 +12,10 @@
  *     [--seed 1] [--ranges 1] [--ticks T]            random strategies plus paired runs; writes gate1.md.
  *     [--out DIR]                                    --ranges N plays N consecutive ranges of --games
  *                                                    seeds and reports each range and all of them pooled
+ *   npm run harness -- gate2 [--games 200]           the Gate 2 suite: random archetypes, crisis success,
+ *     [--seed 1] [--ticks T] [--absence 20]          defection and retaliation, win rates, cooperator vs
+ *     [--out DIR]                                    free-rider and spoiler pairs, the 24-hour absence
+ *                                                    test, and the Gate 1 suite again; writes gate2.md
  *   `--suite gate1` is the same as `gate1`. An unknown command or flag is an
  *   error (exit 2), never silently ignored.
  */
@@ -24,6 +28,7 @@ import { formatSummary, summarize, toCsv } from './metrics.ts';
 import { findChromium, runInBrowser } from './browser.ts';
 import { loadRoster } from './roster.ts';
 import { formatGate1, formatGate1Ranges, runGate1, runGate1Ranges } from './gate1.ts';
+import { formatGate2, runGate2 } from './gate2.ts';
 import { parseArgs, type HarnessCommand, type ParsedArgs } from './args.ts';
 
 let parsed: ParsedArgs;
@@ -112,5 +117,20 @@ async function gate1(): Promise<void> {
   if (!report.pass) process.exitCode = 1;
 }
 
-const commands: Record<HarnessCommand, () => Promise<void>> = { play, determinism, bench, gate1 };
+async function gate2(): Promise<void> {
+  const games = flag('games', 200);
+  const firstSeed = flag('seed', 1);
+  const ticks = parsed.numbers.ticks;
+  const outDir = resolve(option('out', join(fileURLToPath(new URL('..', import.meta.url)), 'out')));
+  const start = performance.now();
+  const report = runGate2({ games, firstSeed, roster, absenceSeeds: flag('absence', 20), ...(ticks === undefined ? {} : { ticks }) });
+  const text = [formatGate2(report), report.gate1 === null ? '' : formatGate1(report.gate1, `Gate 1 suite rerun, seeds ${firstSeed}-${firstSeed + games - 1} (top scorer waived)`).replace(/^## /gm, '### ').replace(/^# /, '## ')].join('\n');
+  mkdirSync(outDir, { recursive: true });
+  writeFileSync(join(outDir, 'gate2.md'), `${text}\n`);
+  console.log(text);
+  console.log(`wall time ${Math.round(performance.now() - start)} ms; wrote ${join(outDir, 'gate2.md')}`);
+  if (!report.pass) process.exitCode = 1;
+}
+
+const commands: Record<HarnessCommand, () => Promise<void>> = { play, determinism, bench, gate1, gate2 };
 await commands[parsed.command]();

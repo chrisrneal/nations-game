@@ -110,6 +110,12 @@ function crisisLine(r: CrisisResult, self: NationId, seen: readonly Event[]): st
     const months = h.toTick - h.fromTick + 1;
     return `your output -${(h.bp / 100).toFixed(1)}% for ${months} month${months === 1 ? '' : 's'}`;
   })();
-  const role = r.contributors.includes(self) ? 'you contributed' : r.freeRiders.includes(self) ? 'you did not contribute' : 'no share asked of you';
-  return `${label(r.kind)} crisis (severity ${r.severity}): pool met ${funded}% of target, ${r.outcome}; ${role} (${paid} paid at the appeal); ${damage}.`;
+  const role = r.contributors.includes(self)
+    ? paid > 0
+      ? `you paid ${paid} at the appeal`
+      : 'your monthly payments covered your share'
+    : r.freeRiders.includes(self)
+      ? 'you paid less than half your share'
+      : 'no share was asked of you';
+  return `${label(r.kind)} crisis (severity ${r.severity}): pool met ${funded}% of target, ${r.outcome}; ${role}; ${damage}.`;
 }

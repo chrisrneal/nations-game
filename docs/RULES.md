@@ -817,7 +817,7 @@ wherever they feed economy maths.
 | `contributorTrustBonus` | 2 | 0 | 6 | Trust gained with every other contributor |
 | `crisisPartialPct` | 50 | 25 | 90 | Share of the target, in percent, a pool must reach for a crisis to count as a partial success rather than a failure. Reaching full cover is a success (§4.3). Phase 2 prompt 09 |
 | `contributorMinSharePct` | 50 | 10 | 100 | Share of its own fair share a nation must pay in a round to count as a contributor for the bonuses, so one token Credit cannot farm them. Phase 2 prompt 09 |
-| `defaultContributionBp` | 20 | 0 | 200 | Starting position of the monthly contribution dial (§8.2 dial 3), in basis points of income, split between the pools. Steady funding is what fills the health pool before a pandemic. Phase 2 prompt 09 |
+| `defaultContributionBp` | 110 | 0 | 200 | Starting position of the monthly contribution dial (§8.2 dial 3), in basis points of income, split between the pools. Steady funding is what fills the health pool before a pandemic. Phase 2 prompt 09; gate2 tuning (seeds 1001-1100 only): 20 -> 110, the main lever on crisis success |
 | `reciprocalMatchPct` | 50 | 25 | 100 | How much of its target the world must have met in a pool's last round, in percent, for a reciprocal policy to pay its full share this round. Below it, it pays in proportion. Phase 2 prompt 09 |
 | `maxPledgeTicks` | 12 | 3 | 24 | Furthest ahead a pledge deadline may be set. A year: long enough to promise for the next climate event, short enough that a promise is soon tested. Phase 2 prompt 09 |
 

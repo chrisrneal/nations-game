@@ -18,7 +18,7 @@ import type {
 } from '@nations/contracts';
 import { mulDiv } from './economy.ts';
 import { randomInt } from './rng.ts';
-import { adjustTrust } from './trust.ts';
+import { adjustTrust, clampTrust } from './trust.ts';
 import { TUNABLES } from './tunables.ts';
 
 /**
@@ -54,6 +54,14 @@ export interface CrisisContext {
 }
 
 export const POOL_OF: Readonly<Record<CrisisKind, PoolKind>> = { climate: 'adaptation', pandemic: 'health' };
+
+/** The pools as a step's working copy: each pool's `round` map is copied once, then written in place during the step. */
+export function draftPools(pools: Readonly<Record<PoolKind, Pool>>): Record<PoolKind, Pool> {
+  return {
+    adaptation: { ...pools.adaptation, round: { ...pools.adaptation.round } },
+    health: { ...pools.health, round: { ...pools.health.round } },
+  };
+}
 
 function nation(ctx: CrisisContext, id: NationId): NationRecord {
   return ctx.nations[id] as NationRecord;
@@ -150,12 +158,9 @@ function payIntoPool(ctx: CrisisContext, id: NationId, pool: PoolKind, amount: n
   };
   const p = ctx.pools[pool];
   const late = pool === 'health' && ctx.crises.some((c) => c.pool === 'health');
-  ctx.pools[pool] = {
-    ...p,
-    balance: p.balance + paid,
-    late: p.late + (late ? paid : 0),
-    round: { ...p.round, [id]: (p.round[id] ?? 0) + paid },
-  };
+  // `round` is this step's own copy (see `draftPools`), so it is safe to write in place.
+  (p.round as Record<NationId, number>)[id] = (p.round[id] ?? 0) + paid;
+  ctx.pools[pool] = { ...p, balance: p.balance + paid, late: p.late + (late ? paid : 0) };
   ctx.ledger = { ...ctx.ledger, creditPooled: ctx.ledger.creditPooled + paid };
   return paid;
 }
@@ -376,10 +381,14 @@ export function lockCrises(ctx: CrisisContext): void {
     const resilienceBonus = TUNABLES.contributorResilienceBonus.value;
     const trustBonus = TUNABLES.contributorTrustBonus.value;
     for (const id of contributors) {
-      let n = nation(ctx, id);
-      n = { ...n, private: { ...n.private, resilience: Math.min(TUNABLES.resilienceMax.value, n.private.resilience + resilienceBonus) } };
-      for (const other of contributors) if (other !== id) n = adjustTrust(n, other, trustBonus);
-      ctx.nations[id] = n;
+      const n = nation(ctx, id);
+      const trust: Record<NationId, number> = { ...n.private.trust };
+      for (const other of contributors) {
+        const current = trust[other];
+        if (other !== id && current !== undefined) trust[other] = clampTrust(current + trustBonus);
+      }
+      const resilience = Math.min(TUNABLES.resilienceMax.value, n.private.resilience + resilienceBonus);
+      ctx.nations[id] = { ...n, private: { ...n.private, resilience, trust } };
     }
 
     ctx.pools[crisis.pool] = { ...pool, balance: pool.balance - spent, late: 0, round: {}, lastFundedBp: fundedBp };

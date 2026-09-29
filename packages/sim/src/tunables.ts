@@ -383,10 +383,10 @@ export const TUNABLES = {
     note: 'Phase 2 prompt 09: share of its own fair share a nation must pay in a round to count as a contributor for the bonuses, so one token Credit cannot farm them.',
   },
   defaultContributionBp: {
-    value: 20,
+    value: 110,
     min: 0,
     max: 200,
-    note: 'Phase 2 prompt 09: starting position of the monthly contribution dial (RULES 8.2 dial 3), in basis points of income, split between the pools. Steady funding is what fills the health pool before a pandemic.',
+    note: 'Phase 2 prompt 09: starting position of the monthly contribution dial (RULES 8.2 dial 3), in basis points of income, split between the pools. Steady funding is what fills the health pool before a pandemic. Phase 2 prompt 09 gate2 tuning (seeds 1001-1100 only): 20 -> 110, the main lever on crisis success.',
   },
   reciprocalMatchPct: {
     value: 50,
