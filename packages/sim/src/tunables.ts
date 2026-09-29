@@ -386,7 +386,7 @@ export const TUNABLES = {
     value: 50,
     min: 0,
     max: 100,
-    note: 'Prompt 14: percent of the pool\'s cover that reaches a nation that paid none of its own share; the cover scales in a straight line up to all of it at a full share (RULES 4.3 rule 1). 100 is the old rule, where paying was optional and free-riding cost nothing (GATE-2 F3). Tuned on seeds 1001-1400 only.',
+    note: 'Prompt 14: percent of the pool\'s cover that reaches a nation that paid none of its own share; the cover scales in a straight line up to all of it at a full share (RULES 4.3 rule 1). 100 is the old rule, where paying was optional and free-riding cost nothing (GATE-2 F3). Tuning (seeds 1001-1400 only): 100 (old rule) -> 50. 75 leaves the free-rider at 1.61x fair share; 25 and 0 only push the cooperator\'s share of tops higher.',
   },
   defaultContributionBp: {
     value: 110,

@@ -547,13 +547,6 @@ The derivative is negative for every *i*, at every position on the board. A
 because its score is measured against its own baseline and nobody else's, so pulling
 *j* down moves *i*'s score down and leaves *i*'s target where it was.
 
-The crisis pools add a quieter form of the same act, and prompt 14 prices it. A
-nation that trades normally but pays nothing into the pools, and pledges only to
-withdraw, hurts no one directly, so the argument above says it gains nothing, but it
-also used to lose almost nothing (GATE-2 F3). Under §4.3 rule 1 it now keeps only
-`nonPayerCoverPct`% of the pool's cover, so its own crisis damage rises, and the world
-"damage avoided" goals it shares fall with it.
-
 Two constraints this places on future work:
 
 - **`collectiveFloorBp` must stay above zero.** If the multiplier could reach zero,
@@ -860,7 +853,7 @@ wherever they feed economy maths.
 | `contributorTrustBonus` | 2 | 0 | 6 | Trust gained with every other contributor |
 | `crisisPartialPct` | 50 | 25 | 90 | Share of the target, in percent, a pool must reach for a crisis to count as a partial success rather than a failure. Reaching full cover is a success (§4.3). Phase 2 prompt 09 |
 | `contributorMinSharePct` | 50 | 10 | 100 | Share of its own fair share a nation must pay in a round to count as a contributor for the bonuses, so one token Credit cannot farm them. Phase 2 prompt 09 |
-| `nonPayerCoverPct` | 50 | 0 | 100 | Percent of the pool's cover that reaches a nation that paid none of its own share; the cover scales in a straight line up to all of it at a full share (§4.3 rule 1). 100 is the old rule, where paying was optional. Prompt 14 (starting value; tuned on seeds 1001-1400 only) |
+| `nonPayerCoverPct` | 50 | 0 | 100 | Percent of the pool's cover that reaches a nation that paid none of its own share; the cover scales in a straight line up to all of it at a full share (§4.3 rule 1). 100 is the old rule, where paying was optional. Prompt 14; tuning (seeds 1001-1400 only): 100 (old rule) -> 50. 75 leaves the free-rider at 1.61x fair share; 25 and 0 only push the cooperator's share of tops higher (docs/balance/gate2-prompt14.md) |
 | `defaultContributionBp` | 110 | 0 | 200 | Starting position of the monthly contribution dial (§8.2 dial 3), in basis points of income, split between the pools. Steady funding is what fills the health pool before a pandemic. Phase 2 prompt 09; gate2 tuning (seeds 1001-1100 only): 20 -> 110, the main lever on crisis success |
 | `reciprocalMatchPct` | 50 | 25 | 100 | How much of its target the world must have met in a pool's last round, in percent, for a reciprocal policy to pay its full share this round. Below it, it pays in proportion. Phase 2 prompt 09 |
 | `maxPledgeTicks` | 12 | 3 | 24 | Furthest ahead a pledge deadline may be set. A year: long enough to promise for the next climate event, short enough that a promise is soon tested. Phase 2 prompt 09 |
