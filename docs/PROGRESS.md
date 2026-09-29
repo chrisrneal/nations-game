@@ -36,11 +36,36 @@ Suite: `npm run harness -- gate2` (200 seeded games with random archetypes, coop
 - [ ] 10 playtests, 3+ by others, most want another game (owner)
 - [ ] Depth budget and 60 fps hold (prompt 11 phone check at 360 px PASS: 60.1 fps at 4x on a 4x-slowed CPU, no horizontal scroll on any screen or sheet, tables at most 4 columns, every card 2-3 taps; owner to confirm on a real phone)
 - [x] Gates 0-1 pass (determinism 1,000/1,000 Node vs Chromium; Gate 1 rerun passes every line but the waived top scorer, Egypt 12.0%, trade advantage +17.6%)
-- [ ] Gate 1's waived top-scorer line re-graded with archetypes (FAIL: Saudi Arabia 22.0% with the shipped AI, prompt 13; was 23.5%, limit 11.8%. Not caused by crises: 24.5% with crises switched off. Needs a RULES 2.8 change or a second waiver)
+- [ ] Gate 1's waived top-scorer line re-graded with archetypes (FAIL: Saudi Arabia 21.0-22.5% on seeds 1-200 and 201-400, limit 11.8%. Not caused by crises. Prompt 15's RULES 2.8 baseline change took it to 12.0-14.0% (Canada, Egypt, Germany) and still failed, so it was reverted: docs/balance/gate2-prompt15.md. Needs a second written waiver)
 
 Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): the archetype line (free-rider 2.21x, shipped AI 1.64x; cooperator 2.92x) and the re-graded top scorer (Saudi Arabia 23.5%, shipped AI 24.0%) fail; the predictions and the 10 playtests have not been done (docs/playtests/ is empty). Prompt 13 fixed findings F1 (the harness now grades the shipped AI) and F2 (paid-in-full nations are no longer shown as "declined"); the failing lines still fail with the shipped AI.
 
 ## Session log
+
+### 2026-09-29 - prompt 15, structural baseline upside (lanes D, S, H)
+**Changed.** Nothing in the game: the rule was built, graded, failed and reverted,
+as the prompt required. It had the baseline (RULES 2.8) expect the cover a trading
+nation normally gets by how it pays: Credit buyers 45% of the world's cover, nations
+that can swap spare goods 60% of the rest.
+**Diagnosis confirmed (seeds 1001-1400).** Saudi Arabia tops 24% because as the
+cooperative AI it gets 60% of its food deficit covered against the 35% its baseline
+expects, and beats that baseline by 26% (up to 34%). Nations that swap spare goods
+(Saudi Arabia, Nigeria, Indonesia, India) get 37-77% covered, Credit buyers (Egypt,
+Mexico, Germany, China, Japan, Korea, Turkiye) 13-35%. Crises are not the cause.
+**Results (graded once, seeds 1-200 and 201-400).** Top scorer: archetype games
+Canada 14.0% / 12.0%, Gate 1 mix Egypt 14.0% / Germany 14.0% (main: Saudi Arabia
+21.0 / 22.5 / 19.0 / 15.0%; line 11.8%). FAIL. Every other line unchanged and
+passing: trade gain +17.1% / +17.8%, crisis success 56.6% / 59.7%, isolationists
+worse off in 98-99% of pairs, 0 dead.
+**Why no baseline rule gets there.** Japan, Korea and Turkiye sit at the 30%
+shortfall cap in baseline and play and almost never win. With about 12 real
+contenders, one tops over 11.8% of 200 games about half the time by chance alone.
+**Checked.** With the rule in: 478 tests (Node-vs-Chromium determinism included) and
+check passed. After the revert the code is identical to main.
+**How to see it.** docs/balance/gate2-prompt15.md.
+**Left.** Owner: a second written waiver of the top-scorer line (recommended), and
+optionally bring the rule back (fairer, but still over the line). See docs/GAPS.md,
+prompt 15.
 
 ### 2026-09-29 - prompt 14, free-riding must not pay (lanes D, S, H)
 **Changed.** A nation that pays nothing into a crisis pool now gets only half of the
