@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { NationId, NationRecord } from '@nations/contracts';
 import {
   baselineOutputFor,
+  expectedCoverBp,
   fairShareDeficit,
   flowsFor,
+  inKindFundBp,
+  mulDiv,
   potentialOutput,
   shortfallPenaltyBp,
   structuralCover,
@@ -18,7 +21,8 @@ import { createWorld, NEUTRAL_ENDOWMENT, type RosterEntry, type WorldState } fro
 
 /**
  * The top-scorer fairness rule (prompt 09, RULES 2.8, 3.3 and 5.1):
- * - the baseline expects the shortfall the world's structure implies;
+ * - the baseline expects the shortfall the world's structure implies, after
+ *   the cover a nation can normally expect for how it pays (prompt 15);
  * - each side of a trade gains by the share of its own imbalance it cleared;
  * - ownScore is read from a smoothed path, not one month.
  */
@@ -81,14 +85,14 @@ describe('structural baseline (RULES 2.8, 5.1)', () => {
     expect(baselineOutputFor(e, nation(s, X).private.baselineE4, cover)).toBe(potentialOutput(e, nation(s, X).private.baselineE4));
   });
 
-  it('an importer expects the penalty on the part of its deficit the world cannot cover', () => {
+  it('an importer expects the penalty on the part of its deficit its expected cover does not reach', () => {
     const s = fresh();
     const cover = structuralCover(s);
     const e = s.endowments[Y]!;
     const b = nation(s, Y).private.baselineE4;
     const f = flowsFor(e, b);
     const deficit = f.food.demand - f.food.production;
-    const unmet = deficit - fairShareDeficit(f.food, cover.food);
+    const unmet = deficit - mulDiv(deficit, expectedCoverBp(f, 'food', cover), 10_000);
     expect(fairShareDeficit(f.food, cover.food)).toBe(Math.floor((deficit * cover.food) / 10_000));
     const penalty = shortfallPenaltyBp(unmet, f.food, 0, f.energy);
     expect(penalty).toBeGreaterThan(0);
@@ -115,6 +119,140 @@ describe('structural baseline (RULES 2.8, 5.1)', () => {
     expect(ownScoreBp(y)).toBeLessThan(10_000);
     // An exporter left alone neither gains nor loses: exactly its baseline.
     expect(ownScoreBp(nation(alone, X))).toBe(10_000);
+  });
+});
+
+type BaselineTunable = 'baselineCreditCoverPct' | 'baselineInKindCoverPct';
+/** Runs `fn` with the two prompt 15 tunables set, then puts them back. */
+function withCover<T>(credit: number, inKind: number, fn: () => T): T {
+  const table = TUNABLES as unknown as Record<BaselineTunable, { value: number }>;
+  const before = [table.baselineCreditCoverPct.value, table.baselineInKindCoverPct.value] as const;
+  table.baselineCreditCoverPct.value = credit;
+  table.baselineInKindCoverPct.value = inKind;
+  try {
+    return fn();
+  } finally {
+    table.baselineCreditCoverPct.value = before[0];
+    table.baselineInKindCoverPct.value = before[1];
+  }
+}
+
+describe('expected cover by how a deficit is paid for (RULES 2.8, prompt 15)', () => {
+  // Four nations short of the same 60 food a month (index 20 of a pivot of 50, 100 M people):
+  // W swaps: its spare energy is worth more than its whole food deficit.
+  // P swaps part: its spare energy pays for about a fifth of it.
+  // C has nothing to swap and must buy with Credit.
+  // X exports 100 food, so the world's food cover is 80% of 100 / 180 = 44%.
+  const E: RosterEntry[] = [
+    { id: 'xx', name: 'X', endowment: { ...base, foodSelfSufficiency: 100 } },
+    { id: 'ww', name: 'W', endowment: { ...base, gdpPppBn: 2_400, foodSelfSufficiency: 20, energySelfSufficiency: 100 } },
+    { id: 'pp', name: 'P', endowment: { ...base, foodSelfSufficiency: 20, energySelfSufficiency: 60 } },
+    { id: 'cc', name: 'C', endowment: { ...base, foodSelfSufficiency: 20 } },
+  ];
+  const W = id('ww');
+  const P = id('pp');
+  const C = id('cc');
+  const world = (): WorldState => createWorld({ seed: 5, roster: E });
+  const flows = (s: WorldState, n: NationId) => flowsFor(s.endowments[n]!, nation(s, n).private.baselineE4);
+  const penalty = (s: WorldState, n: NationId): number => structuralPenaltyBp(s.endowments[n]!, nation(s, n).private.baselineE4, structuralCover(s));
+
+  it('the fixture: the same food deficit, spare energy worth all of it, part of it, none of it', () => {
+    const s = world();
+    for (const n of [W, P, C]) expect(flows(s, n).food.demand - flows(s, n).food.production).toBe(60);
+    expect(inKindFundBp(flows(s, W), 'food')).toBe(10_000);
+    const pSpare = flows(s, P).energy.production - flows(s, P).energy.demand;
+    const pFund = Math.floor((pSpare * TUNABLES.energyBasePriceMilli.value * 10_000) / (60 * TUNABLES.foodBasePriceMilli.value));
+    expect(inKindFundBp(flows(s, P), 'food')).toBe(pFund);
+    expect(pFund).toBeGreaterThan(0);
+    expect(pFund).toBeLessThan(10_000);
+    expect(inKindFundBp(flows(s, C), 'food')).toBe(0);
+    // Nobody is short of energy, so there is no energy deficit to fund.
+    expect(inKindFundBp(flows(s, W), 'energy')).toBe(0);
+  });
+
+  it('credit 100 and in-kind 0 is the prompt 09 rule: every importer expects the world\'s cover', () => {
+    withCover(100, 0, () => {
+      const s = world();
+      const cover = structuralCover(s);
+      for (const n of [W, P, C]) {
+        expect(expectedCoverBp(flows(s, n), 'food', cover)).toBe(cover.food);
+        const f = flows(s, n).food;
+        const unmet = f.demand - f.production - fairShareDeficit(f, cover.food);
+        expect(penalty(s, n)).toBe(shortfallPenaltyBp(unmet, f, 0, flows(s, n).energy));
+      }
+    });
+  });
+
+  it('a nation buying with Credit expects baselineCreditCoverPct of the world\'s cover', () => {
+    withCover(50, 60, () => {
+      const s = world();
+      const cover = structuralCover(s);
+      expect(expectedCoverBp(flows(s, C), 'food', cover)).toBe(Math.floor((cover.food * 50) / 100));
+    });
+  });
+
+  it('spare goods that pay for the whole deficit add baselineInKindCoverPct of the rest; part of it, in proportion', () => {
+    withCover(50, 60, () => {
+      const s = world();
+      const cover = structuralCover(s);
+      const credit = Math.floor((cover.food * 50) / 100);
+      expect(expectedCoverBp(flows(s, W), 'food', cover)).toBe(credit + Math.floor(((10_000 - credit) * 60) / 100));
+      const fund = inKindFundBp(flows(s, P), 'food');
+      expect(expectedCoverBp(flows(s, P), 'food', cover)).toBe(credit + mulDiv(10_000 - credit, 60 * fund, 1_000_000));
+      const order = [W, P, C].map((n) => expectedCoverBp(flows(s, n), 'food', cover));
+      expect(order[0]).toBeGreaterThan(order[1]!);
+      expect(order[1]).toBeGreaterThan(order[2]!);
+    });
+  });
+
+  it('so the same deficit costs a swapper a smaller expected shortfall than a Credit buyer, and never more than no cover at all', () => {
+    withCover(50, 60, () => {
+      const s = world();
+      expect(penalty(s, W)).toBeLessThan(penalty(s, P));
+      expect(penalty(s, P)).toBeLessThan(penalty(s, C));
+      const f = flows(s, C);
+      expect(penalty(s, C)).toBeLessThanOrEqual(shortfallPenaltyBp(f.food.demand - f.food.production, f.food, 0, f.energy));
+    });
+    // Under the old rule the three expected the same.
+    withCover(100, 0, () => {
+      const s = world();
+      expect(penalty(s, W)).toBe(penalty(s, C));
+    });
+  });
+
+  it('an exporter still expects no shortfall, whatever the settings', () => {
+    for (const [credit, inKind] of [[100, 0], [25, 100], [50, 60]] as const) {
+      withCover(credit, inKind, () => {
+        const s = world();
+        expect(penalty(s, X)).toBe(0);
+      });
+    }
+  });
+
+  it('reads baseline paths only: no nation\'s play, its own included, moves a baseline', () => {
+    withCover(50, 60, () => {
+      const s = world();
+      const boost = (n: NationId): WorldState => {
+        const r = nation(s, n);
+        return { ...s, nations: { ...s.nations, [n]: { ...r, private: { ...r.private, capacityE4: r.private.capacityE4 * 3 } } } };
+      };
+      for (const n of [W, P, C]) {
+        expect(penalty(boost(X), n)).toBe(penalty(s, n));
+        expect(penalty(boost(n), n)).toBe(penalty(s, n));
+      }
+    });
+  });
+
+  it('the trade gain\'s yardstick is untouched: a buyer still clears against the world\'s fair share', () => {
+    withCover(50, 60, () => {
+      const s = world();
+      const cover = structuralCover(s);
+      for (const n of [W, C]) {
+        const f = nation(s, n).public.food;
+        const energySpare = Math.max(0, nation(s, n).public.energy.production - nation(s, n).public.energy.demand);
+        expect(tradeImbalanceMilli(nation(s, n), s.prices, cover)).toBe(fairShareDeficit(f, cover.food) * s.prices.food + energySpare * s.prices.energy);
+      }
+    });
   });
 });
 
