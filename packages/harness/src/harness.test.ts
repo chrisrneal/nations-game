@@ -24,10 +24,12 @@ describe('harness games', () => {
     expect(new Set(first).size).toBe(200);
   }, 60_000);
 
-  it('a game of greedy traders has no rejected commands, trades, and switches a controller twice', () => {
+  it('a game of AI traders has no invalid commands, trades, and switches a controller twice', () => {
     const game = runGame({ seed: 7, ticks: 120, roster });
     expect(game.rejectedAtSubmit).toBe(0);
     expect(game.rejectedAtStep).toBe(0);
+    // Same-month races (the other side answered first) are refused but are not invalid; about 1 in 200 AI commands.
+    expect(game.racedAtStep).toBeLessThan(game.submitted / 50);
     expect(game.controllerSwitches).toBe(2);
     expect(game.tradesSettled).toBeGreaterThan(100);
   });

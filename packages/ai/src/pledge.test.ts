@@ -45,6 +45,12 @@ describe('answering a crisis appeal, by reciprocity style', () => {
     expect(owedShare(viewWith('strict', crisesView([appeal()], { paid: 30 })), appeal())).toBe(70);
   });
 
+  it('a share already paid is answered with nothing more to pay, in words that say it paid (GATE-2 F2)', () => {
+    const d = decidePledge(input('strict', crisesView([appeal()], { paid: 100 })));
+    expect(d.amount).toBe(0);
+    expect(d.text).toBe('paid the climate relief (month 3) in full: my share of 100 is already in the pool');
+  });
+
   it('strict pays its full share at the first appeal, and only matches others after a poor turnout', () => {
     expect(personality('strict').reciprocity).toBe('strict');
     const first = decidePledge(input('strict', crisesView([appeal()])));

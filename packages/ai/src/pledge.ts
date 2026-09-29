@@ -21,6 +21,8 @@ import { month, rule } from './util.ts';
  * Never more than `aiPledgeMaxIncomePct` of a month's output, never more than
  * the Credit it has free. A payment is a `contribute` command, which answers
  * the appeal; paying nothing is a `declineAppeal`, visible to every nation.
+ * A nation whose share is already paid also answers with `declineAppeal`
+ * (there is nothing left to pay), and the sim records it as contributed.
  */
 export interface PledgeDecision {
   readonly amount: number;
@@ -61,7 +63,8 @@ export function decidePledge(input: PledgeInputs): PledgeDecision {
     return { amount: 0, text: `declined ${name}: I pay 0 into the pools`, reasons: [shareReason, fundedReason] };
   }
   if (owed === 0) {
-    return { amount: 0, text: `declined ${name}: my share of ${crisis.shares[view.selfId] ?? 0} is already paid`, reasons: [fundedReason] };
+    // Nothing left to pay. The sim records this answer as contributed, since the share is in the pool (GATE-2 F2).
+    return { amount: 0, text: `paid ${name} in full: my share of ${crisis.shares[view.selfId] ?? 0} is already in the pool`, reasons: [fundedReason] };
   }
   let wanted: number;
   let why: string;

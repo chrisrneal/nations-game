@@ -26,21 +26,40 @@ Suite: `npm run harness -- gate1` (200 seeded full-roster games, random strategi
 Gate 1 verdict: **PASS WITH WAIVER** (docs/gates/GATE-1.md): the owner waived the top scorer (12.5-15.0% on seeds 1-800) after prompt 13. The real-phone trade and phone speed check are carried to the Gate 2 playtests.
 
 ## Gate 2 checklist
-Suite: `npm run harness -- gate2` (200 seeded games with random archetypes, cooperator / free-rider and spoiler pairs, 40 absence runs, and the Gate 1 suite again). Latest results: docs/balance/gate2-p2-prompt09.md (seeds 1-200; tuned on 1001-1100 only).
-- [x] Crisis success 40-75% (55.3% of 1,182 crises; climate 536 / 385 / 79, pandemic 118 / 22 / 42 success / partial / failure)
-- [ ] No archetype over 1.5x fair share, nations assigned at random (FAIL: free-rider 2.21x, trader 2.03x. Cannot pass while Gate 1 requires trading to beat isolating; owner or architect ruling needed, options in the balance report)
-- [x] Reciprocal cooperators beat free-riders (cooperator ahead in 87% of same-nation pairs, median +0.17%; thin because contributing costs little Credit)
-- [x] A trailing nation gains nothing by sabotage (spoiler median final score 1,073 vs 1,235 as a cooperator; sabotage paid in 0 of 200 pairs)
+Suite: `npm run harness -- gate2` (200 seeded games with random archetypes, cooperator / free-rider and spoiler pairs, 40 absence runs, and the Gate 1 suite again). Latest results: docs/balance/gate2-prompt13.md (seeds 1-200, the shipped AI as trader and free-rider, not tuned).
+- [x] Crisis success 40-75% (prompt 13, shipped AI: 56.4% of 1,182 crises; climate 549 / 377 / 74, pandemic 118 / 22 / 42 success / partial / failure)
+- [ ] No archetype over 1.5x fair share, nations assigned at random (FAIL, prompt 13 with the shipped AI: trader 3.22x, free-rider 1.47x. Cannot pass while Gate 1 requires trading to beat isolating; owner or architect ruling needed)
+- [x] Reciprocal cooperators beat free-riders (prompt 13, shipped AI: cooperator ahead in 73% of same-nation pairs, median +1.41%)
+- [x] A trailing nation gains nothing by sabotage (prompt 13: spoiler median 1,066 vs 1,156 as a cooperator, paid in 0 of 200 pairs. Reported only: a stealth spoiler that keeps trading has median 1,116 but beats the cooperator in 19% of pairs)
 - [ ] Owner predicts AI responses 70%+ after one game (owner; prompt 11 built prediction mode in the Game tab and `npm run harness -- predictions --files <exported saves>`, which grades it)
 - [~] 24 h absence test with a recap readable in under a minute (engine PASS: 40 runs, 0 offers lapsed, 0 appeals or pledges unanswered, recaps at most 6 lines and 121 words; prompt 11 phone check PASS: a live game closed 24 hours catches up in 86 ms on a 4x-slowed Chromium and shows a 6-line, 73-word ranked recap; the owner still reads one on a real phone)
 - [ ] 10 playtests, 3+ by others, most want another game (owner)
 - [ ] Depth budget and 60 fps hold (prompt 11 phone check at 360 px PASS: 60.1 fps at 4x on a 4x-slowed CPU, no horizontal scroll on any screen or sheet, tables at most 4 columns, every card 2-3 taps; owner to confirm on a real phone)
 - [x] Gates 0-1 pass (determinism 1,000/1,000 Node vs Chromium; Gate 1 rerun passes every line but the waived top scorer, Egypt 12.0%, trade advantage +17.6%)
-- [ ] Gate 1's waived top-scorer line re-graded with archetypes (FAIL: Saudi Arabia 23.5%, limit 11.8%. Not caused by crises: 24.5% with crises switched off. Needs a RULES 2.8 change or a second waiver)
+- [ ] Gate 1's waived top-scorer line re-graded with archetypes (FAIL: Saudi Arabia 22.0% with the shipped AI, prompt 13; was 23.5%, limit 11.8%. Not caused by crises: 24.5% with crises switched off. Needs a RULES 2.8 change or a second waiver)
 
-Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): the archetype line (free-rider 2.21x, shipped AI 1.64x; cooperator 2.92x) and the re-graded top scorer (Saudi Arabia 23.5%, shipped AI 24.0%) fail; the predictions and the 10 playtests have not been done (docs/playtests/ is empty). The harness still grades the greedy trader, and a paid-in-full AI nation is shown as "declined".
+Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): the archetype line (free-rider 2.21x, shipped AI 1.64x; cooperator 2.92x) and the re-graded top scorer (Saudi Arabia 23.5%, shipped AI 24.0%) fail; the predictions and the 10 playtests have not been done (docs/playtests/ is empty). Prompt 13 fixed findings F1 (the harness now grades the shipped AI) and F2 (paid-in-full nations are no longer shown as "declined"); the failing lines still fail with the shipped AI.
 
 ## Session log
+
+### 2026-09-29 - prompt 13, the harness grades the shipped AI (lanes H, A, S)
+**Changed.** The balance harness now plays the same AI as the phone. Its cooperator
+("trader") and free-rider are `AiDirector` (the free-rider with paying switched off);
+the other bots are unchanged. Gate 1, Gate 2, the absence runs, `bench` and the
+determinism test all run it. The Gate 2 suite also plays a "stealth spoiler": the
+nation trailing at mid-game keeps trading but pays nothing and makes pledges it
+breaks. Fixed: an AI nation that had already paid its share was shown as
+"declined". The sim now records it as contributed, and its reason says it paid,
+so the crisis card and the prediction reveal read "paid in".
+**Results (seeds 1-200, not tuned).** Crisis success 56.4%. The cooperative AI tops
+3.22x its fair share; the free-rider drops to 1.47x and loses to the cooperator in
+73% of pairs (+1.4%). Sabotage by closing trade never pays; the stealth spoiler
+beats the cooperator in 19% of pairs. Saudi Arabia tops 22.0%. 1,000 ticks take
+1.2 s in Node with the AI.
+**Checked.** 452 tests (1,000-seed Node-vs-Chromium determinism included) and check pass.
+**How to see it.** docs/balance/gate2-prompt13.md.
+**Left.** Owner rulings on the archetype line and on grading the stealth spoiler; the
+top scorer; F3 (defection is cheap). See docs/GAPS.md, prompt 13.
 
 ### 2026-09-29 - prompt 12, Gate 2 review (independent; docs only)
 **Changed.** docs/gates/GATE-2.md written; no code changed. Verdict **FAIL**. Crisis

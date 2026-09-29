@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CrisisEventPayloads, Event } from '@nations/contracts';
-import { ARCHETYPES } from './bots.ts';
+import { ARCHETYPES, type Strategy } from './bots.ts';
 import { playGame } from './game.ts';
 import { assignArchetypes, formatGate2, runGate2 } from './gate2.ts';
 import { loadRoster } from './roster.ts';
@@ -21,15 +21,21 @@ describe('gate2 suite', () => {
     expect(report.games).toBe(2);
     expect(report.freeRiderPairs).toHaveLength(2);
     expect(report.spoilerPairs).toHaveLength(2);
+    expect(report.stealthPairs).toHaveLength(2);
+    // The stealth spoiler replays the cooperator's game up to mid-game, from the same cooperator run.
+    expect(report.stealthPairs.map((p) => p.coop)).toEqual(report.spoilerPairs.map((p) => p.coop));
+    for (const p of report.stealthPairs) expect(p.coopRank).toBeGreaterThanOrEqual(1);
     expect(report.absence).toHaveLength(2);
     const names = report.metrics.map((m) => m.name).join('\n');
-    for (const needle of ['Crashes', 'Negative stocks', 'Crisis success', 'Defection rate', 'Broken pledges', 'Retaliation rate', 'archetype', 'top scorer', 'free-rider', 'spoiler', 'Dead states', '24-hour absence', 'Gate 1 suite', 'Gate 0', 'predicts AI', 'playtests', '60 fps']) {
+    for (const needle of ['Crashes', 'Negative stocks', 'Crisis success', 'Defection rate', 'Broken pledges', 'Retaliation rate', 'archetype', 'top scorer', 'free-rider', 'spoiler', 'stealth spoiler', 'rank change', 'Dead states', '24-hour absence', 'Gate 1 suite', 'Gate 0', 'predicts AI', 'playtests', '60 fps']) {
       expect(names).toContain(needle);
     }
     expect(report.metrics.find((m) => m.name === 'Crashes')?.value).toBe('0');
     const text = formatGate2(report);
     expect(text).toContain('| Metric | Result | Pass line |');
     expect(text).toContain('## Win rate by archetype (random assignment)');
+    expect(text).toContain('## Sabotage from mid-game');
+    expect(text).toContain('stealth spoiler (keeps trading)');
     expect(text).toContain('## Sample away recap');
   });
 
@@ -48,7 +54,7 @@ describe('gate2 suite', () => {
 });
 
 describe('crisis bots', () => {
-  const crisisEvents = (strategy: 'freeRider' | 'exploiter' | 'spoiler' | 'trader'): { events: Event[]; who: string } => {
+  const crisisEvents = (strategy: Strategy): { events: Event[]; who: string } => {
     const who = 'nigeria';
     const events: Event[] = [];
     playGame({ seed: 4, ticks: 20, roster, strategies: { [who]: strategy }, humanSwitch: false, onTick: (_s, e) => events.push(...e) });
@@ -63,6 +69,32 @@ describe('crisis bots', () => {
     const free = crisisEvents('freeRider');
     expect(lockedAs(free.events, free.who, 'contributors')).toBe(0);
     expect(lockedAs(free.events, free.who, 'freeRiders')).toBeGreaterThan(0);
+  });
+
+  it('the trader and the free-rider are the shipped AI: every command explains itself; the bots do not', () => {
+    const said = (events: Event[], who: string): number =>
+      events.filter((e) => e.type === 'explanation' && (e.payload as CrisisEventPayloads['explanation']).nationId === who && (e.payload as CrisisEventPayloads['explanation']).by === 'command').length;
+    for (const s of ['trader', 'freeRider', 'stealthSpoiler'] as const) {
+      const { events, who } = crisisEvents(s);
+      expect(said(events, who), s).toBeGreaterThan(10);
+    }
+    const hoarder = crisisEvents('hoarder');
+    expect(said(hoarder.events, hoarder.who)).toBe(0);
+  });
+
+  it('the stealth spoiler keeps trading like the AI, pays nothing, and pledges twice its share then breaks it', () => {
+    const { events, who } = crisisEvents('stealthSpoiler');
+    const trades = events.filter((e) => e.type === 'offerSettled' && [e.payload as { offer: { from: string; to: string } }].some((p) => p.offer.from === who || p.offer.to === who)).length;
+    expect(trades).toBeGreaterThan(5);
+    expect(lockedAs(events, who, 'contributors')).toBe(0);
+    const made = events.filter((e) => e.type === 'pledgeMade' && (e.payload as CrisisEventPayloads['pledgeMade']).pledge.nationId === who);
+    expect(made.length).toBeGreaterThan(0);
+    const broken = events.filter((e) => e.type === 'pledgeBroken' && (e.payload as CrisisEventPayloads['pledgeBroken']).pledge.nationId === who);
+    expect(broken.length).toBe(made.length);
+  });
+
+  it('refuses to switch a nation to the free-rider mid-game', () => {
+    expect(() => playGame({ seed: 1, ticks: 2, roster, humanSwitch: false, switches: [{ tick: 1, nation: 'nigeria', strategy: 'freeRider' }] })).toThrow(/freeRider/);
   });
 
   it('the exploiter and the spoiler pledge and then break their pledges', () => {
