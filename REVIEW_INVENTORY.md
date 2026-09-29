@@ -81,7 +81,7 @@ None: no YAML, JSON or MD holding prompt text, personas or rubrics. The closest 
 These aren't instructions, but code matches on their wording, so a copy edit would break
 behaviour. I left every runtime string unchanged.
 
-- `packages/sim/src/recap.ts` recap sentences ← regex-matched by `apps/web/src/platform/recap.ts` `weigh()` (`/broke/`, `/appeal open/`, `/locked while you were away/`, `/failed/`, `/failure/`, `/no damage to you/`, `/you (contributed|pledged|declined)/`).
+- `packages/sim/src/recap.ts` recap sentences (including the `CrisisOutcome` word it interpolates) and the host's own folded "crises locked while you were away" line ← regex-matched by `apps/web/src/platform/recap.ts` `weigh()` (`/broke/`, `/appeal open/`, `/locked while you were away/`, `/failed/`, `/failure/`, `/no damage to you/`, `/you (contributed|pledged|declined)/`).
 - `apps/web/src/platform/predictions.ts` `CHOICES`: "the first word of each is what the harness grades" (`packages/harness/src/predictions.ts`).
 - `packages/sim/src/commands.ts` rejection reasons such as `'offer is no longer open'` ← matched by `/no longer open/` in `packages/ai/src/gate2.test.helpers.ts` (race counting).
 - `apps/web/e2e/phone-check.ts` finds UI elements by visible text ("Trade done", "Not sent", and so on).
