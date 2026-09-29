@@ -88,6 +88,18 @@ export const TUNABLES = {
     max: 100,
     note: 'Share of the world\'s structural surplus counted as reachable when setting each importer\'s fair share and its baseline (RULES 2.8). 100 assumes every spare unit reaches a buyer; lower allows for goods that never reach market (regions answer offers but never make them). Prompt 09 gate1 tuning (seeds 1001-1400 only): 80.',
   },
+  baselineCreditCoverPct: {
+    value: 45,
+    min: 25,
+    max: 100,
+    note: 'Prompt 15: percent of the world\'s structural cover (RULES 2.8) the baseline expects a nation to get for a deficit it must buy with Credit. 100 is the prompt 09 rule, where every importer expects the same share of its deficit covered; lower reflects that importers with nothing to swap get less than that in play. Tuning (seeds 1001-1400 only): 100 -> 45; with in-kind at 60, 50 leaves Saudi Arabia and Brazil topping 12.3% and 40 lets China top 13.3%.',
+  },
+  baselineInKindCoverPct: {
+    value: 60,
+    min: 0,
+    max: 100,
+    note: 'Prompt 15: percent of the rest of a deficit the baseline expects covered when the nation\'s own spare goods of the other kind could pay for all of it (in proportion when they pay for part). 0 is the prompt 09 rule; higher reflects that a nation that can swap its surplus for its imports usually gets them (RULES 2.8). Tuning (seeds 1001-1400 only): 0 -> 60; with credit at 45, 55 leaves Saudi Arabia topping 13.5% and 65 hands its wins to Canada (12.8%).',
+  },
   maxShortfallPenaltyPct: {
     value: 30,
     min: 10,

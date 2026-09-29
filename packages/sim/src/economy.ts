@@ -202,13 +202,43 @@ export function fairShareDeficit(flow: Flow, coverBp: number): number {
 
 /**
  * The shortfall penalty a nation on its baseline path pays in the structural
- * world: the penalty on the part of each deficit its fair share cannot cover
- * (RULES 2.8). Exporters and balanced nations expect none.
+ * world: the penalty on the part of each deficit its expected cover does not
+ * reach (RULES 2.8, `expectedCoverBp`). Exporters and balanced nations expect none.
  */
 export function structuralPenaltyBp(e: NationEndowment, baselineE4: number, cover: StructuralCover): number {
   const flows = flowsFor(e, baselineE4);
-  const unmet = (flow: Flow, coverBp: number): number => Math.max(0, flow.demand - flow.production) - fairShareDeficit(flow, coverBp);
-  return shortfallPenaltyBp(unmet(flows.food, cover.food), flows.food, unmet(flows.energy, cover.energy), flows.energy);
+  const unmet = (good: 'food' | 'energy'): number => {
+    const deficit = Math.max(0, flows[good].demand - flows[good].production);
+    return deficit - mulDiv(deficit, expectedCoverBp(flows, good, cover), 10_000);
+  };
+  return shortfallPenaltyBp(unmet('food'), flows.food, unmet('energy'), flows.energy);
+}
+
+/**
+ * How much of a nation's structural deficit in `good` its own structural
+ * surplus of the other good could pay for, in basis points (at most all of
+ * it), valued at base prices (RULES 2.8). 0 when it has no spare of the other good.
+ */
+export function inKindFundBp(flows: { food: Flow; energy: Flow }, good: 'food' | 'energy'): number {
+  const other = good === 'food' ? 'energy' : 'food';
+  const price = { food: TUNABLES.foodBasePriceMilli.value, energy: TUNABLES.energyBasePriceMilli.value };
+  const deficit = Math.max(0, flows[good].demand - flows[good].production);
+  const spare = Math.max(0, flows[other].production - flows[other].demand);
+  if (deficit === 0 || spare === 0) return 0;
+  return Math.min(10_000, Math.floor((spare * price[other] * 10_000) / (deficit * price[good])));
+}
+
+/**
+ * The share of a nation's structural deficit its baseline expects covered, in
+ * basis points (RULES 2.8): `baselineCreditCoverPct` of the world's cover for
+ * what it buys with Credit, plus `baselineInKindCoverPct` of the rest, scaled
+ * by how much of the deficit its own spare goods could pay for. Structural
+ * flows and tunables only, so nothing any player does moves it.
+ */
+export function expectedCoverBp(flows: { food: Flow; energy: Flow }, good: 'food' | 'energy', cover: StructuralCover): number {
+  const credit = mulDiv(cover[good], TUNABLES.baselineCreditCoverPct.value, 100);
+  const inKind = mulDiv(10_000 - credit, TUNABLES.baselineInKindCoverPct.value * inKindFundBp(flows, good), 1_000_000);
+  return Math.min(10_000, credit + inKind);
 }
 
 /**
