@@ -31,14 +31,45 @@ Suite: `npm run harness -- gate2` (200 seeded games with random archetypes, coop
 - [ ] No archetype over 1.5x fair share, nations assigned at random (FAIL: free-rider 2.21x, trader 2.03x. Cannot pass while Gate 1 requires trading to beat isolating; owner or architect ruling needed, options in the balance report)
 - [x] Reciprocal cooperators beat free-riders (cooperator ahead in 87% of same-nation pairs, median +0.17%; thin because contributing costs little Credit)
 - [x] A trailing nation gains nothing by sabotage (spoiler median final score 1,073 vs 1,235 as a cooperator; sabotage paid in 0 of 200 pairs)
-- [ ] Owner predicts AI responses 70%+ after one game (owner; needs the crisis screens, lane U)
-- [~] 24 h absence test with a recap readable in under a minute (engine PASS: 40 runs, 0 offers lapsed, 0 appeals or pledges unanswered, recaps at most 6 lines and 121 words; the owner still reads one on a phone once lane U shows it)
+- [ ] Owner predicts AI responses 70%+ after one game (owner; prompt 11 built prediction mode in the Game tab and `npm run harness -- predictions --files <exported saves>`, which grades it)
+- [~] 24 h absence test with a recap readable in under a minute (engine PASS: 40 runs, 0 offers lapsed, 0 appeals or pledges unanswered, recaps at most 6 lines and 121 words; prompt 11 phone check PASS: a live game closed 24 hours catches up in 86 ms on a 4x-slowed Chromium and shows a 6-line, 73-word ranked recap; the owner still reads one on a real phone)
 - [ ] 10 playtests, 3+ by others, most want another game (owner)
-- [ ] Depth budget and 60 fps hold (owner, phone)
+- [ ] Depth budget and 60 fps hold (prompt 11 phone check at 360 px PASS: 60.1 fps at 4x on a 4x-slowed CPU, no horizontal scroll on any screen or sheet, tables at most 4 columns, every card 2-3 taps; owner to confirm on a real phone)
 - [x] Gates 0-1 pass (determinism 1,000/1,000 Node vs Chromium; Gate 1 rerun passes every line but the waived top scorer, Egypt 12.0%, trade advantage +17.6%)
 - [ ] Gate 1's waived top-scorer line re-graded with archetypes (FAIL: Saudi Arabia 23.5%, limit 11.8%. Not caused by crises: 24.5% with crises switched off. Needs a RULES 2.8 change or a second waiver)
 
 ## Session log
+
+### 2026-09-29 - prompt 11, MVP on the phone (lanes U and P, plus the prediction report in lane H)
+**Changed.** The phone now plays the whole MVP. The app runs the new layered AI
+(prompt 10) instead of the Phase 1 greedy trader, and saves its memory with the game,
+so a reloaded game plays exactly like one that never closed. The inbox has crisis
+appeal cards (pay your share, pledge, or decline, 2 taps), a "pool closing" card,
+alerts (a pledge you cannot cover, resilience under your floor, an AI nation that
+suspended trade with you), and every AI offer card shows the nation's own reason, or
+a placeholder until it gives one. The Game tab has the three dial groups: trade
+posture (Open, Hard, Closed), auto-accept conditions, and the crisis rule with the
+monthly share and its pool. The map draws your trades of the last year as gold lines
+beside the trust lines; tapping a nation's trust explains it (where it started, what
+trades, broken deals and pledges moved it, and drift). Tapping your score breaks it
+down into your baseline percent, the world multiplier and the four world goals. A new
+🕒 live clock runs the world at one month per 30 minutes, keeps going while the app
+is closed, and catches up on reopen with an away recap ranked by importance (repeated
+crises folded into one line). An install banner offers to add the app to the home
+screen (iPhone gets the Share steps). Prediction mode (Game tab) asks "What will they
+do?" before an AI answer is shown, and keeps every guess and the real answer in the
+save; `npm run harness -- predictions --files a.json,b.json` prints the accuracy.
+**Checked.** 444 tests pass (was 419), check passes. Phone check at 360 px in
+Chromium: 53/53, including crisis card in 2 taps, dials reach the sim, prediction
+question and reveal in 2 taps, 24 hours closed = 48 months caught up in 86 ms on a
+4x-slowed CPU (Gate 0 budget 2,000 ms), recap 6 lines and 73 words, one tap to
+dismiss, 60.1 fps at 4x, no horizontal scroll anywhere, tables at most 4 columns.
+**How to see it.** Open the app, start a nation, tap 🕒 in the bottom bar and close
+the app; reopen later to see "While you were away". Crisis cards appear from about
+month 3. Game tab: dials and the Prediction mode switch. No new dependency.
+**Left.** The owner's own checks on a real phone (recap in under a minute, 60 fps,
+depth budget, 70% predictions after one game). Harness bots still use the greedy
+trader. See docs/GAPS.md, prompt 11.
 
 ### 2026-09-29 - prompt 10, AI nations (lane A, plus docs/AI_DESIGN.md)
 **Changed.** packages/ai now has a layered AI (`AiDirector`). Perception uses only the
