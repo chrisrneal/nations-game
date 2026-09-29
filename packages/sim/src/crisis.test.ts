@@ -288,6 +288,39 @@ describe('standing crisis rules (RULES 4.4, 8.2)', () => {
   });
 });
 
+describe('a nation whose share is already paid has contributed (GATE-2 F2)', () => {
+  // HI pays 10% of its income into the adaptation pool every month, so its share is paid in full well before the appeal.
+  const PAID_UP: Partial<StandingPolicy> = { crisisRule: 'none', contributionBp: 1_000, contributionTo: 'adaptation' };
+  function paidUp(): { state: WorldState; share: number } {
+    let s = world(SILENT);
+    s = step(s, [cmd(HI, 1, 'setPolicy', PAID_UP)]).state;
+    s = runTo(s, OPEN + 1).state;
+    const crisis = s.crises[0]!;
+    const share = crisis.shares[HI]!;
+    expect(s.pools.adaptation.round[HI]!).toBeGreaterThanOrEqual(share);
+    return { state: s, share };
+  }
+
+  it('declining an appeal after paying the whole share by monthly payments is recorded as contributed', () => {
+    const { state, share } = paidUp();
+    const r = runTo(state, OPEN + 2, { [OPEN + 1]: [cmd(HI, OPEN + 1, 'declineAppeal', { crisisId: state.crises[0]!.id })] });
+    expect(of(r.events, 'appealAnswered').find((a) => a.nationId === HI)).toMatchObject({ answer: 'contributed', amount: 0, by: 'command', share });
+    expect(r.state.crises[0]!.answers[HI]).toMatchObject({ answer: 'contributed' });
+  });
+
+  it('declining with part of the share unpaid is still declined', () => {
+    const s = runTo(world(SILENT), OPEN + 1).state;
+    const r = runTo(s, OPEN + 2, { [OPEN + 1]: [cmd(HI, OPEN + 1, 'declineAppeal', { crisisId: s.crises[0]!.id })] });
+    expect(of(r.events, 'appealAnswered').find((a) => a.nationId === HI)).toMatchObject({ answer: 'declined', by: 'command' });
+  });
+
+  it('a standing policy that pays nothing to appeals, with the share already paid, has contributed too', () => {
+    const { state } = paidUp();
+    const r = runTo(state, DEADLINE + 1);
+    expect(of(r.events, 'appealAnswered').find((a) => a.nationId === HI)).toMatchObject({ answer: 'contributed', amount: 0, by: 'policy', rule: 'none' });
+  });
+});
+
 describe('pandemic: late money counts less (RULES 4.2)', () => {
   function firstPandemic(): WorldState {
     for (let seed = 1; seed < 400; seed++) {

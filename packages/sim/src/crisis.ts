@@ -257,10 +257,22 @@ export function makePledge(ctx: CrisisContext, id: NationId, pool: PoolKind, amo
   return pledge;
 }
 
-/** The `declineAppeal` command. */
+/** True when the nation has a share of `crisis` and has already paid all of it into the pool this round. */
+function sharePaid(ctx: CrisisContext, id: NationId, crisis: Crisis): boolean {
+  const share = crisis.shares[id] ?? 0;
+  return share > 0 && (ctx.pools[crisis.pool].round[id] ?? 0) >= share;
+}
+
+/**
+ * The `declineAppeal` command. A nation whose share is already paid (by its
+ * monthly contribution) has contributed, not declined, whatever it answers
+ * now: the record says what it paid (GATE-2 F2).
+ */
 export function declineAppeal(ctx: CrisisContext, id: NationId, crisisId: number): void {
   const crisis = ctx.crises.find((c) => c.id === crisisId);
-  if (crisis !== undefined) markAnswered(ctx, id, crisis.pool, { answer: 'declined', amount: 0, by: 'command' }, null);
+  if (crisis === undefined) return;
+  const answer: AppealAnswer = sharePaid(ctx, id, crisis) ? { answer: 'contributed', amount: 0, by: 'command' } : { answer: 'declined', amount: 0, by: 'command' };
+  markAnswered(ctx, id, crisis.pool, answer, null);
 }
 
 /**
@@ -330,13 +342,13 @@ export function answerAppeals(ctx: CrisisContext): void {
       const wanted = rulePayment(rule, owed, pool.lastFundedBp);
       const paid = wanted > 0 ? contribute(ctx, id, crisis.pool, wanted, 'policy') : 0;
       const answer: AppealAnswer =
-        paid > 0 || (owed === 0 && rule !== 'none')
+        paid > 0 || (owed === 0 && rule !== 'none') || sharePaid(ctx, id, crisis)
           ? { answer: 'contributed', amount: paid, by: 'policy' }
           : { answer: 'declined', amount: 0, by: 'policy' };
       markAnswered(ctx, id, crisis.pool, answer, rule);
       const funded = Math.floor(pool.lastFundedBp / 100);
       const reason =
-        rule === 'none'
+        rule === 'none' && !sharePaid(ctx, id, crisis)
           ? `Policy pays nothing to crises: share ${share} of the ${crisis.target} target, ${already} paid this round.`
           : owed === 0
             ? `Share ${share} of the ${crisis.target} target already paid this round (${already}).`
