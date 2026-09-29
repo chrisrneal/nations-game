@@ -14,4 +14,6 @@
 export { benchCatchUp, hashSeeds, runGame, type GameMetrics, type GameOptions } from './game.ts';
 export { CSV_COLUMNS, formatSummary, summarize, toCsv, type Summary } from './metrics.ts';
 export { loadRoster } from './roster.ts';
+export { ARCHETYPES, STRATEGIES, botDecide, type Strategy } from './bots.ts';
+export { assignArchetypes, formatGate2, runGate2, type Gate2Options, type Gate2Report } from './gate2.ts';
 export { findChromium, runInBrowser, type BrowserRun, type BrowserRunOptions } from './browser.ts';

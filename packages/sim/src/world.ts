@@ -1,5 +1,12 @@
 import type {
   ControllerSlot,
+  Crisis,
+  CrisisHit,
+  CrisisResult,
+  EconomyReport,
+  Pledge,
+  Pool,
+  PoolKind,
   NationEndowment,
   NationId,
   NationPrivate,
@@ -23,8 +30,9 @@ export type { NationPrivate, NationPublic, NationRecord } from '@nations/contrac
  * 2 = Phase 1 economy and trade (prompt 06).
  * 3 = structural baseline, own-imbalance trade gains and the smoothed score
  *     track (prompt 09).
+ * 4 = Phase 2 crises, pools, pledges and crisis policies (Phase 2 prompt 09).
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /**
  * One nation's smoothed output and baseline output (RULES 5.1), x 1,000 so a
@@ -56,6 +64,18 @@ export interface WorldState extends State {
    * after its first month; before that ownScore reads the last month.
    */
   readonly scoreTrack: Readonly<Record<NationId, ScoreTrack>>;
+  /** The two crisis pools (RULES 4.3). */
+  readonly pools: Readonly<Record<PoolKind, Pool>>;
+  /** Open crisis appeals, oldest first (seam 8). A crisis leaves this list when it locks. */
+  readonly crises: readonly Crisis[];
+  /** The last `crisisHistoryKept` locked crises, oldest first. */
+  readonly recentCrises: readonly CrisisResult[];
+  /** Open pledges, oldest first (seam 8). */
+  readonly pledges: readonly Pledge[];
+  /** Crisis damage still to land, per nation. Dropped once its last tick has passed. */
+  readonly hits: readonly CrisisHit[];
+  readonly nextCrisisId: number;
+  readonly nextPledgeId: number;
 }
 
 /**
@@ -107,7 +127,31 @@ export function defaultPolicy(): StandingPolicy {
     coverPriority: 'food',
     resilienceFloor: TUNABLES.defaultResilienceFloor.value,
     hardBargains: false,
+    crisisRule: 'reciprocal',
+    contributionBp: TUNABLES.defaultContributionBp.value,
+    contributionTo: 'split',
   };
+}
+
+export const EMPTY_REPORT: EconomyReport = {
+  consumedFood: 0,
+  consumedEnergy: 0,
+  unmetFood: 0,
+  unmetEnergy: 0,
+  penaltyPct: 0,
+  income: 0,
+  resilienceSpent: 0,
+  tradeGainCbp: 0,
+  crisisPct: 0,
+  contributed: 0,
+};
+
+export function emptyPool(kind: PoolKind): Pool {
+  return { kind, balance: 0, late: 0, round: {}, lastFundedBp: 10_000 };
+}
+
+export function emptyPools(): Record<PoolKind, Pool> {
+  return { adaptation: emptyPool('adaptation'), health: emptyPool('health') };
 }
 
 export const EMPTY_LEDGER: WorldLedger = {
@@ -122,6 +166,16 @@ export const EMPTY_LEDGER: WorldLedger = {
   tradesSettled: 0,
   offersExpired: 0,
   offersFailed: 0,
+  creditPooled: 0,
+  creditSpentCrises: 0,
+  climateLoss: 0,
+  climateLossUnpooled: 0,
+  pandemicLoss: 0,
+  pandemicLossUnpooled: 0,
+  crisesLocked: 0,
+  crisesSucceeded: 0,
+  pledgesHonoured: 0,
+  pledgesBroken: 0,
 };
 
 /** Starting resilience (RULES 2.6), clamped to [0, resilienceMax]. */
@@ -180,18 +234,12 @@ export function createWorld(options: CreateWorldOptions): WorldState {
       baselineE4: capacityE4,
       policy: defaultPolicy(),
       trust,
-      last: {
-        consumedFood: 0,
-        consumedEnergy: 0,
-        unmetFood: 0,
-        unmetEnergy: 0,
-        penaltyPct: 0,
-        income: 0,
-        resilienceSpent: 0,
-        tradeGainCbp: 0,
-      },
+      last: EMPTY_REPORT,
       tradesSettled: 0,
       reneges: 0,
+      pledgesHonoured: 0,
+      pledgesBroken: 0,
+      pooledTotal: 0,
     };
     nationOrder.push(id);
     nations[id] = { id, name: e.name, public: pub, private: priv };
@@ -213,6 +261,13 @@ export function createWorld(options: CreateWorldOptions): WorldState {
     nextOfferId: 1,
     ledger: EMPTY_LEDGER,
     scoreTrack: {},
+    pools: emptyPools(),
+    crises: [],
+    recentCrises: [],
+    pledges: [],
+    hits: [],
+    nextCrisisId: 1,
+    nextPledgeId: 1,
   };
   return { ...base, prices: referencePrices(base) };
 }

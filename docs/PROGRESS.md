@@ -25,6 +25,19 @@ Suite: `npm run harness -- gate1` (200 seeded full-roster games, random strategi
 
 Gate 1 verdict: **PASS WITH WAIVER** (docs/gates/GATE-1.md): the owner waived the top scorer (12.5-15.0% on seeds 1-800) after prompt 13. The real-phone trade and phone speed check are carried to the Gate 2 playtests.
 
+## Gate 2 checklist
+Suite: `npm run harness -- gate2` (200 seeded games with random archetypes, cooperator / free-rider and spoiler pairs, 40 absence runs, and the Gate 1 suite again). Latest results: docs/balance/gate2-p2-prompt09.md (seeds 1-200; tuned on 1001-1100 only).
+- [x] Crisis success 40-75% (55.3% of 1,182 crises; climate 536 / 385 / 79, pandemic 118 / 22 / 42 success / partial / failure)
+- [ ] No archetype over 1.5x fair share, nations assigned at random (FAIL: free-rider 2.21x, trader 2.03x. Cannot pass while Gate 1 requires trading to beat isolating; owner or architect ruling needed, options in the balance report)
+- [x] Reciprocal cooperators beat free-riders (cooperator ahead in 87% of same-nation pairs, median +0.17%; thin because contributing costs little Credit)
+- [x] A trailing nation gains nothing by sabotage (spoiler median final score 1,073 vs 1,235 as a cooperator; sabotage paid in 0 of 200 pairs)
+- [ ] Owner predicts AI responses 70%+ after one game (owner; needs the crisis screens, lane U)
+- [~] 24 h absence test with a recap readable in under a minute (engine PASS: 40 runs, 0 offers lapsed, 0 appeals or pledges unanswered, recaps at most 6 lines and 121 words; the owner still reads one on a phone once lane U shows it)
+- [ ] 10 playtests, 3+ by others, most want another game (owner)
+- [ ] Depth budget and 60 fps hold (owner, phone)
+- [x] Gates 0-1 pass (determinism 1,000/1,000 Node vs Chromium; Gate 1 rerun passes every line but the waived top scorer, Egypt 12.0%, trade advantage +17.6%)
+- [ ] Gate 1's waived top-scorer line re-graded with archetypes (FAIL: Saudi Arabia 23.5%, limit 11.8%. Not caused by crises: 24.5% with crises switched off. Needs a RULES 2.8 change or a second waiver)
+
 ## Session log
 
 ### 2026-09-29 - prompt 10, AI nations (lane A, plus docs/AI_DESIGN.md)
@@ -53,6 +66,33 @@ section 3). Read docs/AI_DESIGN.md, or run
 **Left.** Wiring into the app and harness, saving AI memory with the game, crises in
 the sim (the pledge logic waits on them), a harness gate2 suite, and two owner
 decisions (the archetype reading, the top scorer). See docs/GAPS.md, prompt 10.
+
+### 2026-09-29 - Phase 2 prompt 09, Crisis, trust and scoring engine (lanes C, S, H)
+**Changed.** Phase 2 has started. The world now has two crises. A climate appeal
+opens once a world year and gets worse each year; a pandemic can fire any month.
+Each asks every nation for a share of a pool, sized by how exposed that nation
+is. Nations pay now, pledge to pay by a deadline, or say no. Anyone who does not
+answer is answered by their standing crisis policy on the deadline, so nothing
+waits for a player to be online. Pledges are collected automatically on their
+deadline; one withdrawn or unpaid breaks, and every nation trusts the breaker 12
+less, which fades back over about a year. When a pool locks, damage lands on
+every nation by its own exposure, reduced by how full the pool was. The world
+multiplier now reads all four goals, crises included. Standing policies now
+answer every trade offer (yes or no) instead of letting some lapse. The sim can
+write a short away recap from what a nation saw. The monthly crisis contribution
+was tuned from 0.2% to 1.1% of income (seeds 1001-1100 only). New harness suite
+`gate2`, results in docs/balance/gate2-p2-prompt09.md: crisis success 55.3%,
+cooperators beat free-riders, sabotage never pays, the 24-hour absence test
+passes, Gate 1 still passes. Two lines fail and need an owner ruling: the
+archetype win rate (free-rider 2.21x, trader 2.03x) and the top nation (Saudi
+Arabia 23.5%). 352 tests pass; determinism 1,000/1,000.
+**How to see it.** `npm run harness -- gate2` (about a minute; writes
+packages/harness/out/gate2.md). Nothing shows on the phone yet: the crisis
+cards, pledge buttons and recap card are lane U's next prompt.
+**Left.** Owner rulings on the two failing lines; crisis screens and the recap
+card (lane U); the AI pledging, contributing and explaining itself (lane A). See
+docs/GAPS.md, P2-09.
+
 
 ### 2026-09-28 - Gate 1 closed (owner decision)
 **Changed.** The owner waived Gate 1 criterion 5 (top scorer) in writing and marked

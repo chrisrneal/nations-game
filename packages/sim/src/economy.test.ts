@@ -60,10 +60,12 @@ describe('economy formulas (RULES section 2)', () => {
     expect(startingTrust(nigeria, japan)).toBe(25);
   });
 
-  it('a self-sufficient nation left alone grows exactly on its baseline and scores 1.00', () => {
+  it('a self-sufficient nation with no crisis exposure, left alone, grows exactly on its baseline and scores 1.00', () => {
+    // Crises still open and pools still fill, but exposure 0 and preparedness 100 mean no damage lands.
+    const safe = { ...NEUTRAL_ENDOWMENT, climateExposure: 0, pandemicPreparedness: 100, foodSelfSufficiency: 60, energySelfSufficiency: 60 };
     const roster: RosterEntry[] = [
-      { id: 'p', name: 'P', endowment: { ...NEUTRAL_ENDOWMENT, baselineGrowthBp: 600, foodSelfSufficiency: 60, energySelfSufficiency: 60 } },
-      { id: 'q', name: 'Q', endowment: { ...NEUTRAL_ENDOWMENT, foodSelfSufficiency: 60, energySelfSufficiency: 60 } },
+      { id: 'p', name: 'P', endowment: { ...safe, baselineGrowthBp: 600 } },
+      { id: 'q', name: 'Q', endowment: safe },
     ];
     let s = createWorld({ seed: 1, roster });
     const start = s.nations['p' as NationId]!.public.output;
@@ -117,6 +119,18 @@ function commandArb(tick: number): fc.Arbitrary<Command> {
       payload: { hardBargains: hb, rejectAll: rj, acceptTrusted: tr, resilienceFloor: fl },
     })),
     fc.record({ n: id, p: fc.integer({ min: 1, max: 30 }) }).map(({ n, p }) => ({ nationId: n, tick, type: 'fundResilience', payload: { points: p } })),
+    fc.record({ n: id, pool: fc.constantFrom('adaptation', 'health'), a: amount, d: fc.integer({ min: 0, max: 15 }), t: fc.constantFrom('contribute', 'pledge') }).map(
+      ({ n, pool, a, d, t }) => ({ nationId: n, tick, type: t, payload: t === 'pledge' ? { pool, amount: a * 5, deadlineTick: tick + d } : { pool, amount: a } }),
+    ),
+    fc.record({ n: id, x: fc.integer({ min: 1, max: 12 }), t: fc.constantFrom('withdrawPledge', 'declineAppeal') }).map(({ n, x, t }) => ({
+      nationId: n,
+      tick,
+      type: t,
+      payload: t === 'withdrawPledge' ? { pledgeId: x } : { crisisId: x },
+    })),
+    fc.record({ n: id, r: fc.constantFrom('fairShare', 'reciprocal', 'none'), bp: fc.integer({ min: 0, max: 1_000 }), to: fc.constantFrom('adaptation', 'health', 'split') }).map(
+      ({ n, r, bp, to }) => ({ nationId: n, tick, type: 'setPolicy', payload: { crisisRule: r, contributionBp: bp, contributionTo: to } }),
+    ),
   );
 }
 
@@ -128,8 +142,9 @@ function commandsFor(pool: Command[][], tick: number, picks: number[]): Command[
   return picks.map((p) => bucket[p % Math.max(1, bucket.length)]).filter((c): c is Command => c !== undefined).map((c) => ({ ...c, tick }));
 }
 
+/** World stocks; Credit includes what sits in the two crisis pools. */
 function totals(s: WorldState): Record<Resource, number> {
-  const t = { food: 0, energy: 0, credit: 0 };
+  const t = { food: 0, energy: 0, credit: s.pools.adaptation.balance + s.pools.health.balance };
   for (const id of s.nationOrder) {
     const st = s.nations[id]!.private.stocks;
     t.food += st.food;
@@ -192,13 +207,16 @@ describe('Gate 1 invariants (property tests)', () => {
             spent += last.resilienceSpent;
           }
           for (const ev of events) if (ev.type === 'resilienceFunded') spent += (ev.payload as { cost: number }).cost;
+          const dl = (k: keyof WorldState['ledger']): number => state.ledger[k] - s.ledger[k];
           expect(after.food).toBe(before.food + produced.food - consumedFood);
           expect(after.energy).toBe(before.energy + produced.energy - consumedEnergy);
-          expect(after.credit).toBe(before.credit + income - spent);
-          const dl = (k: keyof WorldState['ledger']): number => state.ledger[k] - s.ledger[k];
+          // Credit paid into a pool is still in the world; a pool spent on a crisis is the crisis sink.
+          expect(after.credit).toBe(before.credit + income - spent - dl('creditSpentCrises'));
           expect(dl('foodProduced') - dl('foodConsumed')).toBe(after.food - before.food);
           expect(dl('energyProduced') - dl('energyConsumed')).toBe(after.energy - before.energy);
-          expect(dl('creditIncome') - dl('creditSpentResilience')).toBe(after.credit - before.credit);
+          expect(dl('creditIncome') - dl('creditSpentResilience') - dl('creditSpentCrises')).toBe(after.credit - before.credit);
+          const pools = (x: WorldState): number => x.pools.adaptation.balance + x.pools.health.balance;
+          expect(pools(state) - pools(s)).toBe(dl('creditPooled') - dl('creditSpentCrises'));
           s = state;
         }
       }),
@@ -206,7 +224,7 @@ describe('Gate 1 invariants (property tests)', () => {
     );
   });
 
-  it('no negative stocks, trust stays in band, offers always expire in time', () => {
+  it('no negative stocks or pools, trust stays in band, offers, pledges and appeals always resolve in time', () => {
     fc.assert(
       fc.property(fc.integer(), endowArb, poolArb, scriptArb, (seed, e, pool, script) => {
         let s = randomWorld(seed, e);
@@ -227,6 +245,16 @@ describe('Gate 1 invariants (property tests)', () => {
             expect(o.expiryTick).toBeGreaterThan(s.tick - 1);
             expect(o.expiryTick - o.createdTick).toBe(TUNABLES.offerLifeTicks.value);
           }
+          for (const pool of [s.pools.adaptation, s.pools.health]) {
+            expect(pool.balance).toBeGreaterThanOrEqual(0);
+            expect(pool.late).toBeGreaterThanOrEqual(0);
+            expect(pool.late).toBeLessThanOrEqual(pool.balance);
+          }
+          for (const p of s.pledges) {
+            expect(p.deadlineTick).toBeGreaterThanOrEqual(s.tick);
+            expect(p.paid).toBeLessThan(p.amount);
+          }
+          for (const c of s.crises) expect(c.deadlineTick).toBeGreaterThanOrEqual(s.tick);
           expect(() => hashState(s)).not.toThrow();
         }
       }),

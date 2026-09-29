@@ -1,4 +1,4 @@
-import type { ForeignNation, NationId, NationRecord, NationView } from '@nations/contracts';
+import type { AppealAnswer, ForeignNation, NationId, NationMap, NationRecord, NationView } from '@nations/contracts';
 import { scoreboard } from './score.ts';
 import { TUNABLES } from './tunables.ts';
 import type { WorldState } from './world.ts';
@@ -72,8 +72,25 @@ export function viewFor(state: WorldState, selfId: NationId): NationView {
     prices: { ...state.prices },
     scores: {
       multiplierBp: board.multiplierBp,
+      goals: { ...board.goals },
       nations: board.nations.map((n) => ({ id: n.id, ownScoreBp: n.ownScoreBp, finalScore: n.finalScore })),
+    },
+    crises: {
+      pools: (['adaptation', 'health'] as const).map((kind) => {
+        const pool = state.pools[kind];
+        return { ...pool, round: { ...pool.round } };
+      }),
+      open: state.crises.map((c) => ({ ...c, shares: { ...c.shares }, answers: copyAnswers(c.answers) })),
+      recent: state.recentCrises.map((r) => ({ ...r, contributors: [...r.contributors], freeRiders: [...r.freeRiders] })),
+      pledges: state.pledges.map((p) => ({ ...p })),
+      hits: state.hits.filter((h) => h.nationId === selfId).map((h) => ({ ...h })),
     },
     rules: RULES,
   };
+}
+
+function copyAnswers(answers: NationMap<AppealAnswer>): Record<NationId, AppealAnswer> {
+  const out: Record<NationId, AppealAnswer> = {};
+  for (const [id, a] of Object.entries(answers) as [NationId, AppealAnswer][]) out[id] = { ...a };
+  return out;
 }

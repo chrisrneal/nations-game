@@ -95,7 +95,7 @@ describe('trade offers are State objects with an expiry tick (seam 8)', () => {
     expect(byMaker.state.offers).toEqual([]);
   });
 
-  it('an unanswered offer expires on its expiry tick and the ignorer loses the maker\'s trust', () => {
+  it('an offer no policy condition accepts is declined on its last tick, never left to lapse, and costs no trust', () => {
     const s0 = run(tradeWorld(), [[policy(B, { acceptFairDeficit: false }, 0)]]).state;
     const { give, get } = fairFoodForEnergy(s0);
     const life = TUNABLES.offerLifeTicks.value;
@@ -104,12 +104,17 @@ describe('trade offers are State objects with an expiry tick (seam 8)', () => {
     const before = run(s0, ticks.slice(0, life - 1));
     expect(before.state.offers).toHaveLength(1);
     const { state, events } = run(s0, ticks);
-    expect(state.tick).toBe(1 + life);
     expect(state.offers).toEqual([]);
-    const expired = events.find((e) => e.type === 'offerExpired');
-    expect(expired?.tick).toBe(life);
-    expect(trust(state, A, B)).toBe(trust(quiet, A, B) - TUNABLES.trustPerIgnoredOffer.value);
-    expect(state.ledger.offersExpired).toBe(1);
+    const rejected = events.find((e) => e.type === 'offerRejected');
+    expect(rejected?.tick).toBe(life);
+    expect(rejected?.payload).toMatchObject({ by: 'policy' });
+    expect(types(events)).not.toContain('offerExpired');
+    expect(trust(state, A, B)).toBe(trust(quiet, A, B));
+    expect(state.ledger.offersExpired).toBe(0);
+    // The automatic answer carries its reasons, with numbers, to both sides (RULES 7.4).
+    const why = events.find((e) => e.type === 'explanation' && (e.payload as { decision: string }).decision === 'answerOffer');
+    expect(why?.audience).toEqual([B, A]);
+    expect((why?.payload as { reasons: string[] }).reasons.join(' ')).toMatch(/[0-9]/);
   });
 });
 
@@ -126,7 +131,7 @@ describe('standing policies answer when nobody is online', () => {
     expect(settled?.tick).toBe(life - 1);
   });
 
-  it('rejectAll rejects on the last tick; a non-deficit offer is left to expire', () => {
+  it('rejectAll rejects on the last tick; an offer covering no deficit is declined, not left to expire', () => {
     const s0 = run(tradeWorld(), [[policy(B, { rejectAll: true }, 0)]]).state;
     const { give, get } = fairFoodForEnergy(s0);
     const life = TUNABLES.offerLifeTicks.value;
@@ -134,7 +139,8 @@ describe('standing policies answer when nobody is online', () => {
     expect(r.events.find((e) => e.type === 'offerRejected')?.payload).toMatchObject({ by: 'policy' });
     // Charlie is balanced in food, so a food offer covers no deficit of Charlie's.
     const c = run(tradeWorld(), [[offer(A, C, amt('food', 10), amt('credit', 1), 0)], ...Array.from({ length: life - 1 }, () => [])]);
-    expect(types(c.events)).toContain('offerExpired');
+    expect(types(c.events)).not.toContain('offerExpired');
+    expect(c.events.find((e) => e.type === 'offerRejected')?.payload).toMatchObject({ by: 'policy' });
   });
 
   it('the trusted-partner policy accepts even a hard bargain from a trusted maker', () => {

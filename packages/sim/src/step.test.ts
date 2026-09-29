@@ -13,12 +13,13 @@ describe('step', () => {
     expect(step(step(s0, []).state, [ping(A, B, 1)]).state.tick).toBe(2);
   });
 
-  it('applies the placeholder ping: sender private count, target public count, no RNG draw', () => {
+  it('applies the placeholder ping: sender private count, target public count, no RNG draw of its own', () => {
     const { state, events } = step(world(), [ping(A, B, 0)]);
     expect(state.nations[A]?.private.pingsSent).toBe(1);
     expect(state.nations[B]?.public.pingsReceived).toBe(1);
-    expect(state.rng).toEqual(world().rng);
-    expect(events).toEqual([{ tick: 0, type: 'pinged', payload: { from: A, to: B }, audience: [A, B] }]);
+    // The only draw is the monthly pandemic roll (RULES 4.2), made with or without the ping.
+    expect(state.rng).toEqual(step(world(), []).state.rng);
+    expect(events.filter((e) => e.type === 'pinged')).toEqual([{ tick: 0, type: 'pinged', payload: { from: A, to: B }, audience: [A, B] }]);
   });
 
   it('switches a controller slot mid-game with a public event', () => {

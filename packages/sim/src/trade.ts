@@ -213,35 +213,57 @@ export function counterOffer(ctx: TradeContext, offerId: number, give: ResourceA
   });
 }
 
+/** A standing policy's answer to an offer, with the numbers behind it (RULES 7.4). */
+export interface PolicyAnswer {
+  readonly answer: 'accept' | 'reject';
+  readonly reasons: readonly string[];
+}
+
 /**
  * What a nation's standing policy says about an offer it received (RULES
- * 3.4): 'accept', 'reject', or null to let it run to expiry. Accepting needs
- * the nation to be able to pay while keeping a month of demand of what it pays.
+ * 3.4): accept when an auto-accept condition holds and it can pay while
+ * keeping a month of demand of what it pays; otherwise decline. A policy
+ * answers every offer, so an absent nation never leaves one to lapse
+ * (Phase 2 prompt 09).
  */
-export function policyAnswer(ctx: TradeContext, offer: TradeOffer): 'accept' | 'reject' | null {
+export function policyAnswer(ctx: TradeContext, offer: TradeOffer): PolicyAnswer {
   const receiver = get(ctx, offer.to);
   const policy = receiver.private.policy;
-  if (policy.rejectAll) return 'reject';
   const pays = offer.get;
+  const gets = offer.give;
+  if (policy.rejectAll) return { answer: 'reject', reasons: [`Trade posture closed: declines every offer, this one ${gets.amount} ${gets.resource} for ${pays.amount} ${pays.resource}.`] };
   const keep = pays.resource === 'credit' ? 0 : receiver.public[pays.resource].demand;
-  const canPay = receiver.private.stocks[pays.resource] - pays.amount >= keep;
-  if (!canPay) return null;
+  const holds = receiver.private.stocks[pays.resource];
+  if (holds - pays.amount < keep) {
+    return { answer: 'reject', reasons: [`Paying ${pays.amount} ${pays.resource} would leave ${holds - pays.amount}, under the ${keep} a month needs.`] };
+  }
   const trust = receiver.private.trust[offer.from] ?? 0;
-  if (policy.acceptTrusted && trust >= TUNABLES.autoAcceptTrustThreshold.value) return 'accept';
-  if (policy.acceptFairDeficit && isFair(ctx.prices, offer.give, offer.get)) {
-    const gets = offer.give.resource;
-    if (gets !== 'credit') {
-      const deficit = -structuralBalance(receiver, gets);
-      if (deficit > 0 && receiver.private.stocks[gets] < deficit) return 'accept';
+  const threshold = TUNABLES.autoAcceptTrustThreshold.value;
+  if (policy.acceptTrusted && trust >= threshold) {
+    return { answer: 'accept', reasons: [`Trusted partner: trust ${trust} is at or above ${threshold}.`] };
+  }
+  const fair = isFair(ctx.prices, offer.give, offer.get);
+  if (policy.acceptFairDeficit && fair && gets.resource !== 'credit') {
+    const deficit = -structuralBalance(receiver, gets.resource);
+    const stock = receiver.private.stocks[gets.resource];
+    if (deficit > 0 && stock < deficit) {
+      return { answer: 'accept', reasons: [`Fair price and covers a ${deficit} ${gets.resource} monthly deficit with ${stock} in store.`] };
     }
   }
-  return null;
+  const why = !fair
+    ? `Outside the fair price band of ${TUNABLES.priceBandPct.value}%.`
+    : gets.resource === 'credit' || -structuralBalance(receiver, gets.resource) <= 0
+      ? `No ${gets.resource} deficit to cover.`
+      : `Already holds ${receiver.private.stocks[gets.resource]} ${gets.resource}, a month of the deficit.`;
+  return { answer: 'reject', reasons: [`No auto-accept condition met (trust ${trust}). ${why}`] };
 }
 
 /**
  * Standing policies answer every offer on its last answerable tick, and
  * background regions (which have nobody to wait for) answer every offer the
- * tick it arrives. Each receiver's cover priority is served first.
+ * tick it arrives. Each receiver's cover priority is served first. Every
+ * automatic answer carries its reasons in an `explanation` event for both
+ * parties.
  */
 export function runPolicies(ctx: TradeContext): void {
   const due = (o: TradeOffer): boolean =>
@@ -254,9 +276,17 @@ export function runPolicies(ctx: TradeContext): void {
     });
     for (const offer of batch) {
       if (!ctx.offers.some((o) => o.id === offer.id)) continue;
-      const answer = policyAnswer(ctx, offer);
+      const { answer, reasons } = policyAnswer(ctx, offer);
+      if (get(ctx, offer.to).public.kind === 'playable') {
+        ctx.events.push({
+          tick: ctx.tick,
+          type: 'explanation',
+          payload: { nationId: offer.to, decision: 'answerOffer', subject: offer.id, reasons, by: 'policy' },
+          audience: [offer.to, offer.from],
+        });
+      }
       if (answer === 'accept') acceptOffer(ctx, offer.id, 'policy');
-      else if (answer === 'reject') rejectOffer(ctx, offer.id, 'policy');
+      else rejectOffer(ctx, offer.id, 'policy');
     }
   }
 }

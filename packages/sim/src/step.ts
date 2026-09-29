@@ -1,5 +1,20 @@
 import type { Command, ControllerSlot, Event, NationId, NationRecord, StandingPolicy } from '@nations/contracts';
 import { asSimCommand, validateCommand } from './commands.ts';
+import {
+  answerAppeals,
+  breakPledge,
+  contributeByCommand,
+  damageAt,
+  declineAppeal,
+  draftPools,
+  lockCrises,
+  makePledge,
+  openCrises,
+  pruneHits,
+  resolvePledges,
+  standingContribution,
+  type CrisisContext,
+} from './crisis.ts';
 import { economyTick, referencePrices, structuralCover } from './economy.ts';
 import { nextScoreTrack } from './score.ts';
 import {
@@ -48,10 +63,16 @@ export function canonicalOrder(state: WorldState, commands: readonly Command[]):
  *    moment they are accepted.
  * 2. Standing policies answer offers on their last tick (seam 8), then
  *    anything still unanswered expires.
- * 3. Every nation's economy: produce, consume, shortfall, income, resilience,
- *    growth, against a baseline that expects the structural shortfall
- *    (docs/RULES.md section 2); then each nation's smoothed score track.
- * 4. Trust drifts towards baseTrust; reference prices are refreshed.
+ * 3. Crises (RULES 4): pledges due this tick are collected or broken,
+ *    standing policies answer appeals due this tick, and pools whose deadline
+ *    is this tick lock and schedule each nation's damage.
+ * 4. Every nation's economy: produce, consume, shortfall, crisis damage,
+ *    income, resilience, growth, against a baseline that expects the
+ *    structural shortfall (docs/RULES.md section 2); then its monthly
+ *    standing contribution to the pools and its smoothed score track.
+ * 5. Trust drifts towards baseTrust; spent damage is dropped; new crises open
+ *    (a climate appeal once a year, a pandemic on a seeded roll); reference
+ *    prices are refreshed.
  *
  * Pure: never mutates `state` or `commands`, reads no clock and draws
  * randomness only from `state.rng`. Invalid commands are not errors: they
@@ -61,7 +82,7 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
   const events: Event[] = [];
   const nations: Record<NationId, NationRecord> = { ...state.nations };
   const controllers: Record<NationId, ControllerSlot> = { ...state.controllers };
-  const ctx: TradeContext = {
+  const ctx: TradeContext & CrisisContext = {
     tick: state.tick,
     prices: state.prices,
     nationOrder: state.nationOrder,
@@ -74,8 +95,16 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
     covered: new Map(),
     gainCbp: new Map(),
     cover: structuralCover(state),
+    pools: draftPools(state.pools),
+    crises: [...state.crises],
+    pledges: [...state.pledges],
+    hits: [...state.hits],
+    recent: [...state.recentCrises],
+    nextCrisisId: state.nextCrisisId,
+    nextPledgeId: state.nextPledgeId,
+    rng: state.rng,
   };
-  const draft = (): WorldState => ({ ...state, nations, controllers, offers: ctx.offers });
+  const draft = (): WorldState => ({ ...state, nations, controllers, offers: ctx.offers, crises: ctx.crises, pledges: ctx.pledges });
   const perNation = new Map<string, number>();
 
   const reject = (command: Command, reason: string): void => {
@@ -101,6 +130,7 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
     }
 
     const typed = asSimCommand(command);
+    if (command.why !== undefined) explainCommand(ctx, typed, command.why);
     switch (typed.type) {
       case 'ping': {
         const sender = nations[typed.nationId] as NationRecord;
@@ -174,20 +204,47 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
         });
         break;
       }
+      case 'contribute':
+        contributeByCommand(ctx, typed.nationId, typed.payload.pool, typed.payload.amount);
+        break;
+      case 'pledge':
+        makePledge(ctx, typed.nationId, typed.payload.pool, typed.payload.amount, typed.payload.deadlineTick);
+        break;
+      case 'withdrawPledge':
+        breakPledge(ctx, typed.payload.pledgeId, 'withdrawn');
+        break;
+      case 'declineAppeal':
+        declineAppeal(ctx, typed.nationId, typed.payload.crisisId);
+        break;
     }
   }
 
   runPolicies(ctx);
   expireOffers(ctx);
 
-  let ledger = ctx.ledger;
+  resolvePledges(ctx);
+  answerAppeals(ctx);
+  lockCrises(ctx);
+
   const scoreTrack: Record<NationId, ScoreTrack> = { ...state.scoreTrack };
   for (const id of state.nationOrder) {
     const endowment = state.endowments[id];
     if (endowment === undefined) throw new Error(`No endowment for "${id}"`);
-    const result = economyTick(nations[id] as NationRecord, endowment, ledger, ctx.gainCbp.get(id) ?? 0, ctx.cover);
-    ledger = result.ledger;
-    nations[id] = driftTrust(result.nation, state.nationOrder);
+    const damage = damageAt(ctx.hits, id, state.tick);
+    const result = economyTick(nations[id] as NationRecord, endowment, ctx.ledger, ctx.gainCbp.get(id) ?? 0, ctx.cover, damage.bp);
+    const lost = (bp: number): number => Math.floor((result.preCrisisOutput * Math.min(10_000, bp)) / 10_000);
+    ctx.ledger = {
+      ...result.ledger,
+      climateLoss: result.ledger.climateLoss + lost(damage.climate.bp),
+      climateLossUnpooled: result.ledger.climateLossUnpooled + lost(damage.climate.unpooled),
+      pandemicLoss: result.ledger.pandemicLoss + lost(damage.pandemic.bp),
+      pandemicLossUnpooled: result.ledger.pandemicLossUnpooled + lost(damage.pandemic.unpooled),
+    };
+    nations[id] = result.nation;
+    const contributed = standingContribution(ctx, id);
+    const stepped = nations[id] as NationRecord;
+    const withReport = contributed === 0 ? stepped : { ...stepped, private: { ...stepped.private, last: { ...stepped.private.last, contributed } } };
+    nations[id] = driftTrust(withReport, state.nationOrder);
     scoreTrack[id] = nextScoreTrack(state.scoreTrack[id], result.nation);
     const report = result.nation.private.last;
     if (report.unmetFood > 0 || report.unmetEnergy > 0) {
@@ -195,15 +252,51 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
     }
   }
 
+  pruneHits(ctx);
+  openCrises(ctx);
+
   const next: WorldState = {
     ...state,
+    rng: ctx.rng,
     nations,
     controllers,
     offers: ctx.offers,
     nextOfferId: ctx.nextOfferId,
-    ledger,
+    ledger: ctx.ledger,
     scoreTrack,
+    pools: ctx.pools,
+    crises: ctx.crises,
+    recentCrises: ctx.recent,
+    pledges: ctx.pledges,
+    hits: ctx.hits,
+    nextCrisisId: ctx.nextCrisisId,
+    nextPledgeId: ctx.nextPledgeId,
     tick: state.tick + 1,
   };
   return { state: { ...next, prices: referencePrices(next) }, events };
+}
+
+/**
+ * Relays a command's `why` (RULES 7.4) as an `explanation` event to the
+ * nation that acted and, for an offer, the other side. Built before the
+ * command applies, so the offer it answers is still in the draft.
+ */
+function explainCommand(ctx: TradeContext & CrisisContext, command: ReturnType<typeof asSimCommand>, why: readonly string[]): void {
+  let other: NationId | null = null;
+  let subject: number | null = null;
+  const p = command.payload as unknown as Record<string, unknown>;
+  if (command.type === 'makeOffer') other = command.payload.to;
+  if (typeof p.offerId === 'number') {
+    subject = p.offerId;
+    const offer = ctx.offers.find((o) => o.id === p.offerId);
+    if (offer !== undefined) other = offer.from === command.nationId ? offer.to : offer.from;
+  }
+  if (typeof p.crisisId === 'number') subject = p.crisisId;
+  if (typeof p.pledgeId === 'number') subject = p.pledgeId;
+  ctx.events.push({
+    tick: ctx.tick,
+    type: 'explanation',
+    payload: { nationId: command.nationId, decision: command.type, subject, reasons: [...why], by: 'command' },
+    audience: other === null || other === command.nationId ? [command.nationId] : [command.nationId, other],
+  });
 }

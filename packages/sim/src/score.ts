@@ -1,18 +1,20 @@
-import type { NationRecord, NationScore } from '@nations/contracts';
+import type { CollectiveGoals, NationRecord, NationScore, WorldLedger } from '@nations/contracts';
 import { TUNABLES } from './tunables.ts';
 import type { ScoreTrack, WorldState } from './world.ts';
 
 /**
  * Scoring, docs/RULES.md section 5 (D3), in basis points.
  *
- * Phase 1 has no crises, so the collective multiplier uses the two goals that
- * exist yet: nations at or above their own baseline, and world deficits met.
- * The climate and pandemic goals join the mean when Phase 2 adds them.
+ * The collective multiplier is the mean of four world goals (RULES 5.2):
+ * climate damage avoided, pandemic damage avoided, nations at or above their
+ * own baseline, and world deficits met. A crisis goal with nothing yet to
+ * avoid counts as met.
  */
 export type { NationScore };
 
 export interface Scoreboard {
   readonly collectiveBp: number;
+  readonly goals: CollectiveGoals;
   readonly multiplierBp: number;
   /** Playable nations only, in nation order. Aggregates are never scored. */
   readonly nations: readonly NationScore[];
@@ -47,6 +49,23 @@ export function nextScoreTrack(previous: ScoreTrack | undefined, nation: NationR
   };
 }
 
+/** 1 - (world unmet food and energy demand / world demand), both goods averaged, over the game so far. */
+function deficitsMetBp(l: WorldLedger): number {
+  const metBp = (consumed: number, unmet: number): number =>
+    consumed + unmet === 0 ? 10_000 : Math.floor((consumed * 10_000) / (consumed + unmet));
+  return Math.floor((metBp(l.foodConsumed, l.foodUnmet) + metBp(l.energyConsumed, l.energyUnmet)) / 2);
+}
+
+/** 1 - (output lost to each crisis kind / what empty pools would have lost), over the game so far (RULES 5.2). */
+export function crisisGoals(l: WorldLedger): Pick<CollectiveGoals, 'climateAvoidedBp' | 'pandemicAvoidedBp'> {
+  const avoided = (loss: number, unpooled: number): number =>
+    unpooled <= 0 ? 10_000 : Math.max(0, 10_000 - Math.floor((loss * 10_000) / unpooled));
+  return {
+    climateAvoidedBp: avoided(l.climateLoss, l.climateLossUnpooled),
+    pandemicAvoidedBp: avoided(l.pandemicLoss, l.pandemicLossUnpooled),
+  };
+}
+
 export function scoreboard(state: WorldState): Scoreboard {
   const playable = state.nationOrder
     .map((id) => state.nations[id] as NationRecord)
@@ -56,11 +75,8 @@ export function scoreboard(state: WorldState): Scoreboard {
   const tolerance = TUNABLES.baselineToleranceBp.value;
   const atBaselineBp =
     own.length === 0 ? 0 : Math.floor((own.filter((n) => n.ownScoreBp >= tolerance).length * 10_000) / own.length);
-  const l = state.ledger;
-  const metBp = (consumed: number, unmet: number): number =>
-    consumed + unmet === 0 ? 10_000 : Math.floor((consumed * 10_000) / (consumed + unmet));
-  const deficitsMetBp = Math.floor((metBp(l.foodConsumed, l.foodUnmet) + metBp(l.energyConsumed, l.energyUnmet)) / 2);
-  const collectiveBp = Math.floor((atBaselineBp + deficitsMetBp) / 2);
+  const goals: CollectiveGoals = { ...crisisGoals(state.ledger), atBaselineBp, deficitsMetBp: deficitsMetBp(state.ledger) };
+  const collectiveBp = Math.floor((goals.climateAvoidedBp + goals.pandemicAvoidedBp + goals.atBaselineBp + goals.deficitsMetBp) / 4);
 
   const floor = TUNABLES.collectiveFloorBp.value;
   const ceiling = TUNABLES.collectiveCeilingBp.value;
@@ -68,6 +84,7 @@ export function scoreboard(state: WorldState): Scoreboard {
   const scale = TUNABLES.scoreScale.value;
   return {
     collectiveBp,
+    goals,
     multiplierBp,
     nations: own.map((n) => ({
       ...n,

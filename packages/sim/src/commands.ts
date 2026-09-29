@@ -1,18 +1,22 @@
 import type {
   AcceptOfferCommand,
   Command,
+  ContributeCommand,
   CounterOfferCommand,
+  DeclineAppealCommand,
   FundResilienceCommand,
   GameCommand,
   MakeOfferCommand,
   NationRecord,
   PingCommand,
+  PledgeCommand,
   RejectOfferCommand,
   Resource,
   ResourceAmount,
   SetControllerCommand,
   SetPolicyCommand,
   WithdrawOfferCommand,
+  WithdrawPledgeCommand,
 } from '@nations/contracts';
 import { isFair } from './economy.ts';
 import { TUNABLES } from './tunables.ts';
@@ -20,14 +24,18 @@ import type { WorldState } from './world.ts';
 
 export type {
   AcceptOfferCommand,
+  ContributeCommand,
   CounterOfferCommand,
+  DeclineAppealCommand,
   FundResilienceCommand,
   MakeOfferCommand,
   PingCommand,
+  PledgeCommand,
   RejectOfferCommand,
   SetControllerCommand,
   SetPolicyCommand,
   WithdrawOfferCommand,
+  WithdrawPledgeCommand,
 };
 
 /** Every command the sim understands (contracts `GameCommand`). */
@@ -43,7 +51,19 @@ export const COMMAND_TYPES = [
   'withdrawOffer',
   'setPolicy',
   'fundResilience',
+  'contribute',
+  'pledge',
+  'withdrawPledge',
+  'declineAppeal',
 ] as const;
+const POOLS: readonly string[] = ['adaptation', 'health'];
+const CRISIS_RULES: readonly string[] = ['fairShare', 'reciprocal', 'none'];
+const CONTRIBUTION_TARGETS: readonly string[] = ['adaptation', 'health', 'split'];
+/** Upper end of the monthly contribution dial: a tenth of income. A safety range, not balance. */
+export const MAX_CONTRIBUTION_BP = 1_000;
+/** Limits on a command's `why`: a few short sentences, each with a number in it (RULES 7.4). */
+const MAX_WHY = 3;
+const MAX_WHY_LENGTH = 200;
 const CONTROLLER_SLOTS: readonly string[] = ['human', 'ai', 'caretaker'];
 export const RESOURCES: readonly Resource[] = ['food', 'energy', 'credit'];
 
@@ -78,7 +98,7 @@ function termsShape(give: unknown, get: unknown): string | null {
 }
 
 const POLICY_BOOLEANS = ['acceptFairDeficit', 'acceptTrusted', 'rejectAll', 'hardBargains'] as const;
-const POLICY_KEYS: readonly string[] = [...POLICY_BOOLEANS, 'coverPriority', 'resilienceFloor'];
+const POLICY_KEYS: readonly string[] = [...POLICY_BOOLEANS, 'coverPriority', 'resilienceFloor', 'crisisRule', 'contributionBp', 'contributionTo'];
 
 function policyShape(payload: Record<string, unknown>): string | null {
   const keys = Object.keys(payload);
@@ -96,6 +116,26 @@ function policyShape(payload: Record<string, unknown>): string | null {
       return 'resilienceFloor out of range';
     }
   }
+  if ('crisisRule' in payload && (typeof payload.crisisRule !== 'string' || !CRISIS_RULES.includes(payload.crisisRule))) {
+    return 'crisisRule must be fairShare, reciprocal or none';
+  }
+  if ('contributionTo' in payload && (typeof payload.contributionTo !== 'string' || !CONTRIBUTION_TARGETS.includes(payload.contributionTo))) {
+    return 'contributionTo must be adaptation, health or split';
+  }
+  if ('contributionBp' in payload) {
+    const bp = payload.contributionBp;
+    if (typeof bp !== 'number' || !Number.isSafeInteger(bp) || bp < 0 || bp > MAX_CONTRIBUTION_BP) return 'contributionBp out of range';
+  }
+  return null;
+}
+
+function whyShape(why: unknown): string | null {
+  if (why === undefined) return null;
+  if (!Array.isArray(why) || why.length === 0 || why.length > MAX_WHY) return `why must be 1 to ${MAX_WHY} sentences`;
+  for (const line of why) {
+    if (typeof line !== 'string' || line.length === 0 || line.length > MAX_WHY_LENGTH) return `each why must be text of at most ${MAX_WHY_LENGTH} characters`;
+    if (!/[0-9]/.test(line)) return 'each why must carry a number (RULES 7.4)';
+  }
   return null;
 }
 
@@ -112,6 +152,8 @@ export function validateCommandShape(state: WorldState, command: unknown): strin
   }
   if (typeof tick !== 'number' || !Number.isSafeInteger(tick) || tick < 0) return 'bad tick';
   if (!isRecord(payload)) return 'payload is not an object';
+  const why = whyShape(command.why);
+  if (why !== null) return why;
   switch (type) {
     case 'ping': {
       const { target } = payload;
@@ -145,6 +187,17 @@ export function validateCommandShape(state: WorldState, command: unknown): strin
       return policyShape(payload);
     case 'fundResilience':
       return isPositiveInt(payload.points) ? null : 'points must be a positive whole number';
+    case 'contribute':
+    case 'pledge': {
+      if (typeof payload.pool !== 'string' || !POOLS.includes(payload.pool)) return 'unknown pool';
+      if (!isPositiveInt(payload.amount) || payload.amount > MAX_AMOUNT) return 'amount must be a positive whole number';
+      if (type === 'pledge' && (typeof payload.deadlineTick !== 'number' || !Number.isSafeInteger(payload.deadlineTick))) return 'bad deadline';
+      return null;
+    }
+    case 'withdrawPledge':
+      return isPositiveInt(payload.pledgeId) ? null : 'unknown pledge';
+    case 'declineAppeal':
+      return isPositiveInt(payload.crisisId) ? null : 'unknown crisis';
     default:
       return 'unknown command type';
   }
@@ -205,6 +258,28 @@ export function validateCommand(state: WorldState, command: unknown): string | n
       if (offer === undefined) return 'offer is no longer open';
       if (offer.from !== typed.nationId) return 'only the maker can withdraw an offer';
       return null;
+    }
+    case 'contribute':
+      if (self.public.kind === 'aggregate') return 'background regions pay through their standing policy only';
+      return self.private.stocks.credit < typed.payload.amount ? 'not enough credit' : null;
+    case 'pledge': {
+      if (self.public.kind === 'aggregate') return 'background regions pay through their standing policy only';
+      const deadline = typed.payload.deadlineTick;
+      if (deadline <= state.tick || deadline > state.tick + TUNABLES.maxPledgeTicks.value) {
+        return `deadline must be 1 to ${TUNABLES.maxPledgeTicks.value} months ahead`;
+      }
+      if (state.pledges.some((p) => p.nationId === self.id && p.pool === typed.payload.pool)) return 'you already have an open pledge to this pool';
+      return null;
+    }
+    case 'withdrawPledge': {
+      const pledge = state.pledges.find((p) => p.id === typed.payload.pledgeId);
+      if (pledge === undefined) return 'pledge is no longer open';
+      return pledge.nationId === self.id ? null : 'only the pledger can withdraw a pledge';
+    }
+    case 'declineAppeal': {
+      const crisis = state.crises.find((c) => c.id === typed.payload.crisisId);
+      if (crisis === undefined) return 'appeal is no longer open';
+      return crisis.answers[self.id] === undefined ? null : 'you already answered this appeal';
     }
     case 'fundResilience': {
       const cost = typed.payload.points * TUNABLES.resilienceCostPerPoint.value;

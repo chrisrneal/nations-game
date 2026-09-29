@@ -21,6 +21,14 @@ export interface GameOptions {
   readonly humanSwitch?: boolean;
   /** Called after every tick, e.g. for invariant checks. */
   readonly onTick?: (state: WorldState, events: readonly Event[]) => void;
+  /** Mid-game changes of strategy: from `tick` on, `nation` plays `strategy` (the Gate 2 spoiler scenario). */
+  readonly switches?: readonly { readonly tick: number; readonly nation: string; readonly strategy: Strategy }[];
+  /**
+   * Players who walk away: `nation` is handed to a human who sends nothing for
+   * ticks [from, to), then back to its bot. Before leaving it may send
+   * `leaving` (e.g. a pledge). The Gate 2 absence test.
+   */
+  readonly away?: readonly { readonly nation: string; readonly from: number; readonly to: number; readonly leaving?: readonly Command[] }[];
 }
 
 export interface GameMetrics {
@@ -67,15 +75,28 @@ export function playGame(options: GameOptions): GameResult {
 
   let rejectedAtStep = 0;
   let controllerSwitches = 0;
+  const strategyAt = (id: string, t: number): Strategy => {
+    let strategy: Strategy = options.strategies?.[id] ?? 'trader';
+    for (const sw of options.switches ?? []) if (sw.nation === id && sw.tick <= t) strategy = sw.strategy;
+    return strategy;
+  };
   for (let t = 0; t < ticks; t++) {
     const state = session.state;
     if (human !== undefined && (t === handOff || t === takeBack)) {
       const controller = t === handOff ? 'caretaker' : 'human';
       submit({ nationId: human, tick: t, type: 'setController', payload: { controller } });
     }
+    for (const a of options.away ?? []) {
+      if (t === a.from) {
+        for (const command of a.leaving ?? []) submit({ ...command, tick: t });
+        submit({ nationId: a.nation as NationId, tick: t, type: 'setController', payload: { controller: 'human' } });
+      }
+      if (t === a.to) submit({ nationId: a.nation as NationId, tick: t, type: 'setController', payload: { controller: 'ai' } });
+    }
     for (const id of state.nationOrder) {
       if (state.controllers[id] === 'human') continue;
-      const strategy = options.strategies?.[id] ?? 'trader';
+      if ((options.away ?? []).some((a) => a.nation === id && t === a.from)) continue;
+      const strategy = strategyAt(id, t);
       for (const command of botDecide(strategy, viewFor(state, id), aiSeed)) submit(command);
     }
     const events = session.advance(1);
