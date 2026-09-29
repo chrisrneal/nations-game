@@ -92,4 +92,43 @@ describe('LocalHost', () => {
   it('loading an empty slot fails loudly', async () => {
     await expect(host().host.loadFrom('slot-3')).rejects.toThrow(/empty/);
   });
+
+  it('"Continue" resumes a live game where the wall clock says; a manual slot resumes paused (prompt 11)', async () => {
+    let clock = 5_000_000;
+    const timers = { setInterval: () => 0, clearInterval: () => undefined, now: () => clock };
+    const store = new MemorySaveStore();
+    const first = host(store, new GameEngine(timers));
+    await first.host.newGame('japan');
+    await first.host.setPace('live');
+    await first.host.away();
+    await first.host.saveTo('slot-1');
+    expect((await store.get(AUTOSAVE_SLOT))?.game.live?.anchor).toBe(clock);
+
+    clock += 6 * 60 * 60 * 1000; // six hours closed: 12 months
+    const second = host(store, new GameEngine(timers));
+    const seen: GameUpdate[] = [];
+    second.host.subscribe((u) => seen.push(u));
+    await second.host.loadFrom(AUTOSAVE_SLOT);
+    expect(seen.at(-1)).toMatchObject({ pace: 'live', view: { tick: 12 }, recap: { fromTick: 0, toTick: 12 } });
+    // The caught-up game is autosaved at once, so closing again cannot replay the same months.
+    expect((await store.get(AUTOSAVE_SLOT))?.tick).toBe(12);
+    await second.host.dismissRecap();
+    expect(seen.at(-1)?.recap).toBeNull();
+
+    const third = host(store, new GameEngine(timers));
+    const bookmarks: GameUpdate[] = [];
+    third.host.subscribe((u) => bookmarks.push(u));
+    await third.host.loadFrom('slot-1');
+    expect(bookmarks.at(-1)).toMatchObject({ pace: 'paused', view: { tick: 0 }, recap: null });
+  });
+
+  it('prediction mode and guesses go through the host', async () => {
+    const { host: h } = host();
+    const seen: GameUpdate[] = [];
+    h.subscribe((u) => seen.push(u));
+    await h.newGame('india');
+    await h.setPredictionMode(true);
+    expect(seen.at(-1)?.predictions.mode).toBe(true);
+    await expect(h.predict(999, 'accept')).rejects.toThrow(/already answered/);
+  });
 });

@@ -16,10 +16,12 @@
  *     [--seed 1] [--ticks T] [--absence 20]          defection and retaliation, win rates, cooperator vs
  *     [--out DIR]                                    free-rider and spoiler pairs, the 24-hour absence
  *                                                    test, and the Gate 1 suite again; writes gate2.md
+ *   npm run harness -- predictions                   prediction accuracy (Gate 2) from saves exported on
+ *     [--files a.json,b.json] [--dir DIR] [--out DIR] the phone with prediction mode on; writes predictions.md
  *   `--suite gate1` is the same as `gate1`. An unknown command or flag is an
  *   error (exit 2), never silently ignored.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
@@ -30,6 +32,7 @@ import { loadRoster } from './roster.ts';
 import { formatGate1, formatGate1Ranges, runGate1, runGate1Ranges } from './gate1.ts';
 import { formatGate2, runGate2 } from './gate2.ts';
 import { parseArgs, type HarnessCommand, type ParsedArgs } from './args.ts';
+import { formatPredictionReport, parsePredictionFile, predictionReport } from './predictions.ts';
 
 let parsed: ParsedArgs;
 try {
@@ -132,5 +135,23 @@ async function gate2(): Promise<void> {
   if (!report.pass) process.exitCode = 1;
 }
 
-const commands: Record<HarnessCommand, () => Promise<void>> = { play, determinism, bench, gate1, gate2 };
+async function predictions(): Promise<void> {
+  const files = (parsed.strings.files ?? '').split(',').filter((f) => f.length > 0);
+  const dir = parsed.strings.dir;
+  if (dir !== undefined) files.push(...readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => join(dir, f)));
+  if (files.length === 0) {
+    console.error('Give exported saves: --files a.json,b.json or --dir folder (export from the Game tab with prediction mode on).');
+    process.exit(2);
+  }
+  const report = predictionReport(files.map((f) => parsePredictionFile(f, readFileSync(f, 'utf8'))));
+  const text = formatPredictionReport(report);
+  const outDir = resolve(option('out', join(fileURLToPath(new URL('..', import.meta.url)), 'out')));
+  mkdirSync(outDir, { recursive: true });
+  writeFileSync(join(outDir, 'predictions.md'), `${text}\n`);
+  console.log(text);
+  console.log(`wrote ${join(outDir, 'predictions.md')}`);
+  if (!report.pass) process.exitCode = 1;
+}
+
+const commands: Record<HarnessCommand, () => Promise<void>> = { play, determinism, bench, gate1, gate2, predictions };
 await commands[parsed.command]();

@@ -1,11 +1,13 @@
 import { useEffect, useState, type ReactElement } from 'react';
-import { AUTOSAVE_SLOT, type GameHost, type SlotSummary } from '../platform/index.ts';
+import { AUTOSAVE_SLOT, type GameHost, type InstallPrompt, type SlotSummary } from '../platform/index.ts';
 import { NATIONS, nameOf, tickDate } from '../world/nations.ts';
+import { InstallBanner } from './Install.tsx';
 import { Saves } from './Saves.tsx';
 
 /** First screen: continue the autosave, load a slot, or pick a nation for a new game. */
 export function StartScreen(props: {
   host: GameHost;
+  install?: InstallPrompt | undefined;
   onStart: (nationId: string) => void;
   onLoad: (slot: string) => void;
   onImported: () => void;
@@ -27,6 +29,7 @@ export function StartScreen(props: {
         <h1>Nations</h1>
         <p className="lede">Run a real nation in 2030. Cooperation beats conquest.</p>
       </header>
+      <InstallBanner install={props.install} onToast={props.onToast} />
       {mode === 'menu' && (
         <div className="start-actions">
           {autosave !== null && (

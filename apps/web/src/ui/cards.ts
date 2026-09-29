@@ -1,14 +1,21 @@
-import type { Command, NationView, TradeOffer } from '@nations/contracts';
+import type { Command, Crisis, NationView, Pledge, TradeOffer } from '@nations/contracts';
+import type { JournalSnapshot, PendingPrediction, PredictionsView } from '../platform/index.ts';
 import { nameOf } from '../world/nations.ts';
 import {
+  CRISIS_NAME,
   GOODS,
   ICON,
+  POOL_NAME,
   amountText,
+  balance,
   buyDraft,
   commands,
+  fairAmount,
   fmt,
+  fundedPct,
   isFair,
   outlook,
+  owedShare,
   policyWill,
   priceGapPct,
   rule,
@@ -17,6 +24,7 @@ import {
   type Good,
   type TradeDraft,
 } from './econ.ts';
+import { EMPTY_JOURNAL, announcements, crisisReasons, notYet, offerReason, said } from './reasons.ts';
 
 /**
  * Decision cards, built from the View every time it changes (RULES 8.1). The
@@ -29,7 +37,9 @@ export type CardAction =
   /** Open the trade sheet with these terms, to adjust and send (or counter an offer). */
   | { readonly kind: 'compose'; readonly draft: TradeDraft; readonly counterOf: number | null }
   /** Close the card for this month; nothing is sent. */
-  | { readonly kind: 'dismiss' };
+  | { readonly kind: 'dismiss' }
+  /** Prediction mode: the player's guess at what an AI nation did. */
+  | { readonly kind: 'predict'; readonly id: number; readonly choice: string };
 
 export interface CardOption {
   readonly id: string;
@@ -41,10 +51,12 @@ export interface CardOption {
 
 export interface DecisionCard {
   readonly id: string;
-  readonly kind: 'offer' | 'shortfall' | 'opportunity' | 'pending';
+  readonly kind: 'crisis' | 'alert' | 'offer' | 'shortfall' | 'opportunity' | 'predict' | 'pending';
   readonly icon: string;
   readonly title: string;
   readonly context: string;
+  /** What the nation behind the card said, in its own numbers (RULES 7.4), or a placeholder until it says. */
+  readonly reasons?: readonly string[];
   /** Months until the card goes away on its own. */
   readonly expiresIn: number;
   readonly options: readonly CardOption[];
@@ -60,7 +72,7 @@ function priceLine(view: NationView, offer: Pick<TradeOffer, 'give' | 'get'>, fr
     : `Generous: they ask ${Math.abs(gap)}% less than world prices.`;
 }
 
-function incoming(view: NationView, offer: TradeOffer): DecisionCard {
+function incoming(view: NationView, offer: TradeOffer, journal: JournalSnapshot): DecisionCard {
   const from = nameOf(offer.from);
   const left = offer.expiryTick - view.tick;
   const will = policyWill(view, offer);
@@ -68,9 +80,8 @@ function incoming(view: NationView, offer: TradeOffer): DecisionCard {
   const absent =
     will === 'accept'
       ? 'If you do not answer, your standing policy accepts it on its last month.'
-      : will === 'reject'
-        ? 'If you do not answer, your standing policy rejects it.'
-        : `If you do not answer it expires, and ${from} trusts you a little less.`;
+      : 'If you do not answer, your standing policy declines it on its last month.';
+  const note = offerReason(journal, offer);
   const counter: TradeDraft = { to: offer.from, give: offer.get, get: offer.give };
   return {
     id: `offer:${offer.id}`,
@@ -78,6 +89,7 @@ function incoming(view: NationView, offer: TradeOffer): DecisionCard {
     icon: '🤝',
     title: `${from} offers ${amountText(offer.give)}`,
     context: `${from} gives you ${amountText(offer.give)} and asks for ${amountText(offer.get)}. ${priceLine(view, offer, true)} ${absent}`,
+    reasons: note === undefined ? [notYet(offer.from)] : [said(note), ...note.reasons.slice(1)],
     expiresIn: left,
     options: [
       {
@@ -178,11 +190,231 @@ function opportunity(view: NationView, good: Good): DecisionCard | null {
   };
 }
 
+/** An open crisis appeal the player has not answered, or one closing short of its target. */
+function crisisCard(view: NationView, crisis: Crisis, journal: JournalSnapshot): DecisionCard | null {
+  if (view.tick > crisis.deadlineTick || view.tick <= crisis.openedTick) return null;
+  const { share, paid, owed } = owedShare(view, crisis);
+  if (share <= 0) return null;
+  const left = crisis.deadlineTick - view.tick + 1;
+  const name = CRISIS_NAME[crisis.kind];
+  const pool = POOL_NAME[crisis.pool];
+  const pct = fundedPct(view, crisis);
+  const credit = view.self.private.stocks.credit;
+  const answered = crisis.answers[view.selfId];
+  const heard = crisisReasons(journal, crisis.id, view.selfId).map(said);
+  const reasons = heard.length > 0 ? heard : ['No other nation has explained its answer yet; their reasons show here when they do.'];
+  const refuse = (amount: number): string | null => (credit < amount ? `You hold only ${fmt(credit)} credit: the sim will refuse it.` : null);
+
+  if (answered !== undefined) {
+    // Crisis closing (RULES 8.1): one month left and the pool is short.
+    if (left > 1 || pct >= 100) return null;
+    const topUp = Math.max(1, Math.min(crisis.target - Math.floor((pct * crisis.target) / 100), Math.max(share, 1)));
+    return {
+      id: `closing:${crisis.id}`,
+      kind: 'crisis',
+      icon: '⏰',
+      title: `${name} pool closes at ${pct}%`,
+      context: `The ${pool} pool locks at the end of this month holding ${pct}% of its ${fmt(crisis.target)} credit target. Damage to every nation is cut in proportion to how full it is. You ${answered.answer} ${fmt(answered.amount)}.`,
+      reasons,
+      expiresIn: 1,
+      options: [
+        {
+          id: 'topup',
+          label: `Top up · ${fmt(topUp)} credit`,
+          consequence: refuse(topUp) ?? `Brings the pool closer to full cover; everyone's damage falls, yours included.`,
+          action: { kind: 'send', command: commands.contribute(view, crisis.pool, topUp), done: `Paid ${fmt(topUp)} into the ${pool} pool` },
+        },
+        { id: 'pass', label: 'Pass', consequence: 'Keep your credit; the pool locks as it is.', action: { kind: 'dismiss' } },
+      ],
+    };
+  }
+
+  const policy = view.self.private.policy.crisisRule;
+  const byPolicy =
+    policy === 'none'
+      ? 'your policy pays nothing'
+      : policy === 'fairShare'
+        ? `your policy pays the ${fmt(owed)} you still owe`
+        : 'your policy pays your share if the world funded the last round, less if not';
+  const options: CardOption[] = [];
+  if (owed > 0) {
+    options.push({
+      id: 'pay',
+      label: `Pay your share · ${fmt(owed)} credit`,
+      consequence: refuse(owed) ?? `The pool reaches about ${Math.min(999, pct + Math.floor((owed * 100) / Math.max(1, crisis.target)))}% of target and you count as a contributor.`,
+      action: { kind: 'send', command: commands.contribute(view, crisis.pool, owed), done: `Paid ${fmt(owed)} into the ${pool} pool` },
+    });
+    const hasPledge = view.crises.pledges.some((p) => p.nationId === view.selfId && p.pool === crisis.pool);
+    const deadline = Math.min(crisis.deadlineTick, view.tick + rule(view, 'maxPledgeTicks'));
+    if (!hasPledge && deadline > view.tick) {
+      options.push({
+        id: 'pledge',
+        label: `Pledge ${fmt(owed)} by month ${deadline}`,
+        consequence: `Collected automatically in month ${deadline}; if you cannot pay then, every nation trusts you ${rule(view, 'trustPerPledgeBroken')} less.`,
+        action: { kind: 'send', command: commands.pledge(view, crisis.pool, owed, deadline), done: `Pledged ${fmt(owed)} to the ${pool} pool` },
+      });
+    }
+  } else {
+    const extra = Math.max(1, Math.ceil(share / 2));
+    options.push({
+      id: 'pay',
+      label: `Pay a little more · ${fmt(extra)} credit`,
+      consequence: refuse(extra) ?? 'Your monthly payments already cover your share; extra fills the pool for everyone.',
+      action: { kind: 'send', command: commands.contribute(view, crisis.pool, extra), done: `Paid ${fmt(extra)} into the ${pool} pool` },
+    });
+  }
+  options.push({
+    id: 'decline',
+    label: 'Decline',
+    consequence: owed > 0 ? 'You keep the credit, but every nation sees it and strict nations remember free-riders.' : 'Your monthly payments stand; nothing more is paid.',
+    action: { kind: 'send', command: commands.declineAppeal(view, crisis.id), done: `Declined the ${name.toLowerCase()} appeal` },
+  });
+  return {
+    id: `crisis:${crisis.id}`,
+    kind: 'crisis',
+    icon: crisis.kind === 'climate' ? '🌪️' : '🦠',
+    title: `${name} appeal: your share ${fmt(share)} credit`,
+    context: `The ${pool} pool needs ${fmt(crisis.target)} credit by month ${crisis.deadlineTick} and holds ${pct}%. Your share, by exposure, is ${fmt(share)}; you have paid ${fmt(paid)} this round. If you do not answer, ${byPolicy} on the deadline.`,
+    reasons,
+    expiresIn: left,
+    options,
+  };
+}
+
+/** Alerts: a pledge you cannot cover, resilience under your floor, an AI nation that suspended trade with you. */
+function alerts(view: NationView, journal: JournalSnapshot): DecisionCard[] {
+  const cards: DecisionCard[] = [];
+  const credit = view.self.private.stocks.credit;
+  for (const p of view.crises.pledges.filter((x: Pledge) => x.nationId === view.selfId)) {
+    const due = p.amount - p.paid;
+    const left = p.deadlineTick - view.tick;
+    if (due <= credit || left > 1) continue;
+    const payNow = Math.max(0, Math.min(credit, due));
+    const options: CardOption[] = [];
+    if (payNow > 0) {
+      options.push({
+        id: 'pay',
+        label: `Pay ${fmt(payNow)} now`,
+        consequence: `Leaves ${fmt(due - payNow)} to find by month ${p.deadlineTick}, or the pledge breaks.`,
+        action: { kind: 'send', command: commands.contribute(view, p.pool, payNow), done: `Paid ${fmt(payNow)} towards your pledge` },
+      });
+    }
+    options.push({
+      id: 'withdraw',
+      label: 'Withdraw the pledge',
+      consequence: `It counts as broken: every nation trusts you ${rule(view, 'trustPerPledgeBroken')} less.`,
+      action: { kind: 'send', command: commands.withdrawPledge(view, p.id), done: 'Pledge withdrawn' },
+    });
+    options.push({ id: 'keep', label: 'Keep it', consequence: 'Income may cover it by the deadline; if not, it breaks.', action: { kind: 'dismiss' } });
+    cards.push({
+      id: `pledge:${p.id}:${view.tick}`,
+      kind: 'alert',
+      icon: '⚠️',
+      title: `Pledge at risk: ${fmt(due)} due month ${p.deadlineTick}`,
+      context: `You pledged ${fmt(p.amount)} to the ${POOL_NAME[p.pool]} pool and paid ${fmt(p.paid)}. You hold ${fmt(credit)} credit.`,
+      expiresIn: Math.max(1, left),
+      options,
+    });
+  }
+
+  const floor = view.self.private.policy.resilienceFloor;
+  const resilience = view.self.private.resilience;
+  if (resilience < floor) {
+    const points = floor - resilience;
+    const cost = points * rule(view, 'resilienceCostPerPoint');
+    cards.push({
+      id: `resilience:${view.tick}`,
+      kind: 'alert',
+      icon: '🛡️',
+      title: `Resilience ${resilience}, under your floor of ${floor}`,
+      context: `Resilience cuts crisis damage. Your policy refills it from credit when it can; you hold ${fmt(credit)}.`,
+      expiresIn: 1,
+      options: [
+        {
+          id: 'fund',
+          label: `Fund ${points} points · ${fmt(cost)} credit`,
+          consequence: credit < cost ? `You hold only ${fmt(credit)} credit: the sim will refuse it.` : 'Back at your floor next month.',
+          action: { kind: 'send', command: commands.fundResilience(view, points), done: `Funded ${points} resilience` },
+        },
+        { id: 'accept', label: 'Accept it for now', consequence: 'A crisis hits you harder until it recovers.', action: { kind: 'dismiss' } },
+      ],
+    });
+  }
+
+  for (const note of announcements(journal, view.selfId, view.tick)) {
+    const partner = view.others.find((o) => o.id === note.nationId);
+    if (partner === undefined) continue;
+    const good = GOODS.find((g) => spare(view, g) > 0 && balance(partner, g) < 0);
+    const give = good === undefined ? null : { resource: good, amount: Math.max(1, Math.min(spare(view, good), -balance(partner, good))) };
+    const options: CardOption[] = [];
+    if (give !== null) {
+      // A goodwill offer: fair goods for a little under their credit value.
+      const credit = Math.max(1, Math.floor((fairAmount(view, give, 'credit') * (100 - Math.floor(rule(view, 'priceBandPct') / 2))) / 100));
+      options.push({
+        id: 'goodwill',
+        label: `Offer goodwill · ${amountText(give)}`,
+        consequence: 'Adjust and send a generous offer; a kept deal rebuilds trust.',
+        action: { kind: 'compose', draft: { to: note.nationId, give, get: { resource: 'credit', amount: credit } }, counterOf: null },
+      });
+    }
+    options.push({ id: 'accept', label: 'Accept it', consequence: 'Trade with them waits until the suspension ends.', action: { kind: 'dismiss' } });
+    cards.push({
+      id: `suspend:${note.nationId}:${note.tick}`,
+      kind: 'alert',
+      icon: '🚫',
+      title: `${nameOf(note.nationId)} suspended trade with you`,
+      context: `In month ${note.tick}, ${nameOf(note.nationId)} stopped trading with you. It will answer your offers with no until the suspension ends.`,
+      reasons: [said(note), ...note.reasons.slice(1)],
+      expiresIn: 1,
+      options,
+    });
+  }
+  return cards;
+}
+
+const GUESS_LABEL: Readonly<Record<string, { label: string; consequence: string }>> = {
+  accept: { label: 'They accept', consequence: 'The deal goes through as you offered it.' },
+  reject: { label: 'They decline', consequence: 'No deal this time.' },
+  counter: { label: 'They counter', consequence: 'They send back different terms.' },
+  contributed: { label: 'They pay in', consequence: 'Credit goes into the pool now.' },
+  pledged: { label: 'They pledge', consequence: 'They promise to pay by a deadline.' },
+  declined: { label: 'They decline', consequence: 'They pay nothing towards it.' },
+};
+
+/** Prediction mode: "What will they do?" before the AI's answer is shown. */
+function predictCard(p: PendingPrediction, tick: number): DecisionCard {
+  return {
+    id: `predict:${p.id}`,
+    kind: 'predict',
+    icon: '🔮',
+    title: `What will ${nameOf(p.nationId)} do?`,
+    context: `${p.question} Guess first; then see the real answer and their reasons. Your guesses are kept in the save.`,
+    expiresIn: Math.max(1, 6 - (tick - p.tick)),
+    options: p.choices.map((choice) => ({
+      id: `guess-${choice}`,
+      label: GUESS_LABEL[choice]?.label ?? choice,
+      consequence: GUESS_LABEL[choice]?.consequence ?? '',
+      action: { kind: 'predict', id: p.id, choice },
+    })),
+  };
+}
+
+export interface CardSources {
+  readonly journal?: JournalSnapshot;
+  readonly predictions?: PredictionsView;
+}
+
 /** Every card for this View, most urgent first. `dismissed` hides cards the player set aside. */
-export function cardsFor(view: NationView, dismissed: ReadonlySet<string>): DecisionCard[] {
+export function cardsFor(view: NationView, dismissed: ReadonlySet<string>, sources: CardSources = {}): DecisionCard[] {
+  const journal = sources.journal ?? EMPTY_JOURNAL;
   const cards: DecisionCard[] = [];
   const priority = view.self.private.policy.coverPriority;
-  for (const offer of view.offers) if (offer.to === view.selfId) cards.push(incoming(view, offer));
+  for (const crisis of view.crises.open) {
+    const card = crisisCard(view, crisis, journal);
+    if (card !== null) cards.push(card);
+  }
+  cards.push(...alerts(view, journal));
+  for (const offer of view.offers) if (offer.to === view.selfId) cards.push(incoming(view, offer, journal));
   for (const good of [priority, ...GOODS.filter((g) => g !== priority)]) {
     const card = shortfall(view, good);
     if (card !== null) cards.push(card);
@@ -191,6 +423,7 @@ export function cardsFor(view: NationView, dismissed: ReadonlySet<string>): Deci
     const card = opportunity(view, good);
     if (card !== null) cards.push(card);
   }
+  if (sources.predictions?.mode === true) for (const p of sources.predictions.pending) cards.push(predictCard(p, view.tick));
   for (const offer of view.offers) if (offer.from === view.selfId) cards.push(pending(view, offer));
   return cards.filter((card) => !dismissed.has(card.id));
 }

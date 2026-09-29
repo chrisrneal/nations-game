@@ -50,4 +50,9 @@ describe('harness command line', () => {
     expect(parseArgs(['determinism', '--no-browser']).switches).toEqual(['no-browser']);
     expect(() => parseArgs(['gate1', '--no-browser'])).toThrow(/Unknown flag --no-browser for "gate1"/);
   });
+
+  it('reads the predictions report flags', () => {
+    expect(parseArgs(['predictions', '--files', 'a.json,b.json', '--dir', 'saves'])).toMatchObject({ command: 'predictions', strings: { files: 'a.json,b.json', dir: 'saves' } });
+    expect(() => parseArgs(['predictions', '--games', '3'])).toThrow(/Unknown flag --games for "predictions"/);
+  });
 });
