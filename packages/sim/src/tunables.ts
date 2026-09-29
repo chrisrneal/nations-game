@@ -410,6 +410,85 @@ export const TUNABLES = {
     max: 6,
     note: 'Prompt 06 gap-filler: ticks of own demand the greedy trader keeps in stock before it sells a surplus or stops buying. Higher is safer and trades less.',
   },
+  // AI nations (prompt 10, docs/AI_DESIGN.md). Read by packages/ai through NationView.rules.
+  aiRetaliationWindowTicks: {
+    value: 2,
+    min: 1,
+    max: 6,
+    note: 'Latest tick, counted from a broken deal, by which a strict reciprocator has visibly retaliated. Short is legible (players connect cause and effect); long feels arbitrary.',
+  },
+  aiPunishTicks: {
+    value: 6,
+    min: 2,
+    max: 24,
+    note: 'How long a retaliation lasts: months of refused trade after a broken deal (half that after a skipped crisis pledge). Long enough to cost more than the break gained, short enough that a reformed partner returns.',
+  },
+  aiForgiveLimit: {
+    value: 1,
+    min: 0,
+    max: 3,
+    note: 'Offences a forgiving AI lets pass inside its memory before it retaliates like a strict one. 0 makes forgiving the same as strict; above 1 becomes farmable.',
+  },
+  aiMemoryDecayPct: {
+    value: 4,
+    min: 1,
+    max: 20,
+    note: 'Percent of remembered grievance that fades each tick (the roadmap\'s decaying memory). 4 halves a grudge in about 17 months; 20 forgets within a season.',
+  },
+  aiGrudgePerBreak: {
+    value: 40,
+    min: 10,
+    max: 100,
+    note: 'Grievance points for a deal broken against this nation. Grievance at or above this counts as an unforgiven offence and lowers the partner in every ranking.',
+  },
+  aiGrudgePerSkip: {
+    value: 20,
+    min: 0,
+    max: 60,
+    note: 'Grievance points for skipping a crisis pledge this nation paid into. 0 means crisis free-riding is never remembered in trade.',
+  },
+  aiTrustPriceBpPerPoint: {
+    value: 20,
+    min: 0,
+    max: 60,
+    note: 'How much more generous (bp of price) an AI is per point of trust above baseTrust, and how much stricter below. At 20, trust 75 accepts 8% worse terms; trust 15 wants 4% better.',
+  },
+  aiCounterRangePct: {
+    value: 20,
+    min: 0,
+    max: 40,
+    note: 'How far below its reservation price an offer can be and still get a counter rather than a flat rejection. 0 turns counters off.',
+  },
+  aiExploiterMarkupPct: {
+    value: 20,
+    min: 0,
+    max: 50,
+    note: 'Markup a hard-bargaining AI asks over the reference price. At or below priceBandPct its offers stay fair; above it they are hard bargains.',
+  },
+  aiBudgetUnitsPerTick: {
+    value: 4000,
+    min: 500,
+    max: 20000,
+    note: 'Work units the whole AI roster may spend per tick (one unit is one candidate scored). Due nations that do not fit wait a tick. 4000 fits the 17-nation roster with room; measured in docs/AI_DESIGN.md.',
+  },
+  aiPledgeMaxIncomePct: {
+    value: 10,
+    min: 0,
+    max: 30,
+    note: 'Most of one month\'s income an AI pledges to a crisis pool in one go. Caps how far generosity can starve its own economy.',
+  },
+  aiConditionalPledgePct: {
+    value: 50,
+    min: 20,
+    max: 80,
+    note: 'A strict reciprocator pledges its full fair share only when at least this percent of nations paid into the last crisis. Lower cooperates more readily.',
+  },
+  aiFreeRideCoverPct: {
+    value: 70,
+    min: 40,
+    max: 100,
+    note: 'A hard bargainer skips a pledge once the pool is this percent funded, because the pool pays out by exposure anyway (RULES 4.3). 100 means it never free-rides.',
+  },
 } as const satisfies Readonly<Record<string, Tunable>>;
 
 export type TunableId = keyof typeof TUNABLES;
