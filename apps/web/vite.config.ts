@@ -45,7 +45,7 @@ export default defineConfig({
   worker: { format: 'es' },
   server: {
     // `npm run dev -- --host` prints a LAN address so a phone on the same
-    // Wi-Fi can open it. See README.md.
+    // Wi-Fi can open it (README.md, "Installing it on your phone").
     port: 5173,
   },
 });
