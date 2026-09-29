@@ -27,6 +27,33 @@ Gate 1 verdict: **PASS WITH WAIVER** (docs/gates/GATE-1.md): the owner waived th
 
 ## Session log
 
+### 2026-09-29 - prompt 10, AI nations (lane A, plus docs/AI_DESIGN.md)
+**Changed.** packages/ai now has a layered AI (`AiDirector`): perception from the
+nation's own View and events only; memory of deals kept and broken and pledges paid
+and skipped, fading over time; personality from each nation's data row (RULES 7,
+the worked examples reproduced exactly); goals re-scored every 3 months, staggered;
+partner scoring with trust and seeded noise; accept / counter / reject with prices
+that move with trust; crisis pledges by style; and a short explanation with a number
+for every decision another player can see ("declined: you broke the deal in month 1
+(95 energy for 9 credit); no trade with you until month 9"). Strict nations retaliate
+the next month and resume after 6, forgiving ones let one offence pass, hard
+bargainers charge instead of refusing; repeat offences escalate. 13 AI tunables
+added to tunables.ts and RULES 11 (the rule that tunables live there outranks the
+lane list); `aiExploiterMarkupPct` tuned 20 -> 0 on seeds 1001-1400. A Gate 2 check
+(packages/ai/src/gate2.test.ts) graded once on seeds 1-200: every AI criterion
+passes (120 of 120 broken deals answered inside the window, 355,460 of 355,460
+commands explained, peak 924 of 4,000 budget units, 0 rejected, deterministic
+including save + AI snapshot reload); the waived top scorer still fails (Brazil
+16.0%). About 3 ms a month for all 17 nations on a 4x-throttled Chromium. 36 new
+tests. No new dependency.
+**How to see it.** Not on the phone yet: the app and the harness still run the
+Phase 1 greedy trader until lanes P and H switch to `AiDirector` (docs/AI_DESIGN.md
+section 3). Read docs/AI_DESIGN.md, or run
+`AI_GATE2_GAMES=200 npx vitest run packages/ai/src/gate2.test.ts` for the table.
+**Left.** Wiring into the app and harness, saving AI memory with the game, crises in
+the sim (the pledge logic waits on them), a harness gate2 suite, and two owner
+decisions (the archetype reading, the top scorer). See docs/GAPS.md, prompt 10.
+
 ### 2026-09-28 - Gate 1 closed (owner decision)
 **Changed.** The owner waived Gate 1 criterion 5 (top scorer) in writing and marked
 Gate 1 passed. docs/gates/GATE-1.md carries the waiver table. The real-phone trade and
