@@ -7,9 +7,9 @@
  * check the invariants that must hold on every build - conservation, no negative
  * stocks, stable state hash.
  *
- * Phase 0: seeded games with the dummy AI, CSV metrics, the Node-vs-browser
- * determinism check and the 1,000-tick catch-up benchmark. Archetype bots
- * arrive with the economy.
+ * Holds the seeded runs and CSV metrics, the Node-vs-browser determinism
+ * check, the 1,000-tick catch-up benchmark, the archetype bots, the Gate 1
+ * and Gate 2 suites, and the prediction-mode report (see cli.ts for commands).
  */
 export { benchCatchUp, hashSeeds, runGame, type GameMetrics, type GameOptions } from './game.ts';
 export { CSV_COLUMNS, formatSummary, summarize, toCsv, type Summary } from './metrics.ts';

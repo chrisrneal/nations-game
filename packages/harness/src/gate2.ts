@@ -326,7 +326,7 @@ export function runGate2(options: Gate2Options): Gate2Report {
     }
   }
 
-  // 24-hour absence: at the multiplayer cadence (6 h a month) a day is 4 months; at single-player 1x (30 min a month) it is 48.
+  // 24-hour absence: at the multiplayer cadence (6 h a month) a day is 4 months; at RULES 9's single-player 1x (30 min a month, the app's live clock) it is 48.
   const absence: AbsenceRun[] = [];
   const absenceSeeds = options.absenceSeeds ?? 20;
   for (let i = 0; i < absenceSeeds; i++) {

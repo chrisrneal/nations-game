@@ -2,23 +2,26 @@
  * The AI's Gate 2 check (prompt 10). Test code: it drives the sim, so its name
  * carries ".test." for the purity check, and it is not itself a suite.
  *
- * The balance harness has no `gate2` suite yet and the sim has no crises
- * (docs/GAPS.md, prompt 10), so this measures every Gate 2 criterion the AI
- * can move today, the same way packages/harness/src/gate1.ts measures Gate 1:
+ * It measures the Gate 2 criteria the AI can move, with this AI as the
+ * cooperator, the same way packages/harness/src/gate1.ts measures Gate 1. The
+ * harness's own suite (packages/harness/src/gate2.ts) grades the same gate
+ * with its bots, and adds the sabotage and 24-hour absence tests.
  *
  * - archetypes at random: every playable nation is assigned one of
- *   cooperator (this AI, in its data-derived style), hoarder, isolationist or
- *   trade exploiter, uniformly by seed; a Gate 2 pass line is 1.5x fair share;
- * - reciprocity pays: one random nation plays cooperator in one game and trade
- *   exploiter in its pair, everyone else unchanged; the cooperator should
- *   finish ahead in most pairs (the stand-in for "reciprocal cooperators beat
- *   free-riders", which needs crises);
- * - trading vs isolating (Gate 1 carried): the same pairing with isolationist;
+ *   cooperator (this AI, in its data-derived style), hoarder, isolationist,
+ *   trade exploiter or free-rider, uniformly by seed; the bots' pass line is
+ *   1.5x fair share; crisis success is read from the same games;
+ * - paired runs: one random nation plays cooperator in one game and, with
+ *   everyone else unchanged, isolationist, trade exploiter, betrayer or
+ *   free-rider (this AI with paying switched off) in the others; the
+ *   cooperator should finish ahead in most pairs, and trade 15%+ better than
+ *   it isolates (Gate 1 carried);
  * - top scorer per nation (Gate 1 criterion 5, waived, re-graded at Gate 2);
  * - retaliation: every broken deal against a strict AI is answered within
  *   aiRetaliationWindowTicks;
  * - explanations: every AI command carries one, with a number;
- * - budget: units per tick against aiBudgetUnitsPerTick, and wall time.
+ * - budget: units per tick against aiBudgetUnitsPerTick, and wall time;
+ * - no AI command refused as invalid, and repeat runs hash identically.
  */
 import type { Command, ControllerSlot, Event, NationId, NationView, StandingPolicy } from '@nations/contracts';
 import { Session, TUNABLES, createWorld, hashState, mix32, scoreboard, viewFor, type RosterEntry } from '@nations/sim';
@@ -323,7 +326,7 @@ export function runGate2(options: { games: number; firstSeed: number; roster: re
     }
     if (i < 10 && playArchetypes(seed, roster, arch).hash === g.hash) deterministic++;
 
-    // Paired runs: one nation, same seed and neighbours, three ways.
+    // Paired runs: one nation, same seed and neighbours, five ways.
     const who = playable[mix32(seed * 31 + 7) % playable.length]!;
     const coop = playArchetypes(seed, roster, { ...arch, [who]: 'cooperator' });
     const iso = playArchetypes(seed, roster, { ...arch, [who]: 'isolationist' });
