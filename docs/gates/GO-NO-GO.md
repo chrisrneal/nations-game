@@ -256,6 +256,50 @@ If any target fails on the graded seeds, do not re-tune on them. Revert the rule
 Finish as CLAUDE.md says. Pull request title: "[17] A real budget: self-reliance vs trade".
 ```
 
+### [17b] Home investment, second attempt. Model: Opus 5.5 (`claude-opus-5-5`)
+
+```
+[17b] Home investment, second attempt
+
+Lanes: D (docs/RULES.md, docs/balance/, docs/GAPS.md, and section 5 of docs/gates/GO-NO-GO.md), C, S, A, H. After step 2, hand independent parts to subagents, one lane each.
+
+Read docs/balance/gate2-prompt17.md in full first: it is why this prompt exists. Then docs/gates/GO-NO-GO.md (prompt 17's text), the prompt 17 entries in docs/GAPS.md, RULES.md sections 2, 3, 5.3, 8 and 11 as they stand at commit 5fb24a3, and docs/AI_DESIGN.md.
+
+Where we are. Prompt 17 built home investment: a nation pays Credit, plus upkeep in output, to raise its own Food or Energy production, with a lag and diminishing returns. It tuned the rule, graded it FAIL on two knife-edge lines, and reverted it. The owner decided to try once more with the two changes the prompt 17 report recommends: a target 2 the roster can meet, and a weaker lever. The rule worked, but its lever was 2-4x the target: Japan, Korea, Mexico and Turkiye gained +19-32% over idle against a target of +8%. That moved the wins onto the deep importers (Saudi Arabia topped 38.5% of games, up from 21-22.5%) and pushed the free-rider over 1.5x.
+
+Step 1, before any change. Run the gate2 suite on main as it is, on seeds 601-800 and 801-1000 (`npm run harness -- gate2 --games 200 --seed 601`, then `--seed 801`). These are this prompt's grading seeds and the "today" column for every guard below. Nobody has tuned on them. Seeds 401-600 stay fresh for the re-review (prompt 20): do not run them.
+
+Step 2, restore the graded state. Run `git checkout 5fb24a3 -- packages docs/RULES.md`, then delete packages/harness/src/idle-suite.ts and idle-suite.test.ts (at 5fb24a3 the same two lines live in invest-suite.ts). Before changing anything, confirm that `npm test` and `npm run check` pass and that the tuning ranges reproduce section 3E of the prompt 17 report.
+
+Changes to the rule (RULES first, then code, tests first):
+- Weaken the lever. The knobs, in the order the report gives: the AI's payback hurdle (aiInvestPaybackPct), a lower ceiling (investMaxPct 40-60), a higher cost (investCostBp). Cost is the only knob that raises Credit sinks while it weakens the lever, so prefer it whenever sinks are at the 8% floor. Widen a band in RULES 11 and tunables.ts only if you must, and say why.
+- Fix the AI's plan (GAPS, prompt 17). It must price the trade gain a builder gives up (RULES 3.3), so that it stops building where trade is worth more. Under prompt 17, China's AI-vs-idle gap fell from +20% to +10%. Write the test first.
+- Define in RULES 8.1 when the home-investment card is shown, so that it is not open 37 of 60 months for an idle nation: once per shortage, then not again for a season unless the shortage grows. Lane U builds the card in prompt 18. The harness reports how many months it would be open.
+- RULES 5.3, the conservation invariant, the save schema 5 migration and every other constraint of prompt 17 still apply.
+
+Pre-registered targets. Tune only on seeds 1001-1400. Grade once on seeds 601-800 and 801-1000, and change nothing after grading. Targets 1, 4, 5 and 6 and target 3's floor are prompt 17's. Target 2 and target 3's ceiling are reworded. Targets 7 and 8 are new.
+1. Credit sinks are 8-25% of Credit income, with the AI playing.
+2. A real trade-off exists, stated as the roster can support it (7 of the 17 nations have a deficit worth closing). (a) At least 3 fixed rates are each best for at least 2 nations. (b) At least 6 nations score 3% or more above "never invest" at their best rate. (c) At least 6 nations score 3% or more below their best rate at the highest rate.
+3. A lever, not a landslide. The AI-vs-idle median gap is between +8% and +16% for each of Japan, Korea, Mexico and Turkiye, and at least +10% overall.
+4. Collaboration still wins. Gate 1's trading vs isolating stays at +15% or more, with the isolationist investing by the same default policy.
+5. Every Gate 1 and Gate 2 line that passes on main in step 1 still passes on the same seeds. Prompt 17's list: crisis success 40-75%; the cooperator ahead of the free-rider in 70%+ of pairs by a median +3% or more; both spoilers strictly below the cooperator; the 24-hour absence test at 0 / 0 / 0 with recaps of at most 6 lines and 150 words; dead states under 2%; determinism; 0 crashes; 0 negative stocks; each defecting archetype at most 1.5x its fair share and no more than the cooperator.
+6. Report the top-scorer line; do not tune for it (it is waived for Gate 2, decision record G1).
+7. The podium does not move. In the archetype games, no nation tops the score more than 4 points more often than main's most frequent top scorer did on the same seeds in step 1. This guards against making the waived line worse; it is not the waived line itself.
+8. Nobody's good play is worth less. No nation's AI-vs-idle gap falls more than 3 points below main's on the same seeds.
+
+Tuning rule, because prompt 17's lines were knife-edge: on main alone, the free-rider share moves by up to 0.3x between 200-game ranges. Grade a setting only if all of these hold on both tuning ranges (1001-1200 and 1201-1400):
+- The free-rider share is at most 1.35x.
+- Targets 2(b) and 2(c) each have at least 7 nations.
+- The four nations of target 3 each sit between +9% and +15%.
+If no setting inside the bands gets there, stop tuning, do not grade, revert, and say so.
+
+If any target fails on the graded seeds, do not re-tune on them. Revert the rule in the same pull request, as prompts 15 and 17 did. Keep the harness lines, and keep the AI fix only if it stands without the rule. Either way, write docs/balance/gate2-prompt17b.md: the changes, the tuning table, the graded results against step 1, and a decision for the owner. This is the second and last attempt at home investment. If it fails, the report recommends what to build instead (prompt 17's report names joint projects), not a third attempt.
+
+Add this prompt's text to section 5 of docs/gates/GO-NO-GO.md, after prompt 17. In prompt 20, change "the prompt 17 targets" to "the targets of prompt 17b if its rule was kept, else prompt 17's". If the rule is kept, update the prompt 17 lane U entry in docs/GAPS.md to match what was built (the card's showing rule, the View fields), so that prompt 18 can start.
+
+Finish as CLAUDE.md says. Pull request title: "[17b] Home investment, second attempt".
+```
+
 ### [18] Invest on the phone. Model: Sonnet 5.5 (`claude-sonnet-5-5`)
 
 ```
@@ -304,7 +348,7 @@ Then the owner runs the 10 playtests (3 or more by other people) and adds the fi
 
 Independent review. Docs only: docs/gates/GATE-2.md and docs/PROGRESS.md. Start only when docs/playtests/ holds 10 playtest files.
 
-You did not build this code. Do not take docs/PROGRESS.md, docs/balance/ or the builders' comments as evidence: run everything yourself. Re-grade every Gate 2 criterion in docs/ROADMAP.md, using any rewording or waiver recorded in docs/DECISIONS.md and docs/gates/GATE-2.md, and Gates 0 and 1, the way the prompt 12 review did (docs/gates/GATE-2.md, "What was run"). Also rerun the two measurements in docs/gates/GO-NO-GO.md (AI vs idle, decision density) and the prompt 17 targets on fresh seeds 401-600.
+You did not build this code. Do not take docs/PROGRESS.md, docs/balance/ or the builders' comments as evidence: run everything yourself. Re-grade every Gate 2 criterion in docs/ROADMAP.md, using any rewording or waiver recorded in docs/DECISIONS.md and docs/gates/GATE-2.md, and Gates 0 and 1, the way the prompt 12 review did (docs/gates/GATE-2.md, "What was run"). Also rerun the two measurements in docs/gates/GO-NO-GO.md (AI vs idle, decision density) and the targets of prompt 17b if its rule was kept, else prompt 17's, on fresh seeds 401-600.
 
 For criteria 5 and 7, grade the files with npm run harness -- predictions --dir docs/playtests. Report "would play again" separately for the owner and for others, and quote every "most interesting choice" line.
 
