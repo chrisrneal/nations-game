@@ -964,7 +964,7 @@ fails if the two ever disagree.
 | `projectMinSurplusPct` | 10 | 0 | 50 | Surplus, as a percent of the host's own demand, needed to host a goods project |
 | `projectFoodUnitCost` | 10 | 4 | 60 | Credit per unit of monthly food yield. A unit a rich importer goes short of costs it about 0.8 Credit of output a month, one it would have bought about 0.1, so a food project pays back in one to three years depending on how short the buyer really is |
 | `projectEnergyUnitCost` | 3 | 1 | 20 | Credit per unit of monthly energy yield. At H3's 20 bp a unit of energy an importer goes short of saves it about 0.15 Credit a month, so about 20 months to pay back when the shortage is real |
-| `projectShieldCostPct` | 10 | 5 | 100 | A shield member's due as a percent of its own monthly output. Its benefit scales with output, so its price does too; at 10 a climate shield pays back about 1.5 times over a game at average exposure |
+| `projectShieldCostPct` | 20 | 5 | 100 | A shield member's due as a percent of its own monthly output. Its benefit scales with output, so its price does too. 100x slice 9: 10 -> 20, which took the early-warning network from 80% of games to 20%, every template at 45% or less (Gate 3) |
 | `projectShieldBp` | 2500 | 1000 | 5000 | Crisis damage a shield cuts for its members |
 | `projectMaxHosted` | 2 | 1 | 4 | Projects a nation may host that start building, per game |
 | `projectTrustBuilt` | 4 | 0 | 10 | Trust every pair of members gains when a project completes |

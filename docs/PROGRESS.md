@@ -42,6 +42,16 @@ Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): 
 
 ## Session log
 
+### 2026-09-30 - 100x slice 9, No project is a default; invitations triaged
+**Changed.** `projectShieldCostPct` 10 -> 20: the climate early-warning network went from
+being built in 80% of games to 20%; every template is now built in at most 45-52% of
+games (Gate 3's line is 50%). Invitation cards are sorted best value first and show the
+deciding numbers under the title ("27 energy/month (4% of your shortfall) for 38 months ·
+75 credit"), so a player can triage from the list.
+**Result.** docs/balance/100x-slice9.md: every graded line holds on seeds 1001-1100; the
+hydrogen corridor sits at 52% of games, on the Gate 3 line.
+**How to see it.** Play Japan to month 8: the invitations list reads as a ranked menu.
+
 ### 2026-09-30 - 100x slice 8, A different world every game
 **Changed.** AI: founding a project is rolled on the nation's cooperativeness from the
 game seed, so which host moves first, and who partners whom, differs from game to game; a

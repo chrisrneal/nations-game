@@ -612,10 +612,10 @@ export const TUNABLES = {
     note: 'Credit per unit of monthly energy yield. At 20 bp per percent of shortfall a unit of energy an importer goes short of saves it about 0.15 Credit of output a month, so about 20 months to pay back when the shortage is real, and never when trade already covers it.',
   },
   projectShieldCostPct: {
-    value: 10,
+    value: 20,
     min: 5,
     max: 100,
-    note: 'A shield member\'s total due as a percent of its own monthly output, at a template\'s 100%. A shield\'s benefit scales with the member\'s output, so its price does too. At 10, a climate shield pays back about one and a half times over a game for a nation of average exposure.',
+    note: 'A shield member\'s total due as a percent of its own monthly output, at a template\'s 100%. A shield\'s benefit scales with the member\'s output, so its price does too. 100x slice 9 (seeds 1001-1060): at 10 the early-warning network was built in 80% of games, a default rather than a choice; at 20 it is built in 20% and no template in more than 45% (Gate 3: at most 50%). It now pays only for the more exposed nations.',
   },
 
   projectShieldBp: {
