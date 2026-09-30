@@ -431,6 +431,27 @@ function predictCard(p: PendingPrediction, tick: number): DecisionCard {
   };
 }
 
+/**
+ * Invitations, best value first: goods by units a month times months of use per
+ * credit, weighted by how much of a real shortfall they cover; shields after.
+ */
+function rankInvitations(view: NationView, list: readonly Project[]): Project[] {
+  const value = (p: Project): number => {
+    const t = joinTerms(view, p);
+    if (goodOf(p.kind) === null) return 0;
+    return Math.floor((t.units * t.monthsOfUse * (50 + Math.min(100, t.coversPct))) / Math.max(1, t.due));
+  };
+  return [...list].sort((a, b) => value(b) - value(a) || a.id - b.id);
+}
+
+/** One line to triage an invitation from the list: what it gives, for how long, for how much. */
+function glance(view: NationView, p: Project): string {
+  const t = joinTerms(view, p);
+  const good = goodOf(p.kind);
+  const gives = good === null ? `cuts crisis damage ${Math.round(rule(view, 'projectShieldBp') / 100)}%` : `${fmt(t.units)} ${good}/month${t.coversPct > 0 ? ` (${t.coversPct}% of your shortfall)` : ''}`;
+  return `${gives} for ${t.monthsOfUse} months · ${fmt(t.due)} credit`;
+}
+
 /** An invitation to join a forming joint project (RULES 13.2): two taps, join or decline. */
 function invitationCard(view: NationView, p: Project, journal: JournalSnapshot): DecisionCard {
   const t = templateOf(view, p.template);
@@ -447,7 +468,8 @@ function invitationCard(view: NationView, p: Project, journal: JournalSnapshot):
     icon: KIND_ICON[t.kind] ?? '🏗️',
     title: `${host} invites you: ${t.name}`,
     context: `${benefitLine(view, p, terms.units)[0]!.toUpperCase()}${benefitLine(view, p, terms.units).slice(1)}, from month ${terms.ready} (${terms.monthsOfUse} months of use). About ${fmt(terms.due)} credit over ${p.buildTicks} months. ${p.members.length} of ${seats} seats taken${others.length > 0 ? ` (${nameList(others)})` : ''}; answer by month ${p.formingDeadline}.`,
-    reasons: [note === undefined ? notYet(p.host) : said(note)],
+    // The first line is what the inbox list shows under the title: the numbers that decide it, at a glance.
+    reasons: [glance(view, p), note === undefined ? notYet(p.host) : said(note)],
     expiresIn: Math.max(1, p.formingDeadline - view.tick + 1),
     options: [
       {
@@ -561,7 +583,7 @@ export function cardsFor(view: NationView, dismissed: ReadonlySet<string>, sourc
     if (card !== null) cards.push(card);
   }
   cards.push(...alerts(view, journal));
-  for (const p of invitations(view)) cards.push(invitationCard(view, p, journal));
+  for (const p of rankInvitations(view, invitations(view))) cards.push(invitationCard(view, p, journal));
   cards.push(...partnerLeftCards(view));
   for (const offer of view.offers) if (offer.to === view.selfId) cards.push(incoming(view, offer, journal));
   for (const good of [priority, ...GOODS.filter((g) => g !== priority)]) {
