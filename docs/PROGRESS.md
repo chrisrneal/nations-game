@@ -42,6 +42,26 @@ Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): 
 
 ## Session log
 
+### 2026-09-30 - prompt 13 (go/no-go), is the core loop worth building on? (docs only)
+**Changed.** New docs/gates/GO-NO-GO.md: Gate 2 rechecked on main 1be231c, the case to
+continue, the case to rework, the single change most likely to improve "would play
+again", a recommendation, and ready-to-paste prompts 16-20. No game code changed.
+**Recheck.** `npm run check` and `npm test` (468 tests, determinism included) pass;
+53/53 phone checks; the gate2 suite on seeds 1-200 and 201-400 reproduces prompts 14
+and 15 exactly. Gate 2 is still FAIL: archetype line (cooperator 3.50-3.90x) and top
+scorer (Saudi Arabia 21.0-22.5%) need owner rulings; predictions and playtests are
+0 of 10 (docs/playtests/ is empty).
+**New measurements (scratch, not committed).** The same nation played by the AI beats
+it left idle on default policies in 170 of 170 pairs, median +14.5% (Japan, Korea,
+Mexico, Turkiye only 4-8%). An idle nation gets 26 offers and 6 crisis appeals a
+game; 72% of appeals are already paid by the default contribution when they open.
+**Recommendation.** Rework the core decision before Phase 3: give Credit a competing
+use (domestic investment), waive the top scorer, rule on the archetype wording, then
+run the 10 playtests.
+**How to see it.** docs/gates/GO-NO-GO.md.
+**Left.** Owner: decide whether to paste prompts 16-20; play three 10-minute games of
+today's build first as a baseline.
+
 ### 2026-09-29 - prompt 15, structural baseline upside (lanes D, S, H)
 **Changed.** Nothing in the game: the rule was built, graded, failed and reverted,
 as the prompt required. It had the baseline (RULES 2.8) expect the cover a trading
