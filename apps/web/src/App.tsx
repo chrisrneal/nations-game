@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
-import type { Command, Event, Pace, StandingPolicy, TradeOffer } from '@nations/contracts';
+import type { Command, Event, NationView, Pace, Project, StandingPolicy, TradeOffer } from '@nations/contracts';
 import type { GameHost, GameUpdate, InstallPrompt } from './platform/index.ts';
 import { nameOf } from './world/nations.ts';
 import type { CardAction } from './ui/cards.ts';
@@ -9,6 +9,8 @@ import { InstallBanner } from './ui/Install.tsx';
 import { Settings } from './ui/Settings.tsx';
 import { PaceBar } from './ui/PaceBar.tsx';
 import { Policies } from './ui/Policies.tsx';
+import { Projects } from './ui/Projects.tsx';
+import { goodOf, templateOf, yieldShare } from './ui/projects.ts';
 import { OutputLine, ResourceStrip } from './ui/ResourceStrip.tsx';
 import { Saves } from './ui/Saves.tsx';
 import { StartScreen } from './ui/StartScreen.tsx';
@@ -16,12 +18,41 @@ import { TradeSheet } from './ui/TradeSheet.tsx';
 import { WorldMap } from './ui/WorldMap.tsx';
 import { WhyProvider } from './ui/why.tsx';
 
-type Tab = 'inbox' | 'world' | 'game';
+type Tab = 'inbox' | 'projects' | 'world' | 'game';
 const TABS: readonly { tab: Tab; label: string; icon: string }[] = [
   { tab: 'inbox', label: 'Decisions', icon: '📥' },
+  { tab: 'projects', label: 'Projects', icon: '🏗️' },
   { tab: 'world', label: 'World', icon: '🌍' },
   { tab: 'game', label: 'Game', icon: '⚙️' },
 ];
+
+/** One line for a joint-project event the player should hear about (RULES 13), or null. */
+function projectNews(event: Event, view: NationView): string | null {
+  const p = event.payload as { project?: Project; projectId?: number; nationId?: string; reason?: string };
+  const project = p.project ?? view.projects.projects.find((x) => x.id === p.projectId);
+  if (project === undefined) return null;
+  const inIt = project.members.some((m) => m.nationId === view.selfId);
+  const name = templateOf(view, project.template).name;
+  switch (event.type) {
+    case 'projectCompleted': {
+      if (!inIt) return null;
+      const good = goodOf(project.kind);
+      return good === null ? `${name} is running: your crisis damage is cut` : `${name} is running: +${yieldShare(project, view.selfId)} ${good} a month for you`;
+    }
+    case 'projectStarted':
+      return inIt ? `${name} has its partners: building starts, installments are automatic` : null;
+    case 'projectLapsed':
+      return project.host === view.selfId ? `Your ${name} lapsed: too few partners joined. Nothing was paid.` : null;
+    case 'projectLeft':
+      return inIt && p.nationId !== view.selfId ? `${nameOf(p.nationId ?? '')} ${p.reason === 'dropped' ? 'could not pay and was dropped from' : 'walked out of'} the ${name}` : null;
+    case 'projectJoined':
+      return project.host === view.selfId && p.nationId !== view.selfId ? `${nameOf(p.nationId ?? '')} joined your ${name}` : null;
+    case 'projectDeclined':
+      return project.host === view.selfId ? `${nameOf(p.nationId ?? '')} declined your ${name}` : null;
+    default:
+      return null;
+  }
+}
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -82,7 +113,9 @@ export function App(props: { host: GameHost; install?: InstallPrompt }): ReactEl
       host.subscribe((next) => {
         latest.current = next;
         setUpdate(next);
-        const news = next.events.map((e) => tradeNews(e, next.view.selfId, next.predictions.mode)).filter((line): line is string => line !== null);
+        const news = next.events
+          .map((e) => tradeNews(e, next.view.selfId, next.predictions.mode) ?? projectNews(e, next.view))
+          .filter((line): line is string => line !== null);
         if (news.length > 0) setToast(news.length === 1 ? (news[0] as string) : `${news[0] as string} (+${news.length - 1} more)`);
       }),
     [host],
@@ -111,6 +144,10 @@ export function App(props: { host: GameHost; install?: InstallPrompt }): ReactEl
     async (action: CardAction): Promise<void> => {
       if (action.kind === 'compose') {
         setTrade({ draft: action.draft, counterOf: action.counterOf });
+        return;
+      }
+      if (action.kind === 'projects') {
+        setTab('projects');
         return;
       }
       if (action.kind !== 'send') return;
@@ -189,6 +226,7 @@ export function App(props: { host: GameHost; install?: InstallPrompt }): ReactEl
         </header>
         <main className="content">
           {tab === 'inbox' && <Inbox update={update} onAction={act} onPredict={predict} onDismissRecap={dismissRecap} onNewGame={newGame} />}
+          {tab === 'projects' && <Projects view={view} onAction={act} />}
           {tab === 'world' && <WorldMap view={view} journal={update.journal} onTrade={(draft) => setTrade({ draft, counterOf: null })} />}
           {tab === 'game' && (
             <>

@@ -1,4 +1,4 @@
-import type { TradeOffer } from '@nations/contracts';
+import type { Project, TradeOffer } from '@nations/contracts';
 import type { ExplanationNote, JournalSnapshot } from '../platform/index.ts';
 import { nameOf } from '../world/nations.ts';
 
@@ -29,6 +29,16 @@ export function offerReason(journal: JournalSnapshot, offer: TradeOffer): Explan
     const n = notes[i]!;
     if (n.nationId !== offer.from || n.tick !== offer.createdTick) continue;
     if (offer.counterOf === null ? n.decision === 'makeOffer' : n.decision === 'counterOffer' && n.subject === offer.counterOf) return n;
+  }
+  return undefined;
+}
+
+/** Why the host proposed a project, if it said (the sim relays a proposal's reasons to its invitees). */
+export function projectReason(journal: JournalSnapshot, project: Project): ExplanationNote | undefined {
+  const notes = journal.explanations;
+  for (let i = notes.length - 1; i >= 0; i--) {
+    const n = notes[i]!;
+    if (n.nationId === project.host && n.decision === 'proposeProject' && n.subject === project.id) return n;
   }
   return undefined;
 }

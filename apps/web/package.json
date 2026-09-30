@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json",
-    "e2e": "tsx e2e/phone-check.ts"
+    "e2e": "tsx e2e/phone-check.ts",
+    "e2e:projects": "tsx e2e/projects-check.ts"
   },
   "dependencies": {
     "@nations/ai": "*",

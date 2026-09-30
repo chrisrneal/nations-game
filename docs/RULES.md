@@ -709,6 +709,9 @@ gets simplified until it does.
 | **Trade opportunity** | a partner's surplus matches your deficit | 3 — open, set amount, send |
 | **Resilience slipping** | resilience falls below the policy floor | 2 — open, fund or accept |
 | **Away recap** | first open after an absence | 1 — read, dismiss |
+| **Project invitation** (13.2) | a host invites you to a forming project | 2 — open, join or decline |
+| **Host a project** (13.1) | you may host a goods project and nations short of that good exist | 2 — open, found it with the suggested partners (or pick them on the Projects screen) |
+| **Partner walked out** (13.3) | a member left a project you are building | 2 — open, cover the gap or carry on |
 
 Nothing is more than three taps from home, and the primary action sits in the bottom
 third of the screen.

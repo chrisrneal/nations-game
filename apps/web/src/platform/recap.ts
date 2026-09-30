@@ -44,6 +44,9 @@ export function weigh(line: RecapLine): number {
       return 45;
     case 'trust':
       return 35;
+    case 'project':
+      if (/dropped|walked out|lapsed/.test(t)) return 82;
+      return /invitation/.test(t) ? 66 : 62;
     default:
       return 30;
   }

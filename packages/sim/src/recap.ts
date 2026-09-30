@@ -5,6 +5,7 @@ import type {
   Event,
   NationId,
   NationView,
+  ProjectEventPayloads,
   Recap,
   RecapLine,
 } from '@nations/contracts';
@@ -61,6 +62,28 @@ export function buildRecap(before: NationView, after: NationView, events: readon
         lines.push({ kind: 'pledge', text: `Your pledge of ${p.amount} broke (${reason}): every nation trusts you ${TUNABLES.trustPerPledgeBroken.value} less.` });
       }
     }
+  }
+
+  // Joint projects (RULES 13): what changed in the projects you are in, and invitations waiting for you.
+  const projectName = (id: string): string => after.projects.catalogue.find((t) => t.id === id)?.name ?? id;
+  for (const e of seen) {
+    if (e.type === 'projectCompleted') {
+      const p = (e.payload as ProjectEventPayloads['projectCompleted']).project;
+      if (p.members.some((m) => m.nationId === self)) lines.push({ kind: 'project', text: `The ${projectName(p.template)} was completed and now runs for you.` });
+    } else if (e.type === 'projectLeft') {
+      const l = e.payload as ProjectEventPayloads['projectLeft'];
+      const p = after.projects.projects.find((x) => x.id === l.projectId);
+      if (p === undefined) continue;
+      if (l.nationId === self) lines.push({ kind: 'project', text: `You were dropped from the ${projectName(p.template)}: an installment found no Credit. ${l.paid} Credit forfeited.` });
+      else if (p.members.some((m) => m.nationId === self)) lines.push({ kind: 'project', text: `${name(l.nationId)} walked out of the ${projectName(p.template)}; the build takes longer.` });
+    } else if (e.type === 'projectLapsed') {
+      const p = (e.payload as ProjectEventPayloads['projectLapsed']).project;
+      if (p.host === self) lines.push({ kind: 'project', text: `Your ${projectName(p.template)} lapsed: only ${p.members.length} of ${TUNABLES.projectMinMembers.value} needed members joined.` });
+    }
+  }
+  const waiting = after.projects.projects.filter((p) => p.status === 'forming' && p.invited.includes(self));
+  if (waiting.length > 0) {
+    lines.push({ kind: 'project', text: `${waiting.length} project invitation${waiting.length === 1 ? '' : 's'} waiting, the first closing month ${Math.min(...waiting.map((p) => p.formingDeadline))}.` });
   }
 
   let accepted = 0;

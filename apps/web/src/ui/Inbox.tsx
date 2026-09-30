@@ -77,6 +77,10 @@ export function Inbox(props: {
     try {
       if (option.action.kind === 'dismiss') setDismissed((prev) => new Set(prev).add(card.id));
       else if (option.action.kind === 'predict') setRevealed(await props.onPredict(option.action.id, option.action.choice));
+      else if (option.action.kind === 'projects') {
+        setDismissed((prev) => new Set(prev).add(card.id));
+        await props.onAction(option.action);
+      }
       else await props.onAction(option.action);
       setOpenId(null);
     } finally {

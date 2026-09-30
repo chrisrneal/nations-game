@@ -42,6 +42,24 @@ Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): 
 
 ## Session log
 
+### 2026-09-30 - 100x slice 5, Joint projects on the phone
+**Changed.** A fourth tab, **Projects**: invitations (join or decline in one tap), your
+projects with status, progress and your share, "Host one" for every template with the
+sim's terms (or why it is closed to you), a partner picker sheet, and what the rest of
+the world is building. Inbox cards: a project invitation (2 taps), "Host a ..." when you
+have a surplus and partners short of it (2 taps with suggested partners), and "X walked
+out" with "cover the gap" (2 taps). Toasts for joins, starts, completions, walk-outs and
+lapses. The Credit and goods why-sheets show installments and project output. The away
+recap reports completions, walk-outs, drops, lapses and waiting invitations (new recap
+kind `project`).
+**Checked.** 5 new UI tests through the real engine; the 53-check phone suite still
+passes; new `npm run e2e:projects --workspace web`: 10/10 at 360 px (4 tabs fit, an
+invitation resolves in 2 taps with both options above the fold, no horizontal scroll on
+the Projects screen or its sheets, hosting sends invitations).
+**How to see it.** Play Japan: within a few months AI hosts invite you; open the
+Projects tab to see what is being built and to host a climate early-warning network.
+**Left.** Routine shortfall cards still crowd the inbox (slice 6).
+
 ### 2026-09-30 - 100x slice 4, The AI builds joint projects
 **Changed.** `packages/ai/src/projects.ts`: the AI prices a project by the output it
 saves (a unit is worth the shortfall penalty only on the part of a deficit trade will
