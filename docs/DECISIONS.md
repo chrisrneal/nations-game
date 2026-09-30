@@ -355,3 +355,85 @@ Gate 4; it does not edit D4.
 **Reversing it.** Restore the old Gate 2 wording (it cannot pass while Gate 1
 holds), grade per 200 games again (which mostly measures luck), or add a floor
 for nations that cannot win. Each needs a new record; none touches the sim.
+
+---
+
+`H` records come from the owner's 100x mandate (2026-09-30): one autonomous
+session acting as architect, product engineer and release engineer, with docs/100X.md
+as its plan.
+
+## H1 - An autonomous session may act as architect for the 100x work
+**Status.** Accepted, 2026-09-30, by the owner's instruction to "work end to end and
+ship" without review, asking questions only for something destructive.
+**Decision.** For the 100x work the session edits every lane, including
+docs/ROADMAP.md and this file, one slice per pull request, and merges each slice
+itself once CI is green. Each slice still passes `npm test` and `npm run check`,
+logs itself in docs/PROGRESS.md and its shortcuts in docs/GAPS.md. The eight
+architecture rules in CLAUDE.md are unchanged and still enforced by the tests.
+**Why.** The owner is not available and asked for structural change, which crosses
+lanes by nature (a new collaboration system touches contracts, sim, AI, UI and
+harness). Lanes exist so parallel sessions do not collide; there is one session.
+**Cost.** No second pair of eyes before merge. Mitigated by small slices, tests
+first for sim and AI logic, and the harness measuring every balance change.
+**Reversing it.** Revert any slice's squash commit; later slices name what they
+depend on.
+
+## H2 - New systems are gated on invariants and decisions, not on fairness lines
+**Status.** Accepted, 2026-09-30. Replaces the ROADMAP gate rule "No new
+collaboration system before Gate 2 passes".
+**Decision.** A new system may merge when: determinism, conservation, no negative
+stocks and 0 crashes hold; sabotage still never pays (RULES 5.3); trading still
+beats isolating; and the system creates a decision with no single right answer
+(its harness line says how often each option is chosen). The fairness lines (top
+scorer, archetype shares) are measured and reported with every balance change,
+never used to block or revert it. Gate 2's playtest line stays the go/no-go
+question for Phase 3 being *finished*.
+**Why.** Gate 2 needs "most testers want another game". The go/no-go review
+(docs/gates/GO-NO-GO.md) found every monthly decision has an obvious answer, and
+nobody has played it. Two attempts to fix that inside the Phase 2 loop failed on
+fairness lines no player sees (docs/balance/gate2-prompt17b.md). The rule
+therefore forbade the one thing that could make the gate passable: a real
+decision. Prompt 17b's own report recommends joint projects next.
+**Cost.** A system may ship that makes one nation win more often. That is visible
+in every report and can be tuned later; a game nobody wants to replay cannot.
+**Reversing it.** Restore the ROADMAP line; the slices built under this record
+revert cleanly one by one.
+
+## H3 - No dead zone in the shortfall penalty
+**Status.** Accepted, 2026-09-30.
+**Decision.** `shortfallPenaltyBpPerPct` 35 -> 20 and `maxShortfallPenaltyPct`
+30 -> 60, both inside their existing bands. Unmet food and energy together can
+reach 200% of demand, so at 20 bp per percent no nation can reach 60%: the
+penalty is a straight line with no cap in practice.
+**Why.** At 35 bp and a 30% cap, Japan (158% unmet, food and energy together),
+Korea and Turkiye sit on the cap, so their first 70 points of cover are worth
+nothing. It is the structural reason they could not win, and why home investment
+failed twice (prompt 17b section 4: "their first points only clear a dead zone").
+Every system that hands out goods (trade, joint projects) needs every unit to
+count, for every nation. At 20 bp Japan's starting penalty is 31.6%, about where
+it was, so the world keeps its shape.
+**Cost.** A small deficit hurts less (10% unmet costs 2% of output, was 3.5%), so
+trade matters a little less to shallow importers. Measured in
+docs/balance/100x-slice2.md before merging.
+**Reversing it.** Two tunables.
+
+## H4 - Joint projects: hosted consortia, paid in Credit, shared by what each paid
+**Status.** Accepted, 2026-09-30. Phase 3 of D7, designed in RULES 13.
+**Decision.** A project is a State object with a host, an invite list, a forming
+deadline, a build cost and a yield (seam 8). Goods projects are hosted by a
+nation with a surplus in that good and yield a share of that surplus again as new
+production; shield projects cut crisis damage for their members. Members pay
+monthly installments; shares of the yield follow what each paid; leaving
+mid-build forfeits what was paid and costs trust; climate damage at the host cuts
+a goods project's yield. The catalogue (seven templates) lives in the sim as
+design data, like the world file, and every number that scales it is a tunable.
+**Why.** It gives Credit a use worth sacrificing for, creates supply the world is
+short of (goods, not Credit, are scarce: prompt 17b section 4), and makes
+collaboration the route to self-reliance rather than an alternative to it. It
+hands no nation a private lever: a deficit nation needs a host and partners, and
+a host needs financiers. Nothing transfers output between nations without
+consent (RULES 5.3), and no baseline moves.
+**Cost.** A save schema bump; a new card type and a screen; the AI must learn to
+found, join and leave; the balance moves and is reported (H2).
+**Reversing it.** Remove the commands and the State field with a migration; the
+catalogue and AI module are self-contained.

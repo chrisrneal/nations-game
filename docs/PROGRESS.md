@@ -42,6 +42,16 @@ Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): 
 
 ## Session log
 
+### 2026-09-30 - 100x slice 1, Diagnosis and the joint-projects design (architect, H1)
+**Changed.** docs/100X.md: what the game is, a blunt structural diagnosis (every
+decision has one right answer, Credit piles up to about 50 months of output unused,
+collaboration has one verb, a third of the roster sits in the shortfall cap's dead
+zone, the AI never initiates, no feedback during play, and a gate rule that forbade
+the fix), the 100x thesis and seven slices. Decision records H1-H4. ROADMAP's gate
+rule now reads as H2. RULES section 13 designs joint projects before any code.
+**How to see it.** Read docs/100X.md, then RULES section 13.
+**Left.** Slices 2-7 (docs/100X.md section 5).
+
 ### 2026-09-30 - prompt 17b, Home investment, second attempt (lanes D, S, A, H) - tuning stopped, rule reverted, nothing graded
 **Changed.** Ran step 1 (gate2 on main, seeds 601-800 and 801-1000: the "today" column),
 restored the graded state of prompt 17 (commit 5fb24a3) and reproduced its tuning numbers
