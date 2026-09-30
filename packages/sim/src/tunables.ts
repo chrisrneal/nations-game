@@ -141,28 +141,34 @@ export const TUNABLES = {
 
   // Home investment (prompt 17, RULES 2.9)
   investCostBp: {
-    value: 1000,
+    value: 1200,
     min: 300,
     max: 3000,
     note: 'Prompt 17: cost of the first point (1% of a good\'s demand) as basis points of the nation\'s potential output, so 1000 is a tenth of one month\'s output. The main lever on how much of its income a nation puts into building.',
   },
   investEscalationPct: {
-    value: 3,
+    value: 1,
     min: 0,
     max: 10,
     note: 'Prompt 17: percent added to a point\'s price for every point already committed in that good (diminishing returns). At 3 the 40th point costs 2.2x the first; at 0 the price is flat and only the ceiling limits building.',
   },
   investMaxPct: {
-    value: 60,
+    value: 100,
     min: 20,
     max: 100,
     note: 'Prompt 17: ceiling on committed capacity in either good, in points (percent of demand). Below 20 a deep importer cannot cross the shortfall cap\'s dead zone (RULES 7.5); at 100 a nation can replace every import.',
   },
   investLagTicks: {
-    value: 6,
+    value: 3,
     min: 1,
     max: 18,
     note: 'Prompt 17: months between ordering capacity and its coming online. Long enough that building is a bet on the future; short enough that a build ordered in the first half of a game pays before the score is read.',
+  },
+  investUpkeepBpPer10: {
+    value: 18,
+    min: 0,
+    max: 200,
+    note: 'Prompt 17 (tuning revision 1): output lost every month for every 10 points of home capacity online, in basis points of output. Running your own farms and plant takes workers and land from the rest of the economy. Without it Credit is the only cost of building, Credit is never short, and building past what trade leaves uncovered costs nothing; at 0 the rule is that first design.',
   },
   defaultInvestBp: {
     value: 200,
@@ -606,10 +612,10 @@ export const TUNABLES = {
     note: 'Prompt 17: months of income an AI keeps back before any Credit counts as spare for investing.',
   },
   aiInvestPaybackPct: {
-    value: 100,
-    min: 50,
+    value: 15,
+    min: 10,
     max: 200,
-    note: 'Prompt 17: percent of its cost a plan must return in avoided shortfall to be followed. 100 is break-even; above it the AI wants a margin.',
+    note: 'Prompt 17: percent of its cost a plan must return in avoided shortfall to be followed. 100 is break-even; above it the AI wants a margin; below it the AI treats Credit as worth less than the output it buys.',
   },
   aiInvestSmoothTicks: {
     value: 4,

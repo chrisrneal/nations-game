@@ -6,13 +6,22 @@ import type { WorldState } from './world.ts';
 
 export type { ForeignNation, NationView } from '@nations/contracts';
 
+let ruleTable: Readonly<Record<string, number>> | null = null;
+
 /**
- * Every tunable's value, by id: the public rules, the same for every nation.
- * Read from `TUNABLES` when each View is built, so a harness run that sets a
- * tunable (`--set`, packages/harness/src/overrides.ts) reaches the AI too.
+ * Every tunable's value, by id: the public rules, the same for every nation,
+ * built once and shared by every View. A run that changes tunables after the
+ * sim has loaded (`--set`, packages/harness/src/overrides.ts) calls
+ * `refreshRules` so the rules the AI reads move with them.
  */
 function currentRules(): Readonly<Record<string, number>> {
-  return Object.freeze(Object.fromEntries(Object.entries(TUNABLES).map(([id, tunable]) => [id, tunable.value])));
+  ruleTable ??= Object.freeze(Object.fromEntries(Object.entries(TUNABLES).map(([id, tunable]) => [id, tunable.value])));
+  return ruleTable;
+}
+
+/** Forget the shared rules table: the next View rebuilds it from the current tunables. */
+export function refreshRules(): void {
+  ruleTable = null;
 }
 
 /**

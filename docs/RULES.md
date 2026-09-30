@@ -248,6 +248,23 @@ next point and uses up room) but produces nothing.
   the price of the good a little for everyone. That is a shared benefit, not a
   transfer.
 
+**Upkeep.** Running your own farms and plant takes workers and land from the rest
+of the economy. Every month, each point of home capacity online (in either good)
+costs `investUpkeepBpPer10` / 10 basis points of the nation's output (so every 10 points cost `investUpkeepBpPer10` basis points), before crisis damage:
+
+```
+upkeep = min(10000, (homeBp_food + homeBp_energy) * investUpkeepBpPer10 / 1000)      basis points of output
+output = potential * (1 - shortfall penalty) * (1 - upkeep)
+```
+
+Credit is the only price a nation feels when it builds, and Credit is never short
+(a nation ends a game holding most of its income), so without upkeep building
+past what trade leaves uncovered costs nothing at all. Upkeep is the cost that is
+paid in output, the thing that is scored: it makes a point worth building only
+while it closes a shortage, and it makes the safe road dearer than the road of
+trade. Pending capacity pays no upkeep. Upkeep is the nation's own output, so it
+moves no baseline (§5.3).
+
 **The price of self-reliance.** A nation's trade gain is `gainsFromTradeBp` times
 the share of its *structural* imbalance that its trades clear (§3.3). Home units
 do not shrink that imbalance, but they shrink what the nation still needs to
@@ -666,8 +683,9 @@ Two constraints this places on future work:
 **Gate metric.** Gate 2: a trailing nation gains nothing by sabotage. The harness
 runs a saboteur archetype against a cooperative archetype on paired seeds, playing
 the same nation from the same position, and requires the saboteur's median
-`finalScore` to be strictly lower. Gate 4: warmonger and betrayer archetypes at or
-under 1.5x fair share.
+`finalScore` to be strictly lower. Gate 4: warmonger and betrayer archetypes each at
+or under 1.5x fair share and neither topping the score more often than the
+reciprocal cooperator, with nations assigned at random (decision record G1).
 
 ---
 
@@ -813,8 +831,9 @@ therefore scores four plans, none, food, energy and both, each closing its `need
 ```
 months     = gameLengthTicks - tick - investLagTicks             months the capacity would be online
 dead zone  = points of shortage above the cap edge, summed over the goods in the plan
-benefit    = (points - dead zone) * value per point * months
-net        = benefit * aiInvestPaybackPct / 100 - cost of the plan
+per month  = potentialOutput * ((points - dead zone) * shortfallPenaltyBpPerPct - points * investUpkeepBpPer10 / 10) / 10,000
+benefit    = per month * months
+net        = benefit - cost of the plan * aiInvestPaybackPct / 100
 ```
 
 It follows the plan with the highest positive `net`, and does nothing if none is
@@ -826,8 +845,11 @@ of income. A nation that can be hurt by a broken partner (the reciprocity styles
 with, not whether a shortage is worth building against.
 
 The harness's fixed-rate strategies (docs/balance/gate2-prompt17.md) replace the
-plan with a flat rule: spend the given percent of spare Credit each month on the
-good with the larger gap, until the gap or the ceiling stops it.
+plan with a flat budget, the way the dial does: each month spend the given percent
+of last month's income (out of the Credit that is spare) on the good with the
+larger gap, then the other, with no plan and no stopping rule but the ceiling. A
+rate is therefore a real dose: too little leaves a shortage standing, too much
+keeps building capacity nobody needs and pays its upkeep.
 
 **Gate metric.** Gate 2: the owner predicts AI responses correctly 70% of the time
 after one game, and the AI is legible without being farmable. Plus the numeric-reason
@@ -960,10 +982,11 @@ docs/balance/gate2-prompt17.md records every move, made on seeds 1001-1400 only.
 
 | id | value | min | max | note |
 |---|---|---|---|---|
-| `investCostBp` | 1000 | 300 | 3000 | Cost of the first point (1% of a good's demand) as basis points of the nation's potential output, so 1000 is a tenth of one month's output. The main lever on how much of its income a nation puts into building. |
-| `investEscalationPct` | 3 | 0 | 10 | Percent added to a point's price for every point already committed in that good (diminishing returns). At 3 the 40th point costs 2.2x the first; at 0 the price is flat and only the ceiling limits building. |
-| `investMaxPct` | 60 | 20 | 100 | Ceiling on committed capacity in either good, in points (percent of demand). Below 20 a deep importer cannot cross the shortfall cap's dead zone (§7.5); at 100 a nation can replace every import. |
-| `investLagTicks` | 6 | 1 | 18 | Months between ordering capacity and its coming online. Long enough that building is a bet on the future; short enough that a build ordered in the first half of a game pays before the score is read. |
+| `investCostBp` | 1200 | 300 | 3000 | Cost of the first point (1% of a good's demand) as basis points of the nation's potential output, so 1000 is a tenth of one month's output. The main lever on how much of its income a nation puts into building. |
+| `investEscalationPct` | 1 | 0 | 10 | Percent added to a point's price for every point already committed in that good (diminishing returns). At 3 the 40th point costs 2.2x the first; at 0 the price is flat and only the ceiling limits building. |
+| `investMaxPct` | 100 | 20 | 100 | Ceiling on committed capacity in either good, in points (percent of demand). Below 20 a deep importer cannot cross the shortfall cap's dead zone (§7.5); at 100 a nation can replace every import. |
+| `investLagTicks` | 3 | 1 | 18 | Months between ordering capacity and its coming online. Long enough that building is a bet on the future; short enough that a build ordered in the first half of a game pays before the score is read. |
+| `investUpkeepBpPer10` | 18 | 0 | 200 | Output lost every month for every 10 points of home capacity online, in basis points of output (§2.9). Added in tuning revision 1: without it Credit is the only cost of building, Credit is never short, and over-building is free. At 0 the rule is the first design. |
 | `defaultInvestBp` | 200 | 0 | 1000 | Starting position of the home-investment slider of the budget dial (§8.2 dial 3), in basis points of income. What an absent player, a region and every bot that never sets it invests. Small on purpose: playing the dial is worth more than leaving it. |
 
 ### Trade
@@ -1069,7 +1092,7 @@ docs/balance/gate2-prompt17.md records every move, made on seeds 1001-1400 only.
 | `aiFreeRideCoverPct` | 70 | 40 | 100 | A hard bargainer skips a pledge once the pool is this percent funded. 100 never free-rides |
 | `aiInvestSharePct` | 25 | 5 | 100 | Percent of its spare Credit an AI spends each month on its investment plan (§7.5). Prompt 17 |
 | `aiInvestReserveTicks` | 1 | 0 | 6 | Months of income an AI keeps back before any Credit counts as spare for investing. Prompt 17 |
-| `aiInvestPaybackPct` | 100 | 50 | 200 | Percent of its cost a plan must return in avoided shortfall to be followed. 100 is break-even; above it the AI wants a margin. Prompt 17 |
+| `aiInvestPaybackPct` | 15 | 10 | 200 | Percent of its cost a plan must return in avoided shortfall to be followed. 100 is break-even; above it the AI wants a margin; below it the AI treats Credit as worth less than the output it buys, which is what an economy that holds 50 months of income in the bank should do. Prompt 17 |
 | `aiInvestSmoothTicks` | 4 | 1 | 12 | Window of the running average of the shortage an AI has suffered (§7.5). 1 believes only last month. Prompt 17 |
 | `aiInvestCoverPriorPct` | 40 | 0 | 100 | Before it has suffered anything, the percent of a structural gap an AI expects trade to cover. Matches the world's cover in §2.8. Prompt 17 |
 

@@ -9,7 +9,7 @@ import type {
   Resource,
   WorldLedger,
 } from '@nations/contracts';
-import { arriveBuilds, standingInvestment } from './invest.ts';
+import { arriveBuilds, standingInvestment, upkeepBpOf } from './invest.ts';
 import { TUNABLES } from './tunables.ts';
 
 /**
@@ -284,7 +284,9 @@ export function economyTick(
   const penaltyBp = shortfallPenaltyBp(unmetFood, pub.food, unmetEnergy, pub.energy);
 
   const potential = potentialOutput(e, priv.capacityE4);
-  const preCrisisOutput = mulDiv(potential, 10_000 - penaltyBp, 10_000);
+  // Running home capacity takes output too (RULES 2.9): a drag per point online, on top of the shortfall penalty.
+  const upkeepBp = upkeepBpOf(priv.home);
+  const preCrisisOutput = mulDiv(mulDiv(potential, 10_000 - penaltyBp, 10_000), 10_000 - upkeepBp, 10_000);
   const crisis = Math.max(0, Math.min(10_000, crisisBp));
   const output = mulDiv(preCrisisOutput, 10_000 - crisis, 10_000);
   let credit = priv.stocks.credit + output;

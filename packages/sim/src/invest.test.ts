@@ -104,12 +104,12 @@ describe('the invest command', () => {
 
   it('counts pending capacity as committed: the next point costs more, and the ceiling includes it', () => {
     const s0 = tradeWorld();
-    const { state: s1 } = step(s0, [...noStanding(), invest(A, 'food', 1_000, 0)]);
+    const { state: s1 } = step(s0, [...noStanding(), invest(A, 'food', 600, 0)]);
     const v = viewFor(s1, A).invest;
-    expect(v.food.pendingBp).toBe(1_000);
+    expect(v.food.pendingBp).toBe(600);
     expect(v.food.onlineBp).toBe(0);
-    expect(v.food.roomBp).toBe(T.investMaxPct.value * 100 - 1_000);
-    expect(v.food.nextPointCost).toBe(pointPrice(v.basePointCost, 10));
+    expect(v.food.roomBp).toBe(T.investMaxPct.value * 100 - 600);
+    expect(v.food.nextPointCost).toBe(pointPrice(v.basePointCost, 6));
     expect(v.energy.pendingBp).toBe(0);
     expect(v.energy.nextPointCost).toBe(pointPrice(v.basePointCost, 0));
   });

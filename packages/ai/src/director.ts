@@ -29,6 +29,12 @@ export interface AiDirectorOptions {
   readonly seed: number;
   /** Nations the AI plays without ever paying into a pool (the free-rider in the AI's Gate 2 check). */
   readonly freeRiders?: readonly string[];
+  /**
+   * Nations that replace their investment plan with a flat rule: spend this
+   * percent of spare Credit each month (the harness's fixed-rate strategies,
+   * docs/balance/gate2-prompt17.md). 0 never invests.
+   */
+  readonly investRates?: Readonly<Record<string, number>>;
 }
 
 export interface TickUsage {
@@ -68,7 +74,7 @@ export class AiDirector {
     for (const e of options.endowments) {
       if (e.kind !== 'playable') continue;
       const id = e.id as NationId;
-      this.minds.set(id, new NationMind(id, e, world, options.seed, !(options.freeRiders ?? []).includes(id)));
+      this.minds.set(id, new NationMind(id, e, world, options.seed, !(options.freeRiders ?? []).includes(id), options.investRates?.[id] ?? null));
       this.order.push(id);
     }
   }

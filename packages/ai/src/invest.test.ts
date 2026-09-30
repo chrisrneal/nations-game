@@ -7,7 +7,11 @@ import { fullRoster, id } from './testkit.test.helpers.ts';
 
 const roster = fullRoster();
 const world = (): WorldState => createWorld({ seed: 4, roster });
-const viewOf = (who: string, state: WorldState = world()): NationView => viewFor(state, id(who));
+/** The tests read the plan's logic, not the tuning: Credit is cheap to the AI (payback 10%) and capacity has no upkeep. */
+const viewOf = (who: string, state: WorldState = world()): NationView => {
+  const v = viewFor(state, id(who));
+  return { ...v, rules: { ...v.rules, aiInvestPaybackPct: 10, investUpkeepBpPer10: 0 } };
+};
 const pct = (bp: number): number => Math.floor(bp / 100);
 
 describe('what the AI has seen (RULES 7.5)', () => {
@@ -133,20 +137,35 @@ describe('this month\'s orders', () => {
 });
 
 describe('the fixed-rate strategies', () => {
-  it('spend nothing at 0%, more at higher rates, on the larger gap first, never past it', () => {
-    const v = viewOf('germany');
+  /** A View a month in, so there is an income to take a share of. */
+  const inMonth = (who: string): NationView => {
+    const v = viewOf(who);
+    return { ...v, self: { ...v.self, private: { ...v.self.private, last: { ...v.self.private.last, income: v.self.public.output } } } };
+  };
+
+  it('spend nothing at 0%, a share of last month\'s income at higher rates, on the larger gap first', () => {
+    const v = inMonth('germany');
     expect(investAtRate(v, 0, 50_000)).toEqual([]);
     const low = investAtRate(v, 10, 50_000).reduce((s, o) => s + o.cost, 0);
     const mid = investAtRate(v, 25, 50_000).reduce((s, o) => s + o.cost, 0);
     expect(mid).toBeGreaterThan(low);
+    expect(low).toBeLessThanOrEqual(Math.floor(v.self.public.output / 10));
+    expect(investAtRate(v, 100, 3)[0]!.cost).toBeLessThanOrEqual(3);
     const all = investAtRate(v, 100, 50_000_000);
     expect(all[0]!.good).toBe(v.invest.energy.gapBp >= v.invest.food.gapBp ? 'energy' : 'food');
-    for (const o of all) expect(o.bp).toBeLessThanOrEqual(v.invest[o.good].gapBp);
     for (const o of all) for (const r of o.reasons) expect(/\d/.test(r)).toBe(true);
   });
 
-  it('build nothing for a nation with no gap', () => {
-    expect(investAtRate(viewOf('australia'), 100, 50_000_000)).toEqual([]);
+  it('do not stop when a gap closes: they build to the ceiling in both goods, and no further', () => {
+    // Australia has no gap in either good; a flat rate still builds, which is why too high a rate costs (upkeep) and 0 is best for it.
+    const v = inMonth('australia');
+    // Give it an income big enough to fill both goods.
+    const rich = { ...v, self: { ...v.self, private: { ...v.self.private, last: { ...v.self.private.last, income: 100_000_000 } } } };
+    const orders = investAtRate(rich, 100, 500_000_000);
+    expect(orders.map((o) => o.good).sort()).toEqual(['energy', 'food']);
+    for (const o of orders) expect(o.bp).toBe(v.invest[o.good].roomBp);
+    // A nation with nothing spare builds nothing.
+    expect(investAtRate(v, 100, 0)).toEqual([]);
   });
 });
 

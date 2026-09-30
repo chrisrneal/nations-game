@@ -132,6 +132,7 @@ export function planInvestment(view: NationView, memory: InvestMemory): InvestPl
   const months = rule(view, 'gameLengthTicks') - view.tick - inv.lagTicks;
   if (months <= 0) return null;
   const perPct = rule(view, 'shortfallPenaltyBpPerPct');
+  const upkeep = rule(view, 'investUpkeepBpPer10');
   const esc = rule(view, 'investEscalationPct');
   const capBp = rule(view, 'maxShortfallPenaltyPct') * 100;
   const payback = rule(view, 'aiInvestPaybackPct');
@@ -153,9 +154,12 @@ export function planInvestment(view: NationView, memory: InvestMemory): InvestPl
       const sum = needs.food + needs.energy;
       if (sum <= 0) continue;
       const cost = GOODS.reduce((c, g) => c + (needs[g] > 0 ? costOf(inv.basePointCost, inv.maxBp - inv[g].roomBp, needs[g], esc) : 0), 0);
-      const recoveredBp = Math.max(0, sum - deadSum) * perPct;
-      const monthlyGain = Math.floor((inv.potentialOutput * recoveredBp) / 100 / 10_000);
-      const net = Math.floor((monthlyGain * months * payback) / 100) - cost;
+      // Penalty recovered, less the output the new capacity's upkeep takes every month (both in basis points of output).
+      const recoveredBp = Math.floor((Math.max(0, sum - deadSum) * perPct) / 100);
+      const upkeepBp = Math.floor((sum * upkeep) / 1_000);
+      const monthlyGain = Math.floor((inv.potentialOutput * (recoveredBp - upkeepBp)) / 10_000);
+      // It must earn back `payback`% of its cost in output (100 = break-even).
+      const net = monthlyGain * months - Math.floor((cost * payback) / 100);
       if (net > 0 && (best === null || net > best.net)) best = { needs, cost, monthlyGain, months, net, deadPoints: Math.min(sum, deadSum) / 100 };
     }
   }
@@ -210,21 +214,26 @@ export function ordersFor(view: NationView, plan: InvestPlan, memory: InvestMemo
 }
 
 /**
- * The harness's fixed-rate strategies (docs/balance/gate2-prompt17.md): spend
- * `ratePct`% of spare Credit each month on the good with the larger gap, until
- * that gap or the ceiling stops it. No plan, no memory, no payback test.
+ * The harness's fixed-rate strategies (docs/balance/gate2-prompt17.md): each
+ * month spend `ratePct`% of last month's income, out of the spare Credit it
+ * has (a flat budget, like the dial), on home capacity: the good with the
+ * larger gap, then the one with less committed. It has no plan, no memory and no
+ * payback test, and it does not stop when a gap closes: it stops only at the
+ * ceiling. That is what makes a rate a rate: too little leaves a shortage
+ * standing, too much keeps building capacity nobody needs and pays its upkeep.
  */
 export function investAtRate(view: NationView, ratePct: number, spare: number): InvestOrder[] {
   const inv = view.invest;
   const esc = rule(view, 'investEscalationPct');
-  let budget = Math.floor((spare * clamp(ratePct, 0, 100)) / 100);
+  const income = view.self.private.last.income;
+  let budget = Math.min(spare, Math.floor((income * clamp(ratePct, 0, 100)) / 100));
   if (budget <= 0) return [];
   const orders: InvestOrder[] = [];
-  const ranked = GOODS.map((g) => ({ g, gap: inv[g].gapBp })).sort((a, b) => b.gap - a.gap || (a.g < b.g ? -1 : 1));
+  const committedOf = (g: Good): number => inv.maxBp - inv[g].roomBp;
+  const ranked = GOODS.map((g) => ({ g, gap: inv[g].gapBp })).sort((a, b) => b.gap - a.gap || committedOf(a.g) - committedOf(b.g) || (a.g < b.g ? -1 : 1));
   for (const { g, gap } of ranked) {
-    if (gap <= 0 || budget <= 0) continue;
-    const committed = inv.maxBp - inv[g].roomBp;
-    const bought = buyWith(inv.basePointCost, committed, budget, Math.min(gap, inv[g].roomBp), esc);
+    if (budget <= 0) continue;
+    const bought = buyWith(inv.basePointCost, committedOf(g), budget, inv[g].roomBp, esc);
     if (bought.bp <= 0) continue;
     budget -= bought.cost;
     orders.push({
@@ -232,7 +241,7 @@ export function investAtRate(view: NationView, ratePct: number, spare: number): 
       bp: bought.bp,
       cost: bought.cost,
       text: `invest ${fmtPts(bought.bp)} points of ${g} for ${bought.cost} credit, online in month ${view.tick + inv.lagTicks + 1}`,
-      reasons: [`fixed rate: ${ratePct}% of ${spare} spare credit a month`, `${Math.floor(gap / 100)}% of ${g} demand is still uncovered at home`],
+      reasons: [`fixed rate: ${ratePct}% of last month's ${income} income, ${spare} credit spare`, `${Math.floor(gap / 100)}% of ${g} demand is still uncovered at home, ${Math.floor(inv[g].roomBp / 100)} points of room left`],
     });
   }
   return orders;

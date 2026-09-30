@@ -3,7 +3,7 @@ import { proposePurchases, proposeSales, type Proposal } from './actions.ts';
 import { believe, decayMemory, emptyMemory, offenceText, punishing, remember, type PartnerBelief, type PartnerMemory } from './beliefs.ts';
 import { explanationEvent, hasNumber, type DecisionKind, type ExplanationEvent } from './explain.ts';
 import { scoreGoals, type Goal } from './goals.ts';
-import { emptyInvestMemory, observeShortage, ordersFor, planInvestment, spareCredit, type InvestMemory } from './invest.ts';
+import { emptyInvestMemory, investAtRate, observeShortage, ordersFor, planInvestment, spareCredit, type InvestMemory, type InvestOrder } from './invest.ts';
 import { answerOffer, type Ledger } from './negotiation.ts';
 import { observe, openAppeals, visibleTo } from './perception.ts';
 import { personalityFor, type Personality } from './personality.ts';
@@ -71,6 +71,8 @@ export class NationMind {
     private readonly seed: number,
     /** False only for the free-rider in the AI's Gate 2 check: never pays into a pool. */
     private readonly pays = true,
+    /** Null: invest by plan (RULES 7.5). A number: spend that percent of spare Credit a month instead (the harness's fixed-rate strategies). */
+    private readonly investRate: number | null = null,
   ) {}
 
   /** Personality is fixed by the data; the thresholds come from the View's rules. */
@@ -273,14 +275,17 @@ export class NationMind {
 
     // --- Invest (RULES 7.5): what is left after answering offers, paying pools and buying goods.
     options.spend(2);
-    const plan = planInvestment(view, this.invest);
-    if (plan !== null) {
-      const spare = spareCredit(view, view.self.private.stocks.credit - ledger.creditFree);
-      for (const order of ordersFor(view, plan, this.invest, spare)) {
-        if (!decide({ type: 'invest', payload: { good: order.good, bp: order.bp } }, 'invest', null, order.text, order.reasons)) break;
-        ledger.creditFree -= order.cost;
-        ledger.stocks.credit -= order.cost;
-      }
+    const spareCash = spareCredit(view, view.self.private.stocks.credit - ledger.creditFree);
+    let orders: readonly InvestOrder[] = [];
+    if (this.investRate !== null) orders = investAtRate(view, this.investRate, spareCash);
+    else {
+      const plan = planInvestment(view, this.invest);
+      if (plan !== null) orders = ordersFor(view, plan, this.invest, spareCash);
+    }
+    for (const order of orders) {
+      if (!decide({ type: 'invest', payload: { good: order.good, bp: order.bp } }, 'invest', null, order.text, order.reasons)) break;
+      ledger.creditFree -= order.cost;
+      ledger.stocks.credit -= order.cost;
     }
     return { commands, explanations };
   }

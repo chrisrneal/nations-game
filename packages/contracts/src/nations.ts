@@ -131,6 +131,8 @@ export interface InvestView {
   readonly potentialOutput: number;
   /** Credit for the first point in a good. */
   readonly basePointCost: number;
+  /** Output this nation loses every month to the upkeep of its online home capacity, in basis points (RULES 2.9). */
+  readonly upkeepBp: number;
   readonly food: InvestGoodView;
   readonly energy: InvestGoodView;
 }

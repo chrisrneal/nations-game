@@ -104,6 +104,14 @@ export function gapBpOf(flow: Flow, pendingBp: number): number {
   return short <= 0 ? 0 : Math.floor((short * 10_000) / flow.demand);
 }
 
+/**
+ * Output a nation gives up every month to run its home capacity (RULES 2.9):
+ * `investUpkeepBpPer10` for every 10 points online, in basis points of output.
+ */
+export function upkeepBpOf(home: HomeCapacity): number {
+  return Math.min(10_000, Math.floor(((home.food + home.energy) * TUNABLES.investUpkeepBpPer10.value) / 1_000));
+}
+
 /** Credit for the first point of this nation, from its own potential output. */
 export function baseCostFor(nation: Pick<NationRecord, 'private'>, e: Pick<NationEndowment, 'mineralsRefining'>): number {
   return investBase(potentialOutput(e, nation.private.capacityE4));
@@ -128,6 +136,7 @@ export function investView(nation: NationRecord, e: NationEndowment): InvestView
     maxBp: maxCommittedBp(),
     potentialOutput: potentialOutput(e, nation.private.capacityE4),
     basePointCost: base,
+    upkeepBp: upkeepBpOf(nation.private.home),
     food: good('food'),
     energy: good('energy'),
   };
