@@ -131,4 +131,16 @@ describe('LocalHost', () => {
     expect(seen.at(-1)?.predictions.mode).toBe(true);
     await expect(h.predict(999, 'accept')).rejects.toThrow(/already answered/);
   });
+
+  it('a finished game with playtest answers exports as playtest-<date>-<nation>.json; other exports keep their name', async () => {
+    const { host: h, engine } = host();
+    await h.newGame('egypt');
+    engine.advance(3);
+    expect((await h.exportFile()).name).toBe('nations-egypt-month-3.json');
+    engine.advance(100);
+    await h.answerPlaytest({ who: 'owner', again: 'unsure' });
+    const file = await h.exportFile();
+    expect(file.name).toMatch(/^playtest-\d{4}-\d{2}-\d{2}-egypt\.json$/);
+    expect(JSON.parse(file.text).game.playtest).toMatchObject({ who: 'owner', again: 'unsure' });
+  });
 });

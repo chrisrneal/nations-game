@@ -337,3 +337,21 @@ describe('GameEngine AI, journal and predictions (prompt 11)', () => {
     expect(engine.exportGame().predictions?.records).toEqual([]);
   });
 });
+
+describe('playtest answers (Gate 2 line 7)', () => {
+  it('are kept host-side, travel in the exported save, and come back on import; the world is untouched', () => {
+    const engine = new GameEngine();
+    engine.newGame('canada', 2);
+    const end = engine.advance(100);
+    const before = end.standing.fingerprint;
+    engine.answerPlaytest({ who: 'other', again: 'yes' });
+    const after = engine.answerPlaytest({ interesting: '  Joining   the grid link\nlate  ' });
+    expect(after.playtest).toEqual({ version: 1, who: 'other', again: 'yes', interesting: 'Joining the grid link late' });
+    expect(after.standing.fingerprint).toBe(before);
+    const saved = JSON.parse(JSON.stringify(engine.exportGame()));
+    const other = new GameEngine();
+    expect(other.importGame(saved).playtest).toEqual(after.playtest);
+    engine.newGame('canada', 3);
+    expect(engine.advance(1).playtest.who).toBeNull();
+  });
+});

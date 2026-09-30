@@ -16,6 +16,7 @@ import world2030 from '../../../../data/world-2030.json' with { type: 'json' };
 import { Journal, type JournalSnapshot } from './journal.ts';
 import { LIVE_POLL_MS, PACE_INTERVAL_MS, SUPPORTED_PACES, liveTicksDue } from './pace.ts';
 import { EMPTY_BOOK, guess, predictionsView, recordAnswers, resolved, type PredictionBook, type PredictionsView, type ResolvedPrediction } from './predictions.ts';
+import { EMPTY_PLAYTEST, answer, type PlaytestAnswers } from './playtest.ts';
 import { awayRecap, type AwayRecap } from './recap.ts';
 
 /** The player's View: the contracts NationView. */
@@ -51,6 +52,8 @@ export interface GameUpdate extends HostUpdate {
   readonly recap: AwayRecap | null;
   readonly predictions: PredictionsView;
   readonly live: LiveClock | null;
+  /** The playtest answers given at game over (Gate 2 line 7). */
+  readonly playtest: PlaytestAnswers;
 }
 
 /** Everything needed to resume a game: the sim save plus who plays whom, and host-side memory. */
@@ -63,6 +66,8 @@ export interface SavedGame {
   readonly journal?: JournalSnapshot;
   /** Prediction mode, and every guess with the real answer. */
   readonly predictions?: PredictionBook;
+  /** The playtest answers, once given (missing in older saves). */
+  readonly playtest?: PlaytestAnswers;
   /** Present while the game runs on the live clock: wall-clock ms up to which live months have been counted. */
   readonly live?: { readonly anchor: number };
 }
@@ -141,6 +146,7 @@ export class GameEngine {
   private director: AiDirector | null = null;
   private journal: Journal | null = null;
   private book: PredictionBook = EMPTY_BOOK;
+  private playtest: PlaytestAnswers = EMPTY_PLAYTEST;
   private recap: AwayRecap | null = null;
   private away: { view: NationView; events: Event[] } | null = null;
   private pace: Pace = 'paused';
@@ -156,6 +162,7 @@ export class GameEngine {
     const state = createWorld({ seed, roster: fullRoster(), controllers: { [humanId]: 'human' }, policies: { [humanId]: { autoImport: true } } });
     const aiSeed = mix32(seed ^ 0x2545f491);
     this.start(new Session(state), nationId(humanId), aiSeed, null, undefined, { ...EMPTY_BOOK, mode: this.book.mode });
+    this.playtest = EMPTY_PLAYTEST;
     return this.update([]);
   }
 
@@ -237,6 +244,13 @@ export class GameEngine {
     return resolved(result.record);
   }
 
+  /** The playtest questions at game over: who played, would they play again, the most interesting choice. */
+  answerPlaytest(update: Partial<Omit<PlaytestAnswers, 'version'>>): GameUpdate {
+    this.requireGame();
+    this.playtest = answer(this.playtest, update);
+    return this.emit([]);
+  }
+
   /** A compact save: the current state becomes the snapshot, with the AI's memory and the player's journal beside it. */
   exportGame(): SavedGame {
     const { session, humanId } = this.requireGame();
@@ -248,6 +262,7 @@ export class GameEngine {
       ai: this.requireDirector().snapshot(),
       journal: this.requireJournal().snapshot(),
       predictions: this.book,
+      ...(this.playtest === EMPTY_PLAYTEST ? {} : { playtest: this.playtest }),
       ...live,
     };
   }
@@ -262,6 +277,7 @@ export class GameEngine {
     const humanId = nationId(saved.humanId);
     if (session.state.controllers[humanId] === undefined) throw new Error('Save does not contain its player nation');
     this.start(session, humanId, saved.aiSeed, saved.ai ?? null, saved.journal, saved.predictions ?? EMPTY_BOOK);
+    this.playtest = saved.playtest ?? EMPTY_PLAYTEST;
     if (options.resumeLive === true && saved.live !== undefined && session.state.tick < GAME_LENGTH) {
       this.pace = 'live';
       this.liveAnchor = saved.live.anchor;
@@ -414,6 +430,7 @@ export class GameEngine {
       recap: this.recap,
       predictions: predictionsView(this.book),
       live,
+      playtest: this.playtest,
     };
   }
 

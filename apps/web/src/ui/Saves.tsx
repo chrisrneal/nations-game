@@ -55,7 +55,7 @@ function SlotRow(props: {
 }
 
 /** Hands the browser a file to save: the player keeps it wherever they like. */
-function download(name: string, text: string): void {
+export function download(name: string, text: string): void {
   const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
   const a = document.createElement('a');
   a.href = url;

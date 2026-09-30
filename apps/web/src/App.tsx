@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import type { Command, Event, NationView, Pace, Project, StandingPolicy, TradeOffer } from '@nations/contracts';
 import type { GameHost, GameUpdate, InstallPrompt } from './platform/index.ts';
 import { nameOf } from './world/nations.ts';
@@ -12,7 +12,7 @@ import { Policies } from './ui/Policies.tsx';
 import { Projects } from './ui/Projects.tsx';
 import { goodOf, templateOf, yieldShare } from './ui/projects.ts';
 import { OutputLine, ResourceStrip } from './ui/ResourceStrip.tsx';
-import { Saves } from './ui/Saves.tsx';
+import { Saves, download } from './ui/Saves.tsx';
 import { StartScreen } from './ui/StartScreen.tsx';
 import { TradeSheet } from './ui/TradeSheet.tsx';
 import { WorldMap } from './ui/WorldMap.tsx';
@@ -198,6 +198,19 @@ export function App(props: { host: GameHost; install?: InstallPrompt }): ReactEl
     [host, run],
   );
   const newGame = useCallback(() => run(host.setPace('paused'), () => setStarting(true)), [host, run]);
+  const playtest = useMemo(
+    () => ({
+      answer: (u: Parameters<typeof host.answerPlaytest>[0]) => run(host.answerPlaytest(u)),
+      save: () =>
+        run(
+          host.exportFile().then((file) => {
+            download(file.name, file.text);
+            setToast(`Saved ${file.name}. Send it to the owner.`);
+          }),
+        ),
+    }),
+    [host, run],
+  );
 
   if (starting || update === null) {
     return (
@@ -227,7 +240,7 @@ export function App(props: { host: GameHost; install?: InstallPrompt }): ReactEl
           <ResourceStrip view={view} />
         </header>
         <main className="content">
-          {tab === 'inbox' && <Inbox update={update} onAction={act} onPredict={predict} onDismissRecap={dismissRecap} onNewGame={newGame} />}
+          {tab === 'inbox' && <Inbox update={update} onAction={act} onPredict={predict} onDismissRecap={dismissRecap} onNewGame={newGame} playtest={playtest} />}
           {tab === 'projects' && <Projects view={view} onAction={act} />}
           {tab === 'world' && <WorldMap view={view} journal={update.journal} onTrade={(draft) => setTrade({ draft, counterOf: null })} />}
           {tab === 'game' && (
