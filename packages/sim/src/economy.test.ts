@@ -37,10 +37,19 @@ describe('economy formulas (RULES section 2)', () => {
     expect(rich.energy.production).toBe(Math.floor((plain.energy.production * 10_100) / 10_000));
   });
 
-  it('shortfall penalty: 10% unmet costs 10 x shortfallPenaltyBpPerPct; both resources together cap at 30%', () => {
+  it('shortfall penalty: 10% unmet costs 10 x shortfallPenaltyBpPerPct; the cap is a safety net, never reached (H3)', () => {
     const flow = { demand: 1_000, production: 0 };
     expect(shortfallPenaltyBp(100, flow, 0, flow)).toBe(10 * TUNABLES.shortfallPenaltyBpPerPct.value);
-    expect(shortfallPenaltyBp(1_000, flow, 1_000, flow)).toBe(TUNABLES.maxShortfallPenaltyPct.value * 100);
+    const worst = shortfallPenaltyBp(1_000, flow, 1_000, flow);
+    expect(worst).toBe(200 * TUNABLES.shortfallPenaltyBpPerPct.value);
+    expect(worst).toBeLessThan(TUNABLES.maxShortfallPenaltyPct.value * 100);
+  });
+
+  it('no dead zone (H3): every extra unit of cover lowers the penalty, even at the worst shortfall', () => {
+    const flow = { demand: 1_000, production: 0 };
+    for (let unmet = 1_000; unmet >= 100; unmet -= 50) {
+      expect(shortfallPenaltyBp(unmet - 50, flow, 1_000, flow)).toBeLessThan(shortfallPenaltyBp(unmet, flow, 1_000, flow));
+    }
   });
 
   it('fair price band (RULES 3.2)', () => {
