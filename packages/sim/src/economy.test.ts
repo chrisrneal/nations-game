@@ -140,6 +140,17 @@ function commandArb(tick: number): fc.Arbitrary<Command> {
     fc.record({ n: id, r: fc.constantFrom('fairShare', 'reciprocal', 'none'), bp: fc.integer({ min: 0, max: 1_000 }), to: fc.constantFrom('adaptation', 'health', 'split') }).map(
       ({ n, r, bp, to }) => ({ nationId: n, tick, type: 'setPolicy', payload: { crisisRule: r, contributionBp: bp, contributionTo: to } }),
     ),
+    // Joint projects (RULES 13): propose, join, decline, leave and fund, often invalid.
+    fc.record({ n: id, t: fc.constantFrom('solar', 'grid', 'hydrogen', 'grain', 'irrigation', 'earlyWarning', 'vaccines'), inv: fc.uniqueArray(id, { minLength: 1, maxLength: 3 }) }).map(
+      ({ n, t, inv }) => ({ nationId: n, tick, type: 'proposeProject', payload: { template: t, invite: inv } }),
+    ),
+    fc.record({ n: id, p: fc.integer({ min: 1, max: 6 }), t: fc.constantFrom('joinProject', 'joinProject', 'declineProject', 'leaveProject') }).map(({ n, p, t }) => ({
+      nationId: n,
+      tick,
+      type: t,
+      payload: { projectId: p },
+    })),
+    fc.record({ n: id, p: fc.integer({ min: 1, max: 6 }), a: amount }).map(({ n, p, a }) => ({ nationId: n, tick, type: 'fundProject', payload: { projectId: p, amount: a } })),
   );
 }
 
@@ -203,6 +214,7 @@ describe('Gate 1 invariants (property tests)', () => {
             };
           }
           const { state, events } = step(s, commandsFor(pool, s.tick, picks));
+          const dl0 = (k: keyof WorldState['ledger']): number => state.ledger[k] - s.ledger[k];
           const after = totals(state);
           let consumedFood = 0;
           let consumedEnergy = 0;
@@ -216,6 +228,8 @@ describe('Gate 1 invariants (property tests)', () => {
             spent += last.resilienceSpent;
           }
           for (const ev of events) if (ev.type === 'resilienceFunded') spent += (ev.payload as { cost: number }).cost;
+          // Credit paid into a joint project is the project sink (RULES 13.3).
+          spent += dl0('creditSpentProjects');
           const dl = (k: keyof WorldState['ledger']): number => state.ledger[k] - s.ledger[k];
           expect(after.food).toBe(before.food + produced.food - consumedFood);
           expect(after.energy).toBe(before.energy + produced.energy - consumedEnergy);
@@ -223,7 +237,7 @@ describe('Gate 1 invariants (property tests)', () => {
           expect(after.credit).toBe(before.credit + income - spent - dl('creditSpentCrises'));
           expect(dl('foodProduced') - dl('foodConsumed')).toBe(after.food - before.food);
           expect(dl('energyProduced') - dl('energyConsumed')).toBe(after.energy - before.energy);
-          expect(dl('creditIncome') - dl('creditSpentResilience') - dl('creditSpentCrises')).toBe(after.credit - before.credit);
+          expect(dl('creditIncome') - dl('creditSpentResilience') - dl('creditSpentCrises') - dl('creditSpentProjects')).toBe(after.credit - before.credit);
           const pools = (x: WorldState): number => x.pools.adaptation.balance + x.pools.health.balance;
           expect(pools(state) - pools(s)).toBe(dl('creditPooled') - dl('creditSpentCrises'));
           s = state;

@@ -1,4 +1,5 @@
-import type { AppealAnswer, ForeignNation, NationId, NationMap, NationRecord, NationView } from '@nations/contracts';
+import type { AppealAnswer, ForeignNation, NationEndowment, NationId, NationMap, NationRecord, NationView, Project } from '@nations/contracts';
+import { CATALOGUE, hostProblem, projectTerms } from './projects.ts';
 import { scoreboard } from './score.ts';
 import { TUNABLES } from './tunables.ts';
 import type { WorldState } from './world.ts';
@@ -98,7 +99,26 @@ export function viewFor(state: WorldState, selfId: NationId): NationView {
       pledges: state.pledges.map((p) => ({ ...p })),
       hits: state.hits.filter((h) => h.nationId === selfId).map((h) => ({ ...h })),
     },
+    projects: {
+      catalogue: CATALOGUE.map((t) => ({ ...t })),
+      projects: state.projects.map(copyProject),
+      hostable: CATALOGUE.map((t) => ({
+        template: t.id,
+        ...projectTerms(t, self),
+        problem: hostProblem(t, self, state.endowments[selfId] as NationEndowment, state.projects),
+      })),
+    },
     rules: currentRules(),
+  };
+}
+
+function copyProject(p: Project): Project {
+  return {
+    ...p,
+    invited: [...p.invited],
+    declined: [...p.declined],
+    members: p.members.map((m) => ({ ...m })),
+    left: p.left.map((l) => ({ ...l })),
   };
 }
 

@@ -10,6 +10,7 @@ import type {
 } from './economy.ts';
 import type { TradeOffer } from './trade.ts';
 import type { CrisesView } from './crisis.ts';
+import type { ProjectsView } from './project.ts';
 import type { View } from './view.ts';
 
 /**
@@ -115,6 +116,8 @@ export interface NationView extends View {
   readonly scores: ScoresView;
   /** Pools, open crisis appeals, recent results and open pledges (public), plus this nation's own damage. */
   readonly crises: CrisesView;
+  /** The project catalogue and every forming, building and active joint project (RULES 13). Public. */
+  readonly projects: ProjectsView;
   /**
    * The value of every tunable, by id: the public rules of this game. An AI
    * reads its numbers here, never from its own constants, so tuning one file

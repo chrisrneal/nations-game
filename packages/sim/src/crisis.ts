@@ -13,11 +13,13 @@ import type {
   Pledge,
   Pool,
   PoolKind,
+  Project,
   RngState,
   WorldLedger,
 } from '@nations/contracts';
 import { mulDiv } from './economy.ts';
 import { randomInt } from './rng.ts';
+import { shieldBp } from './projects.ts';
 import { adjustTrust, clampTrust } from './trust.ts';
 import { TUNABLES } from './tunables.ts';
 
@@ -52,6 +54,8 @@ export interface CrisisContext {
   nextCrisisId: number;
   nextPledgeId: number;
   rng: RngState;
+  /** Joint projects, for the shields that cut crisis damage (RULES 13.4). */
+  readonly projects?: readonly Project[];
 }
 
 export const POOL_OF: Readonly<Record<CrisisKind, PoolKind>> = { climate: 'adaptation', pandemic: 'health' };
@@ -433,11 +437,13 @@ export function lockCrises(ctx: CrisisContext): void {
     for (const id of ctx.nationOrder) {
       const bpUnpooled = hitBp(crisis, ctx.endowments[id] as NationEndowment, nation(ctx, id).private.resilience);
       if (bpUnpooled <= 0) continue;
+      const pooled = mulDiv(bpUnpooled, 10_000 - ownCoverBp(coverBp, pool.round[id] ?? 0, crisis.shares[id] ?? 0), 10_000);
       const hit: CrisisHit = {
         crisisId: crisis.id,
         kind: crisis.kind,
         nationId: id,
-        bp: mulDiv(bpUnpooled, 10_000 - ownCoverBp(coverBp, pool.round[id] ?? 0, crisis.shares[id] ?? 0), 10_000),
+        // A shield project cuts what the pool left (RULES 13.4); the unpooled damage is unchanged.
+        bp: mulDiv(pooled, 10_000 - shieldBp(ctx.projects ?? [], id, crisis.kind), 10_000),
         bpUnpooled,
         fromTick: ctx.tick,
         toTick: ctx.tick + lasts - 1,

@@ -1,6 +1,7 @@
 import type { Command } from './command.ts';
 import type { ControllerSlot, NationId, Tick } from './nation.ts';
 import type { EconomyReport, ResourceAmount, StandingPolicy } from './economy.ts';
+import type { ProjectCommand } from './project.ts';
 import type { AppealAnswer, Crisis, CrisisHit, CrisisResult, CrisisRule, Pledge, PoolKind } from './crisis.ts';
 
 /**
@@ -82,7 +83,8 @@ export type GameCommand =
   | ContributeCommand
   | PledgeCommand
   | WithdrawPledgeCommand
-  | DeclineAppealCommand;
+  | DeclineAppealCommand
+  | ProjectCommand;
 
 /**
  * Event payloads, by event type. Trade events go to both parties only; the

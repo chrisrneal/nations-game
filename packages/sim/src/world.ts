@@ -7,6 +7,7 @@ import type {
   Pledge,
   Pool,
   PoolKind,
+  Project,
   NationEndowment,
   NationId,
   NationPrivate,
@@ -31,8 +32,9 @@ export type { NationPrivate, NationPublic, NationRecord } from '@nations/contrac
  * 3 = structural baseline, own-imbalance trade gains and the smoothed score
  *     track (prompt 09).
  * 4 = Phase 2 crises, pools, pledges and crisis policies (Phase 2 prompt 09).
+ * 5 = joint projects and the project Credit sink (100x slice 3, RULES 13).
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 /**
  * One nation's smoothed output and baseline output (RULES 5.1), x 1,000 so a
@@ -76,6 +78,9 @@ export interface WorldState extends State {
   readonly hits: readonly CrisisHit[];
   readonly nextCrisisId: number;
   readonly nextPledgeId: number;
+  /** Forming, building and active joint projects, oldest first (RULES 13, seam 8). Lapsed projects leave. */
+  readonly projects: readonly Project[];
+  readonly nextProjectId: number;
 }
 
 /**
@@ -168,6 +173,7 @@ export const EMPTY_LEDGER: WorldLedger = {
   offersFailed: 0,
   creditPooled: 0,
   creditSpentCrises: 0,
+  creditSpentProjects: 0,
   climateLoss: 0,
   climateLossUnpooled: 0,
   pandemicLoss: 0,
@@ -268,6 +274,8 @@ export function createWorld(options: CreateWorldOptions): WorldState {
     hits: [],
     nextCrisisId: 1,
     nextPledgeId: 1,
+    projects: [],
+    nextProjectId: 1,
   };
   return { ...base, prices: referencePrices(base) };
 }

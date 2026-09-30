@@ -7,6 +7,7 @@ import type {
   FundResilienceCommand,
   GameCommand,
   MakeOfferCommand,
+  NationEndowment,
   NationRecord,
   PingCommand,
   PledgeCommand,
@@ -19,6 +20,7 @@ import type {
   WithdrawPledgeCommand,
 } from '@nations/contracts';
 import { isFair } from './economy.ts';
+import { TEMPLATE_IDS, hostProblem, roomToFund, sharesTie, templateOf } from './projects.ts';
 import { TUNABLES } from './tunables.ts';
 import type { WorldState } from './world.ts';
 
@@ -55,6 +57,11 @@ export const COMMAND_TYPES = [
   'pledge',
   'withdrawPledge',
   'declineAppeal',
+  'proposeProject',
+  'joinProject',
+  'declineProject',
+  'leaveProject',
+  'fundProject',
 ] as const;
 const POOLS: readonly string[] = ['adaptation', 'health'];
 const CRISIS_RULES: readonly string[] = ['fairShare', 'reciprocal', 'none'];
@@ -198,6 +205,27 @@ export function validateCommandShape(state: WorldState, command: unknown): strin
       return isPositiveInt(payload.pledgeId) ? null : 'unknown pledge';
     case 'declineAppeal':
       return isPositiveInt(payload.crisisId) ? null : 'unknown crisis';
+    case 'proposeProject': {
+      if (typeof payload.template !== 'string' || !TEMPLATE_IDS.includes(payload.template)) return 'unknown project';
+      const invite = payload.invite;
+      const most = TUNABLES.projectSlots.value + 2;
+      if (!Array.isArray(invite) || invite.length === 0 || invite.length > most) return `invite 1 to ${most} nations`;
+      const seen = new Set<string>();
+      for (const id of invite) {
+        if (typeof id !== 'string' || !Object.hasOwn(state.nations, id)) return 'unknown invitee';
+        if (id === nationId) return 'you cannot invite yourself';
+        if (seen.has(id)) return 'an invitee is listed twice';
+        seen.add(id);
+      }
+      return null;
+    }
+    case 'joinProject':
+    case 'declineProject':
+    case 'leaveProject':
+      return isPositiveInt(payload.projectId) ? null : 'unknown project';
+    case 'fundProject':
+      if (!isPositiveInt(payload.projectId)) return 'unknown project';
+      return isPositiveInt(payload.amount) && payload.amount <= MAX_AMOUNT ? null : 'amount must be a positive whole number';
     default:
       return 'unknown command type';
   }
@@ -280,6 +308,42 @@ export function validateCommand(state: WorldState, command: unknown): string | n
       const crisis = state.crises.find((c) => c.id === typed.payload.crisisId);
       if (crisis === undefined) return 'appeal is no longer open';
       return crisis.answers[self.id] === undefined ? null : 'you already answered this appeal';
+    }
+    case 'proposeProject': {
+      const template = templateOf(typed.payload.template);
+      const problem = hostProblem(template, self, state.endowments[self.id] as NationEndowment, state.projects);
+      if (problem !== null) return problem;
+      for (const id of typed.payload.invite) {
+        if (nation(state, id).public.kind !== 'playable') return 'only playable nations can be invited';
+      }
+      return null;
+    }
+    case 'joinProject':
+    case 'declineProject': {
+      const project = state.projects.find((p) => p.id === typed.payload.projectId);
+      if (project === undefined || project.status !== 'forming') return 'project is no longer forming';
+      if (!project.invited.includes(self.id)) return 'you are not invited to this project';
+      if (typed.type === 'declineProject') return null;
+      if (project.members.length >= TUNABLES.projectSlots.value) return 'project is full';
+      const template = templateOf(project.template);
+      if (template.sharedTieRequired && !sharesTie(state.endowments[self.id] as NationEndowment, state.endowments[project.host] as NationEndowment)) {
+        return 'a grid link needs a bloc or alliance in common with the host';
+      }
+      return null;
+    }
+    case 'leaveProject': {
+      const project = state.projects.find((p) => p.id === typed.payload.projectId);
+      if (project === undefined || project.status === 'active') return 'project is not forming or building';
+      if (!project.members.some((m) => m.nationId === self.id)) return 'you are not a member';
+      return project.host === self.id ? 'a host cannot leave its own project' : null;
+    }
+    case 'fundProject': {
+      const project = state.projects.find((p) => p.id === typed.payload.projectId);
+      if (project === undefined || project.status !== 'building') return 'project is not building';
+      if (!project.members.some((m) => m.nationId === self.id)) return 'you are not a member';
+      const room = roomToFund(project, self.id);
+      if (typed.payload.amount > room) return `you can pay at most ${room} more into this project`;
+      return self.private.stocks.credit < typed.payload.amount ? 'not enough credit' : null;
     }
     case 'fundResilience': {
       const cost = typed.payload.points * TUNABLES.resilienceCostPerPoint.value;
