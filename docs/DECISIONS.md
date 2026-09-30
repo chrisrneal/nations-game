@@ -4,9 +4,11 @@ One record per decision. Each says what was decided, why, what it costs, and wha
 would have to happen to reverse it. **Changing one of these needs a new record
 appended here, not an edit to an old one** - later sessions rely on these being
 stable. `D` records come from docs/ROADMAP.md, `S` records cover the nine
-architecture seams, `T` records cover the toolchain chosen in prompt 01.
+architecture seams, `T` records cover the toolchain chosen in prompt 01, `G`
+records are rulings on how a gate is graded.
 
-Status of everything below: **accepted**, 2026-09-27, prompt 01.
+Status of everything below: **accepted**, 2026-09-27, prompt 01, unless a record
+gives its own status.
 
 ---
 
@@ -238,3 +240,118 @@ eslint.config.js (`nations/allowed-imports`) that takes an explicit allow-list.
 local rule is about twenty lines and says exactly what it means.
 **Cost.** A little custom code in the lint config.
 **Reversing it.** Swap back if upstream gains a first-class allow-list option.
+
+---
+
+## G1 - Gate 2 archetype line reworded; top-scorer line waived, then pooled
+**Status.** **Accepted**, 2026-09-30, prompt 16, on the owner's two rulings. It
+refines the Cost line of D4 and changes what docs/ROADMAP.md says for Gate 2 and
+Gate 4; it does not edit D4.
+
+**Decision.**
+1. **Gate 2 criterion 2 is reworded to what it protects against.** Old: "no
+   archetype over 1.5x fair share with nations assigned at random". New: *"No
+   defecting archetype (free-rider, hoarder, exploiter, isolationist) tops the
+   score in more than 1.5x its fair share, and none tops it more often than the
+   reciprocal cooperator, with nations assigned at random."*
+   - An archetype's fair share is its share of the nation-seats dealt (about one
+     in five each), which is what the harness already measures ("tops / fair
+     share"). The reciprocal cooperator is the shipped AI, as the harness has
+     graded it since prompt 13.
+   - "More often than the cooperator" is compared as a multiple of fair share,
+     not as a raw count. The seat draw is random (628 cooperator seats against 730
+     free-rider seats on seeds 1-200), and a raw count would let that draw decide
+     the line. With equal seats the two readings agree.
+   - The cooperator is exempt from the 1.5x ceiling. Its multiple is still
+     reported, so the owner can see it, but it is not graded.
+2. **Gate 4's line does not have Gate 2's flaw as written, but it is reworded to
+   close two weaknesses.** The line names only the defectors ("warmonger and
+   betrayer at or under 1.5x fair share"), so unlike Gate 2's it does not put the
+   cooperator under a ceiling it cannot meet. The weaknesses are:
+   - It has no "not more often than the cooperator" clause. D4 says war must
+     never be the dominant strategy, and a warmonger at 1.4x while the cooperator
+     sits at 1.3x passes the old line while being dominant. Gate 4 now reads:
+     *"warmonger and betrayer each at or under 1.5x fair share, and neither tops
+     the score more often than the reciprocal cooperator, with nations assigned at
+     random."*
+   - A ceiling of 1.5x depends on the mix of archetypes dealt. If a warmonger or
+     betrayer trades as well as the cooperator, the good traders share the wins
+     and each lands near (archetypes dealt) / (archetypes that trade well), which
+     is 1.75x with seven archetypes and four good traders. That is Gate 2's flaw
+     again, by structure. It cannot be judged until the archetypes exist, so the
+     Gate 4 prompt must state the archetype mix and the expected multiple for a
+     good trader before any grading. If the ceiling cannot be met by
+     structure, the architect rules before the run, never after it.
+3. **The top-scorer line (Gate 1 criterion 5, GATE-2 line 9b: no nation tops more
+   than 2x its fair share, 11.8%) is waived a second time, for Gate 2 only.** The
+   waiver is recorded in docs/gates/GATE-2.md (Waivers), citing
+   docs/balance/gate2-prompt15.md section 5. Nothing is tuned to it.
+4. **From Gate 3 on, the line is graded pooled over 800 games, not per 200.**
+   The limit stays at 2x fair share (11.8% with 17 playable nations, at most 94
+   wins in 800 games). The games are four consecutive 200-game ranges on seeds
+   that nobody tuned on, in both the archetype games and the Gate 1 mix, and the
+   most frequent top scorer is graded on the pooled count. Each range is still
+   reported, for information only. The threshold and the 800 are fixed now, before
+   any run they will grade. The second option in prompt 15 section 6 ("2x the
+   fair share of the nations that can win") is rejected.
+
+**Why.**
+- **Item 1.** As worded the line could not pass while Gate 1 holds. Two archetypes
+  trade well and three trade badly on purpose, so the two good traders took 170 of
+  200 wins on 40% of the seats (docs/balance/gate2-p2-prompt09.md). To bring every
+  archetype under 1.5x the defectors would have to win as often as the
+  cooperator, which contradicts Gate 1's "trading beats isolating by 15%". What
+  the line was written to stop is defection paying. Two checks say that
+  directly: no defector over 1.5x, and none ahead of the cooperator. Prompt 14
+  already fixed the real defect behind it (free-riding paid): the free-rider
+  tops 1.05x and 1.15x on seeds 1-200 and 201-400, below the cooperator's 3.90x
+  and 3.50x, so the reworded line is met by the numbers we have. The re-review
+  (prompt 20) still has to confirm it for all four defectors.
+- **Item 2.** The Gate 4 fix costs one clause and keeps D4's "never dominant"
+  honest. The mix problem is real but unmeasurable today, so the record makes the
+  Gate 4 prompt name it in advance instead of guessing now.
+- **Item 4, why pooled.** Prompt 15 section 5 shows that 200 games is too few for
+  an 11.8% line. Only about 11-12 of 17 nations can realistically win, and a
+  perfectly fair game with 12 equally likely winners has its top nation over
+  11.8% in 47% of 200-game ranges. I re-ran that simulation for this record
+  (scratch script, not committed) and got the same figures, then ran it at 800:
+
+  | Equally likely winners | Fair game, one 200-game range over 11.8% | Fair game, pooled 800 over 11.8% |
+  |---|---|---|
+  | 17 | 1.5% | 0.0% |
+  | 14 | 12.4% | 0.0% |
+  | 12 | 46.9% | 0.6% |
+  | 11 | 75.8% | 5.1% |
+
+  Pooling therefore passes a fair game and still catches a biased one: one
+  nation whose true win rate is 13% is flagged 83% of the time at 800 games (70%
+  at 200), and one at 15% is flagged 99.6% of the time. A pass now means fairness,
+  where before it was mostly luck.
+- **Item 4, why not "the nations that can win".** It sets the denominator from the
+  results, so it is circular and breaks the rule that thresholds are fixed before
+  the results they grade (ROADMAP, Gate rules). It also removes the nations that
+  cannot win, Japan, Korea and Turkiye at the shortfall cap, from the sums, so the
+  line would pass by excluding the unfairness GO-NO-GO section 2 points at.
+
+**Cost.**
+- **The top-scorer line will fail at Gate 3 on today's game.** Saudi Arabia tops
+  21.0-22.5% on seeds 1-400, so a pooled grade fails by a wide margin. Gate 3
+  cannot close until a fairness change holds on pooled fresh seeds. No prompt
+  for it is scheduled here. Prompt 15's rule (reverted in c9f1c4b, 276f1bf and
+  40741f6) took the worst nation to 12-14% per range and is the obvious first
+  try; its pooled figure was never measured.
+- Grading the line takes four times as many games (the gate2 suite is about a
+  minute per 200 games, so about four to six minutes for 800). The
+  harness needs a pooled mode for the gate2 suite; Gate 1's suite already
+  reports pooled numbers.
+- The line still grades only the ceiling. Whether every nation *can* win is a
+  separate question (a floor), and it is not part of this record. The
+  Credit-buyer lever in prompt 17 is aimed at it.
+- The reworded Gate 2 line does not ask whether cooperation wins against other
+  cooperators, only whether defection pays. The current bots cannot test that.
+- Lane H must change `gate2.ts` and `packages/ai/src/gate2.test.ts` to grade the
+  new wording (logged in docs/GAPS.md, prompt 16).
+
+**Reversing it.** Restore the old Gate 2 wording (it cannot pass while Gate 1
+holds), grade per 200 games again (which mostly measures luck), or add a floor
+for nations that cannot win. Each needs a new record; none touches the sim.

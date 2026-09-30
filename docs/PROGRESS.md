@@ -28,7 +28,7 @@ Gate 1 verdict: **PASS WITH WAIVER** (docs/gates/GATE-1.md): the owner waived th
 ## Gate 2 checklist
 Suite: `npm run harness -- gate2` (200 seeded games with random archetypes, cooperator / free-rider and spoiler pairs, 40 absence runs, and the Gate 1 suite again). Latest results: docs/balance/gate2-prompt14.md (seeds 1-200, the shipped AI as trader and free-rider; the free-riding rule tuned on seeds 1001-1400 only, graded once).
 - [x] Crisis success 40-75% (prompt 13, shipped AI: 56.4% of 1,182 crises; climate 549 / 377 / 74, pandemic 118 / 22 / 42 success / partial / failure)
-- [ ] No archetype over 1.5x fair share, nations assigned at random (FAIL, prompt 14 with the shipped AI: free-rider 1.05x, now inside the line and below the cooperator, but the cooperator is 3.90x (3.22x before). Cannot pass while Gate 1 requires trading to beat isolating; owner or architect ruling needed)
+- [~] No defecting archetype (free-rider, hoarder, exploiter, isolationist) over 1.5x its fair share, and none topping the score more often than the reciprocal cooperator, nations assigned at random (REWORDED by the owner, 2026-09-30, decision record G1 in docs/DECISIONS.md; the old wording could not pass while Gate 1 holds. On the prompt 14 and go/no-go numbers it is met for the free-rider: 1.05x on seeds 1-200 and 1.15x on 201-400 against the cooperator's 3.90x and 3.50x. The hoarder, exploiter and isolationist were 0.00-0.40x at the review and their scores fell after prompt 14, but were not re-reported. The re-review (prompt 20) confirms all four on fresh seeds; the harness still grades the old wording, GAPS prompt 16)
 - [x] Reciprocal cooperators beat free-riders (prompt 14, shipped AI: cooperator ahead in 90.5% of same-nation pairs, median +5.47%; was 73.0% and +1.41% before the free-riding rule)
 - [x] A trailing nation gains nothing by sabotage (prompt 14: spoiler median 978 vs 1,105 as a cooperator, paid in 1 of 200 pairs. The stealth spoiler that keeps trading has median 1,042 and beats the cooperator in 8.5% of pairs, was 19%; now graded strictly below the cooperator by the suite, which it is)
 - [ ] Owner predicts AI responses 70%+ after one game (owner; prompt 11 built prediction mode in the Game tab and `npm run harness -- predictions --files <exported saves>`, which grades it)
@@ -36,11 +36,36 @@ Suite: `npm run harness -- gate2` (200 seeded games with random archetypes, coop
 - [ ] 10 playtests, 3+ by others, most want another game (owner)
 - [ ] Depth budget and 60 fps hold (prompt 11 phone check at 360 px PASS: 60.1 fps at 4x on a 4x-slowed CPU, no horizontal scroll on any screen or sheet, tables at most 4 columns, every card 2-3 taps; owner to confirm on a real phone)
 - [x] Gates 0-1 pass (determinism 1,000/1,000 Node vs Chromium; Gate 1 rerun passes every line but the waived top scorer, Egypt 12.0%, trade advantage +17.6%)
-- [ ] Gate 1's waived top-scorer line re-graded with archetypes (FAIL: Saudi Arabia 21.0-22.5% on seeds 1-200 and 201-400, limit 11.8%. Not caused by crises. Prompt 15's RULES 2.8 baseline change took it to 12.0-14.0% (Canada, Egypt, Germany) and still failed, so it was reverted: docs/balance/gate2-prompt15.md. Needs a second written waiver)
+- [~] Gate 1's waived top-scorer line re-graded with archetypes (WAIVED a second time by the owner, 2026-09-30, for Gate 2 only: docs/gates/GATE-2.md Waivers, citing docs/balance/gate2-prompt15.md section 5. Still FAIL: Saudi Arabia 21.0-22.5% on seeds 1-200 and 201-400, limit 11.8%; prompt 15's rule took it to 12.0-14.0% and was reverted. From Gate 3 on it is graded pooled over 800 games on fresh seeds at the same limit, decision record G1, so Gate 3 cannot close on today's game)
 
-Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): the archetype line (free-rider 2.21x, shipped AI 1.64x; cooperator 2.92x) and the re-graded top scorer (Saudi Arabia 23.5%, shipped AI 24.0%) fail; the predictions and the 10 playtests have not been done (docs/playtests/ is empty). Prompt 13 fixed findings F1 (the harness now grades the shipped AI) and F2 (paid-in-full nations are no longer shown as "declined"); the failing lines still fail with the shipped AI.
+Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): the archetype line (free-rider 2.21x, shipped AI 1.64x; cooperator 2.92x) and the re-graded top scorer (Saudi Arabia 23.5%, shipped AI 24.0%) fail; the predictions and the 10 playtests have not been done (docs/playtests/ is empty). Prompt 13 fixed findings F1 (the harness now grades the shipped AI) and F2 (paid-in-full nations are no longer shown as "declined"); the failing lines still fail with the shipped AI. Rulings since (prompt 16, 2026-09-30): criterion 2 reworded and line 9b waived for Gate 2; the verdict stays FAIL until the predictions and playtests are done and the re-review (prompt 20) grades the new wording.
 
 ## Session log
+
+### 2026-09-30 - prompt 16, Gate 2 rulings (architect; docs only)
+**Changed.** Decision record G1 in docs/DECISIONS.md, on the owner's two rulings.
+Gate 2 criterion 2 now reads "no defecting archetype (free-rider, hoarder, exploiter,
+isolationist) over 1.5x its fair share, and none topping the score more often than the
+reciprocal cooperator"; ROADMAP (Gate 2 line and the harness paragraph) says the same.
+The top-scorer line (Gate 1 criterion 5, GATE-2 line 9b) is waived for Gate 2 only:
+new Waivers section in docs/gates/GATE-2.md citing docs/balance/gate2-prompt15.md
+section 5. No code changed; nothing was tuned.
+**Decided.** (1) Gate 4's line does not have Gate 2's flaw as written, because it names
+only the defectors. It gets the same "not more often than the cooperator" clause, since
+D4 says war is never dominant, and the Gate 4 prompt must state its archetype mix and
+the expected multiple for a good trader before any run. (2) From Gate 3 on the
+top-scorer line is graded pooled over 800 games on fresh seeds at the same 11.8% limit,
+not "2x the fair share of the nations that can win": the second is circular and hides
+Japan, Korea and Turkiye at the shortfall cap. A simulation for the record shows a fair
+game with 12 equally likely winners fails a 200-game range 47% of the time and the
+pooled 800 only 0.6%, while a nation truly winning 13% is flagged 83% of the time.
+**How to see it.** docs/DECISIONS.md (G1), docs/gates/GATE-2.md (Waivers), the Gate 2
+checklist above.
+**Left.** The top-scorer line fails on today's game (Saudi Arabia 21-22%), so Gate 3
+cannot close until a fairness change holds on pooled fresh seeds; none is scheduled.
+Lane H must change the gate2 suite and packages/ai/src/gate2.test.ts to the new wording
+and add a pooled mode (docs/GAPS.md, prompt 16; prompt 17 already asks for the new
+wording). The predictions and the 10 playtests are still 0 of 10.
 
 ### 2026-09-30 - prompt 13 (go/no-go), is the core loop worth building on? (docs only)
 **Changed.** New docs/gates/GO-NO-GO.md: Gate 2 rechecked on main 1be231c, the case to
