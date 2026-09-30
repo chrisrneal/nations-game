@@ -31,6 +31,11 @@ for criterion 2 or line 9b, and criteria 5 and 7 have no evidence to waive.
 `docs/playtests/` holds only `.gitkeep`: no playtest notes, no exported saves,
 no prediction files, no "would play again" answers.
 
+> **Since this review (prompt 16, 2026-09-30):** the owner reworded criterion 2
+> and waived line 9b. The table above is the review as written; the rulings are
+> under "Waivers" at the end of this file and in docs/DECISIONS.md (G1). The
+> re-review re-grades against them.
+
 What the failures mean in plain terms:
 - **Criterion 2.** A nation that never pays into the crisis pools but otherwise
   trades normally (the free-rider) tops the score in 2.21x its fair share of
@@ -298,3 +303,21 @@ Credit sinks 0.4%. Trading vs isolating median **+17.6%** (63.0% of pairs at
    `npm run harness -- predictions --dir docs/playtests`.
 5. Owner phone checks: recap reading, 60 fps and depth budget, the Gate 1 trade
    in 3 taps, and Gate 0's catch-up speed with the shipped AI.
+
+## Waivers (owner, 2026-09-30)
+
+Recorded in prompt 16 on the owner's two rulings; the reasoning is decision
+record G1 in docs/DECISIONS.md. The verdict above is unchanged: criteria 5 and 7
+have no evidence yet, so the gate stays open until the re-review.
+
+| # | Criterion | Status after ruling |
+|---|---|---|
+| 2 | No archetype over 1.5x fair share, nations assigned at random | **REWORDED (not a waiver).** Now: "No defecting archetype (free-rider, hoarder, exploiter, isolationist) tops the score in more than 1.5x its fair share, and none tops it more often than the reciprocal cooperator, with nations assigned at random." Fair share is the archetype's share of the seats dealt; "more often" is compared as a multiple of fair share, not a raw count; the cooperator (the shipped AI) is reported but not held to 1.5x. The review's problem (a) is resolved by the wording. Problem (b), the free-rider, was fixed by prompt 14 (1.05x and 1.15x against the cooperator's 3.90x and 3.50x on seeds 1-200 and 201-400). The re-review confirms all four defectors on fresh seeds |
+| 9b | Gate 1's waived top-scorer line (no nation tops more than 2x fair share, 11.8%), re-graded at Gate 2 | **WAIVED**, for Gate 2 only. Saudi Arabia tops 21.0-22.5% of games on seeds 1-400 (23.5% at the review), and the prompt 15 rule that took it to 12.0-14.0% still failed on every graded check and was reverted. docs/balance/gate2-prompt15.md section 5 shows why: about 11-12 nations can realistically win, and with 12 equally likely winners a perfectly fair game fails a 200-game check about 47% of the time (all four graded checks pass about one time in twelve). Nothing is tuned to it. From Gate 3 on the line is graded pooled over 800 games on fresh seeds at the same 11.8% limit (G1) |
+
+Not waived and still open: criteria 5 and 7 (predictions and the 10 playtests),
+the owner's real-phone checks (recap reading, depth budget and 60 fps, the
+Gate 1 trade in 3 taps, Gate 0 catch-up speed with the shipped AI). What is known about the waived line
+and what was tried is in docs/balance/gate2-p2-prompt09.md and
+docs/balance/gate2-prompt15.md (sections 4-6). Because the line is now graded
+pooled from Gate 3, Gate 3 cannot close on today's game (G1, Cost).
