@@ -1,4 +1,4 @@
-import { TUNABLES } from '@nations/sim';
+import { TUNABLES, refreshRules } from '@nations/sim';
 
 /**
  * `--set id=value[,id=value]` for tuning sweeps: replaces sim tunables for one
@@ -7,9 +7,9 @@ import { TUNABLES } from '@nations/sim';
  * inside the band tunables.ts declares (the band is the limit of tuning; going
  * outside it is a design change).
  *
- * The change reaches the numbers the sim reads from `TUNABLES` directly. The
- * View's copy of the rules is taken when the sim is loaded, so a number only
- * the AI reads from its View does not sweep this way.
+ * The change reaches the numbers the sim reads from `TUNABLES` directly and,
+ * through `refreshRules` (prompt 17), the copy of the rules every View carries,
+ * so a number only the AI reads from its View sweeps too.
  */
 type Mutable = { value: number; min: number; max: number };
 
@@ -37,7 +37,9 @@ export function applyOverrides(values: Readonly<Record<string, number>>): () => 
   const table = TUNABLES as unknown as Record<string, Mutable>;
   const before = Object.entries(values).map(([id]) => [id, (table[id] as Mutable).value] as const);
   for (const [id, value] of Object.entries(values)) (table[id] as Mutable).value = value;
+  refreshRules();
   return () => {
     for (const [id, value] of before) (table[id] as Mutable).value = value;
+    refreshRules();
   };
 }

@@ -19,7 +19,7 @@ const FLAGS: Record<HarnessCommand, FlagSpec> = {
   determinism: { numbers: ['seeds', 'ticks'], strings: [], switches: ['no-browser'] },
   bench: { numbers: ['ticks', 'runs'], strings: [], switches: ['no-browser'] },
   gate1: { numbers: ['games', 'seed', 'ranges', 'ticks'], strings: ['out', 'set'], switches: [], positive: ['ranges'] },
-  gate2: { numbers: ['games', 'seed', 'ticks', 'absence'], strings: ['out', 'set'], switches: [], positive: ['games'] },
+  gate2: { numbers: ['games', 'seed', 'ticks', 'absence'], strings: ['out', 'set'], switches: ['no-idle'], positive: ['games'] },
   predictions: { numbers: [], strings: ['files', 'dir', 'out'], switches: [] },
 };
 
