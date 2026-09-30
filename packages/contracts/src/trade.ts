@@ -144,7 +144,7 @@ export type CrisisEventType = keyof CrisisEventPayloads;
 
 /** One line of an away recap: what kind of news it is, and one plain sentence with numbers. */
 export interface RecapLine {
-  readonly kind: 'score' | 'crisis' | 'pledge' | 'trade' | 'trust' | 'policy';
+  readonly kind: 'score' | 'crisis' | 'pledge' | 'trade' | 'trust' | 'policy' | 'project';
   readonly text: string;
 }
 
