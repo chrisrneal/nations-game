@@ -746,8 +746,9 @@ Logged in `docs/GAPS.md`.
 
 ## 10. What this does not cover yet
 
-Phase 3 and 4 systems (joint projects, treaties, alliances forming in play, blocs,
-limited war) are named in D7 and are deliberately absent here. When they arrive they
+Phase 4 systems (treaties, alliances forming in play, blocs, limited war) are
+named in D7 and are deliberately absent here. Joint projects (Phase 3) are
+section 13. When they arrive they
 must preserve §5.3: nothing may transfer one nation's output to another without
 consent.
 
@@ -941,3 +942,131 @@ None of them blocks lane S from starting on §2 and §3.
 
 Answers get written into this file, in §1, before the next build session touches
 anything that depends on them.
+
+---
+
+## 13. Joint projects *(Phase 3; decision records H2 and H4)*
+
+The second collaboration verb. Trade moves goods the world already has; a joint
+project makes goods the world does not have, or armour against the crises it
+cannot avoid. It is where Credit finally has something to compete for.
+
+### 13.1 The catalogue
+
+Seven templates, design data in `packages/sim/src/projects.ts` and in every
+View. Build time, yield and cost are percentages of the tunables in 13.6.
+
+| Template | Kind | Build | Yield | Cost | Who may host |
+|---|---|---|---|---|---|
+| Solar and storage belt | energy | 67% | 25% | 100% | energy surplus |
+| Cross-border grid link | energy | 100% | 35% | 90% | energy surplus; every member shares a bloc or alliance with the host |
+| Green hydrogen corridor | energy | 133% | 50% | 110% | energy surplus and minerals endowment 50 or more |
+| Grain corridor and reserve | food | 67% | 30% | 100% | food surplus |
+| Desalination and smart irrigation | food | 133% | 45% | 110% | food surplus |
+| Climate early-warning network | climate shield | 67% | - | 100% | anyone |
+| Vaccine manufacturing network | pandemic shield | 100% | - | 100% | anyone |
+
+A nation has a **surplus** in a good when its production exceeds its demand by at
+least `projectMinSurplusPct` of that demand (public flows, at founding).
+
+### 13.2 Founding and forming
+
+A playable nation **proposes** a project from a template it may host, naming up
+to `projectSlots + 2` invitees (playable nations only). At that moment the sim
+fixes:
+
+```
+buildTicks = projectBuildTicks * template.build / 100
+yield      = hostSurplus * projectYieldPct / 100 * template.yield / 100      (goods)
+cost       = yield * unitCost(good) * template.cost / 100                     (goods)
+cost       = averagePlayableOutput * projectShieldCostPct / 100 * template.cost / 100   (shields)
+unitCost   = projectFoodUnitCost or projectEnergyUnitCost
+```
+
+The project is **forming** for `projectFormingTicks` months. Only invitees may
+**join**; an invitee may **decline** (a clear no, costs nothing). It starts
+**building** as soon as `projectSlots` nations (host included) have joined, or at
+the forming deadline if at least `projectMinMembers` have; otherwise it **lapses**
+and nothing was paid. A nation may have one forming project as host at a time and
+may host at most `projectMaxHosted` projects that start building in a game.
+
+Nothing waits for anyone to be online (S8): an absent invitee simply has not
+joined when the deadline comes.
+
+### 13.3 Building
+
+Each building month every member pays its **installment** automatically:
+
+```
+installment = ceil(cost / (buildTicks * membersAtStart))
+cap_i       = 2 * ceil(cost / membersAtStart)         (the most one member may pay in total)
+```
+
+and may pay more at any time with **fund project** (up to its cap), which both
+speeds the build and raises its share. The project completes the month total
+paid reaches `cost`; the last payments are trimmed so it never passes it. A
+member that cannot pay an installment is **dropped**: it counts as leaving.
+
+A member other than the host may **leave** while the project is forming (free)
+or building. Leaving mid-build forfeits everything it paid (the money is already
+concrete) and every remaining member's trust in it falls by
+`projectTrustLeave`. The remaining members' installments do not change, so the
+build takes longer: a partner walking out costs everyone time, which is the risk
+of choosing partners. The host may not leave its own project.
+
+Money paid into a project is a named Credit sink (`creditSpentProjects`).
+
+### 13.4 Active
+
+When it completes, every pair of members gains `projectTrustBuilt` trust, and
+the project is **active** until the game ends. Shares follow money:
+
+```
+share_i = paid_i / totalPaid
+```
+
+- **Goods projects** add `floor(yield * share_i)` to member *i*'s production of
+  that good every month, cut by the climate damage the host is taking that month
+  (`yield * (10000 - hostClimateBp) / 10000`). A drought at the host is a drought
+  at the plant, which ties the adaptation pool to what you built. Production is a
+  source in the conservation invariant like any other.
+- **Shield projects** cut every member's damage from crises of their kind by
+  `projectShieldBp` when the damage is scheduled (RULES 4.4), after pool cover.
+  The damage an empty pool would have done is unchanged, so the world's
+  "damage avoided" goal counts it.
+
+### 13.5 What it does to scoring and to 5.3
+
+Nothing new in the formula. A member's extra production lowers its shortfall
+penalty (2.7) or gives it goods to sell (3.3); both raise its output, and the
+world's unmet demand falls, which raises the "deficits met" goal for everyone.
+Baselines read the structural world (2.8), which project yields never enter, so
+no play moves any baseline. Nothing transfers between nations: each member's
+Credit goes into the ground and each member's yield is new production. 5.3 holds.
+
+**Gate metric.** Gate 3 (with H2): no project built in over 50% of games (a single
+template is not a dominant strategy); crisis success stays in band; withdrawal is
+sometimes rational (the AI leaves in some games) and always costs trust;
+invariants hold. Reported with every balance change: how often each template is
+built, Credit sinks as a share of income, and how often invitations are accepted.
+
+### 13.6 Tunables
+
+| id | value | min | max | note |
+|---|---|---|---|---|
+| `projectFormingTicks` | 3 | 1 | 6 | Months an invitation stays open |
+| `projectMinMembers` | 3 | 2 | 5 | Members, host included, needed to start building at the deadline |
+| `projectSlots` | 4 | 3 | 6 | Most members, host included |
+| `projectBuildTicks` | 9 | 4 | 18 | Build months at a template's 100% |
+| `projectYieldPct` | 40 | 10 | 80 | Total yield as a percent of the host's surplus at a template's 100% |
+| `projectMinSurplusPct` | 10 | 0 | 50 | Surplus, as a percent of the host's own demand, needed to host a goods project |
+| `projectFoodUnitCost` | 18 | 4 | 60 | Credit per unit of monthly food yield. About two years of what a unit saves a rich importer |
+| `projectEnergyUnitCost` | 5 | 1 | 20 | Credit per unit of monthly energy yield. At H3's 20 bp a unit of energy saves 0.2 Credit a month, so about 25 months to pay back |
+| `projectShieldCostPct` | 150 | 50 | 400 | Shield cost as a percent of the average playable nation's monthly output |
+| `projectShieldBp` | 2500 | 1000 | 5000 | Crisis damage a shield cuts for its members |
+| `projectMaxHosted` | 2 | 1 | 4 | Projects a nation may host that start building, per game |
+| `projectTrustBuilt` | 4 | 0 | 10 | Trust every pair of members gains when a project completes |
+| `projectTrustLeave` | 12 | 5 | 30 | Trust each remaining member loses in a nation that leaves mid-build. Matches a broken pledge |
+
+These move to section 11 with the code (slice 3), where `rules.test.ts` checks
+them against `tunables.ts`.
