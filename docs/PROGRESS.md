@@ -42,6 +42,24 @@ Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): 
 
 ## Session log
 
+### 2026-09-30 - 100x slice 6, Keep us supplied: routine imports become a standing policy
+**Changed.** New standing policy `autoImport` ("Keep us supplied", RULES 3.4) in the sim:
+each month it sends fair offers for next month's food and energy shortfall to the most
+trusted playable nations with a surplus, up to `autoImportOffersPerGood` (2) a good, never
+two open offers to one partner, only what it can pay. Off by default (the AI trades for
+itself, so harness games are unchanged); a new phone game turns it on for the player. A
+switch on the Game tab. With it on, the inbox drops routine shortfall and "waiting on"
+cards and routine purchase toasts; a shortfall card appears only for the gap no seller
+can fill, and it points at joint projects.
+**Checked.** 3 sim tests (off by default; fair offers to playable sellers within the gap;
+no stacking on busy partners; closed posture wins); the conservation and no-negative
+property tests toggle it; web tests updated and one added (no routine shortfall or pending
+cards for a whole year of Japan; the policy's trades settle). Phone suite 53/53.
+**How to see it.** New game as Japan: after the first month the inbox holds invitations,
+crisis appeals and AI offers only. Game tab > Keep us supplied turns it off.
+**Left.** Month 0 still shows the two shortfall cards (the policy applies at the end of
+the first month). Japan can have 5-7 invitations open at once; the inbox needs triage.
+
 ### 2026-09-30 - 100x slice 5, Joint projects on the phone
 **Changed.** A fourth tab, **Projects**: invitations (join or decline in one tap), your
 projects with status, progress and your share, "Host one" for every template with the

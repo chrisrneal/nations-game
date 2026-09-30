@@ -63,13 +63,15 @@ function message(error: unknown): string {
  * prediction mode the answers to the player's own offers stay hidden: a
  * "What will they do?" card asks first.
  */
-function tradeNews(event: Event, selfId: string, predicting: boolean): string | null {
+function tradeNews(event: Event, selfId: string, predicting: boolean, supplied = false): string | null {
   const p = event.payload as { offer?: TradeOffer; reneger?: string; by?: string; reason?: string };
   const offer = p.offer;
   if (event.type === 'commandRejected') return `Not sent: ${p.reason ?? 'rejected'}`;
   if (offer === undefined) return null;
   const other = nameOf(offer.from === selfId ? offer.to : offer.from);
   const mine = offer.from === selfId;
+  // "Keep us supplied" buys every month; its routine answers are not news (RULES 3.4). A failed deal still is.
+  if (supplied && mine && offer.give.resource === 'credit' && event.type !== 'offerFailed') return '';
   if (predicting && mine && (event.type === 'offerSettled' || event.type === 'offerRejected' || event.type === 'offerFailed')) return null;
   switch (event.type) {
     case 'offerSettled':
@@ -114,8 +116,8 @@ export function App(props: { host: GameHost; install?: InstallPrompt }): ReactEl
         latest.current = next;
         setUpdate(next);
         const news = next.events
-          .map((e) => tradeNews(e, next.view.selfId, next.predictions.mode) ?? projectNews(e, next.view))
-          .filter((line): line is string => line !== null);
+          .map((e) => tradeNews(e, next.view.selfId, next.predictions.mode, next.view.self.private.policy.autoImport === true) ?? projectNews(e, next.view))
+          .filter((line): line is string => line !== null && line !== '');
         if (news.length > 0) setToast(news.length === 1 ? (news[0] as string) : `${news[0] as string} (+${news.length - 1} more)`);
       }),
     [host],

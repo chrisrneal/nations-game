@@ -15,6 +15,8 @@ describe('decision cards from the View', () => {
   it('Japan is short of food and energy: the card buys it in two taps (open, send), and the offer then waits as a card', () => {
     const engine = new GameEngine();
     engine.newGame('japan', 4);
+    // Buying by hand: "keep us supplied" off.
+    engine.submit({ nationId: 'japan' as NationView['selfId'], tick: 0, type: 'setPolicy', payload: { autoImport: false } });
     let update = engine.advance(1);
     const card = find(cardsFor(update.view, new Set()), 'shortfall');
     expect(card?.title).toMatch(/^(Food|Energy) short by/);
@@ -113,6 +115,8 @@ describe('decision cards from the View', () => {
     for (const nation of ['egypt', 'india']) {
       const engine = new GameEngine();
       engine.newGame(nation, 9);
+      // Egypt buys by hand, so the routine shortfall cards appear too.
+      if (nation === 'egypt') engine.submit({ nationId: 'egypt' as NationView['selfId'], tick: 0, type: 'setPolicy', payload: { autoImport: false } });
       engine.setPredictionMode(true);
       let update = engine.advance(1);
       for (let month = 0; month < 59; month++) {
@@ -132,6 +136,22 @@ describe('decision cards from the View', () => {
       }
     }
     expect([...kinds]).toEqual(expect.arrayContaining(['crisis', 'offer', 'shortfall']));
+  });
+
+  it('with "keep us supplied" on, routine shortfalls are not cards; only a gap no seller can fill is, and it points at projects', () => {
+    const engine = new GameEngine();
+    engine.newGame('japan', 4);
+    let update = engine.advance(1);
+    for (let month = 0; month < 12; month++) {
+      for (const card of cardsFor(update.view, new Set()).filter((c) => c.kind === 'shortfall')) {
+        expect(card.title).toMatch(/no seller can supply/);
+        expect(card.options.map((o) => o.action.kind)).toEqual(['projects', 'dismiss']);
+      }
+      expect(cardsFor(update.view, new Set()).filter((c) => c.kind === 'pending')).toEqual([]);
+      update = engine.advance(1);
+    }
+    // And the policy did buy: Japan settled trades without sending a single command.
+    expect(update.journal.trades.length).toBeGreaterThan(0);
   });
 
   it('AI offer cards carry the maker\'s explanation, or a placeholder until it arrives', () => {

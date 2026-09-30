@@ -104,7 +104,7 @@ function termsShape(give: unknown, get: unknown): string | null {
   return null;
 }
 
-const POLICY_BOOLEANS = ['acceptFairDeficit', 'acceptTrusted', 'rejectAll', 'hardBargains'] as const;
+const POLICY_BOOLEANS = ['acceptFairDeficit', 'acceptTrusted', 'rejectAll', 'hardBargains', 'autoImport'] as const;
 const POLICY_KEYS: readonly string[] = [...POLICY_BOOLEANS, 'coverPriority', 'resilienceFloor', 'crisisRule', 'contributionBp', 'contributionTo'];
 
 function policyShape(payload: Record<string, unknown>): string | null {

@@ -125,7 +125,7 @@ function commandArb(tick: number): fc.Arbitrary<Command> {
       nationId: n,
       tick,
       type: 'setPolicy',
-      payload: { hardBargains: hb, rejectAll: rj, acceptTrusted: tr, resilienceFloor: fl },
+      payload: { hardBargains: hb, rejectAll: rj, acceptTrusted: tr, resilienceFloor: fl, autoImport: !hb },
     })),
     fc.record({ n: id, p: fc.integer({ min: 1, max: 30 }) }).map(({ n, p }) => ({ nationId: n, tick, type: 'fundResilience', payload: { points: p } })),
     fc.record({ n: id, pool: fc.constantFrom('adaptation', 'health'), a: amount, d: fc.integer({ min: 0, max: 15 }), t: fc.constantFrom('contribute', 'pledge') }).map(

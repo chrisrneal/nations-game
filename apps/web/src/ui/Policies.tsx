@@ -119,6 +119,31 @@ export function Policies(props: { view: NationView; onChange: (policy: Partial<S
         </Dial>
       </ul>
 
+      <ul className="slots">
+        <li className="slot">
+          <Num
+            className="slot-info policy-label"
+            why={{
+              title: 'Keep us supplied',
+              value: policy.autoImport === true ? 'On' : 'Off',
+              text: `Each month your nation offers fair prices for next month's food and energy shortfall to the nations with a surplus you trust most (up to ${rule(view, 'autoImportOffersPerGood')} offers a good). Routine imports then stop being cards; you only hear about a shortfall no seller can cover. Off: you buy by hand from the shortfall cards.`,
+            }}
+          >
+            Keep us supplied
+          </Num>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={policy.autoImport === true}
+            aria-label="Keep us supplied"
+            className={policy.autoImport === true ? 'switch on' : 'switch'}
+            onClick={() => onChange({ autoImport: policy.autoImport !== true })}
+          >
+            {policy.autoImport === true ? 'On' : 'Off'}
+          </button>
+        </li>
+      </ul>
+
       <h3 className="group-title">Auto-accept conditions</h3>
       {closed && <p className="hint">Your posture is Closed, so these do nothing until you open it.</p>}
       <ul className="slots">
