@@ -197,7 +197,14 @@ export function hostProblem(
     if (surplusOf(host, good) < needed) return `needs a ${good} surplus of at least ${needed}`;
   }
   if (endowment.mineralsEndowment < template.minMineralsEndowment) return `needs a minerals endowment of at least ${template.minMineralsEndowment}`;
+  if (shieldMembership(projects, host.id, template.kind) !== undefined) return 'you are already in a network like this';
   return null;
+}
+
+/** The shield of `kind` a nation is already in (forming, building or active), if any: one per crisis kind (RULES 13.2). */
+export function shieldMembership(projects: readonly Project[], id: NationId, kind: ProjectKind): Project | undefined {
+  if (goodOf(kind) !== null) return undefined;
+  return projects.find((p) => p.kind === kind && p.members.some((m) => m.nationId === id));
 }
 
 /** Whether two nations share a bloc or an alliance (the grid link's rule). */

@@ -920,14 +920,16 @@ fails if the two ever disagree.
 
 | id | value | min | max | note |
 |---|---|---|---|---|
+| `aiProjectMinTrust` | 30 | 0 | 60 | Mean trust in a project's host and members below which an AI will not join: they may walk out mid-build |
+| `aiProjectMinYield` | 40 | 0 | 200 | Smallest monthly yield an AI host founds a goods project for |
 | `projectFormingTicks` | 3 | 1 | 6 | Months an invitation stays open |
 | `projectMinMembers` | 3 | 2 | 5 | Members, host included, needed to start building at the deadline |
 | `projectSlots` | 4 | 3 | 6 | Most members, host included |
 | `projectBuildTicks` | 9 | 4 | 18 | Build months at a template's 100% |
 | `projectYieldPct` | 40 | 10 | 80 | Total yield as a percent of the host's surplus at a template's 100% |
 | `projectMinSurplusPct` | 10 | 0 | 50 | Surplus, as a percent of the host's own demand, needed to host a goods project |
-| `projectFoodUnitCost` | 18 | 4 | 60 | Credit per unit of monthly food yield. About two years of what a unit saves a rich importer |
-| `projectEnergyUnitCost` | 5 | 1 | 20 | Credit per unit of monthly energy yield. At H3's 20 bp a unit of energy saves 0.2 Credit a month, so about 25 months to pay back |
+| `projectFoodUnitCost` | 10 | 4 | 60 | Credit per unit of monthly food yield. A unit a rich importer goes short of costs it about 0.8 Credit of output a month, one it would have bought about 0.1, so a food project pays back in one to three years depending on how short the buyer really is |
+| `projectEnergyUnitCost` | 3 | 1 | 20 | Credit per unit of monthly energy yield. At H3's 20 bp a unit of energy an importer goes short of saves it about 0.15 Credit a month, so about 20 months to pay back when the shortage is real |
 | `projectShieldCostPct` | 10 | 5 | 100 | A shield member's due as a percent of its own monthly output. Its benefit scales with output, so its price does too; at 10 a climate shield pays back about 1.5 times over a game at average exposure |
 | `projectShieldBp` | 2500 | 1000 | 5000 | Crisis damage a shield cuts for its members |
 | `projectMaxHosted` | 2 | 1 | 4 | Projects a nation may host that start building, per game |
@@ -995,7 +997,10 @@ least `projectMinSurplusPct` of that demand (public flows, at founding).
 ### 13.2 Founding and forming
 
 A playable nation **proposes** a project from a template it may host, naming up
-to `projectSlots + 2` invitees (playable nations only). At that moment the sim
+to `projectSlots - 1` invitees (playable nations only; for a grid link, only
+nations that share a bloc or alliance with it). There are never more invitations
+than free seats, so every invitation is a seat held for that nation, and a
+decline costs the host a member. At that moment the sim
 fixes:
 
 ```
@@ -1008,6 +1013,9 @@ unitCost   = projectFoodUnitCost or projectEnergyUnitCost
 A shield has no single price: its benefit scales with each member's output, so
 each member's **due** is `output_i * projectShieldCostPct / 100 * template.cost / 100`,
 and the shield's cost is the sum of its members' dues when building starts.
+
+A nation may be in only one shield of each kind (forming, building or active):
+protection does not stack.
 
 The project is **forming** for `projectFormingTicks` months. Only invitees may
 **join**; an invitee may **decline** (a clear no, costs nothing). It starts

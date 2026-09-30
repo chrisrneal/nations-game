@@ -7,6 +7,7 @@ import { answerOffer, type Ledger } from './negotiation.ts';
 import { observe, openAppeals, visibleTo } from './perception.ts';
 import { personalityFor, type Personality } from './personality.ts';
 import { decidePledge } from './pledge.ts';
+import { decideProjects } from './projects.ts';
 import { clamp, GOODS, month, rule, show, type Good } from './util.ts';
 
 /**
@@ -106,11 +107,11 @@ export class NationMind {
     const now = view.tick;
     const maxCommands = rule(view, 'maxCommandsPerNationPerTick');
 
-    const say = (decision: DecisionKind, partner: NationId | null, text: string, reasons: readonly string[], extra: { offerId?: number; crisisId?: number } = {}, audience?: readonly NationId[]): void => {
+    const say = (decision: DecisionKind, partner: NationId | null, text: string, reasons: readonly string[], extra: { offerId?: number; crisisId?: number; projectId?: number } = {}, audience?: readonly NationId[]): void => {
       explanations.push(
         explanationEvent(
           now,
-          { nationId: this.id, decision, partner, offerId: extra.offerId ?? null, crisisId: extra.crisisId ?? null, text, reasons: reasons.slice(0, 3) },
+          { nationId: this.id, decision, partner, offerId: extra.offerId ?? null, crisisId: extra.crisisId ?? null, ...(extra.projectId === undefined ? {} : { projectId: extra.projectId }), text, reasons: reasons.slice(0, 3) },
           audience ?? (partner === null ? [this.id] : [this.id, partner]),
         ),
       );
@@ -126,7 +127,7 @@ export class NationMind {
       partner: NationId | null,
       text: string,
       reasons: readonly string[],
-      extra: { offerId?: number; crisisId?: number } = {},
+      extra: { offerId?: number; crisisId?: number; projectId?: number } = {},
       audience?: readonly NationId[],
     ): boolean => {
       if (commands.length >= maxCommands) return false;
@@ -232,6 +233,22 @@ export class NationMind {
         ledger.stocks.credit -= d.amount;
       } else if (!decide({ type: 'declineAppeal', payload: ref }, 'skipPledge', null, d.text, d.reasons, ref, [])) break;
       this.decidedCrises.add(crisis.id);
+    }
+
+    // --- Joint projects (RULES 13): answer invitations, reconsider builds, and on think ticks perhaps found one.
+    const projectDecisions = decideProjects({
+      view,
+      p,
+      endowment: this.endowment,
+      memory: this.memory,
+      creditFree: ledger.creditFree,
+      // Founding waits for a real (staggered) think tick, so the whole roster never proposes in the same month.
+      think: options.think && this.lastThink >= 0,
+    });
+    for (const d of projectDecisions) {
+      options.spend(view.others.length);
+      const projectId = 'projectId' in d.command.payload ? d.command.payload.projectId : undefined;
+      if (!decide(d.command, d.kind, d.partner, d.text, d.reasons, projectId === undefined ? {} : { projectId }, d.audience)) break;
     }
 
     // --- Think (staggered): beliefs and goals.

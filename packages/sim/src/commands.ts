@@ -20,7 +20,7 @@ import type {
   WithdrawPledgeCommand,
 } from '@nations/contracts';
 import { isFair } from './economy.ts';
-import { TEMPLATE_IDS, hostProblem, roomToFund, sharesTie, templateOf } from './projects.ts';
+import { TEMPLATE_IDS, hostProblem, roomToFund, sharesTie, shieldMembership, templateOf } from './projects.ts';
 import { TUNABLES } from './tunables.ts';
 import type { WorldState } from './world.ts';
 
@@ -208,7 +208,8 @@ export function validateCommandShape(state: WorldState, command: unknown): strin
     case 'proposeProject': {
       if (typeof payload.template !== 'string' || !TEMPLATE_IDS.includes(payload.template)) return 'unknown project';
       const invite = payload.invite;
-      const most = TUNABLES.projectSlots.value + 2;
+      // Exactly as many invitations as free seats at most, so a project is never oversubscribed (RULES 13.2).
+      const most = TUNABLES.projectSlots.value - 1;
       if (!Array.isArray(invite) || invite.length === 0 || invite.length > most) return `invite 1 to ${most} nations`;
       const seen = new Set<string>();
       for (const id of invite) {
@@ -315,6 +316,9 @@ export function validateCommand(state: WorldState, command: unknown): string | n
       if (problem !== null) return problem;
       for (const id of typed.payload.invite) {
         if (nation(state, id).public.kind !== 'playable') return 'only playable nations can be invited';
+        if (template.sharedTieRequired && !sharesTie(state.endowments[id] as NationEndowment, state.endowments[self.id] as NationEndowment)) {
+          return 'a grid link can only invite nations that share a bloc or alliance with you';
+        }
       }
       return null;
     }
@@ -325,6 +329,7 @@ export function validateCommand(state: WorldState, command: unknown): string | n
       if (!project.invited.includes(self.id)) return 'you are not invited to this project';
       if (typed.type === 'declineProject') return null;
       if (project.members.length >= TUNABLES.projectSlots.value) return 'project is full';
+      if (shieldMembership(state.projects, self.id, project.kind) !== undefined) return 'you are already in a network like this';
       const template = templateOf(project.template);
       if (template.sharedTieRequired && !sharesTie(state.endowments[self.id] as NationEndowment, state.endowments[project.host] as NationEndowment)) {
         return 'a grid link needs a bloc or alliance in common with the host';

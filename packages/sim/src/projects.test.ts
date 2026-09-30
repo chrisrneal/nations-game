@@ -109,11 +109,11 @@ describe('founding and forming (RULES 13.2)', () => {
   });
 
   it('starts building as soon as every seat is taken', () => {
-    const r = run(world(), 1, { 0: [propose(FARM, 'grain', [X, Y, Z, POWER], 0), join(X, 1, 0), join(Y, 1, 0), join(Z, 1, 0), join(POWER, 1, 0)] });
+    const r = run(world(), 1, { 0: [propose(FARM, 'grain', [X, Y, Z], 0), join(X, 1, 0), join(Y, 1, 0), join(Z, 1, 0), join(POWER, 1, 0)] });
     const p = project(r.state);
     expect(p.status).toBe('building');
     expect(p.members).toHaveLength(TUNABLES.projectSlots.value);
-    expect(rejected(r.events)).toEqual(['project is no longer forming']);
+    expect(rejected(r.events)).toEqual(['you are not invited to this project']); // Power acts first in nation order
     for (const m of p.members) {
       expect(m.due).toBe(Math.ceil(p.cost / 4));
       expect(m.installment).toBe(Math.ceil(m.due / p.buildTicks));

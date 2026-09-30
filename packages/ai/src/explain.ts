@@ -23,16 +23,21 @@ export type DecisionKind =
   | 'suspend'
   | 'resume'
   | 'forgive'
-  | 'policy';
+  | 'policy'
+  | 'proposeProject'
+  | 'joinProject'
+  | 'declineProject'
+  | 'leaveProject';
 
 export interface Explanation {
   readonly nationId: NationId;
   readonly decision: DecisionKind;
   /** The nation the decision is about, when there is one. */
   readonly partner: NationId | null;
-  /** The offer or crisis it answers, when there is one. */
+  /** The offer, crisis or project it answers, when there is one. */
   readonly offerId: number | null;
   readonly crisisId: number | null;
+  readonly projectId?: number | null;
   /** One short sentence, lower case, starting with the verb: "declined: ...". */
   readonly text: string;
   /** Up to three reasons, most important first, each carrying a number. */

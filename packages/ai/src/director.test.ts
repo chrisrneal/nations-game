@@ -32,6 +32,10 @@ describe('AI director on the full roster (17 nations, 6 regions, 60 months)', ()
       setPolicy: 'policy',
       contribute: 'pledge',
       declineAppeal: 'skipPledge',
+      proposeProject: 'proposeProject',
+      joinProject: 'joinProject',
+      declineProject: 'declineProject',
+      leaveProject: 'leaveProject',
     };
     game.commands.forEach((command, i) => {
       const e = decisions[i]!;

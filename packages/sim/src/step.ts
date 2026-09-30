@@ -315,7 +315,7 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
  * nation that acted and, for an offer, the other side. Built before the
  * command applies, so the offer it answers is still in the draft.
  */
-function explainCommand(ctx: TradeContext & CrisisContext, command: ReturnType<typeof asSimCommand>, why: readonly string[]): void {
+function explainCommand(ctx: TradeContext & CrisisContext & ProjectContext, command: ReturnType<typeof asSimCommand>, why: readonly string[]): void {
   let other: NationId | null = null;
   let subject: number | null = null;
   const p = command.payload as unknown as Record<string, unknown>;
@@ -327,11 +327,21 @@ function explainCommand(ctx: TradeContext & CrisisContext, command: ReturnType<t
   }
   if (typeof p.crisisId === 'number') subject = p.crisisId;
   if (typeof p.pledgeId === 'number') subject = p.pledgeId;
-  if (typeof p.projectId === 'number') subject = p.projectId;
+  let audience: NationId[] = other === null || other === command.nationId ? [command.nationId] : [command.nationId, other];
+  // Joint projects (RULES 13): an answer goes to the host, a proposal to every invitee (the id it will get).
+  if (typeof p.projectId === 'number') {
+    subject = p.projectId;
+    const host = ctx.projects.find((x) => x.id === p.projectId)?.host;
+    if (host !== undefined && host !== command.nationId) audience = [command.nationId, host];
+  }
+  if (command.type === 'proposeProject') {
+    subject = ctx.nextProjectId;
+    audience = [command.nationId, ...command.payload.invite];
+  }
   ctx.events.push({
     tick: ctx.tick,
     type: 'explanation',
     payload: { nationId: command.nationId, decision: command.type, subject, reasons: [...why], by: 'command' },
-    audience: other === null || other === command.nationId ? [command.nationId] : [command.nationId, other],
+    audience,
   });
 }

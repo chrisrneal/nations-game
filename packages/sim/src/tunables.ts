@@ -600,16 +600,16 @@ export const TUNABLES = {
     note: 'Surplus, as a percent of the host\'s own demand, needed to host a goods project. Keeps balanced economies from hosting a plant for a good they barely make.',
   },
   projectFoodUnitCost: {
-    value: 18,
+    value: 10,
     min: 4,
     max: 60,
-    note: 'Credit per unit of monthly food yield. About two years of what a unit saves a rich importer, longer for a poorer one.',
+    note: 'Credit per unit of monthly food yield. A unit of food a rich importer goes short of costs it about 0.8 Credit of output a month, one it would have bought about 0.1, so a food project pays back in one to three years depending on how short the buyer really is.',
   },
   projectEnergyUnitCost: {
-    value: 5,
+    value: 3,
     min: 1,
     max: 20,
-    note: 'Credit per unit of monthly energy yield. At 20 bp per percent of shortfall a unit of energy saves about 0.2 Credit a month, so about 25 months to pay back.',
+    note: 'Credit per unit of monthly energy yield. At 20 bp per percent of shortfall a unit of energy an importer goes short of saves it about 0.15 Credit of output a month, so about 20 months to pay back when the shortage is real, and never when trade already covers it.',
   },
   projectShieldCostPct: {
     value: 10,
@@ -641,6 +641,18 @@ export const TUNABLES = {
     min: 5,
     max: 30,
     note: 'Trust each remaining member loses in a nation that leaves mid-build. Matches a broken pledge.',
+  },
+  aiProjectMinTrust: {
+    value: 30,
+    min: 0,
+    max: 60,
+    note: 'Mean trust in a project\'s host and members below which an AI will not join: partners it does not trust may walk out mid-build and leave it paying longer (RULES 13.3).',
+  },
+  aiProjectMinYield: {
+    value: 40,
+    min: 0,
+    max: 200,
+    note: 'Smallest monthly yield an AI host bothers to found a goods project for: below it the partners\' share is too small to be worth a consortium.',
   },
 } as const satisfies Readonly<Record<string, Tunable>>;
 

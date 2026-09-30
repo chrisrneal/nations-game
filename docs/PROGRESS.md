@@ -42,6 +42,24 @@ Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): 
 
 ## Session log
 
+### 2026-09-30 - 100x slice 4, The AI builds joint projects
+**Changed.** `packages/ai/src/projects.ts`: the AI prices a project by the output it
+saves (a unit is worth the shortfall penalty only on the part of a deficit trade will
+not fill, read from world cover in its View), answers every invitation with its
+numbers, founds projects on its think ticks for partners short of the good, takes the
+best shield on offer, and leaves when finishing is not worth what it still owes.
+Sim tweaks: unit costs lowered inside their bands, one shield per kind per nation,
+invitations limited to free seats, grid invitations must share a tie; the View lists
+whom each nation shares ties with. Harness: gate2 reports projects built, the most-built
+template's share of games, invitation answers and walk-outs; Credit sinks include projects.
+**Result.** Seeds 1001-1100: every nation now gains 9%+ from good play (Japan +33%,
+Korea +21%, Mexico +15%, Turkiye +12.5%; were +4-17%), trading beats isolating by
++18.6%, sabotage paid in 1% of pairs, top scorer unchanged. docs/balance/100x-slice4.md.
+**How to see it.** Nothing on the phone yet; `npm run harness -- gate2 --games 20`
+prints the project lines.
+**Left.** Projects on the phone (slice 5). Risks in the report: Japan strong in all-AI
+worlds, no walk-outs yet, small sink, the same projects every seed.
+
 ### 2026-09-30 - 100x slice 3, Joint projects in the sim (H4, RULES 13)
 **Changed.** Contracts: `Project`, `ProjectTemplate`, `ProjectsView` (catalogue, every
 project, and the viewer's own hostable terms), five commands (propose, join, decline,
