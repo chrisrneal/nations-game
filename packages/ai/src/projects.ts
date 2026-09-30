@@ -2,7 +2,7 @@ import type { NationEndowment, NationId, NationView, Project, ProjectTemplate, P
 import type { PartnerMemory } from './beliefs.ts';
 import { punishing } from './beliefs.ts';
 import type { Personality } from './personality.ts';
-import { month, rule, type Good } from './util.ts';
+import { month, noiseBp, rule, type Good } from './util.ts';
 
 /**
  * Joint projects (docs/RULES.md section 13, docs/AI_DESIGN.md "Joint projects").
@@ -45,6 +45,8 @@ export interface ProjectInputs {
   readonly creditFree: number;
   /** Proposals are thought about only on the nation's staggered think ticks. */
   readonly think: boolean;
+  /** Seed for the founding roll, so each game's world builds differently (never Math.random). */
+  readonly seed?: number;
 }
 
 function templateOf(view: NationView, id: ProjectTemplateId): ProjectTemplate {
@@ -278,14 +280,19 @@ function considerLeaving(input: ProjectInputs, project: Project): ProjectDecisio
   const hostName = nameOf(view, project.host);
   const audience = [view.selfId, ...project.members.map((m) => m.nationId).filter((id) => id !== view.selfId)];
   const broke = view.self.private.stocks.credit < me.installment * 2 && view.self.public.output < me.installment * 2;
-  if (value * 2 >= left && !broke) return null;
+  // A host that broke a deal with it mid-build: a strict or hard-bargaining nation walks out rather than keep paying
+  // into the offender's plant (RULES 13.3); a forgiving one stays, since walking out costs it too.
+  const grudge = punishing(input.memory.get(project.host), view.tick) && input.p.reciprocity !== 'forgiving';
+  if (value * 2 >= left && !broke && !grudge) return null;
   return {
     command: { type: 'leaveProject', payload: { projectId: project.id } },
     kind: 'leaveProject',
     partner: project.host,
     text: broke
       ? `left ${hostName}'s ${t.name}: I hold ${view.self.private.stocks.credit} credit and owe ${me.installment} a month`
-      : `left ${hostName}'s ${t.name}: finishing is worth ${value} credit over ${months} months, and I still owe ${left}`,
+      : grudge
+        ? `left ${hostName}'s ${t.name}: I am retaliating against ${hostName} until month ${month(input.memory.get(project.host)!.punishUntil)}, and I still owe ${left}`
+        : `left ${hostName}'s ${t.name}: finishing is worth ${value} credit over ${months} months, and I still owe ${left}`,
     reasons: [`I forfeit the ${me.paid} credit I paid`, `${monthsToGo} months still to build`],
     audience,
   };
@@ -300,6 +307,9 @@ function considerLeaving(input: ProjectInputs, project: Project): ProjectDecisio
  */
 function considerProposing(input: ProjectInputs, creditFree: number): ProjectDecision | null {
   const { view, p } = input;
+  // Not every think tick: a nation founds with a chance of its cooperativeness in percent, rolled from the game's
+  // seed, so which host moves first (and so who partners whom) differs from game to game.
+  if (input.seed !== undefined && noiseBp(input.seed, view.tick, view.selfId, 'found', 9_999) >= p.cooperativeness * 100) return null;
   const slots = rule(view, 'projectSlots');
   const minMembers = rule(view, 'projectMinMembers');
   const last = rule(view, 'gameLengthTicks') - 12;
