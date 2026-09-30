@@ -1,5 +1,5 @@
 import type { AppealAnswer, ForeignNation, NationEndowment, NationId, NationMap, NationRecord, NationView, Project } from '@nations/contracts';
-import { CATALOGUE, hostProblem, projectTerms } from './projects.ts';
+import { CATALOGUE, hostProblem, projectTerms, sharesTie } from './projects.ts';
 import { scoreboard } from './score.ts';
 import { TUNABLES } from './tunables.ts';
 import type { WorldState } from './world.ts';
@@ -107,6 +107,9 @@ export function viewFor(state: WorldState, selfId: NationId): NationView {
         ...projectTerms(t, self),
         problem: hostProblem(t, self, state.endowments[selfId] as NationEndowment, state.projects),
       })),
+      tiedTo: state.nationOrder.filter(
+        (id) => id !== selfId && sharesTie(state.endowments[id] as NationEndowment, state.endowments[selfId] as NationEndowment),
+      ),
     },
     rules: currentRules(),
   };

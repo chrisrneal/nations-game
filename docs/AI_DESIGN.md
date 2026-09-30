@@ -287,6 +287,48 @@ pledges), sends `contribute` and `declineAppeal`, and remembers `crisisLocked`
 and `pledgeBroken`. It does not make pledges of its own: paying at once is
 simpler to explain and cannot be broken.
 
+## 6a. Joint projects (100x slice 4, RULES 13)
+
+`packages/ai/src/projects.ts`, called from `NationMind.act` every month after
+crisis appeals. Pure: it reads the nation's View and its own row of the world
+data, and returns commands with their explanations.
+
+- **What goods are worth.** A unit of food or energy is worth the shortfall
+  penalty it saves (RULES 2.7: `output x shortfallPenaltyBpPerPct / (100 x demand)`
+  a month) only on the part of the deficit the nation expects to go unmet: the
+  larger of last month's shortfall and what world cover leaves uncovered. World
+  cover is computed from every nation's public flows, the way RULES 2.8 computes
+  it. The part trade would fill saves only its price; a unit past the deficit is a
+  surplus worth half its price. This is the prompt 17b diagnosis priced in from
+  day one: a builder that closes a deficit trade already covers gains little.
+- **What a shield is worth.** Expected crisis damage a month from the rules
+  (severity, its own exposure or preparedness, spread, half the pool's cover
+  assumed, resilience), times `projectShieldBp`.
+- **Answering an invitation.** Value a month times the months it would run
+  before the game ends, against its own due. Joins when that return clears its
+  hurdle, `100 + (100 - timeHorizon) / 2 - (cooperativeness - 50) / 4`, never
+  below 100; when its mean trust in the host and members is at least
+  `aiProjectMinTrust`; when it is not retaliating against the host; and when the
+  installments fit in half its income alongside those it already carries.
+  Otherwise it declines, saying which test failed with the numbers. Of several
+  shield invitations of one kind it takes the best and declines the rest.
+- **Founding.** Only on its staggered think ticks, and not if the build would end
+  in the last 12 months. For a goods template it may host, it invites the free
+  seats' worth of nations short of that good, ranked by deficit times trust (grid
+  links: only nations it shares a bloc or alliance with). A surplus host gains
+  little from its own share, so the drive is cooperativeness: it founds when the
+  partners' deficit the yield would cover, times cooperativeness, is at least 40%
+  of the yield, and the yield is at least `aiProjectMinYield`. A shield is founded
+  for its own return, one kind at a time worldwide.
+- **Leaving.** Reconsidered every month for building projects it does not host:
+  it leaves when finishing is worth less than half of what it still owes, or when
+  it can no longer carry two installments. It forfeits what it paid and loses its
+  partners' trust (RULES 13.3), so this is rare by design.
+
+Every decision is one command plus one explanation. Answers are addressed to the
+host, proposals to the invitees; the sim relays the same sentences as the
+command's `why` (step.ts `explainCommand`).
+
 ## 7. Caretaker mode (design on paper only)
 
 **What it is.** A human in an async game goes quiet (seam 7). Their nation's

@@ -290,6 +290,8 @@ export function runGate2(options: Gate2Options): Gate2Report {
   let nationGames = 0;
   let income = 0;
   let sinks = 0;
+  // Joint projects (RULES 13): what the archetype games built, and how invitations were answered.
+  const proj = { built: [] as number[], gamesWith: {} as Record<string, number>, joined: 0, declined: 0, lapsed: 0, left: 0, spent: 0 };
   const crises = emptyStats();
   const tops: Record<string, number> = Object.fromEntries(playable.map((id) => [id, 0]));
   const archetypes: Record<string, { assigned: number; tops: number; finalSum: number }> = Object.fromEntries(ARCHETYPES.map((a) => [a, { assigned: 0, tops: 0, finalSum: 0 }]));
@@ -312,6 +314,12 @@ export function runGate2(options: Gate2Options): Gate2Report {
         onTick: (state, events) => {
           negatives += negativeStocks(state);
           tallyCrises(crises, events, playableSet, memory);
+          for (const e of events) {
+            if (e.type === 'projectJoined') proj.joined++;
+            else if (e.type === 'projectDeclined') proj.declined++;
+            else if (e.type === 'projectLapsed') proj.lapsed++;
+            else if (e.type === 'projectLeft') proj.left++;
+          }
           if (state.tick === mid) {
             const board = scoreboard(state);
             trailing = [...board.nations].sort((a, b) => a.ownScoreBp - b.ownScoreBp || (a.id < b.id ? -1 : 1))[0]?.id ?? trailing;
@@ -319,7 +327,11 @@ export function runGate2(options: Gate2Options): Gate2Report {
         },
       });
       income += main.state.ledger.creditIncome;
-      sinks += main.state.ledger.creditSpentResilience + main.state.ledger.creditSpentCrises;
+      sinks += main.state.ledger.creditSpentResilience + main.state.ledger.creditSpentCrises + main.state.ledger.creditSpentProjects;
+      proj.spent += main.state.ledger.creditSpentProjects;
+      const done = main.state.projects.filter((p) => p.status === 'active');
+      proj.built.push(done.length);
+      for (const t of new Set(done.map((p) => p.template))) proj.gamesWith[t] = (proj.gamesWith[t] ?? 0) + 1;
       let best = main.score.nations[0];
       for (const n of main.score.nations) {
         const a = archetypes[strategies[n.id] as string] as { assigned: number; finalSum: number };
@@ -417,6 +429,11 @@ export function runGate2(options: Gate2Options): Gate2Report {
   const ranks = (pairs: readonly PairScore[], pick: (p: PairScore) => number): string => median(pairs.map(pick)).toFixed(1);
   const deadRate = nationGames === 0 ? 0 : dead / nationGames;
   const creditRatio = income === 0 ? 0 : sinks / income;
+  const builtSorted = [...proj.built].sort((a, b) => a - b);
+  const builtMedian = builtSorted.length === 0 ? 0 : (builtSorted[Math.floor((builtSorted.length - 1) / 2)] as number);
+  const topTemplate = Object.entries(proj.gamesWith).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0];
+  const topTemplateShare = topTemplate === undefined || options.games === 0 ? 0 : topTemplate[1] / options.games;
+  const answered = proj.joined + proj.declined;
   const lapsed = absence.reduce((s, a) => s + a.offersLapsed, 0);
   const unanswered = absence.reduce((s, a) => s + Math.max(0, a.appealsDue - a.appealsAnswered), 0);
   const unresolved = absence.reduce((s, a) => s + Math.max(0, a.pledgesDue - a.pledgesResolved), 0);
@@ -465,7 +482,15 @@ export function runGate2(options: Gate2Options): Gate2Report {
     },
     { name: 'Stealth spoiler pairs where it sank a shared goal; world multiplier change (median)', value: `${pct(stealthSank)}; ${stealthMult >= 0 ? '+' : ''}${stealthMult.toFixed(3)}`, passLine: 'info', pass: null },
     { name: 'Dead states (ownScore < 0.50 at game end)', value: pct(deadRate), passLine: '< 2%', pass: deadRate < 0.02 },
-    { name: 'Credit sinks / Credit income (resilience + crises)', value: pct(creditRatio), passLine: '0-25%', pass: creditRatio >= 0 && creditRatio <= 0.25 },
+    { name: 'Credit sinks / Credit income (resilience + crises + projects)', value: pct(creditRatio), passLine: '0-25%', pass: creditRatio >= 0 && creditRatio <= 0.25 },
+    { name: 'Joint projects built per game (median); project sink / income', value: `${builtMedian}; ${pct(income === 0 ? 0 : proj.spent / income)}`, passLine: 'info', pass: null },
+    {
+      name: `Most-built template, share of games it was built in (${topTemplate?.[0] ?? 'none'}; Gate 3: no project in over 50%)`,
+      value: pct(topTemplateShare),
+      passLine: '<= 50% (Gate 3, reported under H2)',
+      pass: null,
+    },
+    { name: 'Project invitations accepted; projects lapsed; members who left mid-build', value: `${pct(answered === 0 ? 0 : proj.joined / answered)}; ${proj.lapsed}; ${proj.left}`, passLine: 'info', pass: null },
     {
       name: `24-hour absence (${absence.length} runs: 4 months at the multiplayer cadence, 48 at single-player 1x)`,
       value: `${lapsed} lapsed, ${unanswered} appeals and ${unresolved} pledges unanswered; recap <= ${maxLines} lines, <= ${maxWords} words`,

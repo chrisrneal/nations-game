@@ -19,5 +19,6 @@ export { NationMind, type MindSnapshot } from './mind.ts';
 export { personalityFor, stanceLabel, structuralInputs, type Personality, type Reciprocity, type StructuralInputs } from './personality.ts';
 export { EXPLANATION_EVENT, hasNumber, type DecisionKind, type Explanation, type ExplanationEvent } from './explain.ts';
 export { crisisLabel, lastPaidPct, openAppeals, visibleTo } from './perception.ts';
+export { appraise, decideProjects, goodsValueMilli, hurdlePct, worldCoverBp, type Appraisal, type ProjectDecision } from './projects.ts';
 export type { Goal, GoalId } from './goals.ts';
 export type { PartnerMemory } from './beliefs.ts';

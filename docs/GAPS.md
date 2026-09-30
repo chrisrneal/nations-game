@@ -188,3 +188,6 @@ Each entry: prompt number, phase, what is missing, owning lane.
 - 100x-3, Phase 3, Project yield reads the host's climate damage from the month after a hit is scheduled, so the first damaged month at the plant yields in full (RULES 13.4 says "that month"). Harmless one-month lag; fix by computing yields inside the economy tick. Lane S.
 - 100x-3, Phase 3, A host that cannot pay its own installment pays nothing that month and is never dropped (a host cannot leave). The build just slows. Decide whether a bankrupt host should cancel the project. Lane S.
 - 100x-3, Phase 3, The away recap does not mention projects yet (started, completed, a partner left). Lane S (recap.ts) with lane U.
+- 100x-4, Phase 3, The AI never leaves a project mid-build in measured games, so Gate 3's "withdrawal sometimes rational" is not shown. Candidates: leave when a crisis appeal needs the Credit, or when a partner it punishes joins. Lane A.
+- 100x-4, Phase 3, All-AI games build nearly the same projects every seed; project choice is structural and deterministic. Add seeded noise to founding (aiNoiseBp) so the world differs game to game. Lane A.
+- 100x-4, Phase 3, Japan's median rank when played by the AI is 1st of 17 in all-AI games after projects (docs/balance/100x-slice4.md). Watch it in playtests before tuning. Lanes A and S.

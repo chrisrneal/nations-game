@@ -101,6 +101,8 @@ export interface ProjectsView {
    * sim so no interface or AI re-derives the formulas.
    */
   readonly hostable: readonly HostableProject[];
+  /** For the viewing nation only: the nations it shares a bloc or an alliance with (who a grid link may invite). Public data. */
+  readonly tiedTo: readonly NationId[];
 }
 
 export interface HostableProject {
