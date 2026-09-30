@@ -660,6 +660,12 @@ export const TUNABLES = {
     max: 4,
     note: 'Most offers the "keep us supplied" policy sends for one good in a month (RULES 3.4). Two lets it split a shortfall between the two most trusted sellers without flooding the board.',
   },
+  worldAccordBp: {
+    value: 8500,
+    min: 5000,
+    max: 9500,
+    note: 'The World Accord (RULES 5.4): the shared goals must average at least this at the end for the world to have made it. All-AI worlds end at 83-92%, worlds with defectors at 59-80% (100x slice 7 measurement), so a player\'s own choices decide it at the margin. Presentation only: it never changes a score (D3).',
+  },
 } as const satisfies Readonly<Record<string, Tunable>>;
 
 export type TunableId = keyof typeof TUNABLES;

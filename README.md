@@ -5,9 +5,15 @@ alongside sixteen other nations run by the computer. Trade, shared crises and
 keeping your word get you further than conquest. You check in for a couple of
 minutes, make a few decisions, and the world carries on while you are away.
 
-Right now it is the **MVP** (Phase 2): trade, shared crises, computer-run nations
-that explain their decisions, a live clock that keeps running while the app is
-closed, and an away recap. `docs/PROGRESS.md` says what is left before Gate 2.
+Right now it has trade, shared crises, and **joint projects**: nations with a
+surplus host solar belts, hydrogen corridors, grain corridors and early-warning
+networks, partners pay in and share what they make, and walking out costs trust.
+Routine imports run on a standing policy, so the inbox holds real decisions. The
+home screen shows your rank and the **World Accord**, the shared threshold the
+world must reach by 2035: you win when the world makes it and you rank high.
+Computer-run nations found and join projects and explain every decision; a live
+clock keeps running while the app is closed. `docs/100X.md` is the current plan;
+`docs/PROGRESS.md` says what is left.
 This document tells you how to run it and get it onto a phone.
 
 ## What is in here

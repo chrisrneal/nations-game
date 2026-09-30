@@ -1,5 +1,5 @@
 # Progress
-Current phase: 2
+Current phase: 3 (joint projects built under decision record H2; Gate 2's playtests are still owed, docs/100X.md)
 
 ## Gate 0 checklist
 - [x] Sim core has no UI, DOM, network or clock imports (enforced by tsconfig, ESLint and packages/harness/src/purity.test.ts)
@@ -41,6 +41,24 @@ Suite: `npm run harness -- gate2` (200 seeded games with random archetypes, coop
 Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): the archetype line (free-rider 2.21x, shipped AI 1.64x; cooperator 2.92x) and the re-graded top scorer (Saudi Arabia 23.5%, shipped AI 24.0%) fail; the predictions and the 10 playtests have not been done (docs/playtests/ is empty). Prompt 13 fixed findings F1 (the harness now grades the shipped AI) and F2 (paid-in-full nations are no longer shown as "declined"); the failing lines still fail with the shipped AI. Rulings since (prompt 16, 2026-09-30): criterion 2 reworded and line 9b waived for Gate 2; the verdict stays FAIL until the predictions and playtests are done and the re-review (prompt 20) grades the new wording.
 
 ## Session log
+
+### 2026-09-30 - 100x slice 7, The World Accord, a home briefing and a debrief
+**Changed.** RULES 5.4: the co-opetition win condition made visible. The World Accord is
+the shared threshold (`worldAccordBp`, 85%): the world made it if the four shared goals
+average at least that at the end. Presentation only; scores are unchanged (D3). The View
+now carries `collectiveBp`. Home opens with a briefing: your rank and score, an Accord bar
+with the line it must clear, and the next two or three things coming (a pool locking, the
+next climate appeal, your projects' ready months, invitations closing). The end screen
+leads with the verdict (victory, podium, shared success, or the world fell short with its
+weakest goal named) and a three-line debrief of your game (projects built and what they
+make, pool payments and pledges, trades and broken deals).
+**Measured.** 24 games: all-AI worlds end at 83-92% of the shared goals, worlds with
+defecting archetypes at 59-80%, so the players decide whether the world makes it.
+**Checked.** 4 new tests (rank matches the final table, the Accord reads the sim's goals,
+what comes next is ordered and never in the past, the verdict follows threshold then rank);
+phone suites 53/53 and 10/10; no horizontal scroll on home or the end screen at 360 px.
+**How to see it.** Any new game: the briefing sits above the decisions. Play to month 60
+for the verdict.
 
 ### 2026-09-30 - 100x slice 6, Keep us supplied: routine imports become a standing policy
 **Changed.** New standing policy `autoImport` ("Keep us supplied", RULES 3.4) in the sim:

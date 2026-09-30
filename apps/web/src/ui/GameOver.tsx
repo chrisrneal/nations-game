@@ -1,6 +1,8 @@
 import type { ReactElement } from 'react';
 import type { GameUpdate } from '../platform/index.ts';
+import { outcomeOf } from './briefing.ts';
 import { baselineNote, fmt, multiplierNote, multiplierText, standings } from './econ.ts';
+import { myProjects, templateOf, yieldShare } from './projects.ts';
 import { Num } from './why.tsx';
 
 /** The end of the game (month 60): final scores for every playable nation, yours highlighted. */
@@ -10,9 +12,28 @@ export function GameOver(props: { update: GameUpdate; onNewGame: () => void }): 
   const rank = rows.findIndex((r) => r.id === view.selfId) + 1;
   const mine = rows[rank - 1];
   const multiplier = multiplierText(view);
+  const outcome = outcomeOf(view);
+  const built = myProjects(view).filter((p) => p.status === 'active');
+  const p = view.self.private;
+  const debrief = [
+    built.length === 0
+      ? 'You built no joint projects.'
+      : `You built ${built.length} joint project${built.length === 1 ? '' : 's'}: ${built.map((x) => `${templateOf(view, x.template).name}${yieldShare(x, view.selfId) > 0 ? ` (${fmt(yieldShare(x, view.selfId))} a month)` : ''}`).join(', ')}.`,
+    `You paid ${fmt(p.pooledTotal)} credit into the crisis pools; pledges kept ${p.pledgesHonoured}, broken ${p.pledgesBroken}.`,
+    `${fmt(p.tradesSettled)} trades settled; deals you failed to honour: ${p.reneges}.`,
+  ];
   return (
     <section className="gameover" aria-label="Game over" data-testid="game-over">
       <h1 className="section-title">Game over · 2035</h1>
+      <p className={`outcome outcome-${outcome.outcome}`} data-testid="outcome">
+        {outcome.headline}
+      </p>
+      <p className="why-text">{outcome.detail}</p>
+      <ul className="debrief" aria-label="Your game">
+        {debrief.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
       <p className="why-text">
         You finished{' '}
         <Num

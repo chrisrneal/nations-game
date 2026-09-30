@@ -948,3 +948,103 @@ h2 {
   max-height: 45vh;
   overflow-y: auto;
 }
+
+/* ---- briefing and outcome (100x slice 7) ---- */
+.briefing {
+  margin: 0 0 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.briefing-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.briefing-rank {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.accord {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.2rem;
+}
+
+.accord-label {
+  font-size: 0.8rem;
+  text-align: right;
+  color: var(--muted);
+}
+
+.accord.on .accord-label {
+  color: var(--accent);
+}
+
+.accord.off .accord-label {
+  color: #f0a86a;
+}
+
+.accord-bar {
+  position: relative;
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg);
+}
+
+.accord-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.accord.off .accord-fill {
+  background: #d98b4a;
+}
+
+.accord-need {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 12px;
+  background: var(--fg);
+}
+
+.briefing-next {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.outcome {
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin: 0.25rem 0;
+}
+
+.outcome-victory,
+.outcome-podium,
+.outcome-shared {
+  color: var(--accent);
+}
+
+.outcome-short {
+  color: #f0a86a;
+}
+
+.debrief {
+  margin: 0.25rem 0 0.75rem;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
