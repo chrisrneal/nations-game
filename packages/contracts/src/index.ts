@@ -13,8 +13,11 @@ export type { Host, HostUpdate, Pace } from './host.ts';
 export type { SaveFile } from './save.ts';
 export type { Tunable } from './tunable.ts';
 export type {
+  Build,
   EconomyReport,
   Flow,
+  HomeCapacity,
+  HomeGood,
   NationEndowment,
   NationKind,
   NationMap,
@@ -55,6 +58,7 @@ export type {
   EconomyEventType,
   FundResilienceCommand,
   GameCommand,
+  InvestCommand,
   MakeOfferCommand,
   MakeOfferPayload,
   OfferOutcome,
@@ -66,4 +70,4 @@ export type {
   TradeOffer,
   WithdrawOfferCommand,
 } from './trade.ts';
-export type { CollectiveGoals, ForeignNation, NationPrivate, NationPublic, NationRecord, NationScore, NationView, ScoresView } from './nations.ts';
+export type { CollectiveGoals, ForeignNation, InvestGoodView, InvestView, NationPrivate, NationPublic, NationRecord, NationScore, NationView, ScoresView } from './nations.ts';

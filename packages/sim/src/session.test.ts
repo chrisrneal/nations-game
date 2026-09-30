@@ -4,8 +4,8 @@ import type { Command } from '@nations/contracts';
 import { hashState } from './hash.ts';
 import { MIGRATIONS, migrateSave } from './save.ts';
 import { Session } from './session.ts';
-import { A, B, C, D, ping, setController, world } from './testkit.ts';
-import { SCHEMA_VERSION } from './world.ts';
+import { A, B, C, D, ping, policy, setController, tradeWorld, world } from './testkit.ts';
+import { SCHEMA_VERSION, defaultPolicy } from './world.ts';
 
 const IDS = [A, B, C, D];
 
@@ -111,12 +111,55 @@ describe('save and load', () => {
     expect(() => migrateSave({})).toThrow(/schemaVersion/);
   });
 
-  /** A version-3 save (before Phase 2's crises) made from a current one: no pools, crises, pledges or crisis policy. */
-  function asVersion3(save: ReturnType<Session['save']>): Record<string, unknown> {
-    const snapshot: Record<string, unknown> = { ...save.snapshot, schemaVersion: 3 };
-    for (const key of ['pools', 'crises', 'recentCrises', 'pledges', 'hits', 'nextCrisisId', 'nextPledgeId']) delete snapshot[key];
+  /** A version-4 save (before prompt 17's home investment) made from a current one: no capacity, builds, dial, report field or sink. */
+  function asVersion4(save: ReturnType<Session['save']>): Record<string, unknown> {
+    const snapshot: Record<string, unknown> = { ...save.snapshot, schemaVersion: 4 };
+    const drop = (o: object, keys: string[]): Record<string, unknown> => Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)));
     const nations: Record<string, unknown> = {};
     for (const [id, n] of Object.entries(save.snapshot.nations)) {
+      nations[id] = { ...n, private: { ...drop(n.private, ['home', 'builds']), policy: drop(n.private.policy, ['investBp']), last: drop(n.private.last, ['invested']) } };
+    }
+    snapshot.nations = nations;
+    snapshot.ledger = drop(save.snapshot.ledger, ['creditSpentInvestment']);
+    return { ...save, schemaVersion: 4, snapshot, stateHash: hashState(snapshot as never) };
+  }
+
+  it('migrates a compact version-4 save: same position, no capacity or builds, the default investment share', () => {
+    // Investment switched off so the game that made the v4 file is one that could have been played before prompt 17.
+    const session = new Session(tradeWorld(5));
+    for (const id of [A, B, C, D]) session.submit(policy(id, { investBp: 0 }, 0));
+    session.advance(10);
+    const v4 = asVersion4(session.save({ compact: true }));
+    const loaded = Session.load(JSON.parse(JSON.stringify(v4)));
+    expect(loaded.state.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(loaded.state.tick).toBe(10);
+    expect(loaded.state.ledger.creditSpentInvestment).toBe(0);
+    for (const id of IDS) {
+      const before = session.state.nations[id]!;
+      const after = loaded.state.nations[id]!;
+      expect(after.private.home).toEqual({ food: 0, energy: 0 });
+      expect(after.private.builds).toEqual([]);
+      expect(after.private.policy.investBp).toBe(defaultPolicy().investBp);
+      expect(after.private.last.invested).toBe(0);
+      expect({ ...after, private: { ...after.private, policy: { ...after.private.policy, investBp: 0 } } }).toEqual(before);
+    }
+    loaded.advance(1);
+    expect(loaded.state.tick).toBe(11);
+  });
+
+  it('refuses a version-4 save that needs its move history replayed', () => {
+    const session = new Session(world(5));
+    play(session, 5, 0, 12);
+    expect(() => Session.load(asVersion4(session.save()))).toThrow(/home investment changed the rules.*Start a new game/);
+  });
+
+  /** A version-3 save (before Phase 2's crises) made from a current one: no pools, crises, pledges or crisis policy. */
+  function asVersion3(save: ReturnType<Session['save']>): Record<string, unknown> {
+    const v4 = asVersion4(save).snapshot as { nations: typeof save.snapshot.nations };
+    const snapshot: Record<string, unknown> = { ...v4, schemaVersion: 3 };
+    for (const key of ['pools', 'crises', 'recentCrises', 'pledges', 'hits', 'nextCrisisId', 'nextPledgeId']) delete snapshot[key];
+    const nations: Record<string, unknown> = {};
+    for (const [id, n] of Object.entries(v4.nations)) {
       const drop = (o: object, keys: string[]): Record<string, unknown> => Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)));
       const priv = drop(n.private, ['pledgesHonoured', 'pledgesBroken', 'pooledTotal']);
       const policy = drop(n.private.policy, ['crisisRule', 'contributionBp', 'contributionTo']);
@@ -186,7 +229,7 @@ describe('save and load', () => {
   });
 
   it('runs registered migrations in order (stub registry)', () => {
-    expect(Object.keys(MIGRATIONS)).toEqual(['1', '2', '3']);
+    expect(Object.keys(MIGRATIONS)).toEqual(['1', '2', '3', '4']);
     expect(() => migrateSave({ schemaVersion: 1 })).toThrow(/Phase 0 prototype/);
     const migrated = migrateSave(
       { schemaVersion: 1, a: 1 },

@@ -23,7 +23,8 @@ export type DecisionKind =
   | 'suspend'
   | 'resume'
   | 'forgive'
-  | 'policy';
+  | 'policy'
+  | 'invest';
 
 export interface Explanation {
   readonly nationId: NationId;

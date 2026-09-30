@@ -1,4 +1,5 @@
-import type { AppealAnswer, ForeignNation, NationId, NationMap, NationRecord, NationView } from '@nations/contracts';
+import type { AppealAnswer, ForeignNation, NationEndowment, NationId, NationMap, NationRecord, NationView } from '@nations/contracts';
+import { investView } from './invest.ts';
 import { scoreboard } from './score.ts';
 import { TUNABLES } from './tunables.ts';
 import type { WorldState } from './world.ts';
@@ -11,7 +12,7 @@ let ruleTable: Readonly<Record<string, number>> | null = null;
  * Every tunable's value, by id: the public rules, the same for every nation,
  * built once and shared by every View. A run that changes tunables after the
  * sim has loaded (`--set`, packages/harness/src/overrides.ts) calls
- * `refreshRules` so the rules the AI reads move with them (prompt 17).
+ * `refreshRules` so the rules the AI reads move with them.
  */
 function currentRules(): Readonly<Record<string, number>> {
   ruleTable ??= Object.freeze(Object.fromEntries(Object.entries(TUNABLES).map(([id, tunable]) => [id, tunable.value])));
@@ -76,6 +77,8 @@ export function viewFor(state: WorldState, selfId: NationId): NationView {
         policy: { ...priv.policy },
         trust: { ...priv.trust },
         last: { ...priv.last },
+        home: { ...priv.home },
+        builds: priv.builds.map((b) => ({ ...b })),
       },
     },
     others,
@@ -98,6 +101,7 @@ export function viewFor(state: WorldState, selfId: NationId): NationView {
       pledges: state.pledges.map((p) => ({ ...p })),
       hits: state.hits.filter((h) => h.nationId === selfId).map((h) => ({ ...h })),
     },
+    invest: investView(self, state.endowments[selfId] as NationEndowment),
     rules: currentRules(),
   };
 }

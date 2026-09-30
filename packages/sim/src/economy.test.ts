@@ -119,6 +119,8 @@ function commandArb(tick: number): fc.Arbitrary<Command> {
       payload: { hardBargains: hb, rejectAll: rj, acceptTrusted: tr, resilienceFloor: fl },
     })),
     fc.record({ n: id, p: fc.integer({ min: 1, max: 30 }) }).map(({ n, p }) => ({ nationId: n, tick, type: 'fundResilience', payload: { points: p } })),
+    fc.record({ n: id, g: fc.constantFrom('food', 'energy'), bp: fc.integer({ min: 1, max: 900 }) }).map(({ n, g, bp }) => ({ nationId: n, tick, type: 'invest', payload: { good: g, bp } })),
+    fc.record({ n: id, bp: fc.integer({ min: 0, max: 3_000 }) }).map(({ n, bp }) => ({ nationId: n, tick, type: 'setPolicy', payload: { investBp: bp } })),
     fc.record({ n: id, pool: fc.constantFrom('adaptation', 'health'), a: amount, d: fc.integer({ min: 0, max: 15 }), t: fc.constantFrom('contribute', 'pledge') }).map(
       ({ n, pool, a, d, t }) => ({ nationId: n, tick, type: t, payload: t === 'pledge' ? { pool, amount: a * 5, deadlineTick: tick + d } : { pool, amount: a } }),
     ),
@@ -204,7 +206,7 @@ describe('Gate 1 invariants (property tests)', () => {
             consumedFood += last.consumedFood;
             consumedEnergy += last.consumedEnergy;
             income += last.income;
-            spent += last.resilienceSpent;
+            spent += last.resilienceSpent + last.invested;
           }
           for (const ev of events) if (ev.type === 'resilienceFunded') spent += (ev.payload as { cost: number }).cost;
           const dl = (k: keyof WorldState['ledger']): number => state.ledger[k] - s.ledger[k];
@@ -214,7 +216,7 @@ describe('Gate 1 invariants (property tests)', () => {
           expect(after.credit).toBe(before.credit + income - spent - dl('creditSpentCrises'));
           expect(dl('foodProduced') - dl('foodConsumed')).toBe(after.food - before.food);
           expect(dl('energyProduced') - dl('energyConsumed')).toBe(after.energy - before.energy);
-          expect(dl('creditIncome') - dl('creditSpentResilience') - dl('creditSpentCrises')).toBe(after.credit - before.credit);
+          expect(dl('creditIncome') - dl('creditSpentResilience') - dl('creditSpentCrises') - dl('creditSpentInvestment')).toBe(after.credit - before.credit);
           const pools = (x: WorldState): number => x.pools.adaptation.balance + x.pools.health.balance;
           expect(pools(state) - pools(s)).toBe(dl('creditPooled') - dl('creditSpentCrises'));
           s = state;

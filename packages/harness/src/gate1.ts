@@ -10,8 +10,8 @@
  * Pass lines, fixed before any result was seen (ROADMAP gate rules):
  * - crashes 0; negative stocks 0.
  * - sources and sinks in band: world food and energy consumed / produced in
- *   [75%, 100%]; Credit sinks / Credit income in [0%, 25%] (Phase 1's only
- *   Credit sink is resilience; crises add more in Phase 2).
+ *   [75%, 100%]; Credit sinks / Credit income in [0%, 25%] (resilience, the
+ *   crisis pools when they lock, and, since prompt 17, home investment).
  * - trading vs isolating: median over the paired runs of
  *   (trading ownScore / isolating ownScore - 1) >= 15%.
  * - isolationists worse off but alive: isolating scores below trading in most
@@ -192,7 +192,7 @@ function playRange(options: Gate1Options): Tally {
       t.ledger.energyP += l.energyProduced;
       t.ledger.energyC += l.energyConsumed;
       t.ledger.income += l.creditIncome;
-      t.ledger.sinks += l.creditSpentResilience;
+      t.ledger.sinks += l.creditSpentResilience + l.creditSpentCrises + l.creditSpentInvestment;
 
       let best = result.score.nations[0];
       let dead = 0;
@@ -310,7 +310,7 @@ function reportFrom(t: Tally): Gate1Report {
     { name: 'Negative stocks (every nation, every tick)', value: String(t.negatives), passLine: '0', pass: t.negatives === 0 },
     { name: 'Food consumed / produced (world)', value: pct(foodRatio), passLine: '75-100%', pass: inBand(foodRatio, 0.75, 1) },
     { name: 'Energy consumed / produced (world)', value: pct(energyRatio), passLine: '75-100%', pass: inBand(energyRatio, 0.75, 1) },
-    { name: 'Credit sinks / Credit income (world)', value: pct(creditRatio), passLine: '0-25%', pass: inBand(creditRatio, 0, 0.25) },
+    { name: 'Credit sinks / Credit income (world: resilience + crises + investment)', value: pct(creditRatio), passLine: '0-25%', pass: inBand(creditRatio, 0, 0.25) },
     { name: 'Same nation, trading vs isolating (median of paired runs)', value: `${medianGap >= 0 ? '+' : ''}${pct(medianGap)}`, passLine: `>= +${PASS_LINE_PCT}%`, pass: medianGap >= PASS_LINE_PCT / 100 },
     { name: `Pairs at +${PASS_LINE_PCT}% or more`, value: pct(shareAtPassLine), passLine: 'info', pass: null },
     { name: 'Isolationists worse off (pairs where isolating scores lower)', value: pct(worseShare), passLine: '> 50%', pass: worseShare > 0.5 },

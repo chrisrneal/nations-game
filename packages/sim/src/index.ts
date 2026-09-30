@@ -29,6 +29,18 @@ export {
 } from './world.ts';
 export { rosterFromWorldData } from './data.ts';
 export {
+  HOME_GOODS,
+  MAX_INVEST_SHARE_BP,
+  gapBpOf,
+  investBase,
+  investBuy,
+  investCost,
+  investView,
+  pointPrice,
+} from './invest.ts';
+export {
+  bareBalance,
+  bareFlow,
   flowsFor,
   isFair,
   potentialOutput,
@@ -55,6 +67,7 @@ export {
   type PledgeCommand,
   type WithdrawPledgeCommand,
   type FundResilienceCommand,
+  type InvestCommand,
   type MakeOfferCommand,
   type PingCommand,
   type RejectOfferCommand,

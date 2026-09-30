@@ -1,6 +1,7 @@
 import type {
   EconomyReport,
   Flow,
+  HomeCapacity,
   NationEndowment,
   NationId,
   NationRecord,
@@ -8,6 +9,7 @@ import type {
   Resource,
   WorldLedger,
 } from '@nations/contracts';
+import { arriveBuilds, standingInvestment, upkeepBpOf } from './invest.ts';
 import { TUNABLES } from './tunables.ts';
 
 /**
@@ -70,10 +72,13 @@ function populationMillions(population: number): number {
 }
 
 /**
- * Structural demand and production per tick (RULES 2.2 and 2.3). Energy
- * demand follows potential output, so shortfalls do not feed back into it.
+ * Demand and production per tick (RULES 2.2 and 2.3). Energy demand follows
+ * potential output, so shortfalls do not feed back into it. `home` is the
+ * nation's online home capacity (RULES 2.9), added to production; the baseline
+ * and the structural world never pass it (RULES 5.3), so they see the bare
+ * structural flows.
  */
-export function flowsFor(e: NationEndowment, capacityE4: number): { food: Flow; energy: Flow } {
+export function flowsFor(e: NationEndowment, capacityE4: number, home?: HomeCapacity): { food: Flow; energy: Flow } {
   const pivot = TUNABLES.selfSufficiencyPivot.value;
   const foodDemand = populationMillions(e.population) * TUNABLES.foodDemandPerMillionPeople.value;
   const foodProduction = Math.floor((foodDemand * e.foodSelfSufficiency) / pivot);
@@ -81,15 +86,32 @@ export function flowsFor(e: NationEndowment, capacityE4: number): { food: Flow; 
   const energyRaw = mulDiv(energyDemand, e.energySelfSufficiency, pivot);
   const energyProduction = mulDiv(energyRaw, 10_000 + mineralsEnergyBp(e), 10_000);
   return {
-    food: { demand: foodDemand, production: foodProduction },
-    energy: { demand: energyDemand, production: energyProduction },
+    food: { demand: foodDemand, production: foodProduction + (home === undefined ? 0 : mulDiv(foodDemand, home.food, 10_000)) },
+    energy: { demand: energyDemand, production: energyProduction + (home === undefined ? 0 : mulDiv(energyDemand, home.energy, 10_000)) },
   };
 }
 
-/** Structural surplus (positive) or deficit (negative) of one resource. Credit has none. */
+/** Structural surplus (positive) or deficit (negative) of one resource. Credit has none. Includes home capacity: what the nation really has. */
 export function structuralBalance(nation: Pick<NationRecord, 'public'>, resource: Resource): number {
   if (resource === 'credit') return 0;
   const flow = nation.public[resource];
+  return flow.production - flow.demand;
+}
+
+/**
+ * A nation's flow of one good before any home capacity (RULES 2.9): the
+ * imbalance a trade is measured against (RULES 3.3). Building at home shrinks
+ * what a nation must buy, never what its trades are worth clearing.
+ */
+export function bareFlow(nation: Pick<NationRecord, 'public' | 'private'>, good: 'food' | 'energy'): Flow {
+  const flow = nation.public[good];
+  return { demand: flow.demand, production: flow.production - mulDiv(flow.demand, nation.private.home[good], 10_000) };
+}
+
+/** Like `structuralBalance`, but before home capacity: the surplus or deficit a trade can clear. Credit has none. */
+export function bareBalance(nation: Pick<NationRecord, 'public' | 'private'>, resource: Resource): number {
+  if (resource === 'credit') return 0;
+  const flow = bareFlow(nation, resource);
   return flow.production - flow.demand;
 }
 
@@ -235,6 +257,10 @@ export interface EconomyTickResult {
  * `cover` is this month's structural cover, for the baseline (RULES 2.8).
  * `crisisBp` is this month's crisis damage (RULES 4), an output penalty on
  * top of the shortfall penalty; the baseline never expects it.
+ * Home investment (RULES 2.9): after resilience, the standing rule spends its
+ * share of income; then builds ready by next month come online and next
+ * month's flows include them. `tick` is the tick being stepped and
+ * `investedByCommand` what `invest` commands already spent this tick.
  */
 export function economyTick(
   nation: NationRecord,
@@ -243,6 +269,8 @@ export function economyTick(
   tradeGainCbp: number,
   cover: StructuralCover,
   crisisBp = 0,
+  tick = 0,
+  investedByCommand = 0,
 ): EconomyTickResult {
   const pub = nation.public;
   const priv = nation.private;
@@ -256,7 +284,9 @@ export function economyTick(
   const penaltyBp = shortfallPenaltyBp(unmetFood, pub.food, unmetEnergy, pub.energy);
 
   const potential = potentialOutput(e, priv.capacityE4);
-  const preCrisisOutput = mulDiv(potential, 10_000 - penaltyBp, 10_000);
+  // Running home capacity takes output too (RULES 2.9): a drag per point online, on top of the shortfall penalty.
+  const upkeepBp = upkeepBpOf(priv.home);
+  const preCrisisOutput = mulDiv(mulDiv(potential, 10_000 - penaltyBp, 10_000), 10_000 - upkeepBp, 10_000);
   const crisis = Math.max(0, Math.min(10_000, crisisBp));
   const output = mulDiv(preCrisisOutput, 10_000 - crisis, 10_000);
   let credit = priv.stocks.credit + output;
@@ -273,10 +303,15 @@ export function economyTick(
     credit -= resilienceSpent;
   }
 
+  // Home investment (RULES 2.9): the standing rule spends after resilience, then ready builds come online.
+  const standing = standingInvestment({ ...nation, private: { ...priv, stocks: { ...priv.stocks, credit } } }, e, output, tick);
+  credit -= standing.spent;
+  const arrived = arriveBuilds(standing.nation.private, tick + 1);
+
   const growth = growthBpPerTick(e.baselineGrowthBp);
   const capacityE4 = growCapacity(priv.capacityE4, growth);
   const baselineE4 = growCapacity(priv.baselineE4, growth);
-  const flows = flowsFor(e, capacityE4);
+  const flows = flowsFor(e, capacityE4, arrived.home);
 
   const report: EconomyReport = {
     consumedFood,
@@ -289,6 +324,7 @@ export function economyTick(
     tradeGainCbp,
     crisisPct: Math.floor(crisis / 100),
     contributed: 0,
+    invested: investedByCommand + standing.spent,
   };
 
   return {
@@ -309,6 +345,8 @@ export function economyTick(
         resilience,
         capacityE4,
         baselineE4,
+        home: arrived.home,
+        builds: arrived.builds,
         last: report,
       },
     },
@@ -322,6 +360,7 @@ export function economyTick(
       energyUnmet: ledger.energyUnmet + unmetEnergy,
       creditIncome: ledger.creditIncome + output,
       creditSpentResilience: ledger.creditSpentResilience + resilienceSpent,
+      creditSpentInvestment: ledger.creditSpentInvestment + standing.spent,
     },
   };
 }

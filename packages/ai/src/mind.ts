@@ -3,6 +3,7 @@ import { proposePurchases, proposeSales, type Proposal } from './actions.ts';
 import { believe, decayMemory, emptyMemory, offenceText, punishing, remember, type PartnerBelief, type PartnerMemory } from './beliefs.ts';
 import { explanationEvent, hasNumber, type DecisionKind, type ExplanationEvent } from './explain.ts';
 import { scoreGoals, type Goal } from './goals.ts';
+import { emptyInvestMemory, investAtRate, observeShortage, ordersFor, planInvestment, spareCredit, type InvestMemory, type InvestOrder } from './invest.ts';
 import { answerOffer, type Ledger } from './negotiation.ts';
 import { observe, openAppeals, visibleTo } from './perception.ts';
 import { personalityFor, type Personality } from './personality.ts';
@@ -24,6 +25,8 @@ import { clamp, GOODS, month, rule, show, type Good } from './util.ts';
 /** The sim's limits on a command's `why` (packages/sim/src/commands.ts). */
 const WHY_MAX_LINES = 3;
 const WHY_MAX_LENGTH = 200;
+/** Command slots kept back each tick for the two investment orders (one per good), so trading cannot crowd them out. */
+const INVEST_SLOTS = 2;
 
 export interface MindSnapshot {
   readonly id: string;
@@ -35,6 +38,8 @@ export interface MindSnapshot {
   readonly lastDecay: number;
   readonly decidedCrises: readonly number[];
   readonly policySet: boolean;
+  /** The shortage it has suffered, as it remembers it (RULES 7.5). Absent in snapshots from before prompt 17. */
+  readonly invest?: InvestMemory;
 }
 
 export interface MindOutput {
@@ -57,6 +62,7 @@ export class NationMind {
   private lastDecay = -1;
   private decidedCrises = new Set<number>();
   private policySet = false;
+  private invest: InvestMemory = emptyInvestMemory();
 
   constructor(
     readonly id: NationId,
@@ -65,6 +71,8 @@ export class NationMind {
     private readonly seed: number,
     /** False only for the free-rider in the AI's Gate 2 check: never pays into a pool. */
     private readonly pays = true,
+    /** Null: invest by plan (RULES 7.5). A number: spend that percent of spare Credit a month instead (the harness's fixed-rate strategies). */
+    private readonly investRate: number | null = null,
   ) {}
 
   /** Personality is fixed by the data; the thresholds come from the View's rules. */
@@ -93,6 +101,7 @@ export class NationMind {
       decayMemory(this.memory, view);
       this.lastDecay = view.tick;
     }
+    observeShortage(this.invest, view);
     const mine = events.filter((e) => visibleTo(e, this.id));
     if (mine.length === 0) return;
     remember(this.memory, observe(this.id, mine), p.reciprocity, view, view.tick);
@@ -144,8 +153,9 @@ export class NationMind {
       const hardBargains = p.reciprocity === 'exploiter';
       // The crisis rule its standing policy uses if it ever leaves an appeal unanswered, by style.
       const crisisRule = !this.pays ? 'none' : p.reciprocity === 'strict' ? 'reciprocal' : p.reciprocity === 'forgiving' ? 'fairShare' : 'none';
-      const payload = { hardBargains, coverPriority, resilienceFloor: floor, crisisRule, ...(this.pays ? {} : { contributionBp: 0 }) };
-      const text = `set policies: resilience floor ${floor}, ${coverPriority} first, crisis rule ${crisisRule}${hardBargains ? ', hard bargains on' : ''}`;
+      // It invests by command, from its plan (RULES 7.5), so the standing investment share is switched off.
+      const payload = { hardBargains, coverPriority, resilienceFloor: floor, crisisRule, investBp: 0, ...(this.pays ? {} : { contributionBp: 0 }) };
+      const text = `set policies: resilience floor ${floor}, ${coverPriority} first, crisis rule ${crisisRule}${hardBargains ? ', hard bargains on' : ''}, standing investment 0 of ${rule(view, 'defaultInvestBp')} basis points`;
       if (decide({ type: 'setPolicy', payload }, 'policy', null, text, [`time horizon ${p.timeHorizon}`, `food deficit ${deficit('food')}, energy deficit ${deficit('energy')}`])) {
         this.policySet = true;
       }
@@ -255,12 +265,27 @@ export class NationMind {
         busy: new Set<NationId>(open.map((o) => o.to)),
         spend: options.spend,
       };
-      const room = (): number => maxCommands - commands.length;
+      const room = (): number => Math.max(0, maxCommands - INVEST_SLOTS - commands.length);
       const proposals: Proposal[] = proposeSales(ctx, room());
       proposals.push(...proposePurchases(ctx, room() - proposals.length));
       for (const prop of proposals) {
         if (!decide({ type: 'makeOffer', payload: { to: prop.to, give: prop.give, get: prop.get } }, 'offer', prop.to, prop.text, prop.reasons)) break;
       }
+    }
+
+    // --- Invest (RULES 7.5): what is left after answering offers, paying pools and buying goods.
+    options.spend(2);
+    const spareCash = spareCredit(view, view.self.private.stocks.credit - ledger.creditFree);
+    let orders: readonly InvestOrder[] = [];
+    if (this.investRate !== null) orders = investAtRate(view, this.investRate, spareCash);
+    else {
+      const plan = planInvestment(view, this.invest);
+      if (plan !== null) orders = ordersFor(view, plan, this.invest, spareCash);
+    }
+    for (const order of orders) {
+      if (!decide({ type: 'invest', payload: { good: order.good, bp: order.bp } }, 'invest', null, order.text, order.reasons)) break;
+      ledger.creditFree -= order.cost;
+      ledger.stocks.credit -= order.cost;
     }
     return { commands, explanations };
   }
@@ -293,6 +318,7 @@ export class NationMind {
       lastDecay: this.lastDecay,
       decidedCrises: [...this.decidedCrises].sort((a, b) => a - b),
       policySet: this.policySet,
+      invest: { seen: { ...this.invest.seen }, at: this.invest.at },
     };
   }
 
@@ -303,6 +329,7 @@ export class NationMind {
     this.lastDecay = s.lastDecay;
     this.decidedCrises = new Set(s.decidedCrises);
     this.policySet = s.policySet;
+    this.invest = s.invest === undefined ? emptyInvestMemory() : { seen: { ...s.invest.seen }, at: s.invest.at };
     this.beliefs = s.beliefs.map((b) => ({ ...b, need: { ...b.need }, surplus: { ...b.surplus } }));
   }
 }

@@ -7,9 +7,9 @@ import { TUNABLES, refreshRules } from '@nations/sim';
  * inside the band tunables.ts declares (the band is the limit of tuning; going
  * outside it is a design change).
  *
- * The change reaches the numbers the sim reads from `TUNABLES` directly and,
- * through `refreshRules` (prompt 17), the copy of the rules every View carries,
- * so a number only the AI reads from its View sweeps too.
+ * The change reaches the numbers the sim reads from `TUNABLES` directly, and
+ * (since prompt 17, through `refreshRules`) the copy of the rules every View
+ * carries, so a number only the AI reads from its View sweeps too.
  */
 type Mutable = { value: number; min: number; max: number };
 

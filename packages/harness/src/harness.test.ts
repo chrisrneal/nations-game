@@ -44,9 +44,7 @@ describe('harness games', () => {
     expect(summary).toMatchObject({ games: 3, ticksPerGame: 20, rejected: 0, distinctHashes: 3 });
   });
 
-  // A wall-clock check: about 1.6 s alone on the 4-core build machine, so under a full parallel test run a slow scheduling pass can
-  // tip it over 2 s (it did on unchanged code in prompt 17). Retrying twice keeps it a check on speed rather than on luck.
-  it('1,000 catch-up ticks run well inside the 2 s budget on this machine', { retry: 2 }, () => {
+  it('1,000 catch-up ticks run well inside the 2 s budget on this machine', () => {
     const [ms] = benchCatchUp(1000, 1, roster, () => performance.now());
     expect(ms).toBeLessThan(2000);
   });
