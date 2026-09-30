@@ -17,7 +17,7 @@ describe('gate2 suite', () => {
   });
 
   it('runs a small batch and reports every Gate 2 metric', () => {
-    const report = runGate2({ games: 2, firstSeed: 1, roster, ticks: 24, absenceSeeds: 1, skipGate1: true });
+    const report = runGate2({ games: 2, firstSeed: 1, roster, ticks: 24, absenceSeeds: 1, skipGate1: true, skipInvest: true });
     expect(report.games).toBe(2);
     expect(report.freeRiderPairs).toHaveLength(2);
     expect(report.spoilerPairs).toHaveLength(2);
@@ -40,7 +40,7 @@ describe('gate2 suite', () => {
   });
 
   it('grades the prompt 14 lines separately, and reports the cooperator\'s own share for the owner\'s ruling', () => {
-    const report = runGate2({ games: 2, firstSeed: 1, roster, ticks: 24, absenceSeeds: 1, skipGate1: true });
+    const report = runGate2({ games: 2, firstSeed: 1, roster, ticks: 24, absenceSeeds: 1, skipGate1: true, skipInvest: true });
     const line = (needle: string) => report.metrics.find((m) => m.name.includes(needle));
     const graded = ['Free-rider tops / fair share (prompt 14)', 'Free-rider tops below the cooperator (prompt 14)', 'Cooperator ahead of the free-rider (prompt 14)', 'Cooperator vs free-rider median gap (prompt 14)', 'Stealth spoiler strictly below the cooperator (prompt 14)'];
     for (const needle of graded) expect(typeof line(needle)?.pass, needle).toBe('boolean');
@@ -54,7 +54,7 @@ describe('gate2 suite', () => {
   }, 30_000);
 
   it('the prompt 14 lines follow the numbers: the free-rider\'s share and the cooperator\'s lead', () => {
-    const report = runGate2({ games: 3, firstSeed: 1, roster, ticks: 24, absenceSeeds: 1, skipGate1: true });
+    const report = runGate2({ games: 3, firstSeed: 1, roster, ticks: 24, absenceSeeds: 1, skipGate1: true, skipInvest: true });
     const total = Object.values(report.archetypes).reduce((sum, a) => sum + a.assigned, 0);
     const ratio = (name: string): number => {
       const a = report.archetypes[name]!;
@@ -68,7 +68,7 @@ describe('gate2 suite', () => {
   }, 30_000);
 
   it('the absence runs leave nothing unanswered and recap in a few short lines', () => {
-    const report = runGate2({ games: 1, firstSeed: 3, roster, ticks: 60, absenceSeeds: 2, skipGate1: true });
+    const report = runGate2({ games: 1, firstSeed: 3, roster, ticks: 60, absenceSeeds: 2, skipGate1: true, skipInvest: true });
     for (const run of report.absence) {
       expect(run.offersLapsed).toBe(0);
       expect(run.appealsAnswered).toBeGreaterThanOrEqual(run.appealsDue);

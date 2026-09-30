@@ -396,7 +396,6 @@ export function runGate2(options: Gate2Options): Gate2Report {
   const maxTop = Object.entries(topShare).sort((a, b) => b[1] - a[1])[0] ?? ['', 0];
   const totalAssigned = Object.values(archetypes).reduce((s, a) => s + a.assigned, 0);
   const ratio = (a: { assigned: number; tops: number }): number => (a.assigned === 0 || games <= 0 ? 0 : a.tops / games / (a.assigned / totalAssigned));
-  const worstArchetype = Object.entries(archetypes).sort((a, b) => ratio(b[1]) - ratio(a[1]))[0] ?? ['', { assigned: 0, tops: 0 }];
   const archetypeRatio = (name: string): number => ratio(archetypes[name] ?? { assigned: 0, tops: 0 });
   const freeRiderShare = archetypeRatio('freeRider');
   const cooperatorShare = archetypeRatio('trader');

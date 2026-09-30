@@ -982,12 +982,12 @@ docs/balance/gate2-prompt17.md records every move, made on seeds 1001-1400 only.
 
 | id | value | min | max | note |
 |---|---|---|---|---|
-| `investCostBp` | 1200 | 300 | 3000 | Cost of the first point (1% of a good's demand) as basis points of the nation's potential output, so 1000 is a tenth of one month's output. The main lever on how much of its income a nation puts into building. |
-| `investEscalationPct` | 1 | 0 | 10 | Percent added to a point's price for every point already committed in that good (diminishing returns). At 3 the 40th point costs 2.2x the first; at 0 the price is flat and only the ceiling limits building. |
+| `investCostBp` | 1300 | 300 | 3000 | Cost of the first point (1% of a good's demand) as basis points of the nation's potential output, so 1300 is 13% of one month's output. The main lever on how much of its income a nation puts into building. |
+| `investEscalationPct` | 1 | 0 | 10 | Percent added to a point's price for every point already committed in that good (diminishing returns). At 1 the 40th point costs 1.4x the first; at 0 the price is flat and only the ceiling limits building. |
 | `investMaxPct` | 100 | 20 | 100 | Ceiling on committed capacity in either good, in points (percent of demand). Below 20 a deep importer cannot cross the shortfall cap's dead zone (§7.5); at 100 a nation can replace every import. |
 | `investLagTicks` | 3 | 1 | 18 | Months between ordering capacity and its coming online. Long enough that building is a bet on the future; short enough that a build ordered in the first half of a game pays before the score is read. |
 | `investUpkeepBpPer10` | 18 | 0 | 200 | Output lost every month for every 10 points of home capacity online, in basis points of output (§2.9). Added in tuning revision 1: without it Credit is the only cost of building, Credit is never short, and over-building is free. At 0 the rule is the first design. |
-| `defaultInvestBp` | 200 | 0 | 1000 | Starting position of the home-investment slider of the budget dial (§8.2 dial 3), in basis points of income. What an absent player, a region and every bot that never sets it invests. Small on purpose: playing the dial is worth more than leaving it. |
+| `defaultInvestBp` | 250 | 0 | 1000 | Starting position of the home-investment slider of the budget dial (§8.2 dial 3), in basis points of income. What an absent player, a region and every bot that never sets it invests. Small on purpose: playing the dial is worth more than leaving it. |
 
 ### Trade
 
@@ -1092,8 +1092,8 @@ docs/balance/gate2-prompt17.md records every move, made on seeds 1001-1400 only.
 | `aiFreeRideCoverPct` | 70 | 40 | 100 | A hard bargainer skips a pledge once the pool is this percent funded. 100 never free-rides |
 | `aiInvestSharePct` | 25 | 5 | 100 | Percent of its spare Credit an AI spends each month on its investment plan (§7.5). Prompt 17 |
 | `aiInvestReserveTicks` | 1 | 0 | 6 | Months of income an AI keeps back before any Credit counts as spare for investing. Prompt 17 |
-| `aiInvestPaybackPct` | 15 | 10 | 200 | Percent of its cost a plan must return in avoided shortfall to be followed. 100 is break-even; above it the AI wants a margin; below it the AI treats Credit as worth less than the output it buys, which is what an economy that holds 50 months of income in the bank should do. Prompt 17 |
-| `aiInvestSmoothTicks` | 4 | 1 | 12 | Window of the running average of the shortage an AI has suffered (§7.5). 1 believes only last month. Prompt 17 |
+| `aiInvestPaybackPct` | 55 | 10 | 200 | Percent of its cost a plan must return in avoided shortfall to be followed. 100 is break-even; above it the AI wants a margin; below it the AI treats Credit as worth less than the output it buys, which is what an economy that holds 50 months of income in the bank should do. Prompt 17 |
+| `aiInvestSmoothTicks` | 4 | 1 | 12 | Number of months the running average of the shortage an AI has suffered spans (§7.5). 1 believes only last month. Prompt 17 |
 | `aiInvestCoverPriorPct` | 40 | 0 | 100 | Before it has suffered anything, the percent of a structural gap an AI expects trade to cover. Matches the world's cover in §2.8. Prompt 17 |
 
 ### Engine limits
