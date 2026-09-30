@@ -100,31 +100,6 @@ export interface StandingPolicy {
   readonly contributionBp: number;
   /** Which pool the monthly contribution goes to; `split` halves it. */
   readonly contributionTo: ContributionTarget;
-  /** Share of each month's income invested in home Food or Energy capacity, in basis points (RULES 2.9, 8.2 dial 3). */
-  readonly investBp: number;
-}
-
-/** The two goods a nation can produce at home (RULES 2.9). Credit is never built. */
-export type HomeGood = 'food' | 'energy';
-
-/**
- * Home capacity online, per good, in basis points of that good's demand
- * (100 = one point = 1% of demand). Adds units to production (RULES 2.9).
- */
-export interface HomeCapacity {
-  readonly food: number;
-  readonly energy: number;
-}
-
-/**
- * An order still being built: `bp` of capacity in `good`, online from the
- * start of `readyTick`. Counts as committed for price and ceiling, but
- * produces nothing yet (RULES 2.9).
- */
-export interface Build {
-  readonly good: HomeGood;
-  readonly bp: number;
-  readonly readyTick: number;
 }
 
 /** What happened to one nation's economy in the tick just stepped. Private. */
@@ -144,8 +119,6 @@ export interface EconomyReport {
   readonly crisisPct: number;
   /** Credit paid into the pools this tick by the standing contribution. */
   readonly contributed: number;
-  /** Credit put into home capacity this tick, by command and by the standing rule (RULES 2.9). */
-  readonly invested: number;
 }
 
 /**
@@ -172,8 +145,6 @@ export interface WorldLedger {
   readonly energyUnmet: number;
   readonly creditIncome: number;
   readonly creditSpentResilience: number;
-  /** Credit put into home capacity: a named sink (RULES 2.9). */
-  readonly creditSpentInvestment: number;
   readonly tradesSettled: number;
   readonly offersExpired: number;
   readonly offersFailed: number;

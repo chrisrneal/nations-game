@@ -14,20 +14,13 @@
  *                                                    seeds and reports each range and all of them pooled
  *   npm run harness -- gate2 [--games 200]           the Gate 2 suite: random archetypes, crisis success,
  *     [--seed 1] [--ticks T] [--absence 20]          defection and retaliation, win rates, cooperator vs
- *     [--out DIR]                                    free-rider and spoiler pairs, the 24-hour absence
- *                                                    test, and the Gate 1 suite again; writes gate2.md
- *   npm run harness -- invest [--games 200]          the prompt 17 lines alone (much faster than gate2): AI vs
- *     [--seed 1] [--ticks T] [--no-rates] [--out DIR] idle by nation, decision density for an idle nation, Credit
- *                                                    sinks in an all-AI world, and the fixed-rate investment
- *                                                    sweep; writes invest.md. gate2 runs the same lines
- *                                                    (`--no-invest` or `--no-rates` skips them)
- *   npm run harness -- tune [--games 200]            the fast tuning rule (prompt 17b): only the archetype games
- *     [--seed 1] [--ticks T] [--no-rates]            (no pairs, absence or Gate 1) and the prompt 17 lines without the
- *     [--set id=value,...] [--out DIR]               self-reliant and isolationist games; prints one compact summary
- *                                                    and a one-line JSON; writes tune.md and tune.json
+ *     [--no-idle] [--out DIR]                        free-rider and spoiler pairs, the 24-hour absence
+ *                                                    test, the AI-vs-idle and decision-density lines (prompt
+ *                                                    17; --no-idle skips them), and the Gate 1 suite again;
+ *                                                    writes gate2.md
  *   npm run harness -- predictions                   prediction accuracy (Gate 2) from saves exported on
  *     [--files a.json,b.json] [--dir DIR] [--out DIR] the phone with prediction mode on; writes predictions.md
- *   `--set id=value[,id=value]` (play, gate1, gate2, invest, tune) replaces sim tunables for that run, inside
+ *   `--set id=value[,id=value]` (play, gate1, gate2) replaces sim tunables for that run, inside
  *   their bands, for tuning sweeps (overrides.ts).
  *   `--suite gate1` is the same as `gate1`. An unknown command or flag is an
  *   error (exit 2), never silently ignored.
@@ -42,8 +35,6 @@ import { findChromium, runInBrowser } from './browser.ts';
 import { loadRoster } from './roster.ts';
 import { formatGate1, formatGate1Ranges, runGate1, runGate1Ranges } from './gate1.ts';
 import { formatGate2, runGate2 } from './gate2.ts';
-import { formatTune, gate2Json, runTune, tuneJson } from './summary.ts';
-import { formatInvestLines, investMetrics, runInvestLines } from './invest-suite.ts';
 import { parseArgs, type HarnessCommand, type ParsedArgs } from './args.ts';
 import { applyOverrides, parseOverrides } from './overrides.ts';
 import { formatPredictionReport, parsePredictionFile, predictionReport } from './predictions.ts';
@@ -157,64 +148,14 @@ async function gate2(): Promise<void> {
     roster,
     absenceSeeds: flag('absence', 20),
     ...(ticks === undefined ? {} : { ticks }),
-    ...(parsed.switches.includes('no-invest') ? { skipInvest: true } : {}),
-    ...(parsed.switches.includes('no-rates') ? { skipRates: true } : {}),
+    ...(parsed.switches.includes('no-idle') ? { skipIdle: true } : {}),
   });
   const text = [formatGate2(report), report.gate1 === null ? '' : formatGate1(report.gate1, `Gate 1 suite rerun, seeds ${firstSeed}-${firstSeed + games - 1} (top scorer waived)`).replace(/^## /gm, '### ').replace(/^# /, '## ')].join('\n');
   mkdirSync(outDir, { recursive: true });
   writeFileSync(join(outDir, 'gate2.md'), `${text}\n`);
-  writeFileSync(join(outDir, 'gate2.json'), `${JSON.stringify(gate2Json(report))}\n`);
   console.log(text);
   console.log(`wall time ${Math.round(performance.now() - start)} ms; wrote ${join(outDir, 'gate2.md')}`);
   if (!report.pass) process.exitCode = 1;
-}
-
-async function invest(): Promise<void> {
-  const games = flag('games', 200);
-  const firstSeed = flag('seed', 1);
-  const ticks = parsed.numbers.ticks;
-  const outDir = resolve(option('out', join(fileURLToPath(new URL('..', import.meta.url)), 'out')));
-  const start = performance.now();
-  const lines = runInvestLines({ games, firstSeed, roster, ...(ticks === undefined ? {} : { ticks }), ...(parsed.switches.includes('no-rates') ? { skipRates: true } : {}) });
-  const metrics = investMetrics(lines);
-  const text = [
-    `# Prompt 17 lines: ${games} games, seeds ${firstSeed}-${firstSeed + games - 1}`,
-    '',
-    '| Metric | Result | Pass line | |',
-    '|---|---|---|---|',
-    ...metrics.map((m) => `| ${m.name} | ${m.value} | ${m.passLine} | ${m.pass === null ? 'see note' : m.pass ? 'PASS' : 'FAIL'} |`),
-    '',
-    formatInvestLines(lines),
-  ].join('\n');
-  mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, 'invest.md'), `${text}\n`);
-  // The raw rows too, so a tuning session can re-cut them (bootstrap a range, change a tie rule) without replaying games.
-  writeFileSync(join(outDir, 'invest.json'), JSON.stringify(lines));
-  console.log(text);
-  console.log(`wall time ${Math.round(performance.now() - start)} ms; wrote ${join(outDir, 'invest.md')}`);
-  if (metrics.some((m) => m.pass === false)) process.exitCode = 1;
-}
-
-async function tune(): Promise<void> {
-  const games = flag('games', 200);
-  const firstSeed = flag('seed', 1);
-  const ticks = parsed.numbers.ticks;
-  const outDir = resolve(option('out', join(fileURLToPath(new URL('..', import.meta.url)), 'out')));
-  const result = runTune({
-    games,
-    firstSeed,
-    roster,
-    overrides: parseOverrides(parsed.strings.set ?? ''),
-    ...(ticks === undefined ? {} : { ticks }),
-    ...(parsed.switches.includes('no-rates') ? { skipRates: true } : {}),
-  });
-  const text = formatTune(result);
-  const json = JSON.stringify(tuneJson(result));
-  mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, 'tune.md'), `${text}\n`);
-  writeFileSync(join(outDir, 'tune.json'), `${json}\n`);
-  console.log(text);
-  console.log(json);
 }
 
 async function predictions(): Promise<void> {
@@ -235,5 +176,5 @@ async function predictions(): Promise<void> {
   if (!report.pass) process.exitCode = 1;
 }
 
-const commands: Record<HarnessCommand, () => Promise<void>> = { play, determinism, bench, gate1, gate2, invest, tune, predictions };
+const commands: Record<HarnessCommand, () => Promise<void>> = { play, determinism, bench, gate1, gate2, predictions };
 await commands[parsed.command]();

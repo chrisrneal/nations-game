@@ -42,7 +42,7 @@ traces back to a field in `data/world-2030.json`.
 |---|---|---|
 | **Food** | A stock, measured in units. One unit feeds one million people for one month | `food.selfSufficiencyIndex` and `population2030` |
 | **Energy** | A stock, measured in units. One unit powers one unit of economic output for one month | `energy.selfSufficiencyIndex` and `gdp2030PppBn` |
-| **Credit** | A stock. The money. Income arrives every tick and pays for imports, resilience, crisis contributions and home investment (§2.9) | `gdp2030PppBn` and `baselineGrowth` |
+| **Credit** | A stock. The money. Income arrives every tick and pays for imports, resilience and crisis contributions | `gdp2030PppBn` and `baselineGrowth` |
 | **Resilience** | A level from 0 to 100, not a flow. How well the nation absorbs a crisis | `climate.exposureIndex` and `pandemic.preparednessIndex` |
 
 **Output** is not a resource. It is the scoreboard: the nation's economic output per
@@ -101,12 +101,10 @@ economy on the board produces under a fifth of the energy it burns.
 
 ### 2.4 Credit
 
-Income per tick is `output`. It is spent on imports (§3), resilience (§2.6),
-crisis contributions (§4) and home investment (§2.9). Credit can go to zero but
-never negative; a nation with no Credit cannot buy its way out of a shortfall,
-which is the whole point of the resource. Resilience, crisis pools that lock, and
-home investment are the three **sinks**: Credit that leaves the game. Imports and
-pool payments only move Credit between nations or into a pool.
+Income per tick is `output`. It is spent on imports (§3), resilience (§2.6) and
+crisis contributions (§4). Credit can go to zero but never negative; a nation with
+no Credit cannot buy its way out of a shortfall, which is the whole point of the
+resource.
 
 ### 2.5 Where minerals enter
 
@@ -195,115 +193,6 @@ The actual shortfall penalty (§2.7) is unchanged: a nation that goes short stil
 loses that output, and the world still loses it. What changes is the yardstick
 it is scored against (§5.1).
 
-### 2.9 Home investment: depend on partners, or pay to be self-reliant *(prompt 17)*
-
-Until now Credit had almost nothing to compete for: sinks were 0.7% of income and
-a nation ended a game holding 50-60 months of its own output (GO-NO-GO). Home
-investment gives Credit a second use. A nation spends Credit to raise **its own**
-Food or Energy production. It is dearer than buying from a partner while the
-partner will sell, and slower than buying, but it cannot be refused, retaliated
-against or run dry. Trade is the cheaper road and pays the gains of §3.3;
-self-reliance is the safe one and gives those gains up.
-
-**Units.** A good's *home capacity* is a level in **points**, one point being 1%
-of that good's monthly demand. It is stored as `homeBp` (100 = one point,
-integers, S5) and adds units to that good's monthly production:
-
-```
-homeUnits_good = demand_good * homeBp_good / 10000
-production     = structural production (§2.2, §2.3) + homeUnits
-```
-
-Because it is a share of demand, a point of Energy grows with the nation's output
-(§2.3) and a point of Food stays the same size. *Committed* capacity is what is
-online plus what is still being built.
-
-**Cost, with diminishing returns.** The first point costs a share of one month's
-potential output; every point already committed makes the next one dearer:
-
-```
-base      = max(1, potentialOutput * investCostBp / 10000)            Credit, first point
-price(k)  = max(1, base * (100 + investEscalationPct * k) / 100)      Credit for the point after k committed points
-cost      = the sum of price(k) over the points bought, a part-point pro rata, rounded up
-```
-
-`potentialOutput` is the nation's own (§2.1, before shortfalls), so a bigger
-economy pays more per point. Committed capacity may not pass `investMaxPct` points
-in either good: a hard ceiling on top of the rising price. There is no refund and
-no selling of capacity.
-
-**Lag.** Credit leaves the treasury when the build is ordered. The capacity goes
-online `investLagTicks` months later, at the start of that month's production.
-Until then it is *pending*: it counts as committed (it raises the price of the
-next point and uses up room) but produces nothing.
-
-**What it changes, and what it never changes.**
-- Home units are part of the nation's real production, so the shortfall (§2.7),
-  stocks, consumption and the "deficits met" goal (§5.2) all see them.
-- They are **not** part of the structural world (§2.8), the baseline (§5.1), the
-  fair share, or the imbalance a trade clears (§3.3). Those are computed as if the
-  nation had built nothing. So a nation that builds beats its baseline by the
-  shortfall it avoids, and nobody else's baseline, fair share or cover moves.
-- The world's reference prices (§3.2) read real production, so a builder lowers
-  the price of the good a little for everyone. That is a shared benefit, not a
-  transfer.
-
-**Upkeep.** Running your own farms and plant takes workers and land from the rest
-of the economy. Every month, each point of home capacity online (in either good)
-costs `investUpkeepBpPer10` / 10 basis points of the nation's output (so every 10 points cost `investUpkeepBpPer10` basis points), before crisis damage:
-
-```
-upkeep = min(10000, (homeBp_food + homeBp_energy) * investUpkeepBpPer10 / 1000)      basis points of output
-output = potential * (1 - shortfall penalty) * (1 - upkeep)
-```
-
-Credit is the only price a nation feels when it builds, and Credit is never short
-(a nation ends a game holding most of its income), so without upkeep building
-past what trade leaves uncovered costs nothing at all. Upkeep is the cost that is
-paid in output, the thing that is scored: it makes a point worth building only
-while it closes a shortage, and it makes the safe road dearer than the road of
-trade. Pending capacity pays no upkeep. Upkeep is the nation's own output, so it
-moves no baseline (§5.3).
-
-**The price of self-reliance.** A nation's trade gain is `gainsFromTradeBp` times
-the share of its *structural* imbalance that its trades clear (§3.3). Home units
-do not shrink that imbalance, but they shrink what the nation still needs to
-buy. A nation that builds so far that it needs to buy less than its fair share
-clears less of its imbalance and grows more slowly. A nation with no structural
-deficit gains nothing from building (there is nothing to cover) and sells no more
-for it.
-
-**Standing rule (the dial).** Each month, after resilience is funded, a share of
-that month's income, `investBp` (§8.2 dial 3), is invested with no one at the
-controls: it goes to whichever good has the larger remaining gap, ties to the
-cover-priority good (§8.2 dial 2), never above that gap or the ceiling, and
-whatever it cannot use stays in the treasury.
-
-```
-gap_good = max(0, demand - production - pendingUnits) / demand      (basis points of demand)
-spend    = min(treasury, income * investBp / 10000)
-```
-
-The default, `defaultInvestBp`, is deliberately small: it is what an absent
-player, a region, or a bot that never touches the dial does.
-
-**The command.** `invest { good, bp }` orders `bp` of capacity (100 = one point) in
-`good` now. It is refused if the treasury cannot pay the whole cost, if it would
-pass the ceiling, or for a background region (they invest through the standing
-rule only).
-
-**Named sink.** Every Credit invested is counted in `creditSpentInvestment` and is
-a sink in the conservation invariant (§2.7's gate metric):
-`income - resilience - crises - investment = change in Credit held`, every tick,
-exactly. Nothing is created and nothing is paid to another nation.
-
-**Gate metric.** Prompt 17: with the AI playing, Credit sinks are 8-25% of Credit
-income; across fixed investment rates the best rate differs by nation, and both
-never investing and the highest rate lose 3% or more against the best for the
-median nation; the AI beats the same nation left idle by 8% or more for Japan,
-Korea, Mexico and Turkiye and by 10% or more overall; Gate 1's trading beats
-isolating by 15% or more with the isolationist investing by the default rule.
-
 ---
 
 ## 3. Trade
@@ -354,11 +243,6 @@ Values are at reference prices (§3.2). A seller clears the units it sells, up t
 its monthly surplus; a buyer clears the units it receives, up to its monthly
 deficit. A credit leg clears nothing. The gain is added to the nation's capacity,
 so it lasts.
-
-Surplus and deficit here are the **structural** ones, before any home capacity
-(§2.9). A nation that has built part of its own supply still needs to buy less, but
-what its trades are measured against does not shrink; the gain is the price of
-buying less than its fair share.
 
 So a nation that sells its whole surplus, or covers its fair share of its deficits,
 grows `gainsFromTradeBp` (0.40%) a month faster than its baseline, whether it is
@@ -658,14 +542,6 @@ The §2.8 baseline does not open a way round this. Structural cover is computed
 from every nation's baseline path, which no play can move, so starving *j* never
 lowers *i*'s baseline. And a trade gain (§3.3) depends only on the share of *i*'s
 own imbalance it clears, never on anyone else's position.
-
-Home investment (§2.9) keeps the clause. It spends the nation's own Credit on the
-nation's own production: nothing transfers, no other nation's stocks, trust,
-capacity or score change, and no baseline, fair share or structural cover reads
-it. The only thing another nation sees is a slightly lower reference price, a
-benefit to everyone. `packages/sim/src/invest.test.ts` pins this: a nation that
-invests and one that does not leave every other nation's private record, and every
-baseline, identical.
 The derivative is negative for every *i*, at every position on the board. A
 **trailing** nation is not an exception: it cannot close a gap by widening it,
 because its score is measured against its own baseline and nobody else's, so pulling
@@ -806,93 +682,6 @@ country's character; every one of them is a consequence of a row in the data fil
   and your surplus is 114" is legal; "we are a proud trading nation" is not. The
   harness asserts that every logged AI decision carries at least one numeric reason.
 
-### 7.5 Home investment, as the AI decides it *(prompt 17)*
-
-The AI decides how much to invest from its own View only, every month, and every
-`invest` command carries a `why` with numbers (§7.4). It reads no baseline. It
-sets its own `investBp` dial to 0 the first time it sets policies, so the standing
-rule does not spend on top of its plan.
-
-```
-gap_good   = the View's remaining gap in basis points of demand (§2.9)
-seen_good  = a running average of the shortage it actually suffered:
-               seen += (unmet / demand - seen) / aiInvestSmoothTicks       (basis points)
-             first seen at gap * (100 - aiInvestCoverPriorPct) / 100      (what it expects trade to cover)
-need_good  = min(gap, max(0, seen - pending))                              (the shortage still worth building against)
-```
-
-A point of shortage that is bought away is worth
-`potentialOutput * shortfallPenaltyBpPerPct / 10000` Credit of output a month. The
-shortfall penalty caps at `maxShortfallPenaltyPct` (§2.7), so when the shortage it
-has seen would already push the penalty past the cap, the first points it buys
-recover nothing: the plan has to clear that dead zone before it pays. The AI
-therefore scores four plans, none, food, energy and both, each closing its `need`:
-
-```
-months     = gameLengthTicks - tick - investLagTicks             months the capacity would be online
-dead zone  = points of shortage above the cap edge, summed over the goods in the plan
-per month  = potentialOutput * ((points - dead zone) * shortfallPenaltyBpPerPct - points * investUpkeepBpPer10 / 10) / 10,000
-benefit    = per month * months
-net        = benefit - trade gain given up - cost of the plan * aiInvestPaybackPct / 100
-```
-
-**What building does to trade** *(prompt 17b)*. A nation buys from a world that can
-cover only part of what everyone lacks (`cover_g`, §2.8), and what it buys follows
-its *real* deficit: AI sellers rank buyers by deficit, and a builder has a smaller one (docs/balance/gate2-prompt17.md, section 4). So a unit of
-capacity it builds takes `cover_g` of a unit off what it buys, and only
-`1 - cover_g` off what it goes short of. Prompt 17's plan assumed every unit built
-came off the shortage. That was wrong twice over. It counted too much benefit, and
-it ignored the trade gain (§3.3): a nation that buys less than its fair share
-grows less. The diagnostic on seeds 1001-1008 shows it: China built 28 points of
-energy, its trades fell from 266 to 32 a game, its capacity ended 1.03x its
-baseline against 1.25x, and its score fell 8% (the GAPS entry of prompt 17).
-Everything below is read from the View (the public flows of every nation, the
-reference prices and the rules), never from State:
-
-```
-deficit_g  = max(0, demand_g - (production_g - homeUnits_g))       structural deficit: before home capacity (§2.9)
-cover_g    = min(1, structuralCoverSharePct% * sum of surpluses / sum of deficits of good g, over every nation in its View)   (§2.8)
-k_g        = cover_g * aiInvestTradeLossPct / 100                  the part of each unit built that comes off what it buys
-fair_g     = deficit_g * cover_g                                   its fair share: what trade can clear of a deficit
-S          = sum over goods of max(0, production_g - homeUnits_g - demand_g) * price_g      the surplus it can sell
-C          = S + sum of fair_g * price_g                           what a month of trade can clear (§3.3)
-bought_g   = max(0, deficit_g - homeUnits_g - seen_g * demand_g)   what it buys now: the deficit less what it grows itself and what it still goes short of
-share      = min(1, (S + sum of bought_g * price_g) / C)           the share of its imbalance it clears now
-```
-
-A plan that builds `p_g` points of a good **closes `(1 - k_g) * p_g` points of the
-shortage** and takes `k_g * p_g` points (at most `bought_g`) off what it buys. So a
-plan that means to close `need_g` of shortage builds `need_g / (1 - k_g)` points (never
-past the ceiling), its cost and upkeep are those of that many points, and its
-benefit counts only the shortage it closes (less the dead zone, as before). The
-share is worked out again with the smaller purchases as `share'`:
-
-```
-lost growth a month = gainsFromTradeBp * (share - share')          (in % of capacity; 0 while it still buys its fair share)
-trade gain given up = potentialOutput * lost growth * months * (months + 1) / 2     output, in the same unit as benefit
-```
-
-(Growth lost in month *m* is lost again every month after it, so the loss builds
-up over the months the capacity is online.) A nation that buys far more than its
-fair share loses nothing by building a little; one that buys about its fair share
-loses its monthly gain in proportion to the share of its deficit it closes at
-home. At `aiInvestTradeLossPct` 0 the plan is prompt 17's.
-
-It follows the plan with the highest positive `net`, and does nothing if none is
-positive. Each month it spends up to `aiInvestSharePct`% of its *spare* Credit on
-the plan, the good with the least capacity committed first; spare Credit is the
-treasury less what its open offers promise and less `aiInvestReserveTicks` months
-of income. A nation that can be hurt by a broken partner (the reciprocity styles of
-§7.2) invests on exactly the same rule: its personality decides whom it trades
-with, not whether a shortage is worth building against.
-
-The harness's fixed-rate strategies (docs/balance/gate2-prompt17.md) replace the
-plan with a flat budget, the way the dial does: each month spend the given percent
-of last month's income (out of the Credit that is spare) on the good with the
-larger gap, then the other, with no plan and no stopping rule but the ceiling. A
-rate is therefore a real dose: too little leaves a shortage standing, too much
-keeps building capacity nobody needs and pays its upkeep.
-
 **Gate metric.** Gate 2: the owner predicts AI responses correctly 70% of the time
 after one game, and the AI is legible without being farmable. Plus the numeric-reason
 assertion above, on every build.
@@ -914,52 +703,10 @@ gets simplified until it does.
 | **Crisis closing** | one tick before a pool locks | 2 — open, top up or pass |
 | **Trade opportunity** | a partner's surplus matches your deficit | 3 — open, set amount, send |
 | **Resilience slipping** | resilience falls below the policy floor | 2 — open, fund or accept |
-| **Home investment** *(prompt 17, throttled in 17b)* | once per shortage of a good (the rule below), there is room under the ceiling (§2.9), and the treasury can pay for at least one point | 2 — open, pick a build |
 | **Away recap** | first open after an absence | 1 — read, dismiss |
 
 Nothing is more than three taps from home, and the primary action sits in the bottom
 third of the screen.
-
-**The home-investment card** is the only new card type. Its options are, for the
-good that has been short longest: *build the suggested amount* (the AI's own
-plan, §7.5, sized to this month), *build a point*, and *keep buying*. Each option
-says in plain words what it costs, when it comes online and what it returns, from
-the View alone: "Build 4 points of food: 1,120 credit, online in month 24, +4% of
-your food demand" against "Keep buying: cheaper today, exposed to your partners."
-The Shortfall and Crisis cards each gain one line naming the build alternative
-when it exists, and nothing else about them changes. The card needs no new screen:
-it opens in the same bottom sheet as every other card.
-
-**When the card is shown** *(prompt 17b)*. Prompt 17's rule ("short three months
-running") left the card open 37 of 60 months for a nation that never touched it.
-It is now shown **once per shortage, then not again for a season unless the
-shortage grows**. Per good, from the nation's own View alone, each month:
-
-```
-run_g      = consecutive months in which the nation went short of good g (last month's report: unmet_g > 0)
-eligible_g = run_g >= investCardShortTicks  and  gapBp_g > 0  and  roomBp_g > 0  and  Credit >= nextPointCost_g
-```
-
-- The card is for the eligible good that has been short longest (ties to the
-  cover-priority good, §8.2 dial 2).
-- **Once.** When a card opens it stays open `investCardOpenTicks` months or until
-  the player answers it, whichever is first (an expiry tick, S8). It remembers the
-  month it was shown and the good's `gapBp` then.
-- **A shortage ends** when a month passes with nothing unmet: `run_g` is 0 and
-  the memory is cleared, so the next shortage of that good opens a card as soon as
-  it is eligible.
-- **Not again for a season.** While the same shortage goes on, no new card for
-  that good until `investCardQuietTicks` months after the last one closed (a
-  season is 3 months at the default), **unless the shortage has grown**: `gapBp_g`
-  is at least `investCardGrowthBp` above what it was when the card was last shown,
-  which opens a card at once.
-- Building or ordering through the card or the dial shrinks `gapBp` (pending
-  capacity counts, §2.9), so a nation that answers sees the card less.
-
-The memory is presentation state: the phone keeps it, and the harness keeps it in
-its own tracker (`investCardOpen`), because nothing in it changes how the sim
-plays. The harness reports, for an idle nation, how many months the card would be
-open in a 60-month game (docs/balance/gate2-prompt17b.md).
 
 ### 8.2 Standing policies
 
@@ -967,12 +714,9 @@ Five dials, and they answer everything while the player is away:
 
 1. **Trade answer** — auto-accept fair deficit-covering offers / auto-accept from
    trusted above threshold / auto-reject all.
-2. **Cover priority** — Food first or Energy first. Since prompt 17 it also breaks
-   ties for the standing home investment (§2.9).
-3. **Budget** — two shares of each month's income: **contribution**, the percent
-   that goes to the crisis pools each tick and which pool gets it; and **home
-   investment**, the percent that builds Food or Energy at home (§2.9). It is the
-   old contribution dial with a second slider, not a sixth dial.
+2. **Cover priority** — Food first or Energy first.
+3. **Contribution share** — percent of income that goes to the crisis pools each
+   tick, and which pool gets it.
 4. **Resilience floor** — the level below which the nation funds resilience
    automatically.
 5. **Hard bargains** — whether to send offers outside the fair price band.
@@ -1047,24 +791,6 @@ wherever they feed economy maths.
 | `resilienceCostPerPoint` | 6 | 2 | 20 | Credit cost of one resilience point. The band decides whether resilience competes with trade for money |
 | `defaultResilienceFloor` | 40 | 0 | 80 | Starting position of the resilience-floor dial (§8.2). 0 turns automatic funding off |
 | `resilienceMax` | 100 | 80 | 120 | Ceiling. Above 100 a nation can over-prepare, which the harness may want to test |
-
-### Home investment
-
-Prompt 17 (§2.9). Starting values are the design's first guess; the tuning table in
-docs/balance/gate2-prompt17.md records every move, made on seeds 1001-1400 only.
-
-| id | value | min | max | note |
-|---|---|---|---|---|
-| `investCostBp` | 1300 | 300 | 3000 | Cost of the first point (1% of a good's demand) as basis points of the nation's potential output, so 1300 is 13% of one month's output. The main lever on how much of its income a nation puts into building. |
-| `investEscalationPct` | 1 | 0 | 10 | Percent added to a point's price for every point already committed in that good (diminishing returns). At 1 the 40th point costs 1.4x the first; at 0 the price is flat and only the ceiling limits building. |
-| `investMaxPct` | 100 | 20 | 100 | Ceiling on committed capacity in either good, in points (percent of demand). Below 20 a deep importer cannot cross the shortfall cap's dead zone (§7.5); at 100 a nation can replace every import. |
-| `investLagTicks` | 3 | 1 | 18 | Months between ordering capacity and its coming online. Long enough that building is a bet on the future; short enough that a build ordered in the first half of a game pays before the score is read. |
-| `investUpkeepBpPer10` | 18 | 0 | 200 | Output lost every month for every 10 points of home capacity online, in basis points of output (§2.9). Added in tuning revision 1: without it Credit is the only cost of building, Credit is never short, and over-building is free. At 0 the rule is the first design. |
-| `defaultInvestBp` | 250 | 0 | 1000 | Starting position of the home-investment slider of the budget dial (§8.2 dial 3), in basis points of income. What an absent player, a region and every bot that never sets it invests. Small on purpose: playing the dial is worth more than leaving it. |
-| `investCardShortTicks` | 3 | 1 | 12 | Months in a row a nation must go short of a good before the home-investment card is eligible (§8.1). *Prompt 17b* |
-| `investCardOpenTicks` | 1 | 1 | 6 | Months a home-investment card stays open unanswered before it closes (§8.1). *Prompt 17b* |
-| `investCardQuietTicks` | 3 | 0 | 12 | Months after a card closes before the same shortage may open another (§8.1). 3 is a season. *Prompt 17b* |
-| `investCardGrowthBp` | 500 | 100 | 5000 | How much a good's remaining gap must grow, in basis points of demand, to open a card inside the quiet season (§8.1). *Prompt 17b* |
 
 ### Trade
 
@@ -1167,12 +893,6 @@ docs/balance/gate2-prompt17.md records every move, made on seeds 1001-1400 only.
 | `aiPledgeMaxIncomePct` | 10 | 0 | 30 | Most of one month's income an AI pledges to a crisis pool at once |
 | `aiConditionalPledgePct` | 50 | 20 | 80 | A strict reciprocator pledges its full fair share only when at least this percent of nations paid into the last crisis |
 | `aiFreeRideCoverPct` | 70 | 40 | 100 | A hard bargainer skips a pledge once the pool is this percent funded. 100 never free-rides |
-| `aiInvestSharePct` | 25 | 5 | 100 | Percent of its spare Credit an AI spends each month on its investment plan (§7.5). Prompt 17 |
-| `aiInvestReserveTicks` | 1 | 0 | 6 | Months of income an AI keeps back before any Credit counts as spare for investing. Prompt 17 |
-| `aiInvestPaybackPct` | 55 | 10 | 200 | Percent of its cost a plan must return in avoided shortfall to be followed. 100 is break-even; above it the AI wants a margin; below it the AI treats Credit as worth less than the output it buys, which is what an economy that holds 50 months of income in the bank should do. Prompt 17 |
-| `aiInvestSmoothTicks` | 4 | 1 | 12 | Number of months the running average of the shortage an AI has suffered spans (§7.5). 1 believes only last month. Prompt 17 |
-| `aiInvestCoverPriorPct` | 40 | 0 | 100 | Before it has suffered anything, the percent of a structural gap an AI expects trade to cover. Matches the world's cover in §2.8. Prompt 17 |
-| `aiInvestTradeLossPct` | 100 | 0 | 100 | Percent of the world's cover (§2.8) by which the AI assumes each unit it builds cuts what it buys, when it prices the trade gain it gives up and the shortage a build really closes (§7.5). 0 is prompt 17's plan, which ignored both. *Prompt 17b* |
 
 ### Engine limits
 

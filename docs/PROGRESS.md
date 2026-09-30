@@ -42,6 +42,31 @@ Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): 
 
 ## Session log
 
+### 2026-09-30 - prompt 17b, Home investment, second attempt (lanes D, S, A, H) - tuning stopped, rule reverted, nothing graded
+**Changed.** Ran step 1 (gate2 on main, seeds 601-800 and 801-1000: the "today" column),
+restored the graded state of prompt 17 (commit 5fb24a3) and reproduced its tuning numbers
+to the last digit, then built the three changes the prompt asked for, RULES first:
+the AI prices what building does to trade (RULES 7.5: a built unit takes only the world's
+cover share off what a nation buys, and the plan is charged the trade gain it gives up; 22
+tests), a throttle for the home-investment card (RULES 8.1: once per shortage, then not
+again for a season unless the shortage grows; an idle nation's card is open 14.6 months of
+60, was 37), and targets 2 and 3 reworded in the harness plus a fast `tune` command. Tuned
+on seeds 1001-1400 only: 133 settings on 1001-1200, six of them on both ranges.
+**Result.** No setting inside the bands meets the tuning rule, so by the prompt's rule
+tuning stopped, nothing was graded, and the rule is reverted in this pull request (packages
+and RULES.md are byte-identical to main). Not one setting put Japan, Korea, Mexico and
+Turkiye all between +9% and +15% over idle: whenever Mexico is at +15% or less, Korea and
+Turkiye are at +7.1% or less, and no setting has Mexico under +15% with Credit sinks at 8%.
+Saudi Arabia tops 31-37% of games as soon as its AI builds anything. The AI fix worked in
+part (China's AI-vs-idle gap +10.8% -> +15.5%, main +19.8%).
+**How to see it.** docs/balance/gate2-prompt17b.md (changes, tuning table, main on the
+grading seeds, decision). The whole attempt is at tag `prompt17b-stopped` (commit c579cbc):
+`git checkout prompt17b-stopped -- packages docs/RULES.md`, then delete
+packages/harness/src/idle-suite.ts and idle-suite.test.ts.
+**Left.** This was the last attempt at home investment. The report recommends joint projects
+(Phase 3) instead. Prompt 18 does not start. The pooled top-scorer grade is still open from
+prompt 16. Seeds 401-600 are untouched for the prompt 20 re-review.
+
 ### 2026-09-30 - prompt 17, A real budget: self-reliance vs trade (lanes D, C, S, A, H) - graded FAIL, rule reverted
 **Changed.** Designed home investment in docs/RULES.md first (2.9, 3.3, 5.3, 7.5, 8, 11),
 then built it: a nation pays Credit to raise its own Food or Energy production, slowly (a

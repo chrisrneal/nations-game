@@ -1,6 +1,6 @@
 import type { Command } from './command.ts';
 import type { ControllerSlot, NationId, Tick } from './nation.ts';
-import type { EconomyReport, HomeGood, ResourceAmount, StandingPolicy } from './economy.ts';
+import type { EconomyReport, ResourceAmount, StandingPolicy } from './economy.ts';
 import type { AppealAnswer, Crisis, CrisisHit, CrisisResult, CrisisRule, Pledge, PoolKind } from './crisis.ts';
 
 /**
@@ -60,13 +60,6 @@ export type PingCommand = Command<'ping', { readonly target: NationId }>;
 /** Seam 7: hand the nation to the caretaker AI, or take it back. */
 export type SetControllerCommand = Command<'setController', { readonly controller: ControllerSlot }>;
 
-/**
- * Order `bp` of home capacity (100 = one point of demand) in `good` now,
- * paying the whole cost at once. It comes online `investLagTicks` later
- * (RULES 2.9). Refused if the treasury cannot pay or the ceiling would be passed.
- */
-export type InvestCommand = Command<'invest', { readonly good: HomeGood; readonly bp: number }>;
-
 /** Pay Credit into a pool now. Counts towards the nation's open pledges to that pool and answers its open appeal. */
 export type ContributeCommand = Command<'contribute', { readonly pool: PoolKind; readonly amount: number }>;
 /** Promise Credit to a pool by `deadlineTick` (at most `maxPledgeTicks` ahead). Answers the pool's open appeal. */
@@ -86,7 +79,6 @@ export type GameCommand =
   | WithdrawOfferCommand
   | SetPolicyCommand
   | FundResilienceCommand
-  | InvestCommand
   | ContributeCommand
   | PledgeCommand
   | WithdrawPledgeCommand
@@ -109,8 +101,6 @@ export interface EconomyEventPayloads {
   readonly offerFailed: { readonly offer: TradeOffer; readonly reneger: NationId; readonly by: 'command' | 'policy' };
   readonly shortfall: { readonly nationId: NationId; readonly report: EconomyReport };
   readonly resilienceFunded: { readonly nationId: NationId; readonly points: number; readonly cost: number };
-  /** An `invest` command took effect. The standing rule's monthly spending is too frequent to be news and has no event. */
-  readonly investmentMade: { readonly nationId: NationId; readonly good: HomeGood; readonly bp: number; readonly cost: number; readonly readyTick: number; readonly by: 'command' };
   readonly policyChanged: { readonly nationId: NationId; readonly policy: StandingPolicy };
 }
 export type EconomyEventType = keyof EconomyEventPayloads;

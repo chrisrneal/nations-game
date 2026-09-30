@@ -31,10 +31,8 @@ export type { NationPrivate, NationPublic, NationRecord } from '@nations/contrac
  * 3 = structural baseline, own-imbalance trade gains and the smoothed score
  *     track (prompt 09).
  * 4 = Phase 2 crises, pools, pledges and crisis policies (Phase 2 prompt 09).
- * 5 = home investment: capacity, builds, the investment dial and its sink
- *     (prompt 17).
  */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 4;
 
 /**
  * One nation's smoothed output and baseline output (RULES 5.1), x 1,000 so a
@@ -132,7 +130,6 @@ export function defaultPolicy(): StandingPolicy {
     crisisRule: 'reciprocal',
     contributionBp: TUNABLES.defaultContributionBp.value,
     contributionTo: 'split',
-    investBp: TUNABLES.defaultInvestBp.value,
   };
 }
 
@@ -147,7 +144,6 @@ export const EMPTY_REPORT: EconomyReport = {
   tradeGainCbp: 0,
   crisisPct: 0,
   contributed: 0,
-  invested: 0,
 };
 
 export function emptyPool(kind: PoolKind): Pool {
@@ -167,7 +163,6 @@ export const EMPTY_LEDGER: WorldLedger = {
   energyUnmet: 0,
   creditIncome: 0,
   creditSpentResilience: 0,
-  creditSpentInvestment: 0,
   tradesSettled: 0,
   offersExpired: 0,
   offersFailed: 0,
@@ -245,8 +240,6 @@ export function createWorld(options: CreateWorldOptions): WorldState {
       pledgesHonoured: 0,
       pledgesBroken: 0,
       pooledTotal: 0,
-      home: { food: 0, energy: 0 },
-      builds: [],
     };
     nationOrder.push(id);
     nations[id] = { id, name: e.name, public: pub, private: priv };
