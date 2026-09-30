@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Command, NationId, NationView } from '@nations/contracts';
 import { createWorld, step, viewFor, type WorldState } from '@nations/sim';
+import { emptyMemory } from './beliefs.ts';
 import { personalityFor } from './personality.ts';
 import { appraise, decideProjects, goodsValueMilli, hurdlePct, worldCoverBp } from './projects.ts';
 import { fullRoster, play } from './testkit.test.helpers.ts';
@@ -140,6 +141,42 @@ describe('a whole AI game', () => {
     for (const e of projectExplanations) {
       expect(e.payload.text).toMatch(/\d/);
       expect(e.audience).toContain(e.payload.nationId);
+    }
+  });
+});
+
+describe('variety and walk-outs (100x slice 8)', () => {
+  it('different games build different projects: the founding roll comes from the game seed', () => {
+    const built = [1, 2, 3, 4].map((seed) =>
+      play({ seed, ticks: 30, roster })
+        .events.filter((e) => e.type === 'projectStarted')
+        .map((e) => {
+          const p = (e.payload as { project: { template: string; host: string } }).project;
+          return `${p.template}@${p.host}`;
+        })
+        .sort()
+        .join(' '),
+    );
+    expect(new Set(built).size).toBeGreaterThan(1);
+  });
+
+  it('a strict nation walks out of a project whose host it is retaliating against; a forgiving one stays', () => {
+    let s = advance(idleWorld());
+    s = advance(s, [{ nationId: id('saudi-arabia'), tick: s.tick, type: 'proposeProject', payload: { template: 'solar', invite: [id('japan'), id('australia'), id('germany')] } }]);
+    s = advance(s, ['japan', 'australia', 'germany'].map((n) => ({ nationId: id(n), tick: s.tick, type: 'joinProject', payload: { projectId: 1 } })));
+    s = advance(s);
+    expect(s.projects[0]?.status).toBe('building');
+    const grudge = new Map([[id('saudi-arabia'), { ...emptyMemory(), punishUntil: s.tick + 6, punishFrom: s.tick - 1 }]]);
+    for (const [n, expected] of [['australia', 'strict'], ['japan', 'forgiving']] as const) {
+      const view = viewFor(s, id(n));
+      const p = personalityFor(endowmentOf(n), worldGdp, view.rules);
+      expect(p.reciprocity).toBe(expected);
+      const d = decideProjects({ ...inputs(view, n, false), memory: grudge });
+      const left = d.filter((x) => x.command.type === 'leaveProject');
+      if (expected === 'strict') {
+        expect(left).toHaveLength(1);
+        expect(left[0]!.text).toMatch(/retaliating/);
+      } else expect(left).toEqual([]);
     }
   });
 });

@@ -312,8 +312,11 @@ data, and returns commands with their explanations.
   installments fit in half its income alongside those it already carries.
   Otherwise it declines, saying which test failed with the numbers. Of several
   shield invitations of one kind it takes the best and declines the rest.
-- **Founding.** Only on its staggered think ticks, and not if the build would end
-  in the last 12 months. For a goods template it may host, it invites the free
+- **Founding.** Only on its staggered think ticks, and then only on a roll of its
+  cooperativeness in percent, drawn from the game seed (`noiseBp`, never
+  `Math.random`), so which host moves first, and so who partners whom, differs
+  from game to game (100x slice 8). Not if the build would end in the last 12
+  months. For a goods template it may host, it invites the free
   seats' worth of nations short of that good, ranked by deficit times trust (grid
   links: only nations it shares a bloc or alliance with). A surplus host gains
   little from its own share, so the drive is cooperativeness: it founds when the
@@ -321,8 +324,10 @@ data, and returns commands with their explanations.
   of the yield, and the yield is at least `aiProjectMinYield`. A shield is founded
   for its own return, one kind at a time worldwide.
 - **Leaving.** Reconsidered every month for building projects it does not host:
-  it leaves when finishing is worth less than half of what it still owes, or when
-  it can no longer carry two installments. It forfeits what it paid and loses its
+  it leaves when finishing is worth less than half of what it still owes, when it
+  can no longer carry two installments, or (a strict or hard-bargaining nation)
+  when it is retaliating against the host for a broken deal: it will not keep
+  paying into an offender's plant. A forgiving nation stays. It forfeits what it paid and loses its
   partners' trust (RULES 13.3), so this is rare by design.
 
 Every decision is one command plus one explanation. Answers are addressed to the

@@ -244,6 +244,7 @@ export class NationMind {
       creditFree: ledger.creditFree,
       // Founding waits for a real (staggered) think tick, so the whole roster never proposes in the same month.
       think: options.think && this.lastThink >= 0,
+      seed: this.seed,
     });
     for (const d of projectDecisions) {
       options.spend(view.others.length);

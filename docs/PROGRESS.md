@@ -42,6 +42,19 @@ Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): 
 
 ## Session log
 
+### 2026-09-30 - 100x slice 8, A different world every game
+**Changed.** AI: founding a project is rolled on the nation's cooperativeness from the
+game seed, so which host moves first, and who partners whom, differs from game to game; a
+strict or hard-bargaining member walks out of a project whose host it is retaliating
+against (a forgiving one stays). Sim: `createWorld` takes starting policies; the phone
+starts the player with "keep us supplied" on, so month 0 has no routine cards.
+**Result.** Seeds 1001-1100: every line holds (AI vs idle +16.9%, trading vs isolating
++18.0%, crisis success 61.0%); 48 walk-outs in 100 archetype games (Gate 3's withdrawal
+line now shown). All-AI games build a different set of about 19 projects each seed.
+docs/balance/100x-slice8.md.
+**How to see it.** Two new games as the same nation get different invitations.
+**Left.** The early-warning network is built in 81% of games (Gate 3 wants at most 50%).
+
 ### 2026-09-30 - 100x slice 7, The World Accord, a home briefing and a debrief
 **Changed.** RULES 5.4: the co-opetition win condition made visible. The World Accord is
 the shared threshold (`worldAccordBp`, 85%): the world made it if the four shared goals

@@ -152,11 +152,10 @@ export class GameEngine {
 
   newGame(humanId: string, seed: number): GameUpdate {
     if (!playableRoster().some((entry) => entry.id === humanId)) throw new Error(`"${humanId}" is not a playable nation`);
-    const state = createWorld({ seed, roster: fullRoster(), controllers: { [humanId]: 'human' } });
+    // The phone player starts with "keep us supplied" on (RULES 3.4): routine imports are a standing policy, not a monthly card.
+    const state = createWorld({ seed, roster: fullRoster(), controllers: { [humanId]: 'human' }, policies: { [humanId]: { autoImport: true } } });
     const aiSeed = mix32(seed ^ 0x2545f491);
     this.start(new Session(state), nationId(humanId), aiSeed, null, undefined, { ...EMPTY_BOOK, mode: this.book.mode });
-    // The phone player starts with "keep us supplied" on (RULES 3.4): routine imports are a standing policy, not a monthly card.
-    this.submit({ nationId: nationId(humanId), tick: 0, type: 'setPolicy', payload: { autoImport: true } });
     return this.update([]);
   }
 

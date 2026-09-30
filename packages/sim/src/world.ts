@@ -116,6 +116,8 @@ export interface CreateWorldOptions {
   readonly roster: readonly RosterEntry[];
   /** Controller per raw nation id; nations not listed start as `ai`. */
   readonly controllers?: Readonly<Record<string, ControllerSlot>>;
+  /** Starting standing policies per raw nation id, over the defaults (e.g. the phone player's "keep us supplied"). */
+  readonly policies?: Readonly<Record<string, Partial<StandingPolicy>>>;
 }
 
 /** The single place a raw string becomes a NationId (contracts convention). */
@@ -238,7 +240,7 @@ export function createWorld(options: CreateWorldOptions): WorldState {
       resilience: startingResilience(e),
       capacityE4,
       baselineE4: capacityE4,
-      policy: defaultPolicy(),
+      policy: { ...defaultPolicy(), ...(options.policies?.[e.id] ?? {}) },
       trust,
       last: EMPTY_REPORT,
       tradesSettled: 0,

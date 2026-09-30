@@ -59,7 +59,8 @@ describe('decision cards from the View', () => {
 
   it('a dismissed card stays hidden', () => {
     const engine = new GameEngine();
-    const update = engine.newGame('japan', 4);
+    let update = engine.newGame('japan', 4);
+    for (let i = 0; i < 12 && cardsFor(update.view, new Set()).length === 0; i++) update = engine.advance(1);
     const all = cardsFor(update.view, new Set());
     expect(all.length).toBeGreaterThan(0);
     expect(cardsFor(update.view, new Set([all[0]!.id])).map((c) => c.id)).not.toContain(all[0]!.id);
@@ -136,6 +137,13 @@ describe('decision cards from the View', () => {
       }
     }
     expect([...kinds]).toEqual(expect.arrayContaining(['crisis', 'offer', 'shortfall']));
+  });
+
+  it('a new game starts with "keep us supplied" already on: no routine shortfall card even in month 0', () => {
+    const engine = new GameEngine();
+    const first = engine.newGame('japan', 4);
+    expect(first.view.self.private.policy.autoImport).toBe(true);
+    for (const card of cardsFor(first.view, new Set()).filter((c) => c.kind === 'shortfall')) expect(card.title).toMatch(/no seller can supply/);
   });
 
   it('with "keep us supplied" on, routine shortfalls are not cards; only a gap no seller can fill is, and it points at projects', () => {
