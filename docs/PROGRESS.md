@@ -28,7 +28,7 @@ Gate 1 verdict: **PASS WITH WAIVER** (docs/gates/GATE-1.md): the owner waived th
 ## Gate 2 checklist
 Suite: `npm run harness -- gate2` (200 seeded games with random archetypes, cooperator / free-rider and spoiler pairs, 40 absence runs, and the Gate 1 suite again). Latest results: docs/balance/gate2-prompt14.md (seeds 1-200, the shipped AI as trader and free-rider; the free-riding rule tuned on seeds 1001-1400 only, graded once).
 - [x] Crisis success 40-75% (prompt 13, shipped AI: 56.4% of 1,182 crises; climate 549 / 377 / 74, pandemic 118 / 22 / 42 success / partial / failure)
-- [~] No defecting archetype (free-rider, hoarder, exploiter, isolationist) over 1.5x its fair share, and none topping the score more often than the reciprocal cooperator, nations assigned at random (REWORDED by the owner, 2026-09-30, decision record G1 in docs/DECISIONS.md; the old wording could not pass while Gate 1 holds. On the prompt 14 and go/no-go numbers it is met for the free-rider: 1.05x on seeds 1-200 and 1.15x on 201-400 against the cooperator's 3.90x and 3.50x. The hoarder, exploiter and isolationist were 0.00-0.40x at the review and their scores fell after prompt 14, but were not re-reported. The re-review (prompt 20) confirms all four on fresh seeds; the harness still grades the old wording, GAPS prompt 16)
+- [~] No defecting archetype (free-rider, hoarder, exploiter, isolationist) over 1.5x its fair share, and none topping the score more often than the reciprocal cooperator, nations assigned at random (REWORDED by the owner, 2026-09-30, decision record G1 in docs/DECISIONS.md; the old wording could not pass while Gate 1 holds. On the prompt 14 and go/no-go numbers it is met for the free-rider: 1.05x on seeds 1-200 and 1.15x on 201-400 against the cooperator's 3.90x and 3.50x. The hoarder, exploiter and isolationist were 0.00-0.40x at the review and their scores fell after prompt 14, but were not re-reported. Prompt 17 made the harness and the AI's check grade the new wording, and it passes for all four defectors on seeds 1-200 and 201-400: free-rider 1.05x / 1.15x, hoarder 0.18x / 0.25x, exploiter 0.10x / 0.10x, isolationist 0.00x, against the cooperator's 3.90x / 3.50x. The re-review (prompt 20) confirms it on fresh seeds)
 - [x] Reciprocal cooperators beat free-riders (prompt 14, shipped AI: cooperator ahead in 90.5% of same-nation pairs, median +5.47%; was 73.0% and +1.41% before the free-riding rule)
 - [x] A trailing nation gains nothing by sabotage (prompt 14: spoiler median 978 vs 1,105 as a cooperator, paid in 1 of 200 pairs. The stealth spoiler that keeps trading has median 1,042 and beats the cooperator in 8.5% of pairs, was 19%; now graded strictly below the cooperator by the suite, which it is)
 - [ ] Owner predicts AI responses 70%+ after one game (owner; prompt 11 built prediction mode in the Game tab and `npm run harness -- predictions --files <exported saves>`, which grades it)
@@ -41,6 +41,37 @@ Suite: `npm run harness -- gate2` (200 seeded games with random archetypes, coop
 Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): the archetype line (free-rider 2.21x, shipped AI 1.64x; cooperator 2.92x) and the re-graded top scorer (Saudi Arabia 23.5%, shipped AI 24.0%) fail; the predictions and the 10 playtests have not been done (docs/playtests/ is empty). Prompt 13 fixed findings F1 (the harness now grades the shipped AI) and F2 (paid-in-full nations are no longer shown as "declined"); the failing lines still fail with the shipped AI. Rulings since (prompt 16, 2026-09-30): criterion 2 reworded and line 9b waived for Gate 2; the verdict stays FAIL until the predictions and playtests are done and the re-review (prompt 20) grades the new wording.
 
 ## Session log
+
+### 2026-09-30 - prompt 17, A real budget: self-reliance vs trade (lanes D, C, S, A, H) - graded FAIL, rule reverted
+**Changed.** Designed home investment in docs/RULES.md first (2.9, 3.3, 5.3, 7.5, 8, 11),
+then built it: a nation pays Credit to raise its own Food or Energy production, slowly (a
+lag), with diminishing returns (a price that rises with every point, a ceiling), and it
+costs output to run (upkeep, added in tuning). One command, one card, the contribution
+dial extended into a budget dial, a named Credit sink, save schema 5 with a migration, an
+AI that decides how much to build from its own View with numbers on every order, and RULES
+5.3 pinned by a test. The harness gained the two permanent lines GO-NO-GO asked for (the
+same nation played by the AI vs left idle; decision density for an idle nation), fixed-rate
+investment strategies, and the reworded archetype line (decision record G1). Tuned on seeds
+1001-1400 only, graded once on 1-200 and 201-400 (commit 5fb24a3).
+**Result.** Targets 1, 3, 4 and 6 met and most of 5 (Credit sinks 8.5% of income; Japan,
+Korea, Mexico and Turkiye +20-30% over idle, was +4-6%; trading over isolating +21.5% and
++21.8%; collaboration beat a self-reliant AI by +16.6%). Two lines failed on seeds 1-200:
+target 2's median clause (never investing 2.7% below the best rate, 7 of 17 nations at
+least 3% below; line 3%) and the archetype line (free-rider 1.61x, line 1.5x). By the
+prompt's rule the rule is reverted in this pull request; contracts, sim, AI and RULES are
+back to main (commit 9a69053). Seeds 201-400 passed both lines, so they are knife-edge.
+**Why, in one paragraph.** The roster has only 7 nations with a deficit worth closing, so
+target 2's "median of 17" clause is a coin flip by construction; and the lever is 2-4x the
+target, which made Saudi Arabia (38.5%) and Turkiye (13%) win far more games and pushed the
+free-rider up with them. Credit alone was never a cost (nations hold 50-60 months of output),
+so the rule needed an output cost to be a trade-off at all.
+**How to see it.** docs/balance/gate2-prompt17.md (design, tuning table, graded results,
+owner decision). `npm run harness -- gate2 --games 200 --seed 1` prints the two new lines on
+today's game. `git checkout 5fb24a3 -- packages docs/RULES.md` restores the graded state.
+**Left.** The owner's decision in the report (recommended: keep it reverted, re-run as 17b
+with the median clause reworded and a weaker lever). Prompt 18 must not start on the reverted
+state. GAPS prompt 17 lists what lane U would need if the rule returns, the AI plan's missing
+trade-gain pricing, and the pooled top-scorer grade still open from prompt 16.
 
 ### 2026-09-30 - prompt 16, Gate 2 rulings (architect; docs only)
 **Changed.** Decision record G1 in docs/DECISIONS.md, on the owner's two rulings.
