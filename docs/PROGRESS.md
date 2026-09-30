@@ -60,8 +60,8 @@ Turkiye are at +7.1% or less, and no setting has Mexico under +15% with Credit s
 Saudi Arabia tops 31-37% of games as soon as its AI builds anything. The AI fix worked in
 part (China's AI-vs-idle gap +10.8% -> +15.5%, main +19.8%).
 **How to see it.** docs/balance/gate2-prompt17b.md (changes, tuning table, main on the
-grading seeds, decision). The whole attempt is at tag `prompt17b-stopped` (commit c579cbc):
-`git checkout prompt17b-stopped -- packages docs/RULES.md`, then delete
+grading seeds, decision). The whole attempt is at commit c579cbc:
+`git checkout c579cbc -- packages docs/RULES.md`, then delete
 packages/harness/src/idle-suite.ts and idle-suite.test.ts.
 **Left.** This was the last attempt at home investment. The report recommends joint projects
 (Phase 3) instead. Prompt 18 does not start. The pooled top-scorer grade is still open from

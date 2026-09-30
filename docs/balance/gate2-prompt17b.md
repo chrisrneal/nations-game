@@ -28,13 +28,14 @@ another decimal: section 4.
 
 The state on `main` after this pull request plays exactly as before it (packages
 and RULES.md are byte-identical to `da07e5a`, checked with `git diff`). The two
-AI-vs-idle lines that exist on `main` stay. The whole attempt is preserved at tag
-`prompt17b-stopped` (commit `c579cbc`): RULES 7.5 and 8.1, the AI's trade-gain
+AI-vs-idle lines that exist on `main` stay. The whole attempt is preserved at commit
+`c579cbc` (it stays in `main`'s history because this pull request is merged with a merge
+commit): RULES 7.5 and 8.1, the AI's trade-gain
 pricing with its tests, the card tracker, the reworded grading, and the fast `tune`
 command. To bring it back:
-`git checkout prompt17b-stopped -- packages docs/RULES.md` and delete
+`git checkout c579cbc -- packages docs/RULES.md` and delete
 `packages/harness/src/idle-suite.ts` and `idle-suite.test.ts` (the same two lines
-live in `invest-suite.ts` there). One director test fails at that tag with the
+live in `invest-suite.ts` there). One director test fails at that commit with the
 default values (Germany no longer invests: section 3); the tests for the new code
 pass.
 
@@ -84,7 +85,7 @@ new `tune` command at the prompt 17 setting (`aiInvestTradeLossPct=0`):
 | AI vs idle overall; Japan, Korea, Mexico, Turkiye | +20.6%; +23.0, +20.5, +30.5, +27.2% | +20.5%; +22.9, +20.3, +30.3, +27.3% |
 | Credit sinks, all-AI world | 8.5% | 8.5% |
 
-## 3. What was built (all at tag `prompt17b-stopped`)
+## 3. What was built (all at commit `c579cbc`)
 
 **RULES 7.5: the AI prices what building does to trade.** Written first, revised
 once. The first text (every unit built comes off what the nation buys) was
@@ -202,12 +203,12 @@ a moderate lever without giving the others an unbounded one.
 
 ## 5. What the attempt leaves that is worth keeping
 
-- **The card rule (RULES 8.1, at the tag).** 37 open months of 60 became 14.6, with
+- **The card rule (RULES 8.1, at c579cbc).** 37 open months of 60 became 14.6, with
   no change to the sim. Any future build/invest card should use it.
 - **The diagnostic.** A builder that cuts its own purchases stops growing; the
   loss is about the share of its deficit it closes at home. If a later rule lets
   nations produce for themselves, price this in the AI from day one.
-- **The `tune` command and the `gate2.json` file** (at the tag): a whole tuning
+- **The `tune` command and the `gate2.json` file** (at c579cbc): a whole tuning
   setting on one 200-game range in 60-160 s.
 - **Main's "today" numbers on 601-1000** (section 1), so the next attempt has its
   baseline.
@@ -228,7 +229,7 @@ and the card rule in view.
 
 Two other options, neither recommended:
 
-- **Restore the rule at the tag and accept the failed lines in writing.** It fails
+- **Restore the rule at c579cbc and accept the failed lines in writing.** It fails
   the pre-registered targets 1, 2(c) and 7 at every tried setting, and raises Saudi
   Arabia to 31-37% of games.
 - **Keep trying knobs on home investment.** The 133 settings cover every tunable
@@ -244,8 +245,8 @@ Prompt 18 (lane U) does not start: the rule was reverted, and its own text says 
 # main today on the grading seeds (step 1)
 npm run harness -- gate2 --games 200 --seed 601
 npm run harness -- gate2 --games 200 --seed 801
-# the attempt, at the tag (tune is a command only there)
-git checkout prompt17b-stopped -- packages docs/RULES.md
+# the attempt, at c579cbc (tune is a command only there)
+git checkout c579cbc -- packages docs/RULES.md
 npm run harness -- tune --games 200 --seed 1001 --set aiInvestTradeLossPct=0 --no-rates
 npm run harness -- tune --games 200 --seed 1201 --set aiInvestPaybackPct=25,aiInvestTradeLossPct=100,investMaxPct=20,investCostBp=3000,defaultInvestBp=1000
 ```
