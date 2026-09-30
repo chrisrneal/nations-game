@@ -561,6 +561,86 @@ export const TUNABLES = {
     max: 100,
     note: 'A hard bargainer skips a pledge once the pool is this percent funded. Its monthly contribution still pays part of its share, which is what keeps its cover (RULES 4.3 rule 1). 100 means it never free-rides.',
   },
+
+  // Joint projects (RULES 13, decision record H4)
+  projectFormingTicks: {
+    value: 3,
+    min: 1,
+    max: 6,
+    note: 'Months an invitation stays open (RULES 13.2). Long enough for an absent invitee\'s next check-in, short enough that a host can try again.',
+  },
+  projectMinMembers: {
+    value: 3,
+    min: 2,
+    max: 5,
+    note: 'Members, host included, needed to start building at the forming deadline. Below 3 a project is a bilateral deal, which trade already covers.',
+  },
+  projectSlots: {
+    value: 4,
+    min: 3,
+    max: 6,
+    note: 'Most members, host included. Scarce seats are what make a host\'s invitation worth having.',
+  },
+  projectBuildTicks: {
+    value: 9,
+    min: 4,
+    max: 18,
+    note: 'Build months at a template\'s 100%. Long enough that joining late does not pay back inside a 60-month game.',
+  },
+  projectYieldPct: {
+    value: 40,
+    min: 10,
+    max: 80,
+    note: 'Total yield as a percent of the host\'s surplus in that good at founding, at a template\'s 100%. The world is short of goods; this is how much a project adds.',
+  },
+  projectMinSurplusPct: {
+    value: 10,
+    min: 0,
+    max: 50,
+    note: 'Surplus, as a percent of the host\'s own demand, needed to host a goods project. Keeps balanced economies from hosting a plant for a good they barely make.',
+  },
+  projectFoodUnitCost: {
+    value: 18,
+    min: 4,
+    max: 60,
+    note: 'Credit per unit of monthly food yield. About two years of what a unit saves a rich importer, longer for a poorer one.',
+  },
+  projectEnergyUnitCost: {
+    value: 5,
+    min: 1,
+    max: 20,
+    note: 'Credit per unit of monthly energy yield. At 20 bp per percent of shortfall a unit of energy saves about 0.2 Credit a month, so about 25 months to pay back.',
+  },
+  projectShieldCostPct: {
+    value: 150,
+    min: 50,
+    max: 400,
+    note: 'Shield cost as a percent of the average playable nation\'s monthly output. Cheap for a giant, a real choice for a small nation.',
+  },
+  projectShieldBp: {
+    value: 2500,
+    min: 1000,
+    max: 5000,
+    note: 'Crisis damage a shield cuts for its members, after pool cover. Below 5000 so the pools still matter.',
+  },
+  projectMaxHosted: {
+    value: 2,
+    min: 1,
+    max: 4,
+    note: 'Projects one nation may host that start building, per game. Spreads hosting across the surplus nations.',
+  },
+  projectTrustBuilt: {
+    value: 4,
+    min: 0,
+    max: 10,
+    note: 'Trust every pair of members gains when a project completes. Two trades\' worth: building together is a stronger tie.',
+  },
+  projectTrustLeave: {
+    value: 12,
+    min: 5,
+    max: 30,
+    note: 'Trust each remaining member loses in a nation that leaves mid-build. Matches a broken pledge.',
+  },
 } as const satisfies Readonly<Record<string, Tunable>>;
 
 export type TunableId = keyof typeof TUNABLES;

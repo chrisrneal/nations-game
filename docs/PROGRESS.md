@@ -42,6 +42,23 @@ Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): 
 
 ## Session log
 
+### 2026-09-30 - 100x slice 3, Joint projects in the sim (H4, RULES 13)
+**Changed.** Contracts: `Project`, `ProjectTemplate`, `ProjectsView` (catalogue, every
+project, and the viewer's own hostable terms), five commands (propose, join, decline,
+leave, fund), project events, and the `creditSpentProjects` sink. Sim
+(`packages/sim/src/projects.ts`): the seven-template catalogue; founding with fixed
+terms; forming with an invite list and a deadline; automatic monthly installments;
+members dropped when they cannot pay; leaving mid-build forfeits what was paid and
+costs trust; completion raises trust between members; active goods projects add new
+production to each member by what it paid, cut by climate damage at the host; shields
+cut members' crisis damage after the pool. Save schema 5 with a 4 -> 5 migration.
+**Tests.** 20 new tests in `projects.test.ts` (terms, hosting rules, forming, lapsing,
+installments, cap, dropping, leaving, trust, yields, host damage, shields, RULES 5.3
+baselines unmoved, save/reload, migration); the conservation and no-negative-stock
+property tests now throw random project commands at the step and count the project sink.
+**How to see it.** Nothing on the phone yet: no AI or card uses projects (slices 4-5).
+**Left.** The AI (slice 4) and the phone (slice 5).
+
 ### 2026-09-30 - 100x slice 2, No dead zone in the shortfall penalty (H3)
 **Changed.** `shortfallPenaltyBpPerPct` 35 -> 20 and `maxShortfallPenaltyPct` 30 -> 60
 (inside their bands; RULES 2.7, 2.8 and 11). The penalty is now a straight line with

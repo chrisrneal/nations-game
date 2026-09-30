@@ -152,6 +152,8 @@ export interface WorldLedger {
   readonly creditPooled: number;
   /** Credit spent by pools when crises locked: the crisis sink. */
   readonly creditSpentCrises: number;
+  /** Credit paid into joint projects: the project sink (RULES 13.3). */
+  readonly creditSpentProjects: number;
   /** Output lost to climate damage, and what it would have been with empty pools (RULES 5.2). */
   readonly climateLoss: number;
   readonly climateLossUnpooled: number;

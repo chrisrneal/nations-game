@@ -16,6 +16,16 @@ import {
   type CrisisContext,
 } from './crisis.ts';
 import { economyTick, referencePrices, structuralCover } from './economy.ts';
+import {
+  declineProject,
+  fundProject,
+  joinProject,
+  leaveProject,
+  processProjects,
+  projectYields,
+  proposeProject,
+  type ProjectContext,
+} from './projects.ts';
 import { nextScoreTrack } from './score.ts';
 import {
   acceptOffer,
@@ -65,7 +75,9 @@ export function canonicalOrder(state: WorldState, commands: readonly Command[]):
  *    anything still unanswered expires.
  * 3. Crises (RULES 4): pledges due this tick are collected or broken,
  *    standing policies answer appeals due this tick, and pools whose deadline
- *    is this tick lock and schedule each nation's damage.
+ *    is this tick lock and schedule each nation's damage (cut by shields).
+ *    Then joint projects (RULES 13): forming deadlines, installments,
+ *    completion, and next month's project production.
  * 4. Every nation's economy: produce, consume, shortfall, crisis damage,
  *    income, resilience, growth, against a baseline that expects the
  *    structural shortfall (docs/RULES.md section 2); then its monthly
@@ -82,7 +94,7 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
   const events: Event[] = [];
   const nations: Record<NationId, NationRecord> = { ...state.nations };
   const controllers: Record<NationId, ControllerSlot> = { ...state.controllers };
-  const ctx: TradeContext & CrisisContext = {
+  const ctx: TradeContext & CrisisContext & ProjectContext = {
     tick: state.tick,
     prices: state.prices,
     nationOrder: state.nationOrder,
@@ -103,8 +115,10 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
     nextCrisisId: state.nextCrisisId,
     nextPledgeId: state.nextPledgeId,
     rng: state.rng,
+    projects: [...state.projects],
+    nextProjectId: state.nextProjectId,
   };
-  const draft = (): WorldState => ({ ...state, nations, controllers, offers: ctx.offers, crises: ctx.crises, pledges: ctx.pledges });
+  const draft = (): WorldState => ({ ...state, nations, controllers, offers: ctx.offers, crises: ctx.crises, pledges: ctx.pledges, projects: ctx.projects });
   const perNation = new Map<string, number>();
 
   const reject = (command: Command, reason: string): void => {
@@ -216,6 +230,21 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
       case 'declineAppeal':
         declineAppeal(ctx, typed.nationId, typed.payload.crisisId);
         break;
+      case 'proposeProject':
+        proposeProject(ctx, typed.nationId, typed.payload.template, typed.payload.invite);
+        break;
+      case 'joinProject':
+        joinProject(ctx, typed.nationId, typed.payload.projectId);
+        break;
+      case 'declineProject':
+        declineProject(ctx, typed.nationId, typed.payload.projectId);
+        break;
+      case 'leaveProject':
+        leaveProject(ctx, typed.nationId, typed.payload.projectId, 'left');
+        break;
+      case 'fundProject':
+        fundProject(ctx, typed.nationId, typed.payload.projectId, typed.payload.amount);
+        break;
     }
   }
 
@@ -225,13 +254,16 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
   resolvePledges(ctx);
   answerAppeals(ctx);
   lockCrises(ctx);
+  processProjects(ctx);
+  // Next month's project production, cut by climate damage at each host (RULES 13.4).
+  const yields = projectYields(ctx.projects, ctx.hits, state.tick + 1);
 
   const scoreTrack: Record<NationId, ScoreTrack> = { ...state.scoreTrack };
   for (const id of state.nationOrder) {
     const endowment = state.endowments[id];
     if (endowment === undefined) throw new Error(`No endowment for "${id}"`);
     const damage = damageAt(ctx.hits, id, state.tick);
-    const result = economyTick(nations[id] as NationRecord, endowment, ctx.ledger, ctx.gainCbp.get(id) ?? 0, ctx.cover, damage.bp);
+    const result = economyTick(nations[id] as NationRecord, endowment, ctx.ledger, ctx.gainCbp.get(id) ?? 0, ctx.cover, damage.bp, yields.get(id));
     const lost = (bp: number): number => Math.floor((result.preCrisisOutput * Math.min(10_000, bp)) / 10_000);
     ctx.ledger = {
       ...result.ledger,
@@ -271,6 +303,8 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
     hits: ctx.hits,
     nextCrisisId: ctx.nextCrisisId,
     nextPledgeId: ctx.nextPledgeId,
+    projects: ctx.projects,
+    nextProjectId: ctx.nextProjectId,
     tick: state.tick + 1,
   };
   return { state: { ...next, prices: referencePrices(next) }, events };
@@ -293,6 +327,7 @@ function explainCommand(ctx: TradeContext & CrisisContext, command: ReturnType<t
   }
   if (typeof p.crisisId === 'number') subject = p.crisisId;
   if (typeof p.pledgeId === 'number') subject = p.pledgeId;
+  if (typeof p.projectId === 'number') subject = p.projectId;
   ctx.events.push({
     tick: ctx.tick,
     type: 'explanation',

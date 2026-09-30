@@ -235,6 +235,8 @@ export interface EconomyTickResult {
  * `cover` is this month's structural cover, for the baseline (RULES 2.8).
  * `crisisBp` is this month's crisis damage (RULES 4), an output penalty on
  * top of the shortfall penalty; the baseline never expects it.
+ * `projectYield` is next month's production from joint projects (RULES 13.4),
+ * added to the refreshed public flows.
  */
 export function economyTick(
   nation: NationRecord,
@@ -243,6 +245,7 @@ export function economyTick(
   tradeGainCbp: number,
   cover: StructuralCover,
   crisisBp = 0,
+  projectYield: { readonly food: number; readonly energy: number } = { food: 0, energy: 0 },
 ): EconomyTickResult {
   const pub = nation.public;
   const priv = nation.private;
@@ -276,7 +279,12 @@ export function economyTick(
   const growth = growthBpPerTick(e.baselineGrowthBp);
   const capacityE4 = growCapacity(priv.capacityE4, growth);
   const baselineE4 = growCapacity(priv.baselineE4, growth);
-  const flows = flowsFor(e, capacityE4);
+  const structural = flowsFor(e, capacityE4);
+  // Joint projects add new production for next month (RULES 13.4). The baseline never sees it (5.3).
+  const flows = {
+    food: { demand: structural.food.demand, production: structural.food.production + projectYield.food },
+    energy: { demand: structural.energy.demand, production: structural.energy.production + projectYield.energy },
+  };
 
   const report: EconomyReport = {
     consumedFood,

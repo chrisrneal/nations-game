@@ -111,12 +111,34 @@ function migrate3to4(save: Record<string, unknown>): Record<string, unknown> {
   return { ...save, schemaVersion: 4, snapshot: upgraded, stateHash: hashState(upgraded) };
 }
 
+/**
+ * 4 -> 5 (100x slice 3: joint projects, RULES 13). A save with nothing to
+ * replay keeps its position: the world gains no projects and a zero project
+ * sink, and its hash is re-recorded. A save that must replay is refused, because
+ * the shortfall penalty changed (H3) and would replay it differently.
+ */
+function migrate4to5(save: Record<string, unknown>): Record<string, unknown> {
+  if (needsReplay(save)) {
+    throw new Error('This save needs its moves replayed, and the rules changed since it was made (joint projects), so they would not replay to the same position. Start a new game.');
+  }
+  const snapshot = save.snapshot as Record<string, unknown>;
+  const upgraded = {
+    ...snapshot,
+    schemaVersion: 5,
+    ledger: { ...EMPTY_LEDGER, ...(snapshot.ledger as object) },
+    projects: [],
+    nextProjectId: 1,
+  } as unknown as WorldState;
+  return { ...save, schemaVersion: 5, snapshot: upgraded, stateHash: hashState(upgraded) };
+}
+
 export const MIGRATIONS: Readonly<Record<number, (save: Record<string, unknown>) => Record<string, unknown>>> = {
   1: () => {
     throw new Error('This save is from the Phase 0 prototype, which had no economy. Start a new game.');
   },
   2: migrate2to3,
   3: migrate3to4,
+  4: migrate4to5,
 };
 
 /** Brings a parsed save up to the current schema, or throws loudly. */

@@ -43,6 +43,20 @@ export { ownScoreBp, scoreboard, type NationScore, type Scoreboard } from './sco
 export { POOL_OF, exposureFor, hitBp, rulePayment } from './crisis.ts';
 export { buildRecap } from './recap.ts';
 export {
+  CATALOGUE,
+  averagePlayableOutput,
+  goodOf,
+  hostProblem,
+  projectTerms,
+  projectYields,
+  roomToFund,
+  sharesTie,
+  shieldBp,
+  shieldOf,
+  templateOf,
+  type ProjectTerms,
+} from './projects.ts';
+export {
   COMMAND_TYPES,
   MAX_CONTRIBUTION_BP,
   RESOURCES,

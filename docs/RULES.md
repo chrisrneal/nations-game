@@ -916,6 +916,24 @@ fails if the two ever disagree.
 
 ---
 
+### Joint projects (section 13)
+
+| id | value | min | max | note |
+|---|---|---|---|---|
+| `projectFormingTicks` | 3 | 1 | 6 | Months an invitation stays open |
+| `projectMinMembers` | 3 | 2 | 5 | Members, host included, needed to start building at the deadline |
+| `projectSlots` | 4 | 3 | 6 | Most members, host included |
+| `projectBuildTicks` | 9 | 4 | 18 | Build months at a template's 100% |
+| `projectYieldPct` | 40 | 10 | 80 | Total yield as a percent of the host's surplus at a template's 100% |
+| `projectMinSurplusPct` | 10 | 0 | 50 | Surplus, as a percent of the host's own demand, needed to host a goods project |
+| `projectFoodUnitCost` | 18 | 4 | 60 | Credit per unit of monthly food yield. About two years of what a unit saves a rich importer |
+| `projectEnergyUnitCost` | 5 | 1 | 20 | Credit per unit of monthly energy yield. At H3's 20 bp a unit of energy saves 0.2 Credit a month, so about 25 months to pay back |
+| `projectShieldCostPct` | 150 | 50 | 400 | Shield cost as a percent of the average playable nation's monthly output |
+| `projectShieldBp` | 2500 | 1000 | 5000 | Crisis damage a shield cuts for its members |
+| `projectMaxHosted` | 2 | 1 | 4 | Projects a nation may host that start building, per game |
+| `projectTrustBuilt` | 4 | 0 | 10 | Trust every pair of members gains when a project completes |
+| `projectTrustLeave` | 12 | 5 | 30 | Trust each remaining member loses in a nation that leaves mid-build. Matches a broken pledge |
+
 ## 12. Open questions for the owner
 
 Answered so far: roster size, resource count, tick length and all seven contested
@@ -963,11 +981,11 @@ View. Build time, yield and cost are percentages of the tunables in 13.6.
 
 | Template | Kind | Build | Yield | Cost | Who may host |
 |---|---|---|---|---|---|
-| Solar and storage belt | energy | 67% | 25% | 100% | energy surplus |
-| Cross-border grid link | energy | 100% | 35% | 90% | energy surplus; every member shares a bloc or alliance with the host |
-| Green hydrogen corridor | energy | 133% | 50% | 110% | energy surplus and minerals endowment 50 or more |
-| Grain corridor and reserve | food | 67% | 30% | 100% | food surplus |
-| Desalination and smart irrigation | food | 133% | 45% | 110% | food surplus |
+| Solar and storage belt | energy | 67% (6 months) | 63% (25% of the host's surplus) | 100% | energy surplus |
+| Cross-border grid link | energy | 100% (9) | 88% (35%) | 90% | energy surplus; every member shares a bloc or alliance with the host |
+| Green hydrogen corridor | energy | 133% (12) | 125% (50%) | 110% | energy surplus and minerals endowment 50 or more |
+| Grain corridor and reserve | food | 67% (6) | 75% (30%) | 100% | food surplus |
+| Desalination and smart irrigation | food | 133% (12) | 113% (45%) | 110% | food surplus |
 | Climate early-warning network | climate shield | 67% | - | 100% | anyone |
 | Vaccine manufacturing network | pandemic shield | 100% | - | 100% | anyone |
 
@@ -1057,21 +1075,5 @@ built, Credit sinks as a share of income, and how often invitations are accepted
 
 ### 13.6 Tunables
 
-| id | value | min | max | note |
-|---|---|---|---|---|
-| `projectFormingTicks` | 3 | 1 | 6 | Months an invitation stays open |
-| `projectMinMembers` | 3 | 2 | 5 | Members, host included, needed to start building at the deadline |
-| `projectSlots` | 4 | 3 | 6 | Most members, host included |
-| `projectBuildTicks` | 9 | 4 | 18 | Build months at a template's 100% |
-| `projectYieldPct` | 40 | 10 | 80 | Total yield as a percent of the host's surplus at a template's 100% |
-| `projectMinSurplusPct` | 10 | 0 | 50 | Surplus, as a percent of the host's own demand, needed to host a goods project |
-| `projectFoodUnitCost` | 18 | 4 | 60 | Credit per unit of monthly food yield. About two years of what a unit saves a rich importer |
-| `projectEnergyUnitCost` | 5 | 1 | 20 | Credit per unit of monthly energy yield. At H3's 20 bp a unit of energy saves 0.2 Credit a month, so about 25 months to pay back |
-| `projectShieldCostPct` | 150 | 50 | 400 | Shield cost as a percent of the average playable nation's monthly output |
-| `projectShieldBp` | 2500 | 1000 | 5000 | Crisis damage a shield cuts for its members |
-| `projectMaxHosted` | 2 | 1 | 4 | Projects a nation may host that start building, per game |
-| `projectTrustBuilt` | 4 | 0 | 10 | Trust every pair of members gains when a project completes |
-| `projectTrustLeave` | 12 | 5 | 30 | Trust each remaining member loses in a nation that leaves mid-build. Matches a broken pledge |
-
-These move to section 11 with the code (slice 3), where `rules.test.ts` checks
-them against `tunables.ts`.
+In section 11, under "Joint projects", where `rules.test.ts` checks them against
+`tunables.ts`.

@@ -66,4 +66,23 @@ export type {
   TradeOffer,
   WithdrawOfferCommand,
 } from './trade.ts';
+export type {
+  DeclineProjectCommand,
+  FundProjectCommand,
+  HostRule,
+  HostableProject,
+  JoinProjectCommand,
+  LeaveProjectCommand,
+  Project,
+  ProjectCommand,
+  ProjectEventPayloads,
+  ProjectEventType,
+  ProjectKind,
+  ProjectMember,
+  ProjectStatus,
+  ProjectTemplate,
+  ProjectTemplateId,
+  ProjectsView,
+  ProposeProjectCommand,
+} from './project.ts';
 export type { CollectiveGoals, ForeignNation, NationPrivate, NationPublic, NationRecord, NationScore, NationView, ScoresView } from './nations.ts';
