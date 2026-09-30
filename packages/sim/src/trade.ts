@@ -291,6 +291,47 @@ export function runPolicies(ctx: TradeContext): void {
   }
 }
 
+/**
+ * Keep us supplied (RULES 3.4): for every nation whose standing policy has
+ * `autoImport` on, send fair offers for next month's shortfall of each good
+ * (priority good first), to the nations with a surplus of it it trusts most,
+ * at most `autoImportOffersPerGood` a good, never to a partner it already
+ * has an offer open with, and only what it can pay for. It reads public flows
+ * and its own stocks only: what the nation itself could see. The offers are
+ * ordinary offers, answered next month by the seller's AI or policy.
+ */
+export function autoImports(ctx: TradeContext): void {
+  for (const id of ctx.nationOrder) {
+    const buyer = get(ctx, id);
+    if (buyer.public.kind !== 'playable' || buyer.private.policy.autoImport !== true || buyer.private.policy.rejectAll) continue;
+    const first = buyer.private.policy.coverPriority;
+    for (const good of [first, first === 'food' ? 'energy' : 'food'] as const) {
+      const flow = buyer.public[good];
+      const mine = ctx.offers.filter((o) => o.from === id);
+      const pendingIn = mine.filter((o) => o.get.resource === good).reduce((s, o) => s + o.get.amount, 0);
+      let gap = flow.demand - flow.production - get(ctx, id).private.stocks[good] - pendingIn;
+      if (gap <= 0) continue;
+      const busy = new Set<NationId>(mine.map((o) => o.to));
+      const sellers = ctx.nationOrder
+        // Playable sellers only: a background region's policy never sells.
+        .filter((s) => s !== id && !busy.has(s) && get(ctx, s).public.kind === 'playable' && structuralBalance(get(ctx, s), good) > 0)
+        .sort((a, b) => (buyer.private.trust[b] ?? 0) - (buyer.private.trust[a] ?? 0) || structuralBalance(get(ctx, b), good) - structuralBalance(get(ctx, a), good));
+      let sent = 0;
+      for (const seller of sellers) {
+        if (gap <= 0 || sent >= TUNABLES.autoImportOffersPerGood.value) break;
+        if (ctx.offers.filter((o) => o.from === id).length >= TUNABLES.maxOpenOffersPerNation.value) return;
+        const amount = Math.min(gap, structuralBalance(get(ctx, seller), good));
+        const gets: ResourceAmount = { resource: good, amount };
+        const pay: ResourceAmount = { resource: 'credit', amount: Math.max(1, Math.round((ctx.prices[good] * amount) / ctx.prices.credit)) };
+        if (!isFair(ctx.prices, pay, gets) || get(ctx, id).private.stocks.credit < pay.amount) continue;
+        createOffer(ctx, id, seller, pay, gets, null);
+        gap -= amount;
+        sent += 1;
+      }
+    }
+  }
+}
+
 /** Offers nobody answered are gone once their expiry tick arrives. Ignoring costs the receiver trust. */
 export function expireOffers(ctx: TradeContext): void {
   const expired = ctx.offers.filter((o) => o.expiryTick <= ctx.tick + 1);

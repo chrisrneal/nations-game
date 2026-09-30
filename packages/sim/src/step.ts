@@ -29,6 +29,7 @@ import {
 import { nextScoreTrack } from './score.ts';
 import {
   acceptOffer,
+  autoImports,
   counterOffer,
   createOffer,
   expireOffers,
@@ -72,7 +73,8 @@ export function canonicalOrder(state: WorldState, commands: readonly Command[]):
  * 1. Commands stamped for `state.tick`, in canonical order. Trades settle the
  *    moment they are accepted.
  * 2. Standing policies answer offers on their last tick (seam 8), then
- *    anything still unanswered expires.
+ *    anything still unanswered expires, then "keep us supplied" policies send
+ *    next month's import offers (RULES 3.4).
  * 3. Crises (RULES 4): pledges due this tick are collected or broken,
  *    standing policies answer appeals due this tick, and pools whose deadline
  *    is this tick lock and schedule each nation's damage (cut by shields).
@@ -250,6 +252,7 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
 
   runPolicies(ctx);
   expireOffers(ctx);
+  autoImports(ctx);
 
   resolvePledges(ctx);
   answerAppeals(ctx);

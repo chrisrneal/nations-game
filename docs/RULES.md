@@ -274,6 +274,13 @@ Every nation has standing policies, and they are the default answer (S8):
 - **Auto-reject everything** — the isolationist setting, which Gate 1 requires to be
   worse but survivable.
 - **Cover deficit priority** — Food before Energy, or the reverse.
+- **Keep us supplied** *(100x slice 6)* — each month, send fair offers for next
+  month's shortfall of each good (priority good first) to the playable nations
+  with a surplus the nation trusts most: up to `autoImportOffersPerGood` a good,
+  never two open offers to one partner, only what it can pay. Off by default (the
+  AI trades for itself); the phone turns it on for the player, so routine imports
+  stop being a monthly card. It reads only what the nation could see: public
+  flows and its own stocks.
 
 A player who never opens the app still trades, because their policies do. Since
 Phase 2 prompt 09, a policy **answers every offer** on its last month: an offer
@@ -812,6 +819,7 @@ wherever they feed economy maths.
 | `foodBasePriceMilli` | 100 | 20 | 500 | Reference price of one food unit in thousandths of a Credit when world supply meets demand (§3.2). 100 puts world food spending near 4% of output |
 | `energyBasePriceMilli` | 60 | 10 | 300 | Reference price of one energy unit in thousandths of a Credit at balance. 60 puts world energy spending near 6% of output |
 | `autoAcceptTrustThreshold` | 55 | 30 | 80 | Trust level at which the trusted-partner standing policy fires |
+| `autoImportOffersPerGood` | 2 | 1 | 4 | Most offers the "keep us supplied" policy sends for one good in a month (3.4) |
 
 ### Trust
 

@@ -158,6 +158,23 @@ function shortfall(view: NationView, good: Good): DecisionCard | null {
   const draft = buyDraft(view, good, gap);
   const pct = next.demand === 0 ? 0 : Math.round((gap * 100) / next.demand);
   const penalty = Math.min(rule(view, 'maxShortfallPenaltyPct'), Math.floor((pct * rule(view, 'shortfallPenaltyBpPerPct')) / 100));
+  if (view.self.private.policy.autoImport === true) {
+    // "Keep us supplied" buys what trade can supply (RULES 3.4). A card only when no seller is left: the gap trade cannot close.
+    if (draft !== null) return null;
+    const name = good === 'food' ? 'Food' : 'Energy';
+    return {
+      id: `short:${good}`,
+      kind: 'shortfall',
+      icon: ICON[good],
+      title: `${name}: ${fmt(gap)} a month no seller can supply`,
+      context: `Your policy buys what the world has to spare, and every seller is already in a deal with you. The rest of the shortfall costs about ${penalty}% of output a month. Only new supply closes it: a joint project that makes ${good}.`,
+      expiresIn: 1,
+      options: [
+        { id: 'projects', label: `Find ${good} projects`, consequence: 'Open the Projects screen: invitations, and projects hosted by nations with a surplus.', action: { kind: 'projects' } },
+        { id: 'accept', label: 'Accept it for now', consequence: 'Hide this until you reopen the app; the policy keeps buying what it can.', action: { kind: 'dismiss' } },
+      ],
+    };
+  }
   const options: CardOption[] = [];
   if (draft !== null) {
     options.push({
@@ -558,6 +575,7 @@ export function cardsFor(view: NationView, dismissed: ReadonlySet<string>, sourc
   const host = hostCard(view);
   if (host !== null) cards.push(host);
   if (sources.predictions?.mode === true) for (const p of sources.predictions.pending) cards.push(predictCard(p, view.tick));
-  for (const offer of view.offers) if (offer.from === view.selfId) cards.push(pending(view, offer));
+  // With "keep us supplied" on, the policy's own purchases are routine: they do not wait as cards.
+  if (view.self.private.policy.autoImport !== true) for (const offer of view.offers) if (offer.from === view.selfId) cards.push(pending(view, offer));
   return cards.filter((card) => !dismissed.has(card.id));
 }

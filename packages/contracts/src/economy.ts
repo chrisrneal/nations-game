@@ -100,6 +100,13 @@ export interface StandingPolicy {
   readonly contributionBp: number;
   /** Which pool the monthly contribution goes to; `split` halves it. */
   readonly contributionTo: ContributionTarget;
+  /**
+   * Keep us supplied (RULES 3.4): each month the sim sends fair offers to buy
+   * next month's food and energy shortfall from the most trusted nations with
+   * a surplus. Off by default (the AI trades for itself); the phone turns it on
+   * for the player. Absent in saves made before it existed, which reads as off.
+   */
+  readonly autoImport?: boolean;
 }
 
 /** What happened to one nation's economy in the tick just stepped. Private. */

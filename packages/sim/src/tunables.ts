@@ -654,6 +654,12 @@ export const TUNABLES = {
     max: 200,
     note: 'Smallest monthly yield an AI host bothers to found a goods project for: below it the partners\' share is too small to be worth a consortium.',
   },
+  autoImportOffersPerGood: {
+    value: 2,
+    min: 1,
+    max: 4,
+    note: 'Most offers the "keep us supplied" policy sends for one good in a month (RULES 3.4). Two lets it split a shortfall between the two most trusted sellers without flooding the board.',
+  },
 } as const satisfies Readonly<Record<string, Tunable>>;
 
 export type TunableId = keyof typeof TUNABLES;

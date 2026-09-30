@@ -191,3 +191,5 @@ Each entry: prompt number, phase, what is missing, owning lane.
 - 100x-4, Phase 3, The AI never leaves a project mid-build in measured games, so Gate 3's "withdrawal sometimes rational" is not shown. Candidates: leave when a crisis appeal needs the Credit, or when a partner it punishes joins. Lane A.
 - 100x-4, Phase 3, All-AI games build nearly the same projects every seed; project choice is structural and deterministic. Add seeded noise to founding (aiNoiseBp) so the world differs game to game. Lane A.
 - 100x-4, Phase 3, Japan's median rank when played by the AI is 1st of 17 in all-AI games after projects (docs/balance/100x-slice4.md). Watch it in playtests before tuning. Lanes A and S.
+- 100x-6, Phase 3, A new game's first view (month 0) still shows the two shortfall cards: "keep us supplied" is set by a command that applies at the end of month 0. Set it in `createWorld` options for the human instead. Lanes S and P.
+- 100x-6, Phase 3, A deep importer such as Japan can hold 5-7 project invitations at once; the inbox needs triage (group invitations into one card, or rank by value). Lane U.

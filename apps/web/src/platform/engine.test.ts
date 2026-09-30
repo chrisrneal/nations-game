@@ -66,8 +66,13 @@ describe('GameEngine', () => {
     const update = engine.advance(6);
     expect(update.view.tick).toBe(6);
     expect(seen).toContain('offerMade');
-    // The player's nation never acts on its own; its standing policy may answer offers.
-    expect(update.view.offers.every((o) => o.to === 'india')).toBe(true);
+    // The player's nation acts only through its standing policies: it answers offers, and
+    // "keep us supplied" (on for a new phone game, RULES 3.4) sends fair offers to buy its shortfall.
+    expect(update.view.self.private.policy.autoImport).toBe(true);
+    for (const o of update.view.offers.filter((x) => x.from === 'india')) {
+      expect(o.give.resource).toBe('credit');
+      expect(o.hardBargain).toBe(false);
+    }
   });
 
   it('stops the clock at the end of the game', () => {

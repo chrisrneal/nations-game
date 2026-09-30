@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Command, Event, TradeOffer } from '@nations/contracts';
+import type { Command, Event, NationId, StandingPolicy, TradeOffer } from '@nations/contracts';
 import { structuralCover } from './economy.ts';
 import { step } from './step.ts';
 import { tradeImbalanceMilli } from './trade.ts';
@@ -300,5 +300,50 @@ describe('gains from trade (RULES 3.3)', () => {
     expect(types(noGain.events)).toContain('offerSettled');
     expect(noGain.state.nations[C]?.private.last.tradeGainCbp).toBe(0);
     expect(noGain.state.nations[B]?.private.last.tradeGainCbp).toBe(0);
+  });
+});
+
+describe('keep us supplied (RULES 3.4, autoImport)', () => {
+  const setPolicy = (s: WorldState, who: NationId, payload: Partial<StandingPolicy>): WorldState =>
+    step(s, [{ nationId: who, tick: s.tick, type: 'setPolicy', payload }]).state;
+
+  it('is off by default: nobody offers anything on its own', () => {
+    const s = tradeWorld(1, { AAA: 'human', BBB: 'human', CCC: 'human' });
+    const r = step(s, []);
+    expect(r.events.filter((e) => e.type === 'offerMade')).toEqual([]);
+  });
+
+  it('when on, sends fair offers for next month\'s shortfall to a playable nation with a surplus, from the month it is set', () => {
+    const s0 = tradeWorld(1, { AAA: 'human', BBB: 'human', CCC: 'human' });
+    const r = step(s0, [{ nationId: A, tick: 0, type: 'setPolicy', payload: { autoImport: true } }]);
+    const made = r.events.filter((e) => e.type === 'offerMade').map((e) => (e.payload as { offer: TradeOffer }).offer);
+    expect(made.length).toBeGreaterThan(0);
+    for (const o of made) {
+      expect(o.from).toBe(A);
+      expect(o.get.resource).toBe('energy');
+      expect(o.give.resource).toBe('credit');
+      expect(o.hardBargain).toBe(false);
+      expect(s0.nations[o.to]!.public.kind).toBe('playable');
+    }
+    const n = s0.nations[A]!;
+    const gap = n.public.energy.demand - n.public.energy.production - n.private.stocks.energy;
+    expect(made.reduce((sum, o) => sum + o.get.amount, 0)).toBeLessThanOrEqual(gap);
+  });
+
+  it('does not stack offers: while an offer is open the gap counts it and that partner is skipped', () => {
+    let s = tradeWorld(1, { AAA: 'human', BBB: 'human', CCC: 'human' });
+    s = setPolicy(s, A, { autoImport: true });
+    expect(s.offers.filter((o) => o.from === A).length).toBeGreaterThan(0);
+    const next = step(s, []);
+    const again = next.events.filter((e) => e.type === 'offerMade' && (e.payload as { offer: TradeOffer }).offer.from === A);
+    const busy = s.offers.filter((o) => o.from === A).map((o) => o.to);
+    for (const e of again) expect(busy).not.toContain((e.payload as { offer: TradeOffer }).offer.to);
+    expect(next.state.offers.filter((o) => o.from === A).length).toBeLessThanOrEqual(TUNABLES.maxOpenOffersPerNation.value);
+  });
+
+  it('a closed posture overrides it', () => {
+    let s = tradeWorld(1, { AAA: 'human', BBB: 'human', CCC: 'human' });
+    s = setPolicy(s, A, { autoImport: true, rejectAll: true });
+    expect(step(s, []).events.filter((e) => e.type === 'offerMade')).toEqual([]);
   });
 });
