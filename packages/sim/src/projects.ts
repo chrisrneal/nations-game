@@ -110,7 +110,7 @@ export const CATALOGUE: readonly ProjectTemplate[] = [
     host: 'anyone',
     buildPct: 100,
     yieldPct: 0,
-    costPct: 100,
+    costPct: 50,
     minMineralsEndowment: 0,
     sharedTieRequired: false,
   },
@@ -140,33 +140,23 @@ export function surplusOf(n: Pick<NationRecord, 'public'>, good: 'food' | 'energ
   return Math.max(0, f.production - f.demand);
 }
 
-/** Average realised output of the playable nations: what a shield's cost is priced against (RULES 13.2). */
-export function averagePlayableOutput(state: { readonly nationOrder: readonly NationId[]; readonly nations: Readonly<Record<NationId, NationRecord>> }): number {
-  let sum = 0;
-  let count = 0;
-  for (const id of state.nationOrder) {
-    const n = state.nations[id] as NationRecord;
-    if (n.public.kind !== 'playable') continue;
-    sum += n.public.output;
-    count += 1;
-  }
-  return count === 0 ? 0 : Math.floor(sum / count);
+/** A shield member's total due: a share of its own monthly output (RULES 13.2), at least 1. */
+export function shieldDue(template: ProjectTemplate, member: Pick<NationRecord, 'public'>): number {
+  return Math.max(1, Math.floor((mulDiv(member.public.output, TUNABLES.projectShieldCostPct.value, 100) * template.costPct) / 100));
 }
 
 export interface ProjectTerms {
   readonly buildTicks: number;
   readonly yield: number;
+  /** Goods: the whole build. Shields: this nation's own due. */
   readonly cost: number;
 }
 
 /** What a project would be if `host` founded it now (RULES 13.2). */
-export function projectTerms(template: ProjectTemplate, host: Pick<NationRecord, 'public'>, averageOutput: number): ProjectTerms {
+export function projectTerms(template: ProjectTemplate, host: Pick<NationRecord, 'public'>): ProjectTerms {
   const buildTicks = Math.max(1, Math.floor((TUNABLES.projectBuildTicks.value * template.buildPct) / 100));
   const good = goodOf(template.kind);
-  if (good === null) {
-    const cost = Math.max(1, Math.floor((mulDiv(averageOutput, TUNABLES.projectShieldCostPct.value, 100) * template.costPct) / 100));
-    return { buildTicks, yield: 0, cost };
-  }
+  if (good === null) return { buildTicks, yield: 0, cost: shieldDue(template, host) };
   const yieldUnits = Math.floor((mulDiv(surplusOf(host, good), TUNABLES.projectYieldPct.value, 100) * template.yieldPct) / 100);
   const unit = good === 'food' ? TUNABLES.projectFoodUnitCost.value : TUNABLES.projectEnergyUnitCost.value;
   const cost = Math.max(1, Math.floor((yieldUnits * unit * template.costPct) / 100));
@@ -255,7 +245,7 @@ function pay(ctx: ProjectContext, project: Project, id: NationId, amount: number
 
 export function proposeProject(ctx: ProjectContext, host: NationId, templateId: ProjectTemplateId, invite: readonly NationId[]): Project {
   const template = templateOf(templateId);
-  const terms = projectTerms(template, nation(ctx, host), averagePlayableOutput(ctx));
+  const terms = projectTerms(template, nation(ctx, host));
   const project: Project = {
     id: ctx.nextProjectId,
     template: template.id,
@@ -268,13 +258,11 @@ export function proposeProject(ctx: ProjectContext, host: NationId, templateId: 
     completedTick: null,
     invited: [...invite],
     declined: [],
-    members: [{ nationId: host, paid: 0, joinedTick: ctx.tick }],
+    members: [{ nationId: host, paid: 0, joinedTick: ctx.tick, due: 0, installment: 0, cap: 0 }],
     left: [],
     buildTicks: terms.buildTicks,
     yield: terms.yield,
     cost: terms.cost,
-    installment: 0,
-    cap: 0,
     paidTotal: 0,
   };
   ctx.nextProjectId += 1;
@@ -283,15 +271,27 @@ export function proposeProject(ctx: ProjectContext, host: NationId, templateId: 
   return project;
 }
 
+/**
+ * Building starts: each member's due, installment and cap are fixed (RULES
+ * 13.3). Goods split the cost equally and may pay up to twice their due (to
+ * cover a partner who walks out, or to take a bigger share). A shield charges
+ * each member a share of its own output and nothing more.
+ */
 function start(ctx: ProjectContext, project: Project): Project {
   const n = project.members.length;
+  const template = templateOf(project.template);
+  const goods = goodOf(project.kind) !== null;
+  const members = project.members.map((m) => {
+    const due = goods ? Math.ceil(project.cost / n) : shieldDue(template, nation(ctx, m.nationId));
+    return { ...m, due, installment: Math.max(1, Math.ceil(due / project.buildTicks)), cap: goods ? 2 * due : due };
+  });
   const started: Project = {
     ...project,
     status: 'building',
     startedTick: ctx.tick,
     invited: [],
-    installment: Math.max(1, Math.ceil(project.cost / (project.buildTicks * n))),
-    cap: 2 * Math.ceil(project.cost / n),
+    members,
+    cost: goods ? project.cost : members.reduce((sum, m) => sum + m.due, 0),
   };
   put(ctx, started);
   publicEvent(ctx, 'projectStarted', { project: started });
@@ -300,7 +300,7 @@ function start(ctx: ProjectContext, project: Project): Project {
 
 export function joinProject(ctx: ProjectContext, id: NationId, projectId: number): void {
   const project = ctx.projects.find((p) => p.id === projectId) as Project;
-  const member: ProjectMember = { nationId: id, paid: 0, joinedTick: ctx.tick };
+  const member: ProjectMember = { nationId: id, paid: 0, joinedTick: ctx.tick, due: 0, installment: 0, cap: 0 };
   const joined: Project = { ...project, invited: project.invited.filter((x) => x !== id), members: [...project.members, member] };
   put(ctx, joined);
   publicEvent(ctx, 'projectJoined', { projectId, nationId: id });
@@ -319,8 +319,11 @@ export function leaveProject(ctx: ProjectContext, id: NationId, projectId: numbe
   const member = project.members.find((m) => m.nationId === id) as ProjectMember;
   const members = project.members.filter((m) => m.nationId !== id);
   const building = project.status === 'building';
+  // A shield's cost is the members' dues, so a leaver's unpaid due leaves with it; a goods build still costs the same.
+  const shrink = building && goodOf(project.kind) === null ? Math.max(0, member.due - member.paid) : 0;
   put(ctx, {
     ...project,
+    cost: project.cost - shrink,
     members,
     left: building ? [...project.left, { nationId: id, paid: member.paid, tick: ctx.tick, reason }] : project.left,
   });
@@ -334,7 +337,7 @@ export function leaveProject(ctx: ProjectContext, id: NationId, projectId: numbe
 export function roomToFund(project: Project, id: NationId): number {
   const member = project.members.find((m) => m.nationId === id);
   if (member === undefined || project.status !== 'building') return 0;
-  return Math.max(0, Math.min(project.cap - member.paid, project.cost - project.paidTotal));
+  return Math.max(0, Math.min(member.cap - member.paid, project.cost - project.paidTotal));
 }
 
 export function fundProject(ctx: ProjectContext, id: NationId, projectId: number, amount: number): void {
@@ -376,7 +379,7 @@ export function processProjects(ctx: ProjectContext): void {
     }
     if (project.status !== 'building' || project.startedTick === ctx.tick) continue;
     for (const m of [...project.members]) {
-      const amount = Math.min(project.installment, roomToFund(project, m.nationId));
+      const amount = Math.min(m.installment, roomToFund(project, m.nationId));
       if (amount <= 0) continue;
       if (nation(ctx, m.nationId).private.stocks.credit < amount) {
         if (m.nationId === project.host) continue; // A host cannot be dropped from its own project; it just pays nothing this month.

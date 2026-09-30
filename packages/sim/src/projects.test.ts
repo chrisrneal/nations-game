@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Command, CrisisHit, Event, NationId, NationRecord, Project, ProjectTemplateId } from '@nations/contracts';
-import { CATALOGUE, averagePlayableOutput, projectTerms, projectYields, templateOf } from './projects.ts';
+import { CATALOGUE, projectTerms, projectYields, shieldDue, templateOf } from './projects.ts';
 import { createSave, loadSave, migrateSave } from './save.ts';
 import { step } from './step.ts';
 import { TUNABLES } from './tunables.ts';
@@ -69,18 +69,20 @@ describe('the catalogue and who may host (RULES 13.1)', () => {
     expect(can(X)).toEqual(['earlyWarning', 'vaccines']);
   });
 
-  it('terms follow the formulas: yield from the host surplus, cost from yield and unit cost, shields from average output', () => {
+  it('terms follow the formulas: yield from the host surplus, cost from yield and unit cost, a shield due from own output', () => {
     const s = world();
     const farm = nation(s, FARM);
     const surplus = farm.public.food.production - farm.public.food.demand;
     const grain = templateOf('grain');
-    const t = projectTerms(grain, farm, averagePlayableOutput(s));
+    const t = projectTerms(grain, farm);
     expect(t.yield).toBe(Math.floor((Math.floor((surplus * TUNABLES.projectYieldPct.value) / 100) * grain.yieldPct) / 100));
     expect(t.cost).toBe(Math.floor((t.yield * TUNABLES.projectFoodUnitCost.value * grain.costPct) / 100));
     expect(t.buildTicks).toBe(Math.floor((TUNABLES.projectBuildTicks.value * grain.buildPct) / 100));
-    const shield = projectTerms(templateOf('vaccines'), nation(s, X), averagePlayableOutput(s));
+    const vaccines = templateOf('vaccines');
+    const shield = projectTerms(vaccines, nation(s, X));
     expect(shield.yield).toBe(0);
-    expect(shield.cost).toBe(Math.floor((averagePlayableOutput(s) * TUNABLES.projectShieldCostPct.value) / 100));
+    expect(shield.cost).toBe(Math.floor((Math.floor((nation(s, X).public.output * TUNABLES.projectShieldCostPct.value) / 100) * vaccines.costPct) / 100));
+    expect(shieldDue(vaccines, nation(s, TINY))).toBeLessThan(shield.cost);
   });
 });
 
@@ -112,7 +114,11 @@ describe('founding and forming (RULES 13.2)', () => {
     expect(p.status).toBe('building');
     expect(p.members).toHaveLength(TUNABLES.projectSlots.value);
     expect(rejected(r.events)).toEqual(['project is no longer forming']);
-    expect(p.installment).toBe(Math.ceil(p.cost / (p.buildTicks * 4)));
+    for (const m of p.members) {
+      expect(m.due).toBe(Math.ceil(p.cost / 4));
+      expect(m.installment).toBe(Math.ceil(m.due / p.buildTicks));
+      expect(m.cap).toBe(2 * m.due);
+    }
   });
 
   it('at the deadline: enough members start building; too few lapse and nothing was paid', () => {
@@ -164,7 +170,7 @@ describe('building (RULES 13.3)', () => {
     const doneFull = project(full.state).completedTick as number;
     const r = run(s, 30, { 3: [cmd(Z, 'leaveProject', { projectId: 1 }, 3)] });
     const p = project(r.state);
-    expect(p.left).toEqual([{ nationId: Z, paid: 2 * p.installment, tick: 3, reason: 'left' }]);
+    expect(p.left).toEqual([{ nationId: Z, paid: 2 * project(s).members[3]!.installment, tick: 3, reason: 'left' }]);
     expect(p.members.map((m) => m.nationId)).toEqual([FARM, X, Y]);
     expect(p.completedTick as number).toBeGreaterThan(doneFull);
     const trustAt3 = run(s, 3).state;
@@ -192,14 +198,15 @@ describe('building (RULES 13.3)', () => {
   it('funding more speeds the build and raises the share, up to the cap', () => {
     const s = grainWorld();
     const p = project(s);
-    const extra = p.cap - p.installment * 2;
+    const x = p.members[1]!;
+    const extra = x.cap - x.installment * 2;
     const r = run(s, 30, { 1: [cmd(X, 'fundProject', { projectId: 1, amount: extra }, 1)] });
     const funded = project(r.state);
     expect(funded.completedTick as number).toBeLessThan(project(run(s, 30).state).completedTick as number);
     const share = (who: NationId): number => funded.members.find((m) => m.nationId === who)!.paid;
     expect(share(X)).toBeGreaterThan(share(Y));
-    expect(share(X)).toBeLessThanOrEqual(funded.cap);
-    const over = run(s, 2, { 1: [cmd(X, 'fundProject', { projectId: 1, amount: p.cap + 1 }, 1)] });
+    expect(share(X)).toBeLessThanOrEqual(x.cap);
+    const over = run(s, 2, { 1: [cmd(X, 'fundProject', { projectId: 1, amount: x.cap + 1 }, 1)] });
     expect(rejected(over.events)[0]).toMatch(/at most/);
   });
 });
@@ -240,6 +247,10 @@ describe('active projects (RULES 13.4)', () => {
     const late = (n: NationId): CrisisHit => hits.filter((h) => h.nationId === n && h.fromTick > (project(r.state).completedTick as number))[0] as CrisisHit;
     expect(late(X).bpUnpooled).toBe(late(Y).bpUnpooled);
     expect(late(X).bp).toBeLessThan(late(Y).bp);
+    // Each member paid its own due, a share of its own output.
+    const shield = project(r.state);
+    for (const m of shield.members) expect(m.paid).toBe(m.due);
+    expect(shield.cost).toBe(shield.members.reduce((sum, m) => sum + m.due, 0));
   });
 
   it("RULES 5.3: no project moves anyone's baseline", () => {

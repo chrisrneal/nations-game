@@ -44,7 +44,6 @@ export { POOL_OF, exposureFor, hitBp, rulePayment } from './crisis.ts';
 export { buildRecap } from './recap.ts';
 export {
   CATALOGUE,
-  averagePlayableOutput,
   goodOf,
   hostProblem,
   projectTerms,
@@ -52,6 +51,7 @@ export {
   roomToFund,
   sharesTie,
   shieldBp,
+  shieldDue,
   shieldOf,
   templateOf,
   type ProjectTerms,

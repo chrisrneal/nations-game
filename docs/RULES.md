@@ -928,7 +928,7 @@ fails if the two ever disagree.
 | `projectMinSurplusPct` | 10 | 0 | 50 | Surplus, as a percent of the host's own demand, needed to host a goods project |
 | `projectFoodUnitCost` | 18 | 4 | 60 | Credit per unit of monthly food yield. About two years of what a unit saves a rich importer |
 | `projectEnergyUnitCost` | 5 | 1 | 20 | Credit per unit of monthly energy yield. At H3's 20 bp a unit of energy saves 0.2 Credit a month, so about 25 months to pay back |
-| `projectShieldCostPct` | 150 | 50 | 400 | Shield cost as a percent of the average playable nation's monthly output |
+| `projectShieldCostPct` | 10 | 5 | 100 | A shield member's due as a percent of its own monthly output. Its benefit scales with output, so its price does too; at 10 a climate shield pays back about 1.5 times over a game at average exposure |
 | `projectShieldBp` | 2500 | 1000 | 5000 | Crisis damage a shield cuts for its members |
 | `projectMaxHosted` | 2 | 1 | 4 | Projects a nation may host that start building, per game |
 | `projectTrustBuilt` | 4 | 0 | 10 | Trust every pair of members gains when a project completes |
@@ -987,7 +987,7 @@ View. Build time, yield and cost are percentages of the tunables in 13.6.
 | Grain corridor and reserve | food | 67% (6) | 75% (30%) | 100% | food surplus |
 | Desalination and smart irrigation | food | 133% (12) | 113% (45%) | 110% | food surplus |
 | Climate early-warning network | climate shield | 67% | - | 100% | anyone |
-| Vaccine manufacturing network | pandemic shield | 100% | - | 100% | anyone |
+| Vaccine manufacturing network | pandemic shield | 100% | - | 50% | anyone |
 
 A nation has a **surplus** in a good when its production exceeds its demand by at
 least `projectMinSurplusPct` of that demand (public flows, at founding).
@@ -1002,9 +1002,12 @@ fixes:
 buildTicks = projectBuildTicks * template.build / 100
 yield      = hostSurplus * projectYieldPct / 100 * template.yield / 100      (goods)
 cost       = yield * unitCost(good) * template.cost / 100                     (goods)
-cost       = averagePlayableOutput * projectShieldCostPct / 100 * template.cost / 100   (shields)
 unitCost   = projectFoodUnitCost or projectEnergyUnitCost
 ```
+
+A shield has no single price: its benefit scales with each member's output, so
+each member's **due** is `output_i * projectShieldCostPct / 100 * template.cost / 100`,
+and the shield's cost is the sum of its members' dues when building starts.
 
 The project is **forming** for `projectFormingTicks` months. Only invitees may
 **join**; an invitee may **decline** (a clear no, costs nothing). It starts
@@ -1018,24 +1021,29 @@ joined when the deadline comes.
 
 ### 13.3 Building
 
-Each building month every member pays its **installment** automatically:
+When building starts each member's **due** is fixed: `ceil(cost / membersAtStart)`
+for a goods project, its own share of output for a shield (13.2). Each building
+month every member pays its **installment** automatically:
 
 ```
-installment = ceil(cost / (buildTicks * membersAtStart))
-cap_i       = 2 * ceil(cost / membersAtStart)         (the most one member may pay in total)
+installment_i = ceil(due_i / buildTicks)
+cap_i         = 2 * due_i (goods)  or  due_i (shields)   (the most one member may pay in total)
 ```
 
 and may pay more at any time with **fund project** (up to its cap), which both
 speeds the build and raises its share. The project completes the month total
 paid reaches `cost`; the last payments are trimmed so it never passes it. A
 member that cannot pay an installment is **dropped**: it counts as leaving.
+Installments keep being collected up to each member's cap, so the members who stay
+cover a vacancy over the extra months it takes.
 
 A member other than the host may **leave** while the project is forming (free)
 or building. Leaving mid-build forfeits everything it paid (the money is already
 concrete) and every remaining member's trust in it falls by
-`projectTrustLeave`. The remaining members' installments do not change, so the
-build takes longer: a partner walking out costs everyone time, which is the risk
-of choosing partners. The host may not leave its own project.
+`projectTrustLeave`. The remaining members' installments do not change, so a
+goods build takes longer: a partner walking out costs everyone time, which is the
+risk of choosing partners. A shield's cost falls by the leaver's unpaid due, and the
+leaver is not protected. The host may not leave its own project.
 
 Money paid into a project is a named Credit sink (`creditSpentProjects`).
 

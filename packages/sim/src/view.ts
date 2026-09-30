@@ -1,5 +1,5 @@
 import type { AppealAnswer, ForeignNation, NationEndowment, NationId, NationMap, NationRecord, NationView, Project } from '@nations/contracts';
-import { CATALOGUE, averagePlayableOutput, hostProblem, projectTerms } from './projects.ts';
+import { CATALOGUE, hostProblem, projectTerms } from './projects.ts';
 import { scoreboard } from './score.ts';
 import { TUNABLES } from './tunables.ts';
 import type { WorldState } from './world.ts';
@@ -57,7 +57,6 @@ export function viewFor(state: WorldState, selfId: NationId): NationView {
   const priv = self.private;
   // The sim's own scoreboard: public, identical for every viewer (RULES 5).
   const board = scoreboard(state);
-  const average = averagePlayableOutput(state);
   return {
     schemaVersion: state.schemaVersion,
     selfId,
@@ -103,10 +102,9 @@ export function viewFor(state: WorldState, selfId: NationId): NationView {
     projects: {
       catalogue: CATALOGUE.map((t) => ({ ...t })),
       projects: state.projects.map(copyProject),
-      averageOutput: average,
       hostable: CATALOGUE.map((t) => ({
         template: t.id,
-        ...projectTerms(t, self, average),
+        ...projectTerms(t, self),
         problem: hostProblem(t, self, state.endowments[selfId] as NationEndowment, state.projects),
       })),
     },

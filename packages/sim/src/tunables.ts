@@ -612,11 +612,12 @@ export const TUNABLES = {
     note: 'Credit per unit of monthly energy yield. At 20 bp per percent of shortfall a unit of energy saves about 0.2 Credit a month, so about 25 months to pay back.',
   },
   projectShieldCostPct: {
-    value: 150,
-    min: 50,
-    max: 400,
-    note: 'Shield cost as a percent of the average playable nation\'s monthly output. Cheap for a giant, a real choice for a small nation.',
+    value: 10,
+    min: 5,
+    max: 100,
+    note: 'A shield member\'s total due as a percent of its own monthly output, at a template\'s 100%. A shield\'s benefit scales with the member\'s output, so its price does too. At 10, a climate shield pays back about one and a half times over a game for a nation of average exposure.',
   },
+
   projectShieldBp: {
     value: 2500,
     min: 1000,

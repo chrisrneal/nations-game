@@ -47,6 +47,15 @@ export interface ProjectMember {
   /** Credit paid in so far. Shares of the yield follow it (RULES 13.4). */
   readonly paid: number;
   readonly joinedTick: Tick;
+  /**
+   * Fixed when building starts (0 while forming, RULES 13.3): what this member
+   * has committed in total, its monthly installment, and the most it may pay.
+   * Goods projects split the cost equally; a shield charges each member a share
+   * of its own output, because a shield's benefit scales with it.
+   */
+  readonly due: number;
+  readonly installment: number;
+  readonly cap: number;
 }
 
 export interface Project {
@@ -71,11 +80,12 @@ export interface Project {
   readonly buildTicks: number;
   /** Units of food or energy a month when complete, all members together; 0 for shields. */
   readonly yield: number;
-  /** Credit the whole build costs. */
+  /**
+   * Credit the whole build costs. Goods: fixed at founding. Shields: the sum of
+   * the members' dues, set when building starts (the host's own due before that),
+   * and reduced by a leaver's unpaid due.
+   */
   readonly cost: number;
-  /** Fixed when building starts: each member's monthly installment and the most it may pay in total. */
-  readonly installment: number;
-  readonly cap: number;
   /** Credit paid in by everyone, including members who left. Completes at `cost`. */
   readonly paidTotal: number;
 }
@@ -85,8 +95,6 @@ export interface ProjectsView {
   readonly catalogue: readonly ProjectTemplate[];
   /** Forming, building and active projects, oldest first. Lapsed projects leave State. */
   readonly projects: readonly Project[];
-  /** Average monthly output of the playable nations: what a shield's cost is priced against (RULES 13.2). */
-  readonly averageOutput: number;
   /**
    * For the viewing nation only: what each template would be if it founded it
    * now, and why it may not (null when it may). Public data, computed by the
@@ -99,6 +107,7 @@ export interface HostableProject {
   readonly template: ProjectTemplateId;
   readonly buildTicks: number;
   readonly yield: number;
+  /** Goods: the whole build. Shields: the viewer's own due. */
   readonly cost: number;
   readonly problem: string | null;
 }
