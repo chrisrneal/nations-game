@@ -22,10 +22,19 @@ export interface StoredPrediction {
   readonly status: 'open' | 'guessed' | 'lapsed';
 }
 
+/** The game-over playtest answers, as apps/web/src/platform/playtest.ts writes them (Gate 2 line 7). */
+export interface StoredPlaytest {
+  readonly who: 'owner' | 'other' | null;
+  readonly again: 'yes' | 'unsure' | 'no' | null;
+  readonly interesting: string;
+}
+
 export interface PredictionFile {
   readonly name: string;
   readonly humanId: string;
   readonly records: readonly StoredPrediction[];
+  /** Present when the player answered the game-over questions. */
+  readonly playtest?: StoredPlaytest;
 }
 
 export const PREDICTION_TARGET_PCT = 70;
@@ -39,10 +48,19 @@ export function parsePredictionFile(name: string, text: string): PredictionFile 
     throw new Error(`${name}: not JSON`);
   }
   const root = parsed as { format?: string; game?: unknown };
-  const game = (root.format === 'nations-game-save' ? root.game : parsed) as { humanId?: unknown; predictions?: { records?: unknown } } | undefined;
+  const game = (root.format === 'nations-game-save' ? root.game : parsed) as { humanId?: unknown; predictions?: { records?: unknown }; playtest?: unknown } | undefined;
   if (game === undefined || game === null || typeof game.humanId !== 'string') throw new Error(`${name}: not a Nations saved game`);
   const records = Array.isArray(game.predictions?.records) ? (game.predictions.records as StoredPrediction[]) : [];
-  return { name, humanId: game.humanId, records };
+  const p = game.playtest as Partial<StoredPlaytest> | undefined;
+  const playtest: StoredPlaytest | undefined =
+    typeof p === 'object' && p !== null
+      ? {
+          who: p.who === 'owner' || p.who === 'other' ? p.who : null,
+          again: p.again === 'yes' || p.again === 'unsure' || p.again === 'no' ? p.again : null,
+          interesting: typeof p.interesting === 'string' ? p.interesting : '',
+        }
+      : undefined;
+  return { name, humanId: game.humanId, records, ...(playtest === undefined ? {} : { playtest }) };
 }
 
 export interface Tally {
@@ -105,6 +123,66 @@ function table(title: string, first: string, rows: Readonly<Record<string, Tally
   const keys = Object.keys(rows).sort();
   if (keys.length === 0) return [];
   return [`## ${title}`, '', `| ${first} | Guessed | Right | Accuracy |`, '|---|---|---|---|', ...keys.map((k) => `| ${k} | ${rows[k]!.guessed} | ${rows[k]!.correct} | ${pct(rows[k]!)} |`), ''];
+}
+
+/** Gate 2 line 7: "10 playtests, 3+ by others, most want another game". */
+export const PLAYTESTS_NEEDED = 10;
+export const PLAYTESTS_BY_OTHERS_NEEDED = 3;
+
+export interface PlaytestReport {
+  readonly total: number;
+  readonly byOwner: number;
+  readonly byOthers: number;
+  /** "Would you play another game?" counts, per group (unanswered counted apart). */
+  readonly again: Readonly<Record<'owner' | 'other' | 'unknown', Readonly<Record<'yes' | 'unsure' | 'no' | 'none', number>>>>;
+  readonly interesting: readonly { readonly name: string; readonly who: string; readonly line: string }[];
+  readonly mostWantAnother: boolean;
+  readonly verdict: 'PASS' | 'FAIL' | 'NOT YET';
+}
+
+export function playtestReport(files: readonly PredictionFile[]): PlaytestReport {
+  const empty = (): Record<'yes' | 'unsure' | 'no' | 'none', number> => ({ yes: 0, unsure: 0, no: 0, none: 0 });
+  const again = { owner: empty(), other: empty(), unknown: empty() };
+  const interesting: { name: string; who: string; line: string }[] = [];
+  let total = 0;
+  for (const f of files) {
+    if (f.playtest === undefined) continue;
+    total++;
+    const who = f.playtest.who ?? 'unknown';
+    again[who][f.playtest.again ?? 'none']++;
+    if (f.playtest.interesting.length > 0) interesting.push({ name: f.name, who, line: f.playtest.interesting });
+  }
+  const byOwner = files.filter((f) => f.playtest?.who === 'owner').length;
+  const byOthers = files.filter((f) => f.playtest?.who === 'other').length;
+  const yes = again.owner.yes + again.other.yes + again.unknown.yes;
+  const mostWantAnother = total > 0 && yes * 2 > total;
+  const enough = total >= PLAYTESTS_NEEDED && byOthers >= PLAYTESTS_BY_OTHERS_NEEDED;
+  return { total, byOwner, byOthers, again, interesting, mostWantAnother, verdict: !enough ? 'NOT YET' : mostWantAnother ? 'PASS' : 'FAIL' };
+}
+
+export function formatPlaytestReport(r: PlaytestReport): string {
+  const row = (who: 'owner' | 'other' | 'unknown', label: string): string => {
+    const a = r.again[who];
+    return `| ${label} | ${a.yes} | ${a.unsure} | ${a.no} | ${a.none} |`;
+  };
+  return [
+    '# Playtests',
+    '',
+    `Gate 2 line 7: ${PLAYTESTS_NEEDED} playtests, ${PLAYTESTS_BY_OTHERS_NEEDED}+ by others, most want another game.`,
+    '',
+    `**${r.total} playtest${r.total === 1 ? '' : 's'} (owner ${r.byOwner}, others ${r.byOthers}); most want another game: ${r.mostWantAnother ? 'yes' : 'no'} - ${r.verdict}.**`,
+    '',
+    '| Who | Yes | Not sure | No | No answer |',
+    '|---|---|---|---|---|',
+    row('owner', 'Owner'),
+    row('other', 'Others'),
+    ...(r.again.unknown.yes + r.again.unknown.unsure + r.again.unknown.no + r.again.unknown.none > 0 ? [row('unknown', 'Did not say')] : []),
+    '',
+    '## Most interesting choice, in their words',
+    '',
+    ...(r.interesting.length === 0 ? ['None given yet.'] : r.interesting.map((i) => `- "${i.line}" (${i.who}, ${i.name})`)),
+    '',
+  ].join('\n');
 }
 
 export function formatPredictionReport(r: PredictionReport): string {

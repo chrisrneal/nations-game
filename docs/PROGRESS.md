@@ -42,6 +42,22 @@ Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): 
 
 ## Session log
 
+### 2026-09-30 - 100x slice 10, Playtest kit (Gate 2 line 7)
+**Changed.** At month 60 the end screen asks three questions in taps, each skippable (who
+played, would you play another game, the most interesting choice in one line); the
+answers are kept host-side in the save, never in the sim State. "Save playtest file"
+exports `playtest-<date>-<nation>.json`. `npm run harness -- predictions --dir
+docs/playtests` now also tallies playtests: owner and others, "play again" per group,
+every interesting-choice line quoted, and the Gate 2 line 7 verdict (PASS, FAIL, or NOT
+YET). docs/playtests/README.md explains in plain language how to run a playtest, send
+the file, and add it on GitHub.
+**Checked.** Tests for the tally (counts, quotes, PASS/FAIL/NOT YET), the engine (answers
+travel in the save, the world's fingerprint is untouched), and the file name; phone check
+14/14 (end screen verdict, questions answered in taps, the file downloads with the right
+name, no horizontal scroll); the 53-check suite still passes.
+**How to see it.** Play any game to month 60 (the next-month button is quickest).
+**Left.** The playtests themselves: that is the owner's to run (10, 3+ by others).
+
 ### 2026-09-30 - 100x slice 9, No project is a default; invitations triaged
 **Changed.** `projectShieldCostPct` 10 -> 20: the climate early-warning network went from
 being built in 80% of games to 20%; every template is now built in at most 45-52% of

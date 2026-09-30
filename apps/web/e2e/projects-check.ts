@@ -6,7 +6,8 @@
  * Checks: four tabs fit at 360 px; a project invitation arrives as a card and
  * resolves in 2 taps (open, join) with both options visible without scrolling;
  * the Projects screen and the host sheet have no horizontal scroll; hosting
- * from the Projects screen sends an invitation (2 taps: Host…, Invite).
+ * from the Projects screen sends an invitation (2 taps: Host…, Invite); the end
+ * screen leads with the verdict and saves a playtest file after three questions.
  */
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -82,6 +83,20 @@ try {
       check('hosting sends invitations', /^Invited /.test((await page.locator('.toast').textContent()) ?? ''));
     }
   } else check('Japan can host a shield from the Projects screen', false, 'no Host… button');
+  // Playtest kit (Gate 2 line 7): at month 60, three questions in taps, then the playtest file.
+  await page.locator('.tab:has-text("Decisions")').click();
+  for (let m = 0; m < 70 && (await page.locator('[data-testid=game-over]').count()) === 0; m++) {
+    await page.locator('button:has-text("⏭")').click();
+    await page.waitForTimeout(80);
+  }
+  check('the game reaches its end screen', (await page.locator('[data-testid=game-over]').count()) === 1);
+  check('the end screen leads with the World Accord verdict', /world/i.test((await page.locator('[data-testid=outcome]').textContent()) ?? ''));
+  await page.getByRole('radio', { name: 'Someone else' }).click();
+  await page.getByRole('radio', { name: 'Yes' }).click();
+  await page.locator('#interesting').fill('Walking out of a grid link');
+  await noScroll('end screen with the playtest questions');
+  const [download] = await Promise.all([page.waitForEvent('download'), page.locator('[data-testid=save-playtest]').click()]);
+  check('the playtest file is named playtest-<date>-<nation>.json', /^playtest-\d{4}-\d{2}-\d{2}-japan\.json$/.test(download.suggestedFilename()), download.suggestedFilename());
   check('no page errors', errors.length === 0, errors.join('; '));
 } finally {
   await browser.close();

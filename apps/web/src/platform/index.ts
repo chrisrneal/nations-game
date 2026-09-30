@@ -14,6 +14,7 @@ export type { GameUpdate, LiveClock, PlayerView, Standing } from './engine.ts';
 export type { ExplanationNote, JournalSnapshot, TradeLine, TrustCauses } from './journal.ts';
 export type { PendingPrediction, PredictionKind, PredictionsView, ResolvedPrediction } from './predictions.ts';
 export type { AwayRecap, RankedLine } from './recap.ts';
+export type { PlaytestAgain, PlaytestAnswers, PlaytestWho } from './playtest.ts';
 export type { InstallPrompt, InstallState } from './install.ts';
 export type { SlotSummary } from './saves.ts';
 export { AUTOSAVE_SLOT, FILE_FORMAT, MANUAL_SLOTS, type GameHost } from './localHost.ts';

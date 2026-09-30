@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatPredictionReport, parsePredictionFile, predictionReport } from './predictions.ts';
+import { formatPlaytestReport, formatPredictionReport, parsePredictionFile, playtestReport, predictionReport } from './predictions.ts';
 
 const record = (id: number, nationId: string, kind: string, outcome: string, guess: string | null, status = guess === null ? 'lapsed' : 'guessed') => ({
   id,
@@ -49,5 +49,35 @@ describe('prediction accuracy report', () => {
   it('refuses files that are not saves', () => {
     expect(() => parsePredictionFile('x.json', 'nope')).toThrow(/x\.json: not JSON/);
     expect(() => parsePredictionFile('y.json', '{"format":"other"}')).toThrow(/not a Nations saved game/);
+  });
+});
+
+describe('playtest tally (Gate 2 line 7)', () => {
+  const file = (name: string, who: string | null, again: string | null, interesting = ''): string =>
+    JSON.stringify({ format: 'nations-game-save', game: { humanId: 'japan', predictions: { records: [] }, playtest: { version: 1, who, again, interesting } } });
+  const parse = (name: string, text: string) => parsePredictionFile(name, text);
+
+  it('counts owner and others, would-play-again per group, and quotes every interesting choice', () => {
+    const files = [
+      parse('a.json', file('a', 'owner', 'yes', 'Whether to pay into the Saudi solar belt or the pool')),
+      parse('b.json', file('b', 'other', 'no')),
+      parse('c.json', file('c', 'other', 'yes', 'Walking out of Brazil\'s hydrogen corridor')),
+      parse('d.json', JSON.stringify({ humanId: 'korea', save: {} })),
+    ];
+    const r = playtestReport(files);
+    expect(r).toMatchObject({ total: 3, byOwner: 1, byOthers: 2, mostWantAnother: true, verdict: 'NOT YET' });
+    expect(r.again.owner.yes).toBe(1);
+    expect(r.again.other).toEqual({ yes: 1, unsure: 0, no: 1, none: 0 });
+    expect(r.interesting.map((i) => i.line)).toEqual(['Whether to pay into the Saudi solar belt or the pool', "Walking out of Brazil's hydrogen corridor"]);
+    const text = formatPlaytestReport(r);
+    expect(text).toContain('3 playtests (owner 1, others 2)');
+    expect(text).toContain('"Walking out');
+  });
+
+  it('passes with 10 playtests, 3 by others and most wanting another game; fails when most do not', () => {
+    const many = (yes: number) =>
+      Array.from({ length: 10 }, (_, i) => parse(`${i}.json`, file(String(i), i < 3 ? 'other' : 'owner', i < yes ? 'yes' : 'no')));
+    expect(playtestReport(many(6)).verdict).toBe('PASS');
+    expect(playtestReport(many(5)).verdict).toBe('FAIL');
   });
 });

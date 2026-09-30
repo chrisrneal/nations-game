@@ -3,7 +3,7 @@ import type { GameUpdate, ResolvedPrediction } from '../platform/index.ts';
 import { nameOf } from '../world/nations.ts';
 import { cardsFor, type CardAction, type CardOption, type DecisionCard } from './cards.ts';
 import { Briefing } from './Briefing.tsx';
-import { GameOver } from './GameOver.tsx';
+import { GameOver, type PlaytestActions } from './GameOver.tsx';
 import { Recap } from './Recap.tsx';
 import { Sheet } from './Sheet.tsx';
 import { Num } from './why.tsx';
@@ -64,6 +64,7 @@ export function Inbox(props: {
   onPredict: (id: number, choice: string) => Promise<ResolvedPrediction>;
   onDismissRecap: () => void;
   onNewGame: () => void;
+  playtest?: PlaytestActions;
 }): ReactElement {
   const { view, standing, journal, predictions, recap } = props.update;
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
@@ -91,7 +92,7 @@ export function Inbox(props: {
 
   return (
     <section className="inbox" aria-label="Decisions">
-      {standing.over && <GameOver update={props.update} onNewGame={props.onNewGame} />}
+      {standing.over && <GameOver update={props.update} onNewGame={props.onNewGame} {...(props.playtest === undefined ? {} : { playtest: props.playtest })} />}
       {!standing.over && <Briefing view={view} />}
       {recap !== null && <Recap recap={recap} onDismiss={props.onDismissRecap} />}
       <h1 className="section-title">

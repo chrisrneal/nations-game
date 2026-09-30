@@ -18,7 +18,7 @@
  *                                                    test, the AI-vs-idle and decision-density lines (prompt
  *                                                    17; --no-idle skips them), and the Gate 1 suite again;
  *                                                    writes gate2.md
- *   npm run harness -- predictions                   prediction accuracy (Gate 2) from saves exported on
+ *   npm run harness -- predictions                   prediction accuracy and the playtest tally (Gate 2) from saves exported on
  *     [--files a.json,b.json] [--dir DIR] [--out DIR] the phone with prediction mode on; writes predictions.md
  *   `--set id=value[,id=value]` (play, gate1, gate2) replaces sim tunables for that run, inside
  *   their bands, for tuning sweeps (overrides.ts).
@@ -37,7 +37,7 @@ import { formatGate1, formatGate1Ranges, runGate1, runGate1Ranges } from './gate
 import { formatGate2, runGate2 } from './gate2.ts';
 import { parseArgs, type HarnessCommand, type ParsedArgs } from './args.ts';
 import { applyOverrides, parseOverrides } from './overrides.ts';
-import { formatPredictionReport, parsePredictionFile, predictionReport } from './predictions.ts';
+import { formatPlaytestReport, formatPredictionReport, parsePredictionFile, playtestReport, predictionReport } from './predictions.ts';
 
 let parsed: ParsedArgs;
 try {
@@ -166,8 +166,10 @@ async function predictions(): Promise<void> {
     console.error('Give exported saves: --files a.json,b.json or --dir folder (export from the Game tab with prediction mode on).');
     process.exit(2);
   }
-  const report = predictionReport(files.map((f) => parsePredictionFile(f, readFileSync(f, 'utf8'))));
-  const text = formatPredictionReport(report);
+  const parsedFiles = files.map((f) => parsePredictionFile(f, readFileSync(f, 'utf8')));
+  // Prediction accuracy (Gate 2 line 5) and the playtest tally (line 7) from the same exported files.
+  const report = predictionReport(parsedFiles);
+  const text = `${formatPredictionReport(report)}\n\n${formatPlaytestReport(playtestReport(parsedFiles))}`;
   const outDir = resolve(option('out', join(fileURLToPath(new URL('..', import.meta.url)), 'out')));
   mkdirSync(outDir, { recursive: true });
   writeFileSync(join(outDir, 'predictions.md'), `${text}\n`);

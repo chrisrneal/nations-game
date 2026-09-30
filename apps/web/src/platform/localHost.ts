@@ -1,6 +1,8 @@
 import type { Command, Pace } from '@nations/contracts';
+import { TUNABLES } from '@nations/sim';
 import type { GameEngine, GameUpdate, SavedGame } from './engine.ts';
 import type { ResolvedPrediction } from './predictions.ts';
+import { playtestFileName, type PlaytestAnswers } from './playtest.ts';
 import type { SaveStore, SlotSummary } from './saves.ts';
 
 /** The slot written automatically; the three manual slots sit beside it. */
@@ -43,6 +45,8 @@ export interface GameHost {
   setPredictionMode(on: boolean): Promise<void>;
   /** The player's guess; resolves to the real answer and the AI's reasons. */
   predict(id: number, choice: string): Promise<ResolvedPrediction>;
+  /** Game-over playtest answers (Gate 2 line 7), kept in the save. */
+  answerPlaytest(update: Partial<Omit<PlaytestAnswers, 'version'>>): Promise<void>;
 }
 
 /** Marker and version of an exported save file. */
@@ -66,7 +70,8 @@ export type EngineApi = {
     | 'markBack'
     | 'dismissRecap'
     | 'setPredictionMode'
-    | 'predict']: (
+    | 'predict'
+    | 'answerPlaytest']: (
     ...args: Parameters<GameEngine[K]>
   ) => Async<ReturnType<GameEngine[K]>>;
 };
@@ -166,6 +171,8 @@ export class LocalHost implements GameHost {
     const game = await this.options.engine.exportGame();
     const exportedAt = this.options.now?.() ?? Date.now();
     const text = JSON.stringify({ format: FILE_FORMAT, version: FILE_VERSION, exportedAt, game });
+    // A finished game with playtest answers is a playtest file (docs/playtests/README.md).
+    if (game.playtest !== undefined && game.save.savedAtTick >= TUNABLES.gameLengthTicks.value) return { name: playtestFileName(game.humanId, exportedAt), text };
     return { name: `nations-${game.humanId}-month-${game.save.savedAtTick}.json`, text };
   }
 
@@ -210,6 +217,10 @@ export class LocalHost implements GameHost {
 
   async predict(id: number, choice: string): Promise<ResolvedPrediction> {
     return this.options.engine.predict(id, choice);
+  }
+
+  async answerPlaytest(update: Partial<Omit<PlaytestAnswers, 'version'>>): Promise<void> {
+    await this.options.engine.answerPlaytest(update);
   }
 
   private receive(update: GameUpdate): void {
