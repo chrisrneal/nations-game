@@ -32,6 +32,7 @@ describe('AI director on the full roster (17 nations, 6 regions, 60 months)', ()
       setPolicy: 'policy',
       contribute: 'pledge',
       declineAppeal: 'skipPledge',
+      invest: 'invest',
     };
     game.commands.forEach((command, i) => {
       const e = decisions[i]!;
@@ -49,6 +50,22 @@ describe('AI director on the full roster (17 nations, 6 regions, 60 months)', ()
     });
     const relayed = game.events.filter((e) => e.type === 'explanation' && (e.payload as { by: string }).by === 'command');
     expect(relayed).toHaveLength(game.commands.length);
+  });
+
+  it('invests where it is short and only there, with numbers for every order (RULES 7.5)', () => {
+    const orders = game.commands.filter((c) => c.type === 'invest');
+    expect(orders.length).toBeGreaterThan(20);
+    const by = new Set(orders.map((c) => c.nationId));
+    // Nations short of food or energy build; exporters with nothing to close never do.
+    for (const short of ['egypt', 'germany', 'mexico']) expect(by.has(short as NationId), short).toBe(true);
+    for (const flush of ['australia', 'brazil', 'canada', 'russia', 'united-states']) expect(by.has(flush as NationId), flush).toBe(false);
+    for (const c of orders) {
+      expect(c.why?.length ?? 0).toBeGreaterThan(0);
+      expect(c.why!.every(hasNumber)).toBe(true);
+    }
+    // It runs the dial itself: standing investment is switched off in its first policy command.
+    const first = game.commands.find((c) => c.type === 'setPolicy' && c.nationId === ('egypt' as NationId));
+    expect((first!.payload as { investBp?: number }).investBp).toBe(0);
   });
 
   it('answers every crisis appeal itself, by paying or declining', () => {
