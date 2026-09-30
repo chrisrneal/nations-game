@@ -10,9 +10,6 @@ import { GREEDY, greedyDecide, type TraderStyle } from '@nations/ai';
  * - trader: the AI in its data-derived style (the reciprocal cooperator).
  * - freeRider: the AI with paying switched off: trades exactly like the
  *   trader, pays nothing into any pool. Fixed for the whole game.
- * - selfReliant (prompt 17): the AI's investing and crisis play with trade closed
- *   (reject-everything posture, no offers): pays to be self-reliant instead of
- *   depending on partners. Reported against the trader, not graded.
  * - stealthSpoiler: the AI's trade, but pays nothing and pledges twice its
  *   share to every appeal only to withdraw it (GATE-2 criterion 4 and the
  *   reviewer's check: sabotage without closing trade). Used from mid-game.
@@ -32,25 +29,10 @@ import { GREEDY, greedyDecide, type TraderStyle } from '@nations/ai';
 export const STRATEGIES = ['trader', 'hoarder', 'isolationist', 'exploiter'] as const;
 /** The Gate 2 archetypes, assigned at random: Gate 1's four plus the free-rider. */
 export const ARCHETYPES = [...STRATEGIES, 'freeRider'] as const;
-/**
- * The fixed-rate investment strategies (prompt 17, docs/balance/gate2-prompt17.md):
- * the AI's trade and crisis play unchanged, with its investment plan replaced by
- * a flat rule, `invest<N>` = spend N percent of spare Credit each month on the
- * good with the larger gap. `invest0` never invests. Fixed for the whole game.
- */
-export const INVEST_RATES = [0, 10, 25, 50, 100] as const;
-export type InvestStrategy = `invest${(typeof INVEST_RATES)[number]}`;
-export const INVEST_STRATEGIES: readonly InvestStrategy[] = INVEST_RATES.map((r) => `invest${r}` as const);
-export type Strategy = (typeof ARCHETYPES)[number] | 'spoiler' | 'stealthSpoiler' | 'selfReliant' | InvestStrategy;
-
-/** The percent of spare Credit a fixed-rate strategy invests each month, or null for any other strategy. */
-export function investRateOf(strategy: Strategy): number | null {
-  const m = /^invest(\d+)$/.exec(strategy);
-  return m === null ? null : Number(m[1]);
-}
+export type Strategy = (typeof ARCHETYPES)[number] | 'spoiler' | 'stealthSpoiler';
 
 /** The strategies the shipped AI plays; the rest are bots. */
-export const AI_STRATEGIES: readonly Strategy[] = ['trader', 'freeRider', 'stealthSpoiler', 'selfReliant', ...INVEST_STRATEGIES];
+export const AI_STRATEGIES: readonly Strategy[] = ['trader', 'freeRider', 'stealthSpoiler'];
 export const playedByAi = (strategy: Strategy): boolean => AI_STRATEGIES.includes(strategy);
 
 const HOARDER: TraderStyle = { ...GREEDY, sells: false, paysGoods: false };
@@ -95,11 +77,6 @@ function pledgeAndBreak(view: NationView, multiple: number): Command[] {
  * and crisis dials, and pledges-then-breaks instead.
  */
 export function aiDecide(strategy: Strategy, view: NationView, aiCommands: readonly Command[]): Command[] {
-  if (strategy === 'selfReliant') {
-    // The AI's investment and crisis play, with trade closed: the isolationist that pays to be self-reliant (prompt 17).
-    const kept = aiCommands.filter((c) => c.type === 'invest' || c.type === 'contribute' || c.type === 'declineAppeal' || c.type === 'setPolicy');
-    return [...ensurePolicy(view, { rejectAll: true }), ...kept].slice(0, view.rules.maxCommandsPerNationPerTick ?? 8);
-  }
   if (strategy !== 'stealthSpoiler') return [...aiCommands];
   const limit = view.rules.maxCommandsPerNationPerTick ?? 8;
   const trade = aiCommands.flatMap((c): Command[] => {
@@ -119,12 +96,6 @@ export function botDecide(strategy: Strategy, view: NationView, seed: number): C
     case 'trader':
     case 'freeRider':
     case 'stealthSpoiler':
-    case 'selfReliant':
-    case 'invest0':
-    case 'invest10':
-    case 'invest25':
-    case 'invest50':
-    case 'invest100':
       throw new Error(`${strategy} is played by the AI director (aiDecide), not by a bot`);
     case 'hoarder':
       return fit([...ensurePolicy(view, PAYS_NOTHING), ...greedyDecide(view, seed, HOARDER).commands]);

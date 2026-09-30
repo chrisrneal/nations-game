@@ -16,7 +16,6 @@ export { dummyDecide } from './dummy.ts';
 export { GREEDY, greedyDecide, openOffersBy, type Decision, type TraderStyle } from './greedy.ts';
 export { AiDirector, endowmentsOf, type AiDirectorOptions, type DirectorOutput, type DirectorSnapshot, type TickUsage } from './director.ts';
 export { NationMind, type MindSnapshot } from './mind.ts';
-export { buyWith, costOf, emptyInvestMemory, investAtRate, observeShortage, planInvestment, pointPrice, spareCredit, type InvestMemory, type InvestOrder, type InvestPlan } from './invest.ts';
 export { personalityFor, stanceLabel, structuralInputs, type Personality, type Reciprocity, type StructuralInputs } from './personality.ts';
 export { EXPLANATION_EVENT, hasNumber, type DecisionKind, type Explanation, type ExplanationEvent } from './explain.ts';
 export { crisisLabel, lastPaidPct, openAppeals, visibleTo } from './perception.ts';

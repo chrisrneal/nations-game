@@ -6,9 +6,7 @@ import type {
   DeclineAppealCommand,
   FundResilienceCommand,
   GameCommand,
-  InvestCommand,
   MakeOfferCommand,
-  NationEndowment,
   NationRecord,
   PingCommand,
   PledgeCommand,
@@ -21,12 +19,10 @@ import type {
   WithdrawPledgeCommand,
 } from '@nations/contracts';
 import { isFair } from './economy.ts';
-import { MAX_INVEST_ORDER_BP, MAX_INVEST_SHARE_BP, orderProblem } from './invest.ts';
 import { TUNABLES } from './tunables.ts';
 import type { WorldState } from './world.ts';
 
 export type {
-  InvestCommand,
   AcceptOfferCommand,
   ContributeCommand,
   CounterOfferCommand,
@@ -55,7 +51,6 @@ export const COMMAND_TYPES = [
   'withdrawOffer',
   'setPolicy',
   'fundResilience',
-  'invest',
   'contribute',
   'pledge',
   'withdrawPledge',
@@ -103,7 +98,7 @@ function termsShape(give: unknown, get: unknown): string | null {
 }
 
 const POLICY_BOOLEANS = ['acceptFairDeficit', 'acceptTrusted', 'rejectAll', 'hardBargains'] as const;
-const POLICY_KEYS: readonly string[] = [...POLICY_BOOLEANS, 'coverPriority', 'resilienceFloor', 'crisisRule', 'contributionBp', 'contributionTo', 'investBp'];
+const POLICY_KEYS: readonly string[] = [...POLICY_BOOLEANS, 'coverPriority', 'resilienceFloor', 'crisisRule', 'contributionBp', 'contributionTo'];
 
 function policyShape(payload: Record<string, unknown>): string | null {
   const keys = Object.keys(payload);
@@ -130,10 +125,6 @@ function policyShape(payload: Record<string, unknown>): string | null {
   if ('contributionBp' in payload) {
     const bp = payload.contributionBp;
     if (typeof bp !== 'number' || !Number.isSafeInteger(bp) || bp < 0 || bp > MAX_CONTRIBUTION_BP) return 'contributionBp out of range';
-  }
-  if ('investBp' in payload) {
-    const bp = payload.investBp;
-    if (typeof bp !== 'number' || !Number.isSafeInteger(bp) || bp < 0 || bp > MAX_INVEST_SHARE_BP) return 'investBp out of range';
   }
   return null;
 }
@@ -196,9 +187,6 @@ export function validateCommandShape(state: WorldState, command: unknown): strin
       return policyShape(payload);
     case 'fundResilience':
       return isPositiveInt(payload.points) ? null : 'points must be a positive whole number';
-    case 'invest':
-      if (payload.good !== 'food' && payload.good !== 'energy') return 'good must be food or energy';
-      return isPositiveInt(payload.bp) && payload.bp <= MAX_INVEST_ORDER_BP ? null : 'bp must be a positive whole number';
     case 'contribute':
     case 'pledge': {
       if (typeof payload.pool !== 'string' || !POOLS.includes(payload.pool)) return 'unknown pool';
@@ -293,8 +281,6 @@ export function validateCommand(state: WorldState, command: unknown): string | n
       if (crisis === undefined) return 'appeal is no longer open';
       return crisis.answers[self.id] === undefined ? null : 'you already answered this appeal';
     }
-    case 'invest':
-      return orderProblem(self, state.endowments[self.id] as NationEndowment, typed.payload.good, typed.payload.bp);
     case 'fundResilience': {
       const cost = typed.payload.points * TUNABLES.resilienceCostPerPoint.value;
       if (self.private.stocks.credit < cost) return 'not enough credit';

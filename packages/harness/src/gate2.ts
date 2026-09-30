@@ -54,7 +54,6 @@ import { TUNABLES, buildRecap, mix32, scoreboard, viewFor, type NationView, type
 import { ARCHETYPES, type Strategy } from './bots.ts';
 import { playGame } from './game.ts';
 import { runGate1, type Gate1Report, type Metric } from './gate1.ts';
-import { formatInvestLines, investMetrics, runInvestLines, type InvestLines } from './invest-suite.ts';
 
 export interface Gate2Options {
   readonly games: number;
@@ -65,10 +64,6 @@ export interface Gate2Options {
   readonly absenceSeeds?: number;
   /** Skip the Gate 1 rerun (tests only). */
   readonly skipGate1?: boolean;
-  /** Skip the prompt 17 lines: AI vs idle, decision density and the fixed-rate sweep (`--no-invest`, tests). */
-  readonly skipInvest?: boolean;
-  /** Skip only the fixed-rate sweep, the heaviest of them (5 more games per seed). */
-  readonly skipRates?: boolean;
 }
 
 type Outcome = 'success' | 'partial' | 'failure';
@@ -129,8 +124,6 @@ export interface Gate2Report {
   readonly stealthPairs: readonly PairScore[];
   readonly absence: readonly AbsenceRun[];
   readonly gate1: Gate1Report | null;
-  /** The prompt 17 lines (AI vs idle, decision density, fixed rates), or null when skipped. */
-  readonly invest: InvestLines | null;
   readonly pass: boolean;
 }
 
@@ -321,7 +314,7 @@ export function runGate2(options: Gate2Options): Gate2Report {
         },
       });
       income += main.state.ledger.creditIncome;
-      sinks += main.state.ledger.creditSpentResilience + main.state.ledger.creditSpentCrises + main.state.ledger.creditSpentInvestment;
+      sinks += main.state.ledger.creditSpentResilience + main.state.ledger.creditSpentCrises;
       let best = main.score.nations[0];
       for (const n of main.score.nations) {
         const a = archetypes[strategies[n.id] as string] as { assigned: number; finalSum: number };
@@ -382,10 +375,6 @@ export function runGate2(options: Gate2Options): Gate2Report {
   }
 
   const gate1 = options.skipGate1 === true ? null : runGate1({ games: options.games, firstSeed: options.firstSeed, roster, ticks });
-  const invest =
-    options.skipInvest === true
-      ? null
-      : runInvestLines({ games: options.games, firstSeed: options.firstSeed, roster, ticks, ...(options.skipRates === true ? { skipRates: true } : {}) });
 
   const games = options.games - crashes;
   const lockedAll = (['climate', 'pandemic'] as const).reduce((s, k) => s + crises.locked[k].success + crises.locked[k].partial + crises.locked[k].failure, 0);
@@ -396,13 +385,10 @@ export function runGate2(options: Gate2Options): Gate2Report {
   const maxTop = Object.entries(topShare).sort((a, b) => b[1] - a[1])[0] ?? ['', 0];
   const totalAssigned = Object.values(archetypes).reduce((s, a) => s + a.assigned, 0);
   const ratio = (a: { assigned: number; tops: number }): number => (a.assigned === 0 || games <= 0 ? 0 : a.tops / games / (a.assigned / totalAssigned));
+  const worstArchetype = Object.entries(archetypes).sort((a, b) => ratio(b[1]) - ratio(a[1]))[0] ?? ['', { assigned: 0, tops: 0 }];
   const archetypeRatio = (name: string): number => ratio(archetypes[name] ?? { assigned: 0, tops: 0 });
   const freeRiderShare = archetypeRatio('freeRider');
   const cooperatorShare = archetypeRatio('trader');
-  // Decision record G1 (prompt 16): each defecting archetype at or under 1.5x its fair share and no more often than the cooperator.
-  const defectors = ['freeRider', 'hoarder', 'exploiter', 'isolationist'] as const;
-  const defectorRatios = defectors.map((a) => [a, archetypeRatio(a)] as const);
-  const defectorsPass = defectorRatios.every(([, r]) => r <= 1.5 && r <= cooperatorShare);
   const gap = (p: PairScore): number => p.coop / Math.max(1, p.other) - 1;
   const coopMedian = median(freeRiderPairs.map(gap));
   const coopAhead = freeRiderPairs.length === 0 ? 0 : freeRiderPairs.filter((p) => p.coop > p.other).length / freeRiderPairs.length;
@@ -441,12 +427,7 @@ export function runGate2(options: Gate2Options): Gate2Report {
     { name: 'Defection rate (playable nation-appeals paid under half their share)', value: rate(crises.freeRides, crises.appeals), passLine: 'info', pass: null },
     { name: 'Broken pledges (of all pledges resolved)', value: rate(crises.pledgesBroken, crises.pledgesBroken + crises.pledgesHonoured), passLine: 'info', pass: null },
     { name: 'Retaliation rate (reciprocal answers scaled down after a short round)', value: rate(crises.retaliations, crises.reciprocalAnswers), passLine: 'info', pass: null },
-    {
-      name: 'Defecting archetypes (free-rider, hoarder, exploiter, isolationist): tops / fair share (G1: at most 1.5x and no more often than the cooperator)',
-      value: `${defectorRatios.map(([a, r]) => `${a} ${r.toFixed(2)}x`).join(', ')}; cooperator ${cooperatorShare.toFixed(2)}x`,
-      passLine: 'each <= 1.50x and <= cooperator',
-      pass: defectorsPass,
-    },
+    { name: `Most winning archetype (${worstArchetype[0]}), tops / fair share`, value: `${ratio(worstArchetype[1]).toFixed(2)}x`, passLine: '<= 1.50x', pass: ratio(worstArchetype[1]) <= 1.5 },
     { name: 'Free-rider tops / fair share (prompt 14)', value: `${freeRiderShare.toFixed(2)}x`, passLine: '<= 1.50x', pass: freeRiderShare <= 1.5 },
     { name: 'Free-rider tops below the cooperator (prompt 14)', value: `${freeRiderShare.toFixed(2)}x vs ${cooperatorShare.toFixed(2)}x`, passLine: 'free-rider < cooperator', pass: freeRiderShare < cooperatorShare },
     { name: 'Cooperator\'s own tops / fair share (whether it counts under 1.5x is the owner\'s ruling)', value: `${cooperatorShare.toFixed(2)}x`, passLine: 'info', pass: null },
@@ -470,7 +451,7 @@ export function runGate2(options: Gate2Options): Gate2Report {
     },
     { name: 'Stealth spoiler pairs where it sank a shared goal; world multiplier change (median)', value: `${pct(stealthSank)}; ${stealthMult >= 0 ? '+' : ''}${stealthMult.toFixed(3)}`, passLine: 'info', pass: null },
     { name: 'Dead states (ownScore < 0.50 at game end)', value: pct(deadRate), passLine: '< 2%', pass: deadRate < 0.02 },
-    { name: 'Credit sinks / Credit income (resilience + crises + investment), random archetypes', value: pct(creditRatio), passLine: '0-25%', pass: creditRatio >= 0 && creditRatio <= 0.25 },
+    { name: 'Credit sinks / Credit income (resilience + crises)', value: pct(creditRatio), passLine: '0-25%', pass: creditRatio >= 0 && creditRatio <= 0.25 },
     {
       name: `24-hour absence (${absence.length} runs: 4 months at the multiplayer cadence, 48 at single-player 1x)`,
       value: `${lapsed} lapsed, ${unanswered} appeals and ${unresolved} pledges unanswered; recap <= ${maxLines} lines, <= ${maxWords} words`,
@@ -483,7 +464,6 @@ export function runGate2(options: Gate2Options): Gate2Report {
       passLine: 'pass',
       pass: gate1 === null ? null : gate1Failing.length === 0,
     },
-    ...(invest === null ? [] : investMetrics(invest)),
     { name: 'Gate 0 still passes', value: 'npm test: determinism (1,000 seeds, Node vs Chromium), purity, save/load', passLine: 'all pass', pass: null },
     { name: 'Owner predicts AI responses after one game', value: 'owner check', passLine: '>= 70%', pass: null },
     { name: '10 playtests, 3+ by others, most want another game', value: 'owner check', passLine: 'see ROADMAP', pass: null },
@@ -503,7 +483,6 @@ export function runGate2(options: Gate2Options): Gate2Report {
     stealthPairs,
     absence,
     gate1,
-    invest,
     pass: metrics.every((m) => m.pass !== false),
   };
 }
@@ -556,7 +535,6 @@ export function formatGate2(report: Gate2Report): string {
       .sort((a, b) => b[1] - a[1])
       .map(([id, share]) => `| ${id} | ${pct(share)} |`),
     '',
-    ...(report.invest === null ? [] : [formatInvestLines(report.invest)]),
   ];
   if (sample !== undefined) {
     lines.push(

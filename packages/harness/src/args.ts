@@ -3,7 +3,7 @@
  * flag or command is an error with a non-zero exit, never silently ignored
  * (Gate 1 review F1: `--suite gate1` used to run the default command).
  */
-export const COMMANDS = ['play', 'determinism', 'bench', 'gate1', 'gate2', 'invest', 'predictions'] as const;
+export const COMMANDS = ['play', 'determinism', 'bench', 'gate1', 'gate2', 'predictions'] as const;
 export type HarnessCommand = (typeof COMMANDS)[number];
 
 interface FlagSpec {
@@ -19,8 +19,7 @@ const FLAGS: Record<HarnessCommand, FlagSpec> = {
   determinism: { numbers: ['seeds', 'ticks'], strings: [], switches: ['no-browser'] },
   bench: { numbers: ['ticks', 'runs'], strings: [], switches: ['no-browser'] },
   gate1: { numbers: ['games', 'seed', 'ranges', 'ticks'], strings: ['out', 'set'], switches: [], positive: ['ranges'] },
-  gate2: { numbers: ['games', 'seed', 'ticks', 'absence'], strings: ['out', 'set'], switches: ['no-invest', 'no-rates'], positive: ['games'] },
-  invest: { numbers: ['games', 'seed', 'ticks'], strings: ['out', 'set'], switches: ['no-rates'], positive: ['games'] },
+  gate2: { numbers: ['games', 'seed', 'ticks', 'absence'], strings: ['out', 'set'], switches: [], positive: ['games'] },
   predictions: { numbers: [], strings: ['files', 'dir', 'out'], switches: [] },
 };
 

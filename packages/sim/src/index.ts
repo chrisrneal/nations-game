@@ -29,18 +29,6 @@ export {
 } from './world.ts';
 export { rosterFromWorldData } from './data.ts';
 export {
-  HOME_GOODS,
-  MAX_INVEST_SHARE_BP,
-  gapBpOf,
-  investBase,
-  investBuy,
-  investCost,
-  investView,
-  pointPrice,
-} from './invest.ts';
-export {
-  bareBalance,
-  bareFlow,
   flowsFor,
   isFair,
   potentialOutput,
@@ -67,7 +55,6 @@ export {
   type PledgeCommand,
   type WithdrawPledgeCommand,
   type FundResilienceCommand,
-  type InvestCommand,
   type MakeOfferCommand,
   type PingCommand,
   type RejectOfferCommand,
@@ -77,7 +64,7 @@ export {
   type WithdrawOfferCommand,
 } from './commands.ts';
 export { canonicalOrder, step, type StepResult } from './step.ts';
-export { refreshRules, viewFor, type ForeignNation, type NationView } from './view.ts';
+export { viewFor, type ForeignNation, type NationView } from './view.ts';
 export { CommandQueue, type SubmitResult } from './queue.ts';
 export { MIGRATIONS, createSave, loadSave, migrateSave, type LoadedGame, type SimSaveFile } from './save.ts';
 export { Session } from './session.ts';

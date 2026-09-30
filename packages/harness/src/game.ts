@@ -6,7 +6,7 @@
 import type { Command, ControllerSlot, Event, NationId, NationView } from '@nations/contracts';
 import { AiDirector, endowmentsOf } from '@nations/ai';
 import { Session, createWorld, hashState, mix32, scoreboard, viewFor, type RosterEntry, type Scoreboard, type WorldState } from '@nations/sim';
-import { aiDecide, botDecide, investRateOf, playedByAi, type Strategy } from './bots.ts';
+import { aiDecide, botDecide, playedByAi, type Strategy } from './bots.ts';
 
 export interface GameOptions {
   readonly seed: number;
@@ -24,8 +24,8 @@ export interface GameOptions {
   readonly onTick?: (state: WorldState, events: readonly Event[]) => void;
   /**
    * Mid-game changes of strategy: from `tick` on, `nation` plays `strategy` (the
-   * Gate 2 spoiler scenarios). Not to `freeRider` or a fixed-rate investor: the
-   * AI's free-riders and investment rates are fixed when the director is built.
+   * Gate 2 spoiler scenarios). Not to `freeRider`: the AI's free-riders are fixed
+   * when the director is built.
    */
   readonly switches?: readonly { readonly tick: number; readonly nation: string; readonly strategy: Strategy }[];
   /**
@@ -80,15 +80,10 @@ export function playGame(options: GameOptions): GameResult {
     for (const sw of options.switches ?? []) if (sw.nation === id && sw.tick <= t) strategy = sw.strategy;
     return strategy;
   };
-  if ((options.switches ?? []).some((sw) => sw.strategy === 'freeRider' || investRateOf(sw.strategy) !== null)) throw new Error('freeRider and the fixed-rate investors are fixed for the whole game: they cannot be switched to');
+  if ((options.switches ?? []).some((sw) => sw.strategy === 'freeRider')) throw new Error('freeRider is fixed for the whole game: it cannot be switched to');
   // One director per game, for every nation the AI plays; it perceives every tick's events.
   const freeRiders = state0.nationOrder.filter((id) => strategyAt(id, 0) === 'freeRider');
-  const investRates: Record<string, number> = {};
-  for (const id of state0.nationOrder) {
-    const rate = investRateOf(strategyAt(id, 0));
-    if (rate !== null) investRates[id] = rate;
-  }
-  const director = new AiDirector({ endowments: endowmentsOf(roster), seed: aiSeed, freeRiders, investRates });
+  const director = new AiDirector({ endowments: endowmentsOf(roster), seed: aiSeed, freeRiders });
 
   let submitted = 0;
   let rejectedAtSubmit = 0;

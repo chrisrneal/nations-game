@@ -139,44 +139,6 @@ export const TUNABLES = {
     note: 'Prompt 06 gap-filler: the resilience-floor dial\'s starting position (RULES 8.2 names the dial, not its default). 0 turns automatic funding off.',
   },
 
-  // Home investment (prompt 17, RULES 2.9)
-  investCostBp: {
-    value: 1300,
-    min: 300,
-    max: 3000,
-    note: 'Prompt 17: cost of the first point (1% of a good\'s demand) as basis points of the nation\'s potential output, so 1300 is 13% of one month\'s output. The main lever on how much of its income a nation puts into building.',
-  },
-  investEscalationPct: {
-    value: 1,
-    min: 0,
-    max: 10,
-    note: 'Prompt 17: percent added to a point\'s price for every point already committed in that good (diminishing returns). At 1 the 40th point costs 1.4x the first; at 0 the price is flat and only the ceiling limits building.',
-  },
-  investMaxPct: {
-    value: 100,
-    min: 20,
-    max: 100,
-    note: 'Prompt 17: ceiling on committed capacity in either good, in points (percent of demand). Below 20 a deep importer cannot cross the shortfall cap\'s dead zone (RULES 7.5); at 100 a nation can replace every import.',
-  },
-  investLagTicks: {
-    value: 3,
-    min: 1,
-    max: 18,
-    note: 'Prompt 17: months between ordering capacity and its coming online. Long enough that building is a bet on the future; short enough that a build ordered in the first half of a game pays before the score is read.',
-  },
-  investUpkeepBpPer10: {
-    value: 18,
-    min: 0,
-    max: 200,
-    note: 'Prompt 17 (tuning revision 1): output lost every month for every 10 points of home capacity online, in basis points of output. Running your own farms and plant takes workers and land from the rest of the economy. Without it Credit is the only cost of building, Credit is never short, and building past what trade leaves uncovered costs nothing; at 0 the rule is that first design.',
-  },
-  defaultInvestBp: {
-    value: 250,
-    min: 0,
-    max: 1000,
-    note: 'Prompt 17: starting position of the home-investment slider of the budget dial (RULES 8.2 dial 3), in basis points of income. What an absent player, a region and every bot that never sets it invests. Small on purpose: playing the dial is worth more than leaving it.',
-  },
-
   // Trade
   offerLifeTicks: {
     value: 3,
@@ -598,36 +560,6 @@ export const TUNABLES = {
     min: 40,
     max: 100,
     note: 'A hard bargainer skips a pledge once the pool is this percent funded. Its monthly contribution still pays part of its share, which is what keeps its cover (RULES 4.3 rule 1). 100 means it never free-rides.',
-  },
-  aiInvestSharePct: {
-    value: 25,
-    min: 5,
-    max: 100,
-    note: 'Prompt 17: percent of its spare Credit an AI spends each month on its investment plan (RULES 7.5).',
-  },
-  aiInvestReserveTicks: {
-    value: 1,
-    min: 0,
-    max: 6,
-    note: 'Prompt 17: months of income an AI keeps back before any Credit counts as spare for investing.',
-  },
-  aiInvestPaybackPct: {
-    value: 55,
-    min: 10,
-    max: 200,
-    note: 'Prompt 17: percent of its cost a plan must return in avoided shortfall to be followed. 100 is break-even; above it the AI wants a margin; below it the AI treats Credit as worth less than the output it buys.',
-  },
-  aiInvestSmoothTicks: {
-    value: 4,
-    min: 1,
-    max: 12,
-    note: 'Prompt 17: number of months the running average of the shortage an AI has suffered spans (RULES 7.5). 1 believes only last month.',
-  },
-  aiInvestCoverPriorPct: {
-    value: 40,
-    min: 0,
-    max: 100,
-    note: 'Prompt 17: before it has suffered anything, the percent of a structural gap an AI expects trade to cover. Matches the world\'s cover in RULES 2.8.',
   },
 } as const satisfies Readonly<Record<string, Tunable>>;
 
