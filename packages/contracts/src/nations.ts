@@ -92,6 +92,8 @@ export interface CollectiveGoals {
 export interface ScoresView {
   /** Collective multiplier x 10,000 (RULES 5.2), the same for every nation. */
   readonly multiplierBp: number;
+  /** The mean of the four world goals, 0-10,000: what the multiplier and the World Accord read (RULES 5.2, 5.4). */
+  readonly collectiveBp: number;
   /** The four world goals behind it, each 0-10,000 (RULES 5.2). */
   readonly goals: CollectiveGoals;
   /** Every playable nation, in the world's nation order. */

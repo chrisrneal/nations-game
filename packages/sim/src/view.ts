@@ -86,6 +86,7 @@ export function viewFor(state: WorldState, selfId: NationId): NationView {
     prices: { ...state.prices },
     scores: {
       multiplierBp: board.multiplierBp,
+      collectiveBp: board.collectiveBp,
       goals: { ...board.goals },
       nations: board.nations.map((n) => ({ id: n.id, ownScoreBp: n.ownScoreBp, finalScore: n.finalScore })),
     },

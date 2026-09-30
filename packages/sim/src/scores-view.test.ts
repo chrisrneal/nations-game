@@ -85,7 +85,8 @@ describe('scores in the View', () => {
   it('carries only public numbers: no stock, trust or policy of another nation', () => {
     const view = viewFor(play(5, [[]]), 'aa' as NationId);
     for (const n of view.scores.nations) expect(Object.keys(n).sort()).toEqual(['finalScore', 'id', 'ownScoreBp']);
-    expect(Object.keys(view.scores).sort()).toEqual(['goals', 'multiplierBp', 'nations']);
+    // collectiveBp is the mean of the four public goals (RULES 5.2, 5.4): public by construction.
+    expect(Object.keys(view.scores).sort()).toEqual(['collectiveBp', 'goals', 'multiplierBp', 'nations']);
     expect(Object.keys(view.scores.goals).sort()).toEqual(['atBaselineBp', 'climateAvoidedBp', 'deficitsMetBp', 'pandemicAvoidedBp']);
   });
 });

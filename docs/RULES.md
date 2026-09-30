@@ -575,6 +575,28 @@ the same nation from the same position, and requires the saboteur's median
 or under 1.5x fair share and neither topping the score more often than the
 reciprocal cooperator, with nations assigned at random (decision record G1).
 
+
+### 5.4 The World Accord: the shared threshold *(100x slice 7)*
+
+The vision is co-opetition: a shared threshold plus an individual ranking. The
+multiplier is continuous and stays so (D3: never a binary "everyone loses"), so
+the threshold is a verdict on top of it, not a rule inside it:
+
+```
+the world made it  <=>  collective (the mean of the four goals) >= worldAccordBp at the end
+```
+
+The end of a game reads as both: whether the world made the Accord, and where
+you ranked. *Victory* is the world making it with you first; *podium* is the world
+making it with you in the top three; *shared success* is the world making it; *the
+world fell short* is anything else, whatever your rank. Scores are unchanged, so
+5.3 still holds: a nation that drags the world under the line loses its own
+multiplier with everyone else's.
+
+At `worldAccordBp` 8,500, all-AI worlds end at 83-92% and worlds with free-riders,
+hoarders and isolationists at 59-80%, so whether the world makes it is decided by
+how the players behave.
+
 ---
 
 ## 6. Starting trust
@@ -884,6 +906,7 @@ wherever they feed economy maths.
 | `collectiveCeilingBp` | 14000 | 11000 | 20000 | Multiplier when the world achieves everything (1.40). The gap to the floor is how much cooperation is worth |
 | `baselineToleranceBp` | 9500 | 9000 | 9900 | `ownScore` counted as "at baseline" for the collective goal (0.95) |
 | `scoreScale` | 1000 | 100 | 10000 | Cosmetic multiplier so final scores read as four digits |
+| `worldAccordBp` | 8500 | 5000 | 9500 | The World Accord (5.4): the shared goals' mean at the end at or above which the world made it. Presentation only; never changes a score |
 | `scoreSmoothingTicks` | 12 | 1 | 24 | Window of the monthly exponential average ownScore is read from (§5.1). 1 is the old final-month reading. Prompt 09 tuning (seeds 1001-1400 only) |
 
 ### AI

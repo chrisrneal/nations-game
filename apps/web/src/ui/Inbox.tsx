@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactElement } from 'react';
 import type { GameUpdate, ResolvedPrediction } from '../platform/index.ts';
 import { nameOf } from '../world/nations.ts';
 import { cardsFor, type CardAction, type CardOption, type DecisionCard } from './cards.ts';
+import { Briefing } from './Briefing.tsx';
 import { GameOver } from './GameOver.tsx';
 import { Recap } from './Recap.tsx';
 import { Sheet } from './Sheet.tsx';
@@ -91,6 +92,7 @@ export function Inbox(props: {
   return (
     <section className="inbox" aria-label="Decisions">
       {standing.over && <GameOver update={props.update} onNewGame={props.onNewGame} />}
+      {!standing.over && <Briefing view={view} />}
       {recap !== null && <Recap recap={recap} onDismiss={props.onDismissRecap} />}
       <h1 className="section-title">
         Decisions <span className="count">{cards.length}</span>
