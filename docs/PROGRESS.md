@@ -42,6 +42,18 @@ Gate 2 verdict: **FAIL** (docs/gates/GATE-2.md, independent review, prompt 12): 
 
 ## Session log
 
+### 2026-09-30 - 100x slice 2, No dead zone in the shortfall penalty (H3)
+**Changed.** `shortfallPenaltyBpPerPct` 35 -> 20 and `maxShortfallPenaltyPct` 30 -> 60
+(inside their bands; RULES 2.7, 2.8 and 11). The penalty is now a straight line with
+no reachable cap, so every unit of food or energy moves output for every nation.
+**Result.** Seeds 1001-1100, before -> after: Japan's gain from good play +5.4% ->
++16.9%, Korea +4.4% -> +13.6%; trading vs isolating +18.2% -> +17.4% (still above
++15%); stealth sabotage paid in 10% -> 2% of pairs; crisis success 60.8%; 0 crashes,
+negative stocks or dead states. docs/balance/100x-slice2.md.
+**How to see it.** Play Japan: the resource strip's penalty now falls with every
+trade, instead of sitting at 30% until most of the deficit is covered.
+**Left.** Mexico and Turkiye still have a small lever (joint projects, slice 3).
+
 ### 2026-09-30 - 100x slice 1, Diagnosis and the joint-projects design (architect, H1)
 **Changed.** docs/100X.md: what the game is, a blunt structural diagnosis (every
 decision has one right answer, Credit piles up to about 50 months of output unused,

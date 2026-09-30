@@ -146,9 +146,13 @@ penalty  = min(maxShortfallPenaltyPct, unmetPct * shortfallPenaltyBpPerPct / 100
 output  *= (1 - penalty / 100)
 ```
 
-At the starting values, 10% of demand unmet costs 3.5% of output, and the penalty
-caps at 30%. A nation is never killed by a shortfall; it is made poorer, which keeps
-Gate 1's "dead states under 2%" achievable while still making a deficit hurt.
+At the starting values, 10% of demand unmet costs 2% of output, and food and
+energy both fully unmet cost 40%. The cap (60%) is out of reach: it is a safety
+net, not a plateau. *(Decision record H3: until then the slope was 35 and the cap
+30%, and Japan, Korea and Turkiye sat on the cap, where their first 70 points of
+cover were worth nothing.)* A nation is never killed by a shortfall; it is made
+poorer, which keeps Gate 1's "dead states under 2%" achievable while still making
+every unit of a deficit hurt.
 
 **Gate metric.** Gate 1: 200 seeded full-roster games with no crashes, no negative
 stocks, and sources and sinks in band. The conservation invariant is: for each
@@ -185,9 +189,10 @@ structuralPenalty    = the §2.7 penalty on structuralUnmet (food and energy tog
 
 Exporters and balanced nations expect no penalty. At the start of the real game,
 with the §11 values, the world can cover 35% of its food deficits and 40% of its
-energy deficits. Japan, Korea and Turkiye expect the 30% cap; Egypt, Saudi Arabia
-and Mexico about 20-21%; Germany 17%; China and India 11-12%; Indonesia and
-Nigeria 6%; South Africa 1%.
+energy deficits. With the H3 slope, Japan and Korea expect about 22%, Turkiye
+17%; Egypt, Saudi Arabia and Mexico about 11-12%; Germany 10%; China and India
+6-7%; Indonesia and Nigeria 3%; South Africa under 1%. (At the old slope and cap,
+Japan, Korea and Turkiye expected the 30% cap.)
 
 The actual shortfall penalty (§2.7) is unchanged: a nation that goes short still
 loses that output, and the world still loses it. What changes is the yardstick
@@ -776,9 +781,9 @@ wherever they feed economy maths.
 | `foodDemandPerMillionPeople` | 1 | 1 | 3 | One food unit feeds one million people for a month. Raising it makes food scarcer for everyone equally |
 | `energyDemandPerOutput` | 100 | 60 | 150 | Energy demand as a percent of output. The band covers a world that electrifies fast and one that does not |
 | `selfSufficiencyPivot` | 50 | 40 | 60 | The index value at which production equals demand. Moving it shifts the whole world into surplus or deficit |
-| `shortfallPenaltyBpPerPct` | 35 | 10 | 120 | Output cost per percent of unmet demand. At 35, a 10% shortfall costs 3.5% of output. Prompt 09 tuning (seeds 1001-1400 only): 40 -> 35 |
+| `shortfallPenaltyBpPerPct` | 20 | 10 | 120 | Output cost per percent of unmet demand. At 20, a 10% shortfall costs 2% of output. Prompt 09 tuning (seeds 1001-1400 only): 40 -> 35; H3: 35 -> 20, with the cap out of reach, so every unit of cover counts for every nation |
 | `structuralCoverSharePct` | 80 | 50 | 100 | Share of the world's structural surplus counted as reachable when setting each importer's fair share and its baseline (§2.8). 100 assumes every spare unit reaches a buyer; lower allows for goods that never reach market. Prompt 09 tuning (seeds 1001-1400 only) |
-| `maxShortfallPenaltyPct` | 30 | 10 | 60 | Cap on the shortfall penalty, so no nation is killed by one bad tick (Gate 1: dead states under 2%) |
+| `maxShortfallPenaltyPct` | 60 | 10 | 60 | Cap on the shortfall penalty, so no nation is killed by one bad tick (Gate 1: dead states under 2%). H3: 30 -> 60, out of reach at a slope of 20 |
 | `mineralsEnergyBonusBpPer10` | 10 | 0 | 40 | Energy production bonus per 10 points of mineral endowment. Caps at +10% at the starting value |
 | `startingStockTicks` | 1 | 0 | 6 | Starting Food and Energy as months of own production, starting Credit as months of output. Above 0 so nobody starts a game already short |
 | `mineralsOutputBonusBpPer10` | 10 | 0 | 40 | Output bonus per 10 points of refining leverage. Caps at +10%. Set both to 0 to test a world where minerals do not matter |

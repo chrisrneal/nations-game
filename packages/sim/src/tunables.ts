@@ -77,10 +77,10 @@ export const TUNABLES = {
     note: 'The index value at which production equals demand. Moving it shifts the whole world into surplus or deficit.',
   },
   shortfallPenaltyBpPerPct: {
-    value: 35,
+    value: 20,
     min: 10,
     max: 120,
-    note: 'Output cost per percent of unmet demand. At 35, a 10% shortfall costs 3.5% of output. Prompt 09 gate1 tuning (seeds 1001-1400 only): 40 -> 35.',
+    note: 'Output cost per percent of unmet demand. At 20, a 10% shortfall costs 2% of output, and food and energy fully unmet together cost 40%. Prompt 09 gate1 tuning: 40 -> 35; decision record H3: 35 -> 20 with the cap at 60, so no nation sits in a dead zone where the next unit of cover is worth nothing.',
   },
   structuralCoverSharePct: {
     value: 80,
@@ -89,10 +89,10 @@ export const TUNABLES = {
     note: 'Share of the world\'s structural surplus counted as reachable when setting each importer\'s fair share and its baseline (RULES 2.8). 100 assumes every spare unit reaches a buyer; lower allows for goods that never reach market (regions answer offers but never make them). Prompt 09 gate1 tuning (seeds 1001-1400 only): 80.',
   },
   maxShortfallPenaltyPct: {
-    value: 30,
+    value: 60,
     min: 10,
     max: 60,
-    note: 'Cap on the shortfall penalty (food and energy together), so no nation is killed by one bad tick (Gate 1: dead states under 2%).',
+    note: 'Cap on the shortfall penalty (food and energy together), so no nation is killed by one bad tick (Gate 1: dead states under 2%). Decision record H3: 30 -> 60, out of reach at 20 bp per percent (both goods fully unmet is 40%), so it is a safety net, not a plateau.',
   },
   mineralsEnergyBonusBpPer10: {
     value: 10,
