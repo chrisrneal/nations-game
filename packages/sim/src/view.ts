@@ -1,14 +1,19 @@
-import type { AppealAnswer, ForeignNation, NationId, NationMap, NationRecord, NationView } from '@nations/contracts';
+import type { AppealAnswer, ForeignNation, NationEndowment, NationId, NationMap, NationRecord, NationView } from '@nations/contracts';
+import { investView } from './invest.ts';
 import { scoreboard } from './score.ts';
 import { TUNABLES } from './tunables.ts';
 import type { WorldState } from './world.ts';
 
 export type { ForeignNation, NationView } from '@nations/contracts';
 
-/** Every tunable's value, by id: the public rules, the same for every nation. */
-const RULES: Readonly<Record<string, number>> = Object.freeze(
-  Object.fromEntries(Object.entries(TUNABLES).map(([id, tunable]) => [id, tunable.value])),
-);
+/**
+ * Every tunable's value, by id: the public rules, the same for every nation.
+ * Read from `TUNABLES` when each View is built, so a harness run that sets a
+ * tunable (`--set`, packages/harness/src/overrides.ts) reaches the AI too.
+ */
+function currentRules(): Readonly<Record<string, number>> {
+  return Object.freeze(Object.fromEntries(Object.entries(TUNABLES).map(([id, tunable]) => [id, tunable.value])));
+}
 
 /**
  * Builds a nation's View (seam 6). Other nations are built by copying the
@@ -63,6 +68,8 @@ export function viewFor(state: WorldState, selfId: NationId): NationView {
         policy: { ...priv.policy },
         trust: { ...priv.trust },
         last: { ...priv.last },
+        home: { ...priv.home },
+        builds: priv.builds.map((b) => ({ ...b })),
       },
     },
     others,
@@ -85,7 +92,8 @@ export function viewFor(state: WorldState, selfId: NationId): NationView {
       pledges: state.pledges.map((p) => ({ ...p })),
       hits: state.hits.filter((h) => h.nationId === selfId).map((h) => ({ ...h })),
     },
-    rules: RULES,
+    invest: investView(self, state.endowments[selfId] as NationEndowment),
+    rules: currentRules(),
   };
 }
 

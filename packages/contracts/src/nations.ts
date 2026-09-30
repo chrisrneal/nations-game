@@ -1,7 +1,9 @@
 import type { NationId } from './nation.ts';
 import type {
+  Build,
   EconomyReport,
   Flow,
+  HomeCapacity,
   NationKind,
   NationMap,
   Prices,
@@ -50,6 +52,10 @@ export interface NationPrivate {
   readonly pledgesBroken: number;
   /** Credit this nation has paid into the crisis pools over the game. */
   readonly pooledTotal: number;
+  /** Home Food and Energy capacity online, in basis points of demand (RULES 2.9). Private: it is in `public` flows only as production. */
+  readonly home: HomeCapacity;
+  /** Home capacity ordered and not yet online, oldest first. */
+  readonly builds: readonly Build[];
 }
 
 export interface NationRecord {
@@ -97,6 +103,38 @@ export interface ScoresView {
   readonly nations: readonly NationScore[];
 }
 
+/** One good's home capacity, as this nation's own View quotes it (RULES 2.9). */
+export interface InvestGoodView {
+  /** Online, in basis points of demand (100 = one point). */
+  readonly onlineBp: number;
+  /** Ordered and not yet online. */
+  readonly pendingBp: number;
+  /** What is still missing at home once pending capacity lands, in basis points of demand; 0 when covered. */
+  readonly gapBp: number;
+  /** How much more may be committed before the ceiling, in basis points. */
+  readonly roomBp: number;
+  /** Credit for the next whole point at the current commitment. */
+  readonly nextPointCost: number;
+}
+
+/**
+ * Everything a card, dial or AI needs to price home investment without
+ * recomputing a rule (RULES 2.9): the price of a point in band k is
+ * `basePointCost * (100 + investEscalationPct * k) / 100`, k being the whole
+ * points already committed.
+ */
+export interface InvestView {
+  readonly lagTicks: number;
+  /** Ceiling on committed capacity per good, in basis points. */
+  readonly maxBp: number;
+  /** This nation's potential output: what a point's price and value are scaled by. */
+  readonly potentialOutput: number;
+  /** Credit for the first point in a good. */
+  readonly basePointCost: number;
+  readonly food: InvestGoodView;
+  readonly energy: InvestGoodView;
+}
+
 /**
  * One nation's picture of the world: the contracts `View` plus this nation's
  * own record, every other nation's public face, the offers it is party to and
@@ -115,6 +153,8 @@ export interface NationView extends View {
   readonly scores: ScoresView;
   /** Pools, open crisis appeals, recent results and open pledges (public), plus this nation's own damage. */
   readonly crises: CrisesView;
+  /** Prices and room for building Food and Energy capacity at home (RULES 2.9). */
+  readonly invest: InvestView;
   /**
    * The value of every tunable, by id: the public rules of this game. An AI
    * reads its numbers here, never from its own constants, so tuning one file

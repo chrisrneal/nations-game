@@ -111,12 +111,51 @@ function migrate3to4(save: Record<string, unknown>): Record<string, unknown> {
   return { ...save, schemaVersion: 4, snapshot: upgraded, stateHash: hashState(upgraded) };
 }
 
+/**
+ * 4 -> 5 (prompt 17: home investment). Like the earlier steps, a save with
+ * nothing to replay keeps its position: every nation gains no home capacity, no
+ * builds, the default investment share and a zero investment in its report, the
+ * ledger gains the new sink at zero, and the hash is re-recorded. A save that
+ * must replay is refused: the standing rule now invests every month, so the log
+ * would replay to a different position.
+ */
+function migrate4to5(save: Record<string, unknown>): Record<string, unknown> {
+  if (needsReplay(save)) {
+    throw new Error('This save needs its moves replayed, and home investment changed the rules since it was made, so they would not replay to the same position. Start a new game.');
+  }
+  const snapshot = save.snapshot as Record<string, unknown>;
+  const nations = (snapshot.nations ?? {}) as Record<string, Record<string, unknown>>;
+  const upgradedNations: Record<string, unknown> = {};
+  const policyDefaults = defaultPolicy();
+  for (const [id, n] of Object.entries(nations)) {
+    const priv = n.private as Record<string, unknown>;
+    upgradedNations[id] = {
+      ...n,
+      private: {
+        ...priv,
+        home: { food: 0, energy: 0 },
+        builds: [],
+        policy: { ...(priv.policy as object), investBp: policyDefaults.investBp },
+        last: { ...EMPTY_REPORT, ...(priv.last as object), invested: 0 },
+      },
+    };
+  }
+  const upgraded = {
+    ...snapshot,
+    schemaVersion: 5,
+    nations: upgradedNations,
+    ledger: { ...EMPTY_LEDGER, ...(snapshot.ledger as object), creditSpentInvestment: 0 },
+  } as unknown as WorldState;
+  return { ...save, schemaVersion: 5, snapshot: upgraded, stateHash: hashState(upgraded) };
+}
+
 export const MIGRATIONS: Readonly<Record<number, (save: Record<string, unknown>) => Record<string, unknown>>> = {
   1: () => {
     throw new Error('This save is from the Phase 0 prototype, which had no economy. Start a new game.');
   },
   2: migrate2to3,
   3: migrate3to4,
+  4: migrate4to5,
 };
 
 /** Brings a parsed save up to the current schema, or throws loudly. */

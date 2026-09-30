@@ -1,4 +1,4 @@
-import type { Command, ControllerSlot, Event, NationId, NationRecord, StandingPolicy } from '@nations/contracts';
+import type { Command, ControllerSlot, Event, NationEndowment, NationId, NationRecord, StandingPolicy } from '@nations/contracts';
 import { asSimCommand, validateCommand } from './commands.ts';
 import {
   answerAppeals,
@@ -16,6 +16,7 @@ import {
   type CrisisContext,
 } from './crisis.ts';
 import { economyTick, referencePrices, structuralCover } from './economy.ts';
+import { baseCostFor, committedBpOf, investCost, placeOrder } from './invest.ts';
 import { nextScoreTrack } from './score.ts';
 import {
   acceptOffer,
@@ -106,6 +107,8 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
   };
   const draft = (): WorldState => ({ ...state, nations, controllers, offers: ctx.offers, crises: ctx.crises, pledges: ctx.pledges });
   const perNation = new Map<string, number>();
+  /** Credit each nation put into home capacity by command this tick, for its report. */
+  const investedBy = new Map<NationId, number>();
 
   const reject = (command: Command, reason: string): void => {
     events.push({
@@ -204,6 +207,22 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
         });
         break;
       }
+      case 'invest': {
+        const n = nations[typed.nationId] as NationRecord;
+        const { good, bp } = typed.payload;
+        const cost = investCost(baseCostFor(n, state.endowments[n.id] as NationEndowment), committedBpOf(n.private, good), bp);
+        const readyTick = state.tick + TUNABLES.investLagTicks.value;
+        nations[n.id] = placeOrder(n, good, bp, cost, readyTick);
+        ctx.ledger = { ...ctx.ledger, creditSpentInvestment: ctx.ledger.creditSpentInvestment + cost };
+        investedBy.set(n.id, (investedBy.get(n.id) ?? 0) + cost);
+        events.push({
+          tick: state.tick,
+          type: 'investmentMade',
+          payload: { nationId: n.id, good, bp, cost, readyTick, by: 'command' },
+          audience: [n.id],
+        });
+        break;
+      }
       case 'contribute':
         contributeByCommand(ctx, typed.nationId, typed.payload.pool, typed.payload.amount);
         break;
@@ -231,7 +250,7 @@ export function step(state: WorldState, commands: readonly Command[]): StepResul
     const endowment = state.endowments[id];
     if (endowment === undefined) throw new Error(`No endowment for "${id}"`);
     const damage = damageAt(ctx.hits, id, state.tick);
-    const result = economyTick(nations[id] as NationRecord, endowment, ctx.ledger, ctx.gainCbp.get(id) ?? 0, ctx.cover, damage.bp);
+    const result = economyTick(nations[id] as NationRecord, endowment, ctx.ledger, ctx.gainCbp.get(id) ?? 0, ctx.cover, damage.bp, state.tick, investedBy.get(id) ?? 0);
     const lost = (bp: number): number => Math.floor((result.preCrisisOutput * Math.min(10_000, bp)) / 10_000);
     ctx.ledger = {
       ...result.ledger,

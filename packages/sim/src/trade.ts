@@ -8,7 +8,7 @@ import type {
   TradeOffer,
   WorldLedger,
 } from '@nations/contracts';
-import { CAPACITY_CEILING_E4, fairShareDeficit, isFair, mulDiv, structuralBalance, type StructuralCover } from './economy.ts';
+import { CAPACITY_CEILING_E4, bareBalance, bareFlow, fairShareDeficit, isFair, mulDiv, structuralBalance, type StructuralCover } from './economy.ts';
 import { adjustTrust } from './trust.ts';
 import { TUNABLES } from './tunables.ts';
 
@@ -98,10 +98,11 @@ function moveStock(nation: NationRecord, amount: ResourceAmount, sign: 1 | -1): 
  * plus its fair share of each structural deficit (RULES 2.8). A nation with
  * no imbalance has nothing to clear and gains nothing from trade.
  */
-export function tradeImbalanceMilli(nation: Pick<NationRecord, 'public'>, prices: Prices, cover: StructuralCover): number {
+export function tradeImbalanceMilli(nation: Pick<NationRecord, 'public' | 'private'>, prices: Prices, cover: StructuralCover): number {
   let total = 0;
   for (const good of ['food', 'energy'] as const) {
-    const flow = nation.public[good];
+    // Before any home capacity (RULES 3.3, 2.9): building at home does not shrink what a trade can clear.
+    const flow = bareFlow(nation, good);
     const balance = flow.production - flow.demand;
     total += (balance >= 0 ? balance : fairShareDeficit(flow, cover[good])) * prices[good];
   }
@@ -124,8 +125,8 @@ export function tradeImbalanceMilli(nation: Pick<NationRecord, 'public'>, prices
  */
 function applyGains(ctx: TradeContext, supplier: NationId, receiver: NationId, leg: ResourceAmount): void {
   if (leg.resource === 'credit') return;
-  const surplus = structuralBalance(get(ctx, supplier), leg.resource);
-  const deficit = -structuralBalance(get(ctx, receiver), leg.resource);
+  const surplus = bareBalance(get(ctx, supplier), leg.resource);
+  const deficit = -bareBalance(get(ctx, receiver), leg.resource);
   if (surplus <= 0 || deficit <= 0) return;
   const inKey = `${receiver}:${leg.resource}:in`;
   const covered = Math.min(leg.amount, deficit - (ctx.covered.get(inKey) ?? 0));
