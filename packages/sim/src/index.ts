@@ -64,7 +64,7 @@ export {
   type WithdrawOfferCommand,
 } from './commands.ts';
 export { canonicalOrder, step, type StepResult } from './step.ts';
-export { viewFor, type ForeignNation, type NationView } from './view.ts';
+export { refreshRules, viewFor, type ForeignNation, type NationView } from './view.ts';
 export { CommandQueue, type SubmitResult } from './queue.ts';
 export { MIGRATIONS, createSave, loadSave, migrateSave, type LoadedGame, type SimSaveFile } from './save.ts';
 export { Session } from './session.ts';

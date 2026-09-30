@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { TUNABLES } from '@nations/sim';
+import { TUNABLES, createWorld, viewFor } from '@nations/sim';
+import { loadRoster } from './roster.ts';
 import { applyOverrides, parseOverrides } from './overrides.ts';
 
 describe('--set tunable overrides for tuning sweeps', () => {
@@ -32,5 +33,16 @@ describe('--set tunable overrides for tuning sweeps', () => {
     restore();
     restore = undefined;
     expect(TUNABLES.nonPayerCoverPct.value).toBe(before);
+  });
+
+  it('reaches the rules a View carries, so a number only the AI reads sweeps too, and restores them', () => {
+    const state = createWorld({ seed: 1, roster: loadRoster() });
+    const who = state.nationOrder[0]!;
+    const before = viewFor(state, who).rules.aiNoiseBp as number;
+    restore = applyOverrides({ aiNoiseBp: before === 0 ? 10 : 0 });
+    expect(viewFor(state, who).rules.aiNoiseBp).toBe(before === 0 ? 10 : 0);
+    restore();
+    restore = undefined;
+    expect(viewFor(state, who).rules.aiNoiseBp).toBe(before);
   });
 });

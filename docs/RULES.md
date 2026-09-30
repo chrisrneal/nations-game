@@ -559,8 +559,9 @@ Two constraints this places on future work:
 **Gate metric.** Gate 2: a trailing nation gains nothing by sabotage. The harness
 runs a saboteur archetype against a cooperative archetype on paired seeds, playing
 the same nation from the same position, and requires the saboteur's median
-`finalScore` to be strictly lower. Gate 4: warmonger and betrayer archetypes at or
-under 1.5x fair share.
+`finalScore` to be strictly lower. Gate 4: warmonger and betrayer archetypes each at
+or under 1.5x fair share and neither topping the score more often than the
+reciprocal cooperator, with nations assigned at random (decision record G1).
 
 ---
 

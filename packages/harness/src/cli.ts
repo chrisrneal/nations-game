@@ -14,8 +14,10 @@
  *                                                    seeds and reports each range and all of them pooled
  *   npm run harness -- gate2 [--games 200]           the Gate 2 suite: random archetypes, crisis success,
  *     [--seed 1] [--ticks T] [--absence 20]          defection and retaliation, win rates, cooperator vs
- *     [--out DIR]                                    free-rider and spoiler pairs, the 24-hour absence
- *                                                    test, and the Gate 1 suite again; writes gate2.md
+ *     [--no-idle] [--out DIR]                        free-rider and spoiler pairs, the 24-hour absence
+ *                                                    test, the AI-vs-idle and decision-density lines (prompt
+ *                                                    17; --no-idle skips them), and the Gate 1 suite again;
+ *                                                    writes gate2.md
  *   npm run harness -- predictions                   prediction accuracy (Gate 2) from saves exported on
  *     [--files a.json,b.json] [--dir DIR] [--out DIR] the phone with prediction mode on; writes predictions.md
  *   `--set id=value[,id=value]` (play, gate1, gate2) replaces sim tunables for that run, inside
@@ -140,7 +142,14 @@ async function gate2(): Promise<void> {
   const ticks = parsed.numbers.ticks;
   const outDir = resolve(option('out', join(fileURLToPath(new URL('..', import.meta.url)), 'out')));
   const start = performance.now();
-  const report = runGate2({ games, firstSeed, roster, absenceSeeds: flag('absence', 20), ...(ticks === undefined ? {} : { ticks }) });
+  const report = runGate2({
+    games,
+    firstSeed,
+    roster,
+    absenceSeeds: flag('absence', 20),
+    ...(ticks === undefined ? {} : { ticks }),
+    ...(parsed.switches.includes('no-idle') ? { skipIdle: true } : {}),
+  });
   const text = [formatGate2(report), report.gate1 === null ? '' : formatGate1(report.gate1, `Gate 1 suite rerun, seeds ${firstSeed}-${firstSeed + games - 1} (top scorer waived)`).replace(/^## /gm, '### ').replace(/^# /, '## ')].join('\n');
   mkdirSync(outDir, { recursive: true });
   writeFileSync(join(outDir, 'gate2.md'), `${text}\n`);
