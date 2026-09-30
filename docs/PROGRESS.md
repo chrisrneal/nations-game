@@ -68,8 +68,8 @@ so the rule needed an output cost to be a trade-off at all.
 **How to see it.** docs/balance/gate2-prompt17.md (design, tuning table, graded results,
 owner decision). `npm run harness -- gate2 --games 200 --seed 1` prints the two new lines on
 today's game. `git checkout 5fb24a3 -- packages docs/RULES.md` restores the graded state.
-**Left.** The owner's decision in the report (recommended: keep it reverted, re-run as 17b
-with the median clause reworded and a weaker lever). Prompt 18 must not start on the reverted
+**Left.** Owner decided 2026-09-30: keep it reverted; the architect writes 17b (median clause
+reworded, weaker lever, retuned on 1001-1400). Prompt 18 must not start on the reverted
 state. GAPS prompt 17 lists what lane U would need if the rule returns, the AI plan's missing
 trade-gain pricing, and the pooled top-scorer grade still open from prompt 16.
 
