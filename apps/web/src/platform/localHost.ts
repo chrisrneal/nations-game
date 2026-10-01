@@ -1,179 +1,122 @@
-import type { Command, Pace } from '@nations/contracts';
-import { TUNABLES } from '@nations/sim';
-import type { GameEngine, GameUpdate, SavedGame } from './engine.ts';
-import type { ResolvedPrediction } from './predictions.ts';
-import { playtestFileName, type PlaytestAnswers } from './playtest.ts';
-import type { SaveStore, SlotSummary } from './saves.ts';
+import type { AirportIntent, UpgradeId } from '@nations/contracts';
+import type { AirportEngine, AirportUpdate, SavedAirport } from './engine.ts';
+import type { SaveStore } from './saves.ts';
 
-/** The slot written automatically; the three manual slots sit beside it. */
+/** The slot written automatically. */
 export const AUTOSAVE_SLOT = 'autosave';
-export const MANUAL_SLOTS = ['slot-1', 'slot-2', 'slot-3'] as const;
-/** Autosave every this many ticks while running, as well as when the app is hidden. */
-export const AUTOSAVE_EVERY_TICKS = 10;
+/** Autosave every this many ticks while running (10 s), as well as when the app is hidden. */
+export const AUTOSAVE_EVERY_TICKS = 40;
 
 /**
- * The Host the interface talks to (seam 3), plus the game-management calls a
- * single-player device needs. Everything is async so a RemoteHost can replace
- * LocalHost later with no change to the interface.
+ * The Host the interface talks to (S3). Everything is async, so the interface
+ * cannot tell the sim runs in a Web Worker, and it can only send intents and
+ * read Views.
  */
-export interface GameHost {
-  submit(command: Command): Promise<void>;
-  subscribe(listener: (update: GameUpdate) => void): () => void;
-  setPace(pace: Pace): Promise<void>;
-  newGame(nationId: string): Promise<void>;
-  saveTo(slot: string): Promise<SlotSummary>;
-  loadFrom(slot: string): Promise<void>;
-  listSaves(): Promise<SlotSummary[]>;
-  deleteSave(slot: string): Promise<void>;
-  /** Write the autosave slot now, if a game is running. */
-  autosave(): Promise<void>;
-  /** Milliseconds for `ticks` catch-up ticks on this device (Gate 0). */
-  benchmark(ticks: number): Promise<number>;
-  /** Play one month now (only while paused makes sense; the clock does the rest). */
-  nextMonth(): Promise<void>;
+export interface AirportHost {
+  subscribe(listener: (update: AirportUpdate) => void): () => void;
+  /** Continue the autosave (caught up by the wall clock), or open a new airport if there is none. */
+  start(): Promise<'continued' | 'new'>;
+  submit(intent: AirportIntent): Promise<void>;
+  tap(gate: number): Promise<void>;
+  buy(upgrade: UpgradeId): Promise<void>;
+  /** Throw this airport away and open a new one at the first city. */
+  newGame(): Promise<void>;
   /** The running game as a file: a name and the text to write into it. */
   exportFile(): Promise<{ name: string; text: string }>;
-  /** Resume the game in an exported file (paused), and autosave it on this device. */
+  /** Resume the airport in an exported file, and autosave it on this device. */
   importFile(text: string): Promise<void>;
-  /** The app was hidden or closed: save, and remember what the player last saw for the away recap. */
+  /** The app was hidden or closed: stop the clock and save. */
   away(): Promise<void>;
-  /** The app is visible again: a live game catches up by wall time and writes the away recap. */
+  /** The app is visible again: catch up by the wall clock. */
   back(): Promise<void>;
-  /** The player has read the away recap. */
-  dismissRecap(): Promise<void>;
-  /** Prediction mode: ask "What will they do?" before an AI answer is shown. */
-  setPredictionMode(on: boolean): Promise<void>;
-  /** The player's guess; resolves to the real answer and the AI's reasons. */
-  predict(id: number, choice: string): Promise<ResolvedPrediction>;
-  /** Game-over playtest answers (Gate 2 line 7), kept in the save. */
-  answerPlaytest(update: Partial<Omit<PlaytestAnswers, 'version'>>): Promise<void>;
 }
 
 /** Marker and version of an exported save file. */
-export const FILE_FORMAT = 'nations-game-save';
+export const FILE_FORMAT = 'airport-idle-save';
 export const FILE_VERSION = 1;
 
 type Async<T> = T | Promise<T>;
 /** The engine as LocalHost sees it: in-process in tests, a Comlink Remote in the app. */
 export type EngineApi = {
-  [K in
-    | 'newGame'
-    | 'submit'
-    | 'setPace'
-    | 'subscribe'
-    | 'exportGame'
-    | 'importGame'
-    | 'current'
-    | 'benchmark'
-    | 'advance'
-    | 'markAway'
-    | 'markBack'
-    | 'dismissRecap'
-    | 'setPredictionMode'
-    | 'predict'
-    | 'answerPlaytest']: (
-    ...args: Parameters<GameEngine[K]>
-  ) => Async<ReturnType<GameEngine[K]>>;
+  [K in 'newGame' | 'submit' | 'subscribe' | 'current' | 'pump' | 'pause' | 'resume' | 'exportGame' | 'importGame']: (
+    ...args: Parameters<AirportEngine[K]>
+  ) => Async<ReturnType<AirportEngine[K]>>;
 };
 
 export interface LocalHostOptions {
   readonly engine: EngineApi;
   readonly store: SaveStore;
   /** Wraps the listener for transport (Comlink.proxy in the app). */
-  readonly wrapListener?: (listener: (update: GameUpdate) => void) => (update: GameUpdate) => void;
+  readonly wrapListener?: (listener: (update: AirportUpdate) => void) => (update: AirportUpdate) => void;
   readonly now?: () => number;
   readonly newSeed?: () => number;
 }
 
-/** Host backed by a GameEngine in a Web Worker on this device. */
-export class LocalHost implements GameHost {
-  private readonly listeners = new Set<(update: GameUpdate) => void>();
-  private latest: GameUpdate | null = null;
+/** Host backed by an AirportEngine in a Web Worker on this device. */
+export class LocalHost implements AirportHost {
+  private readonly listeners = new Set<(update: AirportUpdate) => void>();
+  private latest: AirportUpdate | null = null;
   private lastAutosaveTick = 0;
   private readonly ready: Promise<void>;
+  private started: Promise<'continued' | 'new'> | null = null;
 
   constructor(private readonly options: LocalHostOptions) {
     const wrap = options.wrapListener ?? ((listener) => listener);
     this.ready = Promise.resolve(options.engine.subscribe(wrap((update) => this.receive(update))));
   }
 
-  async submit(command: Command): Promise<void> {
-    await this.options.engine.submit(command);
-  }
-
-  subscribe(listener: (update: GameUpdate) => void): () => void {
+  subscribe(listener: (update: AirportUpdate) => void): () => void {
     this.listeners.add(listener);
     if (this.latest !== null) listener(this.latest);
     return () => this.listeners.delete(listener);
   }
 
-  async setPace(pace: Pace): Promise<void> {
-    await this.ready;
-    await this.options.engine.setPace(pace);
+  /** Idempotent: React's strict mode mounts twice, and the airport must open once. */
+  start(): Promise<'continued' | 'new'> {
+    this.started ??= this.open();
+    return this.started;
   }
 
-  async newGame(nationId: string): Promise<void> {
+  private async open(): Promise<'continued' | 'new'> {
+    await this.ready;
+    const record = await this.options.store.get(AUTOSAVE_SLOT);
+    if (record !== undefined) {
+      try {
+        await this.resume(record.game);
+        return 'continued';
+      } catch (error) {
+        console.warn('The autosave could not be loaded; opening a new airport.', error);
+      }
+    }
+    await this.newGame();
+    return 'new';
+  }
+
+  async submit(intent: AirportIntent): Promise<void> {
+    await this.options.engine.submit(intent);
+  }
+
+  tap(gate: number): Promise<void> {
+    return this.submit({ type: 'tap', payload: { gate } });
+  }
+
+  buy(upgrade: UpgradeId): Promise<void> {
+    return this.submit({ type: 'buy', payload: { upgrade } });
+  }
+
+  async newGame(): Promise<void> {
     await this.ready;
     const seed = this.options.newSeed?.() ?? (Math.random() * 0x7fffffff) | 0;
-    this.publish(await this.options.engine.newGame(nationId, seed));
+    this.publish(await this.options.engine.newGame(seed));
     this.lastAutosaveTick = 0;
     await this.autosave();
   }
 
-  async saveTo(slot: string): Promise<SlotSummary> {
-    const game = await this.options.engine.exportGame();
-    const record = {
-      slot,
-      savedAt: this.options.now?.() ?? Date.now(),
-      tick: game.save.savedAtTick,
-      humanId: game.humanId,
-      game,
-    };
-    await this.options.store.put(record);
-    return { slot, savedAt: record.savedAt, tick: record.tick, humanId: record.humanId };
-  }
-
-  async loadFrom(slot: string): Promise<void> {
-    await this.ready;
-    const record = await this.options.store.get(slot);
-    if (record === undefined) throw new Error('That save slot is empty');
-    // Only "Continue" (the autosave) resumes a live game where the wall clock says it should be;
-    // a manual slot is a bookmark and resumes paused where it was saved.
-    this.publish(await this.options.engine.importGame(record.game, { resumeLive: slot === AUTOSAVE_SLOT }));
-    this.lastAutosaveTick = record.tick;
-    if (slot === AUTOSAVE_SLOT && record.game.live !== undefined) await this.autosave();
-  }
-
-  listSaves(): Promise<SlotSummary[]> {
-    return this.options.store.list();
-  }
-
-  deleteSave(slot: string): Promise<void> {
-    return this.options.store.remove(slot);
-  }
-
-  async autosave(): Promise<void> {
-    if ((await this.options.engine.current()) === null) return;
-    const saved = await this.saveTo(AUTOSAVE_SLOT);
-    this.lastAutosaveTick = saved.tick;
-  }
-
-  async benchmark(ticks: number): Promise<number> {
-    return this.options.engine.benchmark(ticks);
-  }
-
-  async nextMonth(): Promise<void> {
-    await this.ready;
-    await this.options.engine.advance(1);
-  }
-
   async exportFile(): Promise<{ name: string; text: string }> {
     const game = await this.options.engine.exportGame();
-    const exportedAt = this.options.now?.() ?? Date.now();
+    const exportedAt = this.now();
     const text = JSON.stringify({ format: FILE_FORMAT, version: FILE_VERSION, exportedAt, game });
-    // A finished game with playtest answers is a playtest file (docs/playtests/README.md).
-    if (game.playtest !== undefined && game.save.savedAtTick >= TUNABLES.gameLengthTicks.value) return { name: playtestFileName(game.humanId, exportedAt), text };
-    return { name: `nations-${game.humanId}-month-${game.save.savedAtTick}.json`, text };
+    return { name: `airport-tick-${game.save.savedAtTick}.json`, text };
   }
 
   async importFile(text: string): Promise<void> {
@@ -181,49 +124,48 @@ export class LocalHost implements GameHost {
     try {
       parsed = JSON.parse(text);
     } catch {
-      throw new Error('That file is not a saved game');
+      throw new Error('That file is not a saved airport');
     }
-    const file = parsed as { format?: unknown; version?: unknown; game?: SavedGame };
+    const file = parsed as { format?: unknown; version?: unknown; game?: SavedAirport };
     if (typeof parsed !== 'object' || parsed === null || file.format !== FILE_FORMAT || file.game === undefined) {
-      throw new Error('That file is not a saved game');
+      throw new Error('That file is not a saved airport');
     }
     if (typeof file.version !== 'number' || file.version > FILE_VERSION) {
       throw new Error('That save file is from a newer version of the game; update the app');
     }
     await this.ready;
-    this.publish(await this.options.engine.importGame(file.game));
-    this.lastAutosaveTick = file.game.save.savedAtTick;
-    await this.autosave();
+    await this.resume(file.game);
   }
 
   async away(): Promise<void> {
     await this.ready;
-    await this.options.engine.markAway();
+    await this.options.engine.pause();
     await this.autosave();
   }
 
   async back(): Promise<void> {
     await this.ready;
-    await this.options.engine.markBack();
+    await this.options.engine.resume();
   }
 
-  async dismissRecap(): Promise<void> {
-    await this.options.engine.dismissRecap();
+  /** Write the autosave slot now, if an airport is running. */
+  async autosave(): Promise<void> {
+    if ((await this.options.engine.current()) === null) return;
+    const game = await this.options.engine.exportGame();
+    await this.options.store.put({ slot: AUTOSAVE_SLOT, savedAt: this.now(), tick: game.save.savedAtTick, game });
+    this.lastAutosaveTick = game.save.savedAtTick;
   }
 
-  async setPredictionMode(on: boolean): Promise<void> {
-    await this.options.engine.setPredictionMode(on);
+  private async resume(game: SavedAirport): Promise<void> {
+    this.publish(await this.options.engine.importGame(game));
+    await this.autosave();
   }
 
-  async predict(id: number, choice: string): Promise<ResolvedPrediction> {
-    return this.options.engine.predict(id, choice);
+  private now(): number {
+    return this.options.now?.() ?? Date.now();
   }
 
-  async answerPlaytest(update: Partial<Omit<PlaytestAnswers, 'version'>>): Promise<void> {
-    await this.options.engine.answerPlaytest(update);
-  }
-
-  private receive(update: GameUpdate): void {
+  private receive(update: AirportUpdate): void {
     this.publish(update);
     if (update.view.tick - this.lastAutosaveTick >= AUTOSAVE_EVERY_TICKS) {
       this.lastAutosaveTick = update.view.tick;
@@ -231,7 +173,7 @@ export class LocalHost implements GameHost {
     }
   }
 
-  private publish(update: GameUpdate): void {
+  private publish(update: AirportUpdate): void {
     this.latest = update;
     for (const listener of this.listeners) listener(update);
   }

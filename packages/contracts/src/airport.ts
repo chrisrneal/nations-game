@@ -81,6 +81,12 @@ export type AirportCommand =
 
 export type AirportCommandType = AirportCommand['type'];
 
+/** A command before the host stamps it with the tick it applies to: what the interface sends. */
+export type AirportIntent =
+  | { readonly type: 'tap'; readonly payload: TapPayload }
+  | { readonly type: 'buy'; readonly payload: BuyPayload }
+  | { readonly type: 'sell'; readonly payload: Record<string, never> };
+
 export interface AirportEventPayloads {
   readonly departed: { gate: number; plane: number; pax: number; seats: number; cents: number; full: boolean; charter: boolean };
   readonly arrived: { gate: number; plane: number; seats: number; charter: boolean };
