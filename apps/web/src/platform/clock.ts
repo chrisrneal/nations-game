@@ -13,3 +13,15 @@ export function ticksDue(anchor: number, now: number, tickMs: number): { ticks: 
 
 /** Steps owed beyond this many are caught up quietly (no events, no animation), keeping the last few live. */
 export const LIVE_EVENT_TICKS = 8;
+
+/** An absence at least this long (RULES 9: 60 s) earns an away recap. Host setting, not balance. */
+export const RECAP_MIN_AWAY_MS = 60_000;
+
+/**
+ * Ticks to step for a gap of `ticks`, given the offline cap (RULES 9): the
+ * airport runs at most `capTicks` while you are away; the rest is lost.
+ */
+export function capped(ticks: number, capTicks: number): { run: number; lost: number } {
+  const run = Math.min(ticks, capTicks);
+  return { run, lost: ticks - run };
+}

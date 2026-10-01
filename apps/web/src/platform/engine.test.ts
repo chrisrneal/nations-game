@@ -69,4 +69,67 @@ describe('AirportEngine (the host clock, S4)', () => {
     expected.advance(50);
     expect(after?.fingerprint).toBe(hashState(expected.state));
   });
+
+  it('a short gap is played live, with no recap', () => {
+    const { clock, engine: e, seen } = engine();
+    e.newGame(5);
+    clock.advance(30_000);
+    expect(seen.at(-1)?.recap).toBeNull();
+    expect(seen.at(-1)?.view.tick).toBe(120);
+  });
+
+  it('an absence of an hour is caught up in full and summed up in a recap', () => {
+    const { clock, engine: e, seen } = engine();
+    e.newGame(5);
+    e.pause();
+    clock.time += 3_600_000;
+    e.resume();
+    const last = seen.at(-1);
+    expect(last?.view.tick).toBe(14_400);
+    expect(last?.recap).toMatchObject({ awayMs: 3_600_000, ranMs: 3_600_000, capMinutes: 120 });
+    expect(last?.recap?.earned).toBe(last?.view.run.earned);
+    expect(last?.recap?.flights).toBeGreaterThan(100);
+    expect(last?.recap?.fixName.length).toBeGreaterThan(0);
+    expect(e.dismissRecap().recap).toBeNull();
+  });
+
+  it('the offline cap stops the airport after 2 hours; the rest of the night is lost', () => {
+    const { clock, engine: e, seen } = engine();
+    e.newGame(5);
+    e.pause();
+    clock.time += 5 * 3_600_000;
+    e.resume();
+    const last = seen.at(-1);
+    expect(last?.view.tick).toBe(2 * 14_400);
+    expect(last?.recap).toMatchObject({ awayMs: 5 * 3_600_000, ranMs: 2 * 3_600_000 });
+    // The clock starts again from now, not from the end of the cap.
+    clock.advance(250);
+    expect(seen.at(-1)?.view.tick).toBe(2 * 14_400 + 1);
+  });
+
+  it('a capped catch-up equals stepping the capped ticks (P4)', () => {
+    const { clock, engine: e, seen } = engine();
+    e.newGame(77);
+    e.submit({ type: 'tap', payload: { gate: 0 } });
+    clock.advance(250);
+    e.pause();
+    clock.time += 9 * 3_600_000;
+    e.resume();
+    const expected = new AirportSession(createAirport({ seed: 77 }));
+    expected.submit({ tick: 0, type: 'tap', payload: { gate: 0 } });
+    expected.advance(1 + 2 * 14_400);
+    expect(seen.at(-1)?.fingerprint).toBe(hashState(expected.state));
+  });
+
+  it('reopening a save from yesterday runs the cap and writes the recap', () => {
+    const { clock, engine: e } = engine();
+    e.newGame(3);
+    clock.advance(1000);
+    const saved = e.exportGame();
+    clock.time += 24 * 3_600_000;
+    const other = new AirportEngine(clock);
+    const update = other.importGame(saved);
+    expect(update.recap?.ranMs).toBe(2 * 3_600_000);
+    expect(update.view.tick).toBe(4 + 2 * 14_400);
+  });
 });

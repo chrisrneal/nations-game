@@ -27,8 +27,10 @@ export interface AirportHost {
   importFile(text: string): Promise<void>;
   /** The app was hidden or closed: stop the clock and save. */
   away(): Promise<void>;
-  /** The app is visible again: catch up by the wall clock. */
+  /** The app is visible again: catch up by the wall clock (and write the away recap after a minute or more). */
   back(): Promise<void>;
+  /** The player has read the away recap. */
+  dismissRecap(): Promise<void>;
 }
 
 /** Marker and version of an exported save file. */
@@ -38,7 +40,7 @@ export const FILE_VERSION = 1;
 type Async<T> = T | Promise<T>;
 /** The engine as LocalHost sees it: in-process in tests, a Comlink Remote in the app. */
 export type EngineApi = {
-  [K in 'newGame' | 'submit' | 'subscribe' | 'current' | 'pump' | 'pause' | 'resume' | 'exportGame' | 'importGame']: (
+  [K in 'newGame' | 'submit' | 'subscribe' | 'current' | 'pump' | 'pause' | 'resume' | 'exportGame' | 'importGame' | 'dismissRecap']: (
     ...args: Parameters<AirportEngine[K]>
   ) => Async<ReturnType<AirportEngine[K]>>;
 };
@@ -146,6 +148,10 @@ export class LocalHost implements AirportHost {
   async back(): Promise<void> {
     await this.ready;
     await this.options.engine.resume();
+  }
+
+  async dismissRecap(): Promise<void> {
+    await this.options.engine.dismissRecap();
   }
 
   /** Write the autosave slot now, if an airport is running. */
