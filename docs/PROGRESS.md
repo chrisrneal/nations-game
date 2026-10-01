@@ -16,6 +16,32 @@ The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 
 ## Session log
 
+### 2026-10-01 - Passenger flow: people walking through the airport (lanes C, S, U, D; owner request)
+**What changed.** The terminal strip above the gates is replaced by a passenger
+flow (RULES 14). Each dot is a passenger: departing ones come in at the left,
+queue at check-in and security, sit on the lounge bench (its crowd is the real
+waiting count) and walk down a walkway between the two columns of gates to the
+gate that boards them; arriving ones step off each landed plane, walk up the
+walkway and out through baggage claim to the exit (charter passengers in gold).
+International routes (Continental on) add passport control and customs,
+transoceanic ones (Transatlantic on) add preclearance, and the route toast
+says which checkpoints opened. A full lounge turns people back at the door in
+orange. One dot stands for 1, 2, 5, 10... people so the flow stays readable as
+the airport grows. The checkpoints are scenery: the sim's rules, numbers,
+State, saves and pacing are unchanged; the sim only adds the checkpoint list to
+the View. The people are drawn on one canvas each animation frame (P7).
+**Checks.** `npm test` (250 tests: the journey per route level in the sim, and
+the flow model in the interface: one dot per person entering, turned away at a
+full lounge, one per passenger boarding, deplaning, queues, quiet catch-ups and
+the dot cap) and `npm run check` pass. Phone check 42/42, including 60.2 fps
+with eight gates, 36 people walking and a thumb tapping on a CPU slowed 4x
+(worst frame 17 ms), and no horizontal scroll at 360 px with all four
+departure checkpoints.
+**How to see it.** Open the app: the flow sits between the cash and the gates.
+Buy routes up to Continental to see passport control appear.
+**What is left.** The owner's call on whether checkpoints should become real
+bottlenecks with their own upgrades (docs/GAPS.md).
+
 ### 2026-10-01 - Pivot slice 8, Nations removed; README (architect, P10)
 **What changed.** The remaining Nations code and data are gone, each deletion in
 its own commit: the harness's Gate 1 and Gate 2 suites, bots, metrics and

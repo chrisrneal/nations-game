@@ -159,6 +159,24 @@ export interface SlotsView {
   readonly nextCity: CityView;
 }
 
+/** A checkpoint passengers walk through (RULES 14). Scenery: it never slows anyone down. */
+export type CheckpointId = 'checkin' | 'security' | 'passport' | 'preclearance' | 'baggage' | 'customs';
+
+export interface CheckpointView {
+  readonly id: CheckpointId;
+  readonly name: string;
+  /** A short label that fits a phone's width. */
+  readonly label: string;
+}
+
+/** The passenger journey for the current route, in walking order (RULES 14). */
+export interface JourneyView {
+  /** From the door to the lounge; then the gates. */
+  readonly departures: readonly CheckpointView[];
+  /** From the gates to the exit. */
+  readonly arrivals: readonly CheckpointView[];
+}
+
 /** What the interface reads (S6, P5): the airport plus derived numbers and names. */
 export interface AirportView {
   readonly tick: number;
@@ -170,6 +188,7 @@ export interface AirportView {
   readonly route: string;
   readonly planeModel: string;
   readonly terminal: { readonly waiting: number; readonly cap: number; readonly arrivalPerTick: number };
+  readonly journey: JourneyView;
   readonly gates: readonly GateView[];
   readonly upgrades: readonly UpgradeView[];
   readonly bottleneck: Bottleneck;

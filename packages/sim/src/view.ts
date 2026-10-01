@@ -1,5 +1,5 @@
 import type { AirportState, AirportView, Bottleneck, BottleneckKind, CityView, EffectUnit, GateView, UpgradeId, UpgradeView } from '@airport/contracts';
-import { PLANE_MODELS, ROUTES, UPGRADE_IDS, UPGRADE_TEXT, cityAt, nameAt } from './catalog.ts';
+import { PLANE_MODELS, ROUTES, UPGRADE_IDS, UPGRADE_TEXT, cityAt, journeyAt, nameAt } from './catalog.ts';
 import { mulDiv } from './math.ts';
 import {
   arrivalBpAt,
@@ -173,6 +173,7 @@ export function airportView(state: AirportState): AirportView {
     route: nameAt(ROUTES, state.levels.route),
     planeModel: nameAt(PLANE_MODELS, state.levels.plane),
     terminal: { waiting: state.waiting, cap: d.waitCapMilli, arrivalPerTick: mulDiv(d.arrivalMilli, arrivalBpAt(d.twist, state.tick), BP) },
+    journey: journeyAt(state.levels.route),
     gates,
     upgrades: UPGRADE_IDS.map((id) => upgradeView(id, state, d.fareMulBp)),
     bottleneck: est.bottleneck,

@@ -11,7 +11,7 @@
  * `airportView(state)`.
  */
 export { AIRPORT_TUNABLES, type AirportTunableId } from './tunables.ts';
-export { CITIES, PLANE_MODELS, ROUTES, UPGRADE_IDS, UPGRADE_TEXT, cityAt } from './catalog.ts';
+export { CHECKPOINTS, CITIES, PLANE_MODELS, ROUTES, UPGRADE_IDS, UPGRADE_TEXT, cityAt, journeyAt } from './catalog.ts';
 export { grow, isqrt, mulDiv } from './math.ts';
 export { canonicalJson, hashState, hashString } from './hash.ts';
 export { mix32, nextUint32, randomInt, seedRng } from './rng.ts';

@@ -88,6 +88,44 @@ describe('the view (S6, P5)', () => {
   });
 });
 
+describe('the passenger journey (RULES 14)', () => {
+  const journey = (route: number) => {
+    const s = createAirport({ seed: 1 });
+    const j = airportView({ ...s, levels: { ...s.levels, plane: route, route } }).journey;
+    return { departures: j.departures.map((c) => c.id), arrivals: j.arrivals.map((c) => c.id) };
+  };
+
+  it('starts with check-in and security out, baggage claim in', () => {
+    expect(journey(0)).toEqual({ departures: ['checkin', 'security'], arrivals: ['baggage'] });
+    expect(journey(4)).toEqual(journey(0));
+  });
+
+  it('adds passport control and customs with the first international route', () => {
+    expect(journey(5)).toEqual({ departures: ['checkin', 'security', 'passport'], arrivals: ['passport', 'baggage', 'customs'] });
+  });
+
+  it('adds preclearance with the first transoceanic route', () => {
+    expect(journey(6)).toEqual({ departures: ['checkin', 'security', 'passport', 'preclearance'], arrivals: ['passport', 'baggage', 'customs'] });
+    expect(journey(9)).toEqual(journey(6));
+  });
+
+  it('names every checkpoint, with a label short enough for a phone', () => {
+    const s = createAirport({ seed: 1 });
+    const j = airportView({ ...s, levels: { ...s.levels, plane: 9, route: 9 } }).journey;
+    for (const c of [...j.departures, ...j.arrivals]) {
+      expect(c.name.length).toBeGreaterThan(0);
+      expect(c.label.length).toBeLessThanOrEqual(12);
+    }
+    expect(j.departures.find((c) => c.id === 'passport')?.name).toBe('Passport control');
+  });
+
+  it('depends on the route alone', () => {
+    const busy = at({ gates: 7, plane: 6, route: 5, boarding: 15, terminal: 15, crew: 10 }, 2);
+    const quiet = createAirport({ seed: 9, city: 1 });
+    expect(airportView(busy).journey).toEqual(airportView({ ...quiet, levels: { ...quiet.levels, plane: 5, route: 5 } }).journey);
+  });
+});
+
 describe('catch-up speed (P4)', () => {
   it('steps a full day of an 8-gate airport in well under the phone budget in Node', () => {
     const s = at({ gates: 7, plane: 5, route: 5, boarding: 15, terminal: 15, crew: 10 });
