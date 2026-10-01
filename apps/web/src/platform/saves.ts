@@ -1,4 +1,4 @@
-import type { SavedGame } from './engine.ts';
+import type { SavedAirport } from './engine.ts';
 
 /** One save slot on this device. */
 export interface SlotRecord {
@@ -6,8 +6,7 @@ export interface SlotRecord {
   /** Wall-clock time of the save, for the list only; the sim never sees it. */
   readonly savedAt: number;
   readonly tick: number;
-  readonly humanId: string;
-  readonly game: SavedGame;
+  readonly game: SavedAirport;
 }
 
 export type SlotSummary = Omit<SlotRecord, 'game'>;
@@ -21,7 +20,7 @@ export interface SaveStore {
 }
 
 function summary(record: SlotRecord): SlotSummary {
-  return { slot: record.slot, savedAt: record.savedAt, tick: record.tick, humanId: record.humanId };
+  return { slot: record.slot, savedAt: record.savedAt, tick: record.tick };
 }
 
 function bySlot(a: SlotSummary, b: SlotSummary): number {
@@ -49,7 +48,8 @@ export class MemorySaveStore implements SaveStore {
   }
 }
 
-const DB_NAME = 'nations';
+/** A fresh database name, so the retired Nations saves (database "nations") are never read as airports. */
+export const DB_NAME = 'airport';
 const STORE = 'slots';
 
 function request<T>(req: IDBRequest<T>): Promise<T> {

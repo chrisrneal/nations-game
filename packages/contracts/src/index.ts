@@ -92,6 +92,7 @@ export type {
   AirportEvent,
   AirportEventPayloads,
   AirportEventType,
+  AirportIntent,
   AirportSaveFile,
   AirportState,
   AirportView,
