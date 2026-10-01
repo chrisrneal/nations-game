@@ -17,3 +17,4 @@ export { loadRoster } from './roster.ts';
 export { ARCHETYPES, STRATEGIES, botDecide, type Strategy } from './bots.ts';
 export { assignArchetypes, formatGate2, runGate2, type Gate2Options, type Gate2Report } from './gate2.ts';
 export { findChromium, runInBrowser, type BrowserRun, type BrowserRunOptions } from './browser.ts';
+export { benchAirportCatchUp, busyAirport, hashAirportSeeds, scriptedAirport } from './airport.ts';

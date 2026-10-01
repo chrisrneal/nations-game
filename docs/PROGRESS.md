@@ -1,12 +1,12 @@
 # Progress
 Current state: **pivot in progress** to the idle airport game (decision record
-P1). Slice 1 of 8 (docs) is done; the deployed app is still Nations until slice 3.
+P1). Slices 1-2 of 8 are done (docs, the airport sim); the deployed app is still Nations until slice 3.
 The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 (docs/PROGRESS.md there).
 
 ## Slices (docs/ROADMAP.md)
 - [x] 1. Pivot docs
-- [ ] 2. Airport sim
+- [x] 2. Airport sim
 - [ ] 3. Airport screen and upgrade sheet; Nations interface deleted
 - [ ] 4. Offline earnings and the away recap
 - [ ] 5. Prestige and the second city
@@ -15,6 +15,30 @@ The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 - [ ] 8. Remove the remaining Nations code; README
 
 ## Session log
+
+### 2026-10-01 - Pivot slice 2, the airport sim (lanes C, S, H)
+**What changed.** packages/sim/src/airport is the whole airport game as a pure
+sim, tests written first: the terminal, gates, planes, boarding, the timer and
+full-flight bonus, turnaround, the tap rush with walk-ups, charters from the
+seeded RNG, all seven upgrades with geometric costs and the route-needs-planes
+rule, selling for slots, the four city twists, the income estimate with the
+named bottleneck, and an `AirportSession` with saves, migrations and fast
+catch-up. Contracts gained the airport types (`airport.ts`). The harness's
+Node-vs-Chromium determinism test now plays 1,000 airports (a scripted player
+tapping, buying and selling for a minute, then an hour caught up), `npm run
+harness -- bench` times airport catch-up, and `rules.test.ts` is back, checking
+the airport tunables against the RULES table.
+**Tests.** 47 sim tests: every RULES rule with worked numbers (the first plane
+fills in 5 s and pays $12.50; the first upgrade is affordable by then), and
+property tests over random play: cash, passengers and loads never negative or
+over their limits, cash moves only by fares and purchases, the same seed and
+commands give the same hash, catching up N ticks equals stepping N ticks, and
+save-reload-continue equals an uninterrupted run. The income estimate is within
+20% of measured idle income in eight configurations, one per city.
+**How to see it.** `npx vitest run packages/sim/src/airport` and `npm run harness
+-- bench`: 24 hours of a busy 8-gate airport catches up in about 100 ms in Node
+and in Chromium (the phone budget is 2 s).
+**What is left.** Nothing shows it yet: slice 3 puts it on the phone.
 
 ### 2026-10-01 - Pivot slice 1, the airport on paper (architect, P2)
 **What changed.** The project is now an idle airport game. docs/RULES.md is
