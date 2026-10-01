@@ -1,5 +1,5 @@
 {
-  "name": "@nations/harness",
+  "name": "@airport/harness",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
     "start": "tsx src/cli.ts"
   },
   "dependencies": {
-    "@nations/contracts": "*",
-    "@nations/sim": "*"
+    "@airport/contracts": "*",
+    "@airport/sim": "*"
   }
 }

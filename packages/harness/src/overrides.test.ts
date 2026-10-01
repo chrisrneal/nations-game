@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { AIRPORT_TUNABLES, createAirport, upgradeCost } from '@nations/sim/airport';
+import { AIRPORT_TUNABLES, createAirport, upgradeCost } from '@airport/sim';
 import { applyOverrides, parseOverrides } from './overrides.ts';
 
 describe('--set tunable overrides for tuning sweeps', () => {

@@ -1,4 +1,4 @@
-import type { Tunable } from '@nations/contracts';
+import type { Tunable } from '@airport/contracts';
 
 /**
  * Every balance number in the airport game, with the band it may move inside

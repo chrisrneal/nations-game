@@ -12,8 +12,8 @@
     "e2e": "tsx e2e/phone-check.ts"
   },
   "dependencies": {
-    "@nations/contracts": "*",
-    "@nations/sim": "*",
+    "@airport/contracts": "*",
+    "@airport/sim": "*",
     "comlink": "^4.4.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

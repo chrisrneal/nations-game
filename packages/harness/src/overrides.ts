@@ -1,4 +1,4 @@
-import { AIRPORT_TUNABLES } from '@nations/sim/airport';
+import { AIRPORT_TUNABLES } from '@airport/sim';
 
 /**
  * `--set id=value[,id=value]` for tuning sweeps: replaces airport tunables for

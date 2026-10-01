@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ReactElement } from 'react';
-import type { AirportView, UpgradeId } from '@nations/contracts';
+import type { AirportView, UpgradeId } from '@airport/contracts';
 import type { AirportHost, Feedback, InstallPrompt } from './platform/index.ts';
 import { BottomBar } from './ui/BottomBar.tsx';
 import { GateCard, NextGateCard } from './ui/GateCard.tsx';

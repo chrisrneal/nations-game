@@ -1,18 +1,17 @@
 {
-  "name": "@nations/sim",
+  "name": "@airport/sim",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Pure simulation core. Imports nothing but @nations/contracts.",
+  "description": "Pure simulation core of the airport. Imports nothing but @airport/contracts.",
   "exports": {
     ".": "./src/index.ts",
-    "./tunables": "./src/tunables.ts",
-    "./airport": "./src/airport/index.ts"
+    "./tunables": "./src/tunables.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@nations/contracts": "*"
+    "@airport/contracts": "*"
   }
 }

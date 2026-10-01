@@ -1,7 +1,7 @@
-import type { AirportCommand, AirportState, UpgradeId } from '@nations/contracts';
+import type { AirportCommand, AirportState, UpgradeId } from '@airport/contracts';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { hashState } from '../hash.ts';
+import { hashState } from './hash.ts';
 import { UPGRADE_IDS } from './catalog.ts';
 import { maxLevel } from './rules.ts';
 import { AirportSession } from './session.ts';

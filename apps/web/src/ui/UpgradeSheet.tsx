@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type ReactElement } from 'react';
-import type { AirportView, UpgradeId, UpgradeView } from '@nations/contracts';
+import type { AirportView, UpgradeId, UpgradeView } from '@airport/contracts';
 import { formatCash, formatEffect } from './format.ts';
 import { Sheet } from './Sheet.tsx';
 import type { AirportStore } from './store.ts';

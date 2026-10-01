@@ -21,7 +21,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, type Page } from 'playwright-core';
 import { busyAirport } from '../../../packages/harness/src/airport.ts';
-import { AIRPORT_TUNABLES, AirportSession, hashState } from '@nations/sim/airport';
+import { AIRPORT_TUNABLES, AirportSession, hashState } from '@airport/sim';
 
 const PORT = 4179;
 const URL = `http://localhost:${PORT}/`;

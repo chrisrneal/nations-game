@@ -1,4 +1,4 @@
-import type { RngState } from '@nations/contracts';
+import type { RngState } from '@airport/contracts';
 
 /**
  * Counter-based seeded RNG. The whole generator is the `{ seed, counter }` pair

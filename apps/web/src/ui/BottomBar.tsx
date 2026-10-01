@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type ReactElement } from 'react';
-import type { AirportView } from '@nations/contracts';
+import type { AirportView } from '@airport/contracts';
 import { formatCash, formatDuration } from './format.ts';
 import { nextGoal, secondsUntil } from './goal.ts';
 import type { AirportStore } from './store.ts';

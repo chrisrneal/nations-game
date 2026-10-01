@@ -1,4 +1,4 @@
-import type { AirportState, AirportView, Bottleneck, BottleneckKind, CityView, EffectUnit, GateView, UpgradeId, UpgradeView } from '@nations/contracts';
+import type { AirportState, AirportView, Bottleneck, BottleneckKind, CityView, EffectUnit, GateView, UpgradeId, UpgradeView } from '@airport/contracts';
 import { PLANE_MODELS, ROUTES, UPGRADE_IDS, UPGRADE_TEXT, cityAt, nameAt } from './catalog.ts';
 import { mulDiv } from './math.ts';
 import {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { canonicalJson, hashState } from './hash.ts';
-import { createAirport } from './airport/state.ts';
+import { createAirport } from './state.ts';
 
 const world = (seed: number) => createAirport({ seed });
 

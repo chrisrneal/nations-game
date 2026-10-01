@@ -1,5 +1,5 @@
-import type { AirportCommand, AirportSaveFile, AirportState } from '@nations/contracts';
-import { hashState } from '../hash.ts';
+import type { AirportCommand, AirportSaveFile, AirportState } from '@airport/contracts';
+import { hashState } from './hash.ts';
 import { AIRPORT_SCHEMA_VERSION } from './state.ts';
 import { advanceMany, step } from './step.ts';
 

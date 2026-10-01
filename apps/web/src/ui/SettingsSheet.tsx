@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactElement } from 'react';
-import type { AirportView } from '@nations/contracts';
+import type { AirportView } from '@airport/contracts';
 import type { AirportHost, Feedback } from '../platform/index.ts';
 import { formatCash, short } from './format.ts';
 import { Sheet } from './Sheet.tsx';

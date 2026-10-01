@@ -1,4 +1,4 @@
-import type { AirportCommand, AirportEvent, AirportState, GateState, UpgradeId } from '@nations/contracts';
+import type { AirportCommand, AirportEvent, AirportState, GateState, UpgradeId } from '@airport/contracts';
 import { describe, expect, it } from 'vitest';
 import { createAirport } from './state.ts';
 import { step } from './step.ts';

@@ -5,7 +5,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { AIRPORT_TUNABLES } from '@nations/sim/airport';
+import { AIRPORT_TUNABLES } from '@airport/sim';
 
 const rules = readFileSync(new URL('../../../docs/RULES.md', import.meta.url), 'utf8');
 const section = rules.slice(rules.indexOf('## 12. Tunables'), rules.indexOf('## 13.'));

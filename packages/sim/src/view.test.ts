@@ -1,4 +1,4 @@
-import type { AirportState, Levels } from '@nations/contracts';
+import type { AirportState, Levels } from '@airport/contracts';
 import { describe, expect, it } from 'vitest';
 import { advanceMany } from './step.ts';
 import { createAirport, ZERO_LEVELS } from './state.ts';

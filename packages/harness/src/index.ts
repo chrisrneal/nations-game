@@ -1,5 +1,5 @@
 /**
- * @nations/harness - headless runs of the airport and repo invariant checks.
+ * @airport/harness - headless runs of the airport and repo invariant checks.
  *
  * Runs in Node and may use Node APIs. Holds the pacing pass (greedy and idle
  * bots timed against docs/RULES.md section 11), the Node-vs-Chromium

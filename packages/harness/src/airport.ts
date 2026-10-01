@@ -3,8 +3,8 @@
  * Runs in Node and, bundled, inside Chromium (browser-entry.ts), so it must not
  * touch Node APIs.
  */
-import type { AirportState, UpgradeId } from '@nations/contracts';
-import { AirportSession, advanceMany, airportView, createAirport, hashState, stepAirport, upgradeCost } from '@nations/sim/airport';
+import type { AirportState, UpgradeId } from '@airport/contracts';
+import { AirportSession, advanceMany, airportView, createAirport, hashState, stepAirport, upgradeCost } from '@airport/sim';
 
 /**
  * A scripted player that uses every command: taps a gate every other tick, buys

@@ -1,4 +1,4 @@
-import type { UpgradeId } from '@nations/contracts';
+import type { UpgradeId } from '@airport/contracts';
 
 /**
  * Design data: names and words, no balance numbers (those are tunables).

@@ -1,4 +1,4 @@
-import type { AirportCommand, AirportEvent, AirportSaveFile, AirportState } from '@nations/contracts';
+import type { AirportCommand, AirportEvent, AirportSaveFile, AirportState } from '@airport/contracts';
 import { airportCommandProblem } from './commands.ts';
 import { createAirportSave, loadAirportSave } from './save.ts';
 import { advanceMany, step } from './step.ts';

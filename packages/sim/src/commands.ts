@@ -1,4 +1,4 @@
-import type { AirportCommand } from '@nations/contracts';
+import type { AirportCommand } from '@airport/contracts';
 import { UPGRADE_IDS } from './catalog.ts';
 
 const TYPES = new Set(['tap', 'buy', 'sell']);

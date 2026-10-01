@@ -1,5 +1,5 @@
-import type { AirportCommand, AirportEvent, AirportState, GateState, Levels, RngState, Stats, UpgradeId } from '@nations/contracts';
-import { randomInt } from '../rng.ts';
+import type { AirportCommand, AirportEvent, AirportState, GateState, Levels, RngState, Stats, UpgradeId } from '@airport/contracts';
+import { randomInt } from './rng.ts';
 import { UPGRADE_IDS } from './catalog.ts';
 import { airportCommandProblem } from './commands.ts';
 import { mulDiv } from './math.ts';
