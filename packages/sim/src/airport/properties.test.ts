@@ -31,7 +31,7 @@ interface Game {
 const game: fc.Arbitrary<Game> = fc.record({
   seed: fc.integer({ min: 0, max: 0x7fffffff }),
   cash: fc.oneof(fc.constant(0), fc.integer({ min: 0, max: 50_000_000 })),
-  earned: fc.oneof(fc.constant(0), fc.integer({ min: 0, max: 20_000_000 })),
+  earned: fc.oneof(fc.constant(0), fc.integer({ min: 0, max: 2_000_000_000 })),
   city: fc.nat(7),
   moves: fc.array(move, { maxLength: 40 }),
 });
