@@ -2,7 +2,8 @@ import type { AirportCommand, AirportEvent, AirportState, GateState, UpgradeId }
 import { describe, expect, it } from 'vitest';
 import { createAirport } from './state.ts';
 import { step } from './step.ts';
-import { seatsAt, slotsFor, upgradeCost } from './rules.ts';
+import { lockReason, seatsAt, slotsFor, upgradeCost } from './rules.ts';
+import { cityAt } from './catalog.ts';
 import { AIRPORT_TUNABLES as T } from './tunables.ts';
 
 function run(state: AirportState, ticks: number, commands: (s: AirportState) => AirportCommand[] = () => []): { state: AirportState; events: AirportEvent[] } {
@@ -252,6 +253,27 @@ describe('city twists (RULES 10)', () => {
     expect(cur.levels.plane).toBe(T.shortRunwayMaxPlane.value);
     const d = run(createAirport({ seed: 1, city: 1 }), 20).events.find((e) => e.type === 'departed');
     expect(d?.payload).toMatchObject({ cents: 1875 });
+  });
+
+  it('says the short runway is why planes stop growing in Port Calder', () => {
+    const s = createAirport({ seed: 1, city: 1 });
+    const capped = tweak(s, { levels: { ...s.levels, plane: T.shortRunwayMaxPlane.value, route: T.shortRunwayMaxPlane.value } });
+    expect(lockReason('plane', capped)).toBe('Short runway');
+    expect(lockReason('route', capped)).toBe('Short runway');
+  });
+
+  it('cycles through the cities as airports are sold', () => {
+    let s = createAirport({ seed: 1 });
+    const visited: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      s = tweak(s, { run: { ...s.run, earned: 1_000_000 } });
+      s = step(s, [{ tick: s.tick, type: 'sell', payload: {} }]).state;
+      visited.push(s.city);
+    }
+    expect(visited).toEqual([1, 2, 3, 4, 5]);
+    expect(s.slots).toBe(5);
+    expect(cityAt(4).label).toBe('Millbrook II');
+    expect(cityAt(6).label).toBe('Highmoor Hub II');
   });
 
   it('Highmoor Hub sends connecting passengers back after a full flight', () => {
