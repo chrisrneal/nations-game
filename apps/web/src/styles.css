@@ -612,6 +612,22 @@ p {
   font-size: 0.85rem;
 }
 
+/* ---- away recap ---- */
+.recap-earned {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--accent);
+  margin-bottom: 0.4rem;
+}
+
+.recap-lines {
+  margin: 0 0 0.9rem;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.92rem;
+}
+
 /* ---- settings ---- */
 .stats {
   display: grid;

@@ -9,6 +9,9 @@
  * the bottom third; the first upgrade bought within 10 s; a tap rushes a gate;
  * 60 fps with eight gates animating and the CPU slowed 4x; export a file,
  * clear site data, import it and the same airport resumes; reopens offline.
+ * Slice 4: closed for 3 hours (the autosave's clock moved back), it reopens on
+ * a CPU slowed 4x inside the 2 s budget, runs only the 2-hour offline cap, and
+ * shows a three-line recap that one tap collects.
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -172,6 +175,50 @@ async function main(): Promise<void> {
     await page.getByTestId('gate-7').waitFor({ timeout: 8000 });
     check('reopens offline and continues the airport', (await page.locator('.gate:not(.gate-next)').count()) === 8);
     await context.setOffline(false);
+
+    // Away for 3 hours: close the app, move the autosave's wall clock back, reopen on a slow CPU.
+    const ticksBefore = Number(await page.evaluate(`new Promise((resolve) => {
+      const req = indexedDB.open('airport', 1);
+      req.onsuccess = () => {
+        const get = req.result.transaction('slots', 'readonly').objectStore('slots').get('autosave');
+        get.onsuccess = () => resolve(get.result.tick);
+      };
+    })`));
+    await page.close();
+    await new Promise((r) => setTimeout(r, 1500));
+    const side = await context.newPage();
+    await side.goto(`${URL}manifest.webmanifest`);
+    const shifted = Number(await side.evaluate(`new Promise((resolve) => {
+      const req = indexedDB.open('airport', 1);
+      req.onsuccess = () => {
+        const store = req.result.transaction('slots', 'readwrite').objectStore('slots');
+        const get = store.get('autosave');
+        get.onsuccess = () => {
+          const record = get.result;
+          record.game.anchor -= 3 * 3600 * 1000;
+          store.put(record).onsuccess = () => resolve(record.tick);
+        };
+      };
+    })`));
+    await side.close();
+    const back = await context.newPage();
+    const backCdp = await context.newCDPSession(back);
+    await backCdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    const reopened = Date.now();
+    await back.goto(URL);
+    await back.getByTestId('recap').waitFor({ timeout: 15_000 });
+    const reopenMs = Date.now() - reopened;
+    await backCdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    check('3 hours away: reopens to the recap inside 2 s (CPU slowed 4x)', reopenMs < 2000, `${reopenMs} ms from opening to the recap, saved at tick ${shifted} (was ${ticksBefore})`);
+    const lines = await back.getByTestId('recap').locator('li').allTextContents();
+    check('the recap is three lines', lines.length === 3, lines.join(' | '));
+    check('the recap says the offline cap cut the night short', /ran for 2h 0m/.test(lines[0] ?? ''), lines[0] ?? '');
+    check('the recap names what it earned', /earned \$/.test(lines[1] ?? ''), lines[1] ?? '');
+    await noHorizontalScroll(back, 'away recap');
+    await touchTargets(back, 'away recap');
+    await back.getByTestId('collect').tap();
+    await back.getByTestId('recap').waitFor({ state: 'detached', timeout: 2000 });
+    check('one tap collects and closes the recap', (await back.getByTestId('recap').count()) === 0);
 
     await context.close();
   } finally {

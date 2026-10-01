@@ -1,5 +1,11 @@
 import type { AirportView } from '@nations/contracts';
-import type { AirportUpdate } from '../platform/index.ts';
+import type { AirportUpdate, AwayRecap } from '../platform/index.ts';
+
+/** What React renders from: the view and the recap, replaced only on a structural change. */
+export interface Structure {
+  readonly view: AirportView;
+  readonly recap: AwayRecap | null;
+}
 
 /**
  * Two update paths (P7). React re-renders only when the airport's structure
@@ -10,17 +16,18 @@ import type { AirportUpdate } from '../platform/index.ts';
  */
 export class AirportStore {
   private latest: AirportUpdate | null = null;
-  private structure: AirportView | null = null;
+  private structure: Structure | null = null;
   private key = '';
   private readonly structureListeners = new Set<() => void>();
   private readonly frameListeners = new Set<(update: AirportUpdate) => void>();
 
   push(update: AirportUpdate): void {
     this.latest = update;
-    const key = structuralKey(update.view);
+    const r = update.recap;
+    const key = `${structuralKey(update.view)}|${r === null ? '' : `${r.awayMs}:${r.earned}`}`;
     if (key !== this.key) {
       this.key = key;
-      this.structure = update.view;
+      this.structure = { view: update.view, recap: update.recap };
       for (const listener of this.structureListeners) listener();
     }
     for (const listener of this.frameListeners) listener(update);
@@ -32,7 +39,7 @@ export class AirportStore {
     return () => this.structureListeners.delete(listener);
   };
 
-  getStructure = (): AirportView | null => this.structure;
+  getStructure = (): Structure | null => this.structure;
 
   /** Called on every update, and at once with the latest one. Returns an unsubscribe function. */
   onFrame(listener: (update: AirportUpdate) => void): () => void {
