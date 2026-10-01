@@ -4,9 +4,9 @@
  *
  *   npm run harness                                  play 20 seeded games of 200 ticks,
  *     [-- --games N --ticks T --seed S --out DIR]    write games.csv + summary.txt
- *   npm run harness -- determinism [--seeds 1000]    same hashes twice in Node and in Chromium
- *     [--ticks 20] [--no-browser]
- *   npm run harness -- bench [--ticks 1000]          time catch-up ticks in Node and Chromium
+ *   npm run harness -- determinism [--seeds 1000]    the airport: same hashes twice in Node and in Chromium
+ *     [--ticks 240] [--no-browser]
+ *   npm run harness -- bench [--ticks 345600]        time airport catch-up (default 24 h) in Node and Chromium
  *     [--runs 5] [--no-browser]
  *   npm run harness -- gate1 [--games 200]           the Gate 1 suite: seeded full-roster games with
  *     [--seed 1] [--ranges 1] [--ticks T]            random strategies plus paired runs; writes gate1.md.
@@ -29,7 +29,8 @@ import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
-import { benchCatchUp, hashSeeds, runGame, type GameMetrics } from './game.ts';
+import { runGame, type GameMetrics } from './game.ts';
+import { benchAirportCatchUp, hashAirportSeeds } from './airport.ts';
 import { formatSummary, summarize, toCsv } from './metrics.ts';
 import { findChromium, runInBrowser } from './browser.ts';
 import { loadRoster } from './roster.ts';
@@ -90,16 +91,16 @@ async function play(): Promise<void> {
 
 async function determinism(): Promise<void> {
   const seeds = flag('seeds', 1000);
-  const ticks = flag('ticks', 20);
-  const first = hashSeeds(1, seeds, ticks, roster);
-  const second = hashSeeds(1, seeds, ticks, roster);
+  const ticks = flag('ticks', 240);
+  const first = hashAirportSeeds(1, seeds, ticks);
+  const second = hashAirportSeeds(1, seeds, ticks);
   const repeatMismatch = first.filter((hash, i) => hash !== second[i]).length;
-  console.log(`node repeat run: ${seeds - repeatMismatch}/${seeds} seeds identical`);
+  console.log(`node repeat run: ${seeds - repeatMismatch}/${seeds} airports identical`);
   let failed = repeatMismatch > 0;
   if (useBrowser) {
     const run = await runInBrowser({ firstSeed: 1, seeds, ticks, benchTicks: 0, benchRuns: 0 });
     const browserMismatch = first.filter((hash, i) => hash !== run.hashes[i]).length;
-    console.log(`node vs browser: ${seeds - browserMismatch}/${seeds} seeds identical (${run.userAgent})`);
+    console.log(`node vs browser: ${seeds - browserMismatch}/${seeds} airports identical (${run.userAgent})`);
     failed ||= browserMismatch > 0 || run.hashes.length !== seeds;
   }
   console.log(failed ? 'DETERMINISM: FAIL' : 'DETERMINISM: PASS');
@@ -107,16 +108,16 @@ async function determinism(): Promise<void> {
 }
 
 async function bench(): Promise<void> {
-  const ticks = flag('ticks', 1000);
+  const ticks = flag('ticks', 345_600);
   const runs = flag('runs', 5);
-  console.log(`catch-up benchmark: ${ticks} ticks, ${roster.length} nations, the shipped AI (AiDirector) for every nation`);
-  benchCatchUp(ticks, 1, roster, () => performance.now()); // warm-up
-  console.log(`node:     ${stats(benchCatchUp(ticks, runs, roster, () => performance.now()))}`);
+  console.log(`catch-up benchmark: ${ticks} ticks (${(ticks / 14_400).toFixed(1)} h) of a busy 8-gate airport`);
+  benchAirportCatchUp(ticks, 1, () => performance.now()); // warm-up
+  console.log(`node:     ${stats(benchAirportCatchUp(ticks, runs, () => performance.now()))}`);
   if (useBrowser && findChromium() !== undefined) {
     const run = await runInBrowser({ firstSeed: 1, seeds: 0, ticks: 0, benchTicks: ticks, benchRuns: runs });
     console.log(`chromium: ${stats(run.benchMs)} (first run includes JIT warm-up)`);
   }
-  console.log('budget:   2000 ms on a mid-range phone (Gate 0); phones are typically several times slower than this machine');
+  console.log('budget:   2000 ms on a mid-range phone for the 24-hour cap (P4); phones are several times slower than this machine');
 }
 
 async function gate1(): Promise<void> {

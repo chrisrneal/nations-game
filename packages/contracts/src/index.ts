@@ -86,3 +86,26 @@ export type {
   ProposeProjectCommand,
 } from './project.ts';
 export type { CollectiveGoals, ForeignNation, NationPrivate, NationPublic, NationRecord, NationScore, NationView, ScoresView } from './nations.ts';
+export type {
+  AirportCommand,
+  AirportCommandType,
+  AirportEvent,
+  AirportEventPayloads,
+  AirportEventType,
+  AirportSaveFile,
+  AirportState,
+  AirportView,
+  Bottleneck,
+  BottleneckKind,
+  BuyPayload,
+  CityView,
+  EffectUnit,
+  GateState,
+  GateView,
+  Levels,
+  SlotsView,
+  Stats,
+  TapPayload,
+  UpgradeId,
+  UpgradeView,
+} from './airport.ts';
