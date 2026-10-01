@@ -1,5 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Nations">
-  <rect width="512" height="512" rx="96" fill="#0e1726"/>
-  <circle cx="256" cy="256" r="150" fill="none" stroke="#5fd0a8" stroke-width="18"/>
-  <path d="M106 256h300M256 106c60 60 60 240 0 300M256 106c-60 60-60 240 0 300" fill="none" stroke="#5fd0a8" stroke-width="14" opacity="0.8"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a3a6b"/>
+      <stop offset="1" stop-color="#0b1424"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#sky)"/>
+  <rect x="96" y="350" width="320" height="22" rx="11" fill="#56d3a0"/>
+  <rect x="96" y="386" width="210" height="22" rx="11" fill="#56d3a0" opacity="0.45"/>
+  <g transform="translate(256 220) rotate(-18) scale(8.4) translate(-16 -16)">
+    <path d="M30 16 24 14h-5L13 4h-3l4 10H6L3 11H1l2 5-2 5h2l3-3h8l-4 10h3l6-10h5z" fill="#eef3fb"/>
+  </g>
 </svg>

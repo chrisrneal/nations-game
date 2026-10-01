@@ -12,6 +12,7 @@ import { IndexedDbSaveStore } from './saves.ts';
 
 export type { AirportUpdate, AwayRecap } from './engine.ts';
 export type { InstallPrompt, InstallState } from './install.ts';
+export { createFeedback, type Cue, type Feedback, type Prefs } from './feedback.ts';
 export { AUTOSAVE_SLOT, FILE_FORMAT, type AirportHost } from './localHost.ts';
 
 /** Starts the sim in a Web Worker and returns the Host for the interface. */

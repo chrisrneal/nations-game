@@ -1,6 +1,6 @@
 # Progress
 Current state: **pivot in progress** to the idle airport game (decision record
-P1). Slices 1-6 of 8 are done: the airport, offline earnings, selling it for slots, tuned to the pacing targets.
+P1). Slices 1-7 of 8 are done: the airport, offline earnings, selling it for slots, tuned, with juice.
 The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 (docs/PROGRESS.md there).
 
@@ -11,10 +11,28 @@ The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 - [x] 4. Offline earnings and the away recap
 - [x] 5. Prestige and the second city
 - [x] 6. Pacing pass
-- [ ] 7. Juice and polish
+- [x] 7. Juice and polish
 - [ ] 8. Remove the remaining Nations code; README
 
 ## Session log
+
+### 2026-10-01 - Pivot slice 7, juice and polish (lanes U, P)
+**What changed.** A departing plane takes off from its gate and flies away; a
+full flight flashes the card green (a charter gold) and its "+$954 full" pop
+floats up; the cash counter bumps when fares land; a tap ripples under the
+thumb; bought upgrades pulse; a gate, plane or route purchase shows a toast
+("New route: Regional"). Haptics (on by default where the device can vibrate,
+which is Android; iOS has no vibration API) and synthesized sounds (off by
+default, at most five a second) come from a new platform module, so the
+interface never touches device APIs; both are switches in Settings and are
+remembered. Everything animates transform and opacity only, and
+`prefers-reduced-motion` turns the effects off. New app icon (a plane taking
+off over a runway) replaces the Nations placeholder.
+**Phone check.** 39/39: sound off by default and on in one tap; 60.1 fps with
+eight gates animating, take-offs, pops and a thumb tapping every 300 ms on a
+CPU slowed 4x (worst frame 17 ms).
+**How to see it.** Tap gates and watch them leave; Settings > Sound.
+**What is left.** Cleanup (slice 8).
 
 ### 2026-10-01 - Pivot slice 6, the pacing pass (lanes H, S, D; architect for P9)
 **What changed.** `npm run harness -- pacing` plays two bots and times every

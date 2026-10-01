@@ -137,6 +137,10 @@ async function main(): Promise<void> {
     await page.getByTestId('stats').waitFor();
     await noHorizontalScroll(page, 'settings sheet');
     await touchTargets(page, 'settings sheet');
+    check('sound is off by default', (await page.getByTestId('sound').getAttribute('aria-checked')) === 'false');
+    await page.getByTestId('sound').tap();
+    check('sound turns on with one tap', (await page.getByTestId('sound').getAttribute('aria-checked')) === 'true');
+    await page.getByTestId('sound').tap();
     const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('export').tap()]);
     check('export downloads a save file', /^airport-tick-\d+\.json$/.test(download.suggestedFilename()), download.suggestedFilename());
     await page.getByRole('dialog').getByRole('button', { name: 'Close' }).first().tap();
@@ -153,9 +157,15 @@ async function main(): Promise<void> {
     await noHorizontalScroll(page, 'eight gates');
     await touchTargets(page, 'eight gates');
 
-    // 60 fps with eight gates animating and the CPU slowed 4x.
+    // 60 fps with eight gates animating, take-offs, pops and a thumb tapping, the CPU slowed 4x.
     await page.waitForTimeout(500);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    const tapping = (async () => {
+      for (let i = 0; i < 12; i++) {
+        await page.getByTestId(`gate-${i % 8}`).tap();
+        await page.waitForTimeout(300);
+      }
+    })();
     // A string, not a function: tsx would inject a helper the page does not have.
     const fps = (await page.evaluate(`new Promise((resolve) => {
       let frames = 0, worst = 0, last = performance.now();
@@ -169,8 +179,9 @@ async function main(): Promise<void> {
       };
       requestAnimationFrame(frame);
     })`)) as { frames: number; worst: number };
+    await tapping;
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
-    check('60 fps with eight gates (CPU slowed 4x)', fps.frames >= 55, `${fps.frames.toFixed(1)} fps, worst frame ${fps.worst.toFixed(0)} ms`);
+    check('60 fps with eight gates, tapping (CPU slowed 4x)', fps.frames >= 55, `${fps.frames.toFixed(1)} fps, worst frame ${fps.worst.toFixed(0)} ms`);
 
     // Offline: the installed app reopens and continues from the autosave.
     await page.waitForTimeout(1000);
