@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Headless balance harness and repo invariant checks. Runs in Node.",
+  "description": "Headless airport runs (pacing bots, determinism, catch-up bench) and repo invariant checks. Runs in Node.",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -12,7 +12,6 @@
     "start": "tsx src/cli.ts"
   },
   "dependencies": {
-    "@nations/ai": "*",
     "@nations/contracts": "*",
     "@nations/sim": "*"
   }
