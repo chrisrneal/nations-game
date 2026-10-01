@@ -283,3 +283,32 @@ Checked by property tests on every build:
 - A save reloads to the same state hash and continues identically.
 - Cash only changes by fares (up) and purchases (down); a purchase never makes
   cash negative.
+
+## 14. The passenger journey (what the screen shows)
+
+Above the gates the screen shows passengers walking through the airport. It is
+**scenery**: it reads the numbers of sections 3-5 and changes none of them, so
+no checkpoint ever slows anyone down, and nothing here is in State, the hash or
+a save.
+
+- **Departures:** door, the departure checkpoints, the lounge (the terminal's
+  waiting room of section 3, its crowd the real waiting count), then down the
+  walkway between the gates to the gate that boards them. People enter at the
+  arrival rate less those a full lounge turns away (section 3's missed
+  passengers, shown turning back at the door), and one walks to a gate for each
+  passenger it boards (section 5).
+- **Arrivals:** each plane that arrives at a gate (section 4) lets off one
+  person per seat, at most 10, who walk out through the arrival checkpoints to
+  the exit. They pay nothing and never enter the terminal.
+- **Checkpoints by route level** (design data in `catalog.ts`, not tunables):
+
+| From route level | Departures add | Arrivals add |
+| --- | --- | --- |
+| 0 (Island hops) | Check-in, Security | Baggage claim |
+| 5 (Continental: international) | Passport control | Passport control, Customs |
+| 6 (Transatlantic: transoceanic) | Preclearance | - |
+
+- One dot stands for 1, 2, 5, 10, 20, 50... people, picked so a few dots a
+  second walk in however big the airport grows; the lounge shows the scale.
+- Display limits, not balance: at most 220 people on screen, and none walk for
+  ticks caught up quietly (an absence or a late timer).
