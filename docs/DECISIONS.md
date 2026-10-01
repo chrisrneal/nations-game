@@ -553,3 +553,26 @@ the cleanup. The airport sim is built inside packages/sim beside the Nations sim
 **Cost.** For a few slices, a package called nations holds an airport.
 **Reversing it.** Not needed after slice 8.
 
+
+## P9 - Pacing pass: the first airport takes about 35 minutes
+**Status.** Accepted, 2026-10-01, slice 6.
+**Decision.** Retuned from RULES 11 measurements by the harness bots
+(`npm run harness -- pacing`): gates x4 (was x5); planes $300 x3.5 (was $100
+x4.5); routes $750 x4 (was $250 x5.5); the rush 2.5x (was 3x); a slot needs
+$600K earned (was $10K) and is worth +25% fares (was +10%). Three bands moved,
+which is a design change and why this record exists: `routeCostBase` max to
+200000, `slotUnitCents` to [1000000, 400000000], `slotBonusBp` to [1000, 5000].
+`packages/harness/src/pacing.test.ts` now holds every RULES 11 target on each
+build.
+**Why.** The first numbers put a slot on offer at 5 minutes and the greedy bot
+sold for a trivial +10% again and again; unlocks came every 30 s early and
+every 8 minutes late. Higher bases with slower growth spread gates, planes and
+routes evenly (longest wait 4.5 min); a bigger, stronger slot makes the first
+sale land at 35-36 minutes worth +75% fares; tapping at 3x reached 3.5x idle
+income on some seeds, 2.5x keeps it at 2.3-2.8x.
+**Cost.** An idle player (no taps, a check-in every 15 minutes) reaches the
+first sale at about 2 h 45 min: slower than an active one by design, but the
+offline cap (2 h at first) means a player who checks in twice a day waits
+longer. Measured, not targeted; see docs/GAPS.md.
+**Reversing it.** Values in tunables.ts and the RULES table; the pacing test
+says whether the targets still hold.

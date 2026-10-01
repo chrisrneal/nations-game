@@ -1,6 +1,6 @@
 # Progress
 Current state: **pivot in progress** to the idle airport game (decision record
-P1). Slices 1-5 of 8 are done: the airport, offline earnings, and selling it for slots in a new city.
+P1). Slices 1-6 of 8 are done: the airport, offline earnings, selling it for slots, tuned to the pacing targets.
 The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 (docs/PROGRESS.md there).
 
@@ -10,11 +10,31 @@ The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 - [x] 3. Airport screen and upgrade sheet; Nations interface deleted
 - [x] 4. Offline earnings and the away recap
 - [x] 5. Prestige and the second city
-- [ ] 6. Pacing pass
+- [x] 6. Pacing pass
 - [ ] 7. Juice and polish
 - [ ] 8. Remove the remaining Nations code; README
 
 ## Session log
+
+### 2026-10-01 - Pivot slice 6, the pacing pass (lanes H, S, D; architect for P9)
+**What changed.** `npm run harness -- pacing` plays two bots and times every
+milestone against RULES 11. The greedy bot taps three times a second and buys
+the best income per dollar, looking one purchase ahead; the idle bot never taps
+and checks in every 15 minutes. The report also measures active over idle
+income, whether 30-second check-ins buy something, whether a 5-minute session
+from each check-in reaches a new unlock, and the income estimate against
+measured income. `--set` now sweeps the airport tunables. The first numbers
+failed badly (a slot on offer at 5 minutes; unlocks every 30 s early and every
+8 minutes late), so costs, the rush and slots were retuned (decision record P9)
+and `pacing.test.ts` now holds every target on each build.
+**Results** (seeds 1-5, docs/balance/airport-pacing.md for seed 1): first
+upgrade 3 s; first new gate 19-29 s; longest wait for something new before the
+first sale 4.4-4.5 min; first sale 35.5-35.9 min with 3 slots (+75% fares);
+active 2.3-2.8x idle; every idle check-in buys something; every 5-minute
+session reaches a new gate, plane or route; estimate within 3%. An idle player
+first sells at about 2 h 45 min.
+**How to see it.** `npm run harness -- pacing --seed 2`.
+**What is left.** Juice (7) and cleanup (8).
 
 ### 2026-10-01 - Pivot slice 5, selling the airport and the cities (lanes S, U, P)
 **What changed.** Selling was already in the sim (slice 2); now it is on the

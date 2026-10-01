@@ -5,6 +5,7 @@ import { createAirport, ZERO_LEVELS } from './state.ts';
 import { arrivingGate } from './state.ts';
 import { derive } from './rules.ts';
 import { airportView, estimate } from './view.ts';
+import { AIRPORT_TUNABLES } from './tunables.ts';
 
 /** An airport at these levels, every gate with a plane of the current size, run for a minute to settle. */
 function at(levels: Partial<Levels>, city = 0): AirportState {
@@ -71,8 +72,10 @@ describe('the view (S6, P5)', () => {
 
   it('values the airport in slots and names the next city', () => {
     const s = createAirport({ seed: 1 });
-    const v = airportView({ ...s, run: { ...s.run, earned: 4_000_000 }, slots: 1 });
-    expect(v.slots).toMatchObject({ owned: 1, claimable: 2, nextAt: 9_000_000, bonusBp: 11_000, bonusAfterBp: 13_000 });
+    const unit = AIRPORT_TUNABLES.slotUnitCents.value;
+    const bonus = AIRPORT_TUNABLES.slotBonusBp.value;
+    const v = airportView({ ...s, run: { ...s.run, earned: 4 * unit }, slots: 1 });
+    expect(v.slots).toMatchObject({ owned: 1, claimable: 2, nextAt: 9 * unit, bonusBp: 10_000 + bonus, bonusAfterBp: 10_000 + 3 * bonus });
     expect(v.slots.nextCity.name).toBe('Port Calder');
     expect(v.slots.nextCity.twist).toMatch(/Short runway/);
     expect(airportView(createAirport({ seed: 1, city: 4 })).city.name).toBe('Millbrook II');

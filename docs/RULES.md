@@ -77,7 +77,7 @@ Every tick, in this order:
    fareGrowth^routeLevel` ($1.00 at level 0, +60% a level), and the
    multipliers are, all in basis points and applied in this order: full flight
    `+fullBonus` (+25%), charter x`charterFare`, city fare twist, and slots
-   `+slotBonus` per slot (+10% each). Each is floored to whole cents.
+   `+slotBonus` per slot (+25% each). Each is floored to whole cents.
 5. The gate starts turnaround: `turn = (turnBase + seats / turnSeatsPerSecond) x
    crewTurn^crewLevel`, never below `turnMin` (4.5 s for 10 seats, -12% per crew
    level, at least 1 s). When it ends, a new plane arrives.
@@ -89,7 +89,7 @@ cannot fill it before its timer runs out it leaves without the full-flight bonus
 ## 6. Tapping: the rush
 
 - Tapping a gate adds `rushPerTap` (2.5 s) of rush to it, up to `rushMax` (5 s).
-- A rushed gate boards at `rushBoard` (3x) its rate. Passengers come from the
+- A rushed gate boards at `rushBoard` (2.5x) its rate. Passengers come from the
   terminal first; when the terminal is empty a rush also boards **walk-ups**
   from the check-in hall, up to the same rate. A rushed gate in turnaround runs
   its turnaround `rushTurn` (3x) as fast.
@@ -105,11 +105,11 @@ upgrade fixes one bottleneck and none is strictly better than the others:
 
 | Upgrade | Effect per level | The catch | Base | Growth | Max level |
 | --- | --- | --- | --- | --- | --- |
-| More gates | +1 gate | gates share the same passengers: with a small terminal, more gates means emptier planes and lost full-flight bonuses | $100 | x5.0 | 7 |
-| Bigger planes | +50% seats on the next plane at each gate | slower to fill, longer timer, longer turnaround; leaves without the bonus if it cannot fill in time | $100 | x4.5 | 9 |
+| More gates | +1 gate | gates share the same passengers: with a small terminal, more gates means emptier planes and lost full-flight bonuses | $100 | x4.0 | 7 |
+| Bigger planes | +50% seats on the next plane at each gate | slower to fill, longer timer, longer turnaround; leaves without the bonus if it cannot fill in time | $300 | x3.5 | 9 |
 | Faster boarding | +25% boarding rate (jet bridges, more agents) | only pays while passengers are waiting | $10 | x1.9 | 40 |
 | Bigger terminal | +35% arrivals and +35% waiting room | only pays while the gates can board them | $30 | x2.0 | 40 |
-| Better routes | +60% fare per passenger | route level n needs plane level n or more | $250 | x5.5 | 9 |
+| Better routes | +60% fare per passenger | route level n needs plane level n or more | $750 | x4.0 | 9 |
 | Ground crew | -12% turnaround | worth most with small planes that fill fast | $60 | x2.2 | 20 |
 | Night shift | doubles how long the airport runs while you are away (2 h, 4 h, 8 h, 16 h, 24 h) | earns nothing while you are playing | $500 | x10 | 4 |
 
@@ -163,11 +163,11 @@ The harness checks the estimate against measured idle income (within 20%).
 ## 10. Selling the airport: slots and cities
 
 - An airport is worth `slots = floor(sqrt(earnedThisAirport / slotUnit))` slots
-  ($10K earned is 1 slot, $40K is 2, $1M is 10).
+  ($600K earned is 1 slot, $2.4M is 2, $5.4M is 3, $60M is 10).
 - Selling (one tap, then confirm) adds those slots to the slots you own, and
   opens a new airport in the next city: cash, levels, planes and the terminal all
   reset; slots and lifetime statistics stay.
-- Each slot owned raises every fare by `slotBonus` (+10%), forever.
+- Each slot owned raises every fare by `slotBonus` (+25%), forever.
 - Cities come in a fixed order, each with one twist, and repeat after the last:
 
 | # | City | Twist |
@@ -181,18 +181,25 @@ The first sale is meant for about 30-60 minutes into the game (section 11).
 
 ## 11. Pacing targets
 
-Measured by the harness bots (`npm run harness -- pacing`), with a greedy bot
-that taps and buys the best value upgrade, and an idle bot that never taps and
-checks in every 15 minutes:
+Measured by the harness bots (`npm run harness -- pacing`; packages/harness/src/pacing.test.ts
+holds them on every build). The greedy bot taps three times a second, looks at
+its upgrades once a second, buys the best income per dollar (one purchase
+ahead), and sells once a sale adds at least half again to fares (3 slots the
+first time) and the next slot is further away than a quarter of the airport's
+age. The idle bot never taps, checks in every 15 minutes, and sells at the
+first check-in where the sale adds half again.
 
-- First upgrade within 10 s.
-- First new gate within 2 minutes.
-- Something new to aim for at least every 5 minutes: a new gate, plane, route,
-  a city, or the first sale.
-- First sale at roughly 30-60 minutes for the greedy bot.
-- Active income is about 2-3x idle income at the same levels.
-- A 30-second check-in collects the away earnings and buys at least one upgrade;
-  a 5-minute session can afford the next big unlock it was aiming at.
+| Target | Measured (seeds 1-5, after the slice 6 pacing pass) |
+| --- | --- |
+| First upgrade within 10 s | 3 s |
+| First new gate within 2 minutes | 19-29 s |
+| Something new (a gate, plane, route or sale) at least every 5 minutes before the first sale | longest wait 4.4-4.5 min |
+| First sale at roughly 30-60 minutes (greedy) | 35.5-35.9 min, 3 slots |
+| First sale for an idle player (no taps, check-ins every 15 min) | about 2 h 45 min, 3 slots (reported, no target) |
+| Active income about 2-3x idle at the same levels | 2.3-2.8x |
+| A 30-second check-in buys at least one upgrade | 100% of idle check-ins |
+| A 5-minute session reaches its next unlock | 11 of 11 idle check-ins at the first airport, every seed (target 80%) |
+| Income estimate within 20% of measured idle income | within 3% |
 
 ## 12. Tunables
 
@@ -230,18 +237,18 @@ disagree.
 | `charterFareBp` | 20000 | 10000 | 40000 | A charter's fare multiplier (2x). |
 | `rushTicksPerTap` | 10 | 4 | 20 | Rush added by one tap (2.5 s). |
 | `rushMaxTicks` | 20 | 8 | 40 | Most rush a gate can bank (5 s), so tapping ahead does not pay. |
-| `rushBoardBp` | 30000 | 15000 | 50000 | Boarding speed while rushed (3x). |
+| `rushBoardBp` | 25000 | 15000 | 50000 | Boarding speed while rushed (2.5x; pacing pass: 3x let tapping earn up to 3.5x idle). |
 | `rushTurnSpeed` | 3 | 1 | 5 | Turnaround ticks cleared per tick while rushed. |
 | `gatesCostBase` | 10000 | 5000 | 50000 | Cents for the second gate ($100). |
-| `gatesCostGrowthBp` | 50000 | 30000 | 80000 | Gate cost growth (x5). |
-| `planeCostBase` | 10000 | 5000 | 50000 | Cents for plane level 1 ($100). |
-| `planeCostGrowthBp` | 45000 | 30000 | 70000 | Plane cost growth (x4.5). |
+| `gatesCostGrowthBp` | 40000 | 30000 | 80000 | Gate cost growth (x4): the eighth gate around the first sale. |
+| `planeCostBase` | 30000 | 5000 | 50000 | Cents for plane level 1 ($300): bought around minute 3, after the second gate. |
+| `planeCostGrowthBp` | 35000 | 30000 | 70000 | Plane cost growth (x3.5): a higher base and slower growth spread planes evenly over the first airport. |
 | `boardCostBase` | 1000 | 500 | 5000 | Cents for boarding level 1 ($10): the first upgrade, affordable after the first flight. |
 | `boardCostGrowthBp` | 19000 | 15000 | 25000 | Boarding cost growth (x1.9). |
 | `terminalCostBase` | 3000 | 1000 | 10000 | Cents for terminal level 1 ($30). |
 | `terminalCostGrowthBp` | 20000 | 15000 | 25000 | Terminal cost growth (x2.0). |
-| `routeCostBase` | 25000 | 10000 | 100000 | Cents for route level 1 ($250). |
-| `routeCostGrowthBp` | 55000 | 35000 | 80000 | Route cost growth (x5.5). |
+| `routeCostBase` | 75000 | 10000 | 200000 | Cents for route level 1 ($750). |
+| `routeCostGrowthBp` | 40000 | 35000 | 80000 | Route cost growth (x4). |
 | `crewCostBase` | 6000 | 2000 | 20000 | Cents for crew level 1 ($60). |
 | `crewCostGrowthBp` | 22000 | 15000 | 30000 | Crew cost growth (x2.2). |
 | `nightCostBase` | 50000 | 10000 | 200000 | Cents for night shift level 1 ($500). |
@@ -253,8 +260,8 @@ disagree.
 | `offlineBaseMinutes` | 120 | 30 | 240 | Offline cap with no night shift (2 h). |
 | `offlineGrowthBp` | 20000 | 15000 | 30000 | Offline cap per night shift level (x2). |
 | `offlineMaxMinutes` | 1440 | 480 | 2880 | Longest offline run (24 h). |
-| `slotUnitCents` | 1000000 | 100000 | 10000000 | Earnings for the first slot ($10K); n slots need n squared times this. |
-| `slotBonusBp` | 1000 | 500 | 2500 | Fare per slot owned (+10%). |
+| `slotUnitCents` | 60000000 | 1000000 | 400000000 | Earnings for the first slot ($600K, about 22 minutes of active play); n slots need n squared times this. |
+| `slotBonusBp` | 2500 | 1000 | 5000 | Fare per slot owned (+25%): three slots at the first sale make the next airport 75% richer. |
 | `shortRunwayMaxPlane` | 5 | 3 | 7 | Port Calder's biggest plane level. |
 | `shortRunwayFareBp` | 15000 | 11000 | 20000 | Port Calder's fare multiplier (1.5x). |
 | `hubTransferBp` | 2000 | 500 | 4000 | Highmoor Hub: share of a full flight's seats that come back as connecting passengers. |

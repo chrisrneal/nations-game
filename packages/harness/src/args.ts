@@ -3,7 +3,7 @@
  * flag or command is an error with a non-zero exit, never silently ignored
  * (Gate 1 review F1: `--suite gate1` used to run the default command).
  */
-export const COMMANDS = ['play', 'determinism', 'bench', 'gate1', 'gate2', 'predictions'] as const;
+export const COMMANDS = ['pacing', 'play', 'determinism', 'bench', 'gate1', 'gate2', 'predictions'] as const;
 export type HarnessCommand = (typeof COMMANDS)[number];
 
 interface FlagSpec {
@@ -15,6 +15,7 @@ interface FlagSpec {
 }
 
 const FLAGS: Record<HarnessCommand, FlagSpec> = {
+  pacing: { numbers: ['seed', 'minutes'], strings: ['out', 'set'], switches: [] },
   play: { numbers: ['games', 'ticks', 'seed'], strings: ['out', 'set'], switches: [] },
   determinism: { numbers: ['seeds', 'ticks'], strings: [], switches: ['no-browser'] },
   bench: { numbers: ['ticks', 'runs'], strings: [], switches: ['no-browser'] },

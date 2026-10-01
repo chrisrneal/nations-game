@@ -2,7 +2,9 @@
 /**
  * `npm run harness` entry point.
  *
- *   npm run harness                                  play 20 seeded games of 200 ticks,
+ *   npm run harness -- pacing [--seed 1]             the airport pacing pass (RULES 11): greedy and idle
+ *     [--minutes 90] [--out DIR]                     bots, time to each milestone; writes pacing.md
+ *   npm run harness -- play                          (Nations) play 20 seeded games of 200 ticks,
  *     [-- --games N --ticks T --seed S --out DIR]    write games.csv + summary.txt
  *   npm run harness -- determinism [--seeds 1000]    the airport: same hashes twice in Node and in Chromium
  *     [--ticks 240] [--no-browser]
@@ -31,6 +33,7 @@ import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { runGame, type GameMetrics } from './game.ts';
 import { benchAirportCatchUp, hashAirportSeeds } from './airport.ts';
+import { formatPacing, runPacing } from './pacing.ts';
 import { formatSummary, summarize, toCsv } from './metrics.ts';
 import { findChromium, runInBrowser } from './browser.ts';
 import { loadRoster } from './roster.ts';
@@ -179,5 +182,19 @@ async function predictions(): Promise<void> {
   if (!report.pass) process.exitCode = 1;
 }
 
-const commands: Record<HarnessCommand, () => Promise<void>> = { play, determinism, bench, gate1, gate2, predictions };
+async function pacing(): Promise<void> {
+  const seed = flag('seed', 1);
+  const minutes = flag('minutes', 90);
+  const outDir = resolve(option('out', join(fileURLToPath(new URL('..', import.meta.url)), 'out')));
+  const start = performance.now();
+  const report = runPacing({ seed, minutes });
+  const text = formatPacing(report, seed);
+  mkdirSync(outDir, { recursive: true });
+  writeFileSync(join(outDir, 'pacing.md'), `${text}\n`);
+  console.log(text);
+  console.log(`wall time ${Math.round(performance.now() - start)} ms; wrote ${join(outDir, 'pacing.md')}`);
+  if (!report.pass) process.exitCode = 1;
+}
+
+const commands: Record<HarnessCommand, () => Promise<void>> = { pacing, play, determinism, bench, gate1, gate2, predictions };
 await commands[parsed.command]();

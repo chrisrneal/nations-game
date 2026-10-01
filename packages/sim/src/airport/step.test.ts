@@ -116,11 +116,13 @@ describe('the rush (RULES 6)', () => {
     expect(many.run.taps).toBe(3);
   });
 
-  it('boards 3x as fast, with walk-ups when the terminal is empty', () => {
+  it('boards faster, with walk-ups when the terminal is empty', () => {
     const s = tweak(createAirport({ seed: 1 }), { waiting: 0 });
     const after = step(s, [tap(s, 0)]).state;
-    // 400 arrive, 400 board from the terminal, 1,100 walk up: 1,500 = 3 x 500.
-    expect(gate(after).boarded).toBe(1500);
+    // 400 arrive and board from the terminal; the rest of the rushed rate walks up.
+    const rushed = Math.floor((500 * T.rushBoardBp.value) / 10_000);
+    expect(rushed).toBeGreaterThan(500);
+    expect(gate(after).boarded).toBe(rushed);
     expect(after.waiting).toBe(0);
   });
 
@@ -148,8 +150,8 @@ describe('upgrades (RULES 7)', () => {
     expect(state.levels.boarding).toBe(1);
     expect(state.cash).toBe(s.cash - 1000);
     expect(events.find((e) => e.type === 'bought')?.payload).toEqual({ upgrade: 'boarding', level: 1, cents: 1000 });
-    expect(upgradeCost('boarding', 1)).toBe(1900);
-    expect(upgradeCost('gates', 1)).toBe(50_000);
+    expect(upgradeCost('boarding', 1)).toBe(Math.floor((1000 * T.boardCostGrowthBp.value) / 10_000));
+    expect(upgradeCost('gates', 1)).toBe(Math.floor((T.gatesCostBase.value * T.gatesCostGrowthBp.value) / 10_000));
   });
 
   it('refuses what it cannot afford and leaves cash alone', () => {
@@ -222,10 +224,11 @@ describe('selling the airport (RULES 10)', () => {
     const s = tweak(s0, {
       cash: 5_000_000,
       levels: { ...s0.levels, boarding: 5, gates: 2 },
-      run: { ...s0.run, earned: 4_000_000, flights: 99 },
-      life: { ...s0.life, earned: 4_000_000, flights: 99 },
+      run: { ...s0.run, earned: 4 * T.slotUnitCents.value, flights: 99 },
+      life: { ...s0.life, earned: 4 * T.slotUnitCents.value, flights: 99 },
     });
-    expect(slotsFor(4_000_000)).toBe(2);
+    expect(slotsFor(4 * T.slotUnitCents.value)).toBe(2);
+    expect(slotsFor(4 * T.slotUnitCents.value - 1)).toBe(1);
     const { state, events } = step(s, [{ tick: 0, type: 'sell', payload: {} }]);
     expect(events.find((e) => e.type === 'sold')?.payload).toEqual({ slots: 2, city: 1 });
     expect(state.city).toBe(1);
@@ -238,10 +241,10 @@ describe('selling the airport (RULES 10)', () => {
     expect(state.tick).toBe(1);
   });
 
-  it('owned slots raise every fare by 10% each', () => {
+  it('owned slots raise every fare by the slot bonus each', () => {
     const s = tweak(createAirport({ seed: 1 }), { slots: 3 });
     const d = run(s, 20).events.find((e) => e.type === 'departed');
-    expect(d?.payload).toMatchObject({ cents: 1625 }); // 1,250 x 1.3
+    expect(d?.payload).toMatchObject({ cents: Math.floor((1250 * (10_000 + 3 * T.slotBonusBp.value)) / 10_000) });
   });
 });
 
@@ -266,7 +269,7 @@ describe('city twists (RULES 10)', () => {
     let s = createAirport({ seed: 1 });
     const visited: number[] = [];
     for (let i = 0; i < 5; i++) {
-      s = tweak(s, { run: { ...s.run, earned: 1_000_000 } });
+      s = tweak(s, { run: { ...s.run, earned: T.slotUnitCents.value } });
       s = step(s, [{ tick: s.tick, type: 'sell', payload: {} }]).state;
       visited.push(s.city);
     }

@@ -21,7 +21,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, type Page } from 'playwright-core';
 import { busyAirport } from '../../../packages/harness/src/airport.ts';
-import { AirportSession, hashState } from '@nations/sim/airport';
+import { AIRPORT_TUNABLES, AirportSession, hashState } from '@nations/sim/airport';
 
 const PORT = 4179;
 const URL = `http://localhost:${PORT}/`;
@@ -224,8 +224,8 @@ async function main(): Promise<void> {
     await back.getByTestId('recap').waitFor({ state: 'detached', timeout: 2000 });
     check('one tap collects and closes the recap', (await back.getByTestId('recap').count()) === 0);
 
-    // Selling: an airport that has earned $90K is worth 3 slots.
-    const worth = busyFile(profile, 9_000_000);
+    // Selling: an airport that has earned 9 slot units ($5.4M) is worth 3 slots.
+    const worth = busyFile(profile, 9 * AIRPORT_TUNABLES.slotUnitCents.value);
     await back.getByTestId('settings').tap();
     await back.getByTestId('import-file').setInputFiles(worth.path);
     await back.getByTestId('open-sell').waitFor({ timeout: 5000 });
