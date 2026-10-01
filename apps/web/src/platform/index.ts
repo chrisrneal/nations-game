@@ -10,7 +10,7 @@ import { createInstallPrompt, type InstallPrompt } from './install.ts';
 import { LocalHost, type AirportHost } from './localHost.ts';
 import { IndexedDbSaveStore } from './saves.ts';
 
-export type { AirportUpdate } from './engine.ts';
+export type { AirportUpdate, AwayRecap } from './engine.ts';
 export type { InstallPrompt, InstallState } from './install.ts';
 export { AUTOSAVE_SLOT, FILE_FORMAT, type AirportHost } from './localHost.ts';
 

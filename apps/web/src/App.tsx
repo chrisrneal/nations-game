@@ -4,6 +4,7 @@ import type { AirportHost, InstallPrompt } from './platform/index.ts';
 import { BottomBar } from './ui/BottomBar.tsx';
 import { GateCard, NextGateCard } from './ui/GateCard.tsx';
 import { InstallBanner } from './ui/Install.tsx';
+import { Recap } from './ui/Recap.tsx';
 import { SettingsSheet } from './ui/SettingsSheet.tsx';
 import { AirportStore } from './ui/store.ts';
 import { TerminalStrip } from './ui/TerminalStrip.tsx';
@@ -29,7 +30,8 @@ export function App(props: { host: AirportHost; install?: InstallPrompt }): Reac
     return () => clearTimeout(timer);
   }, [toast]);
 
-  const view = useSyncExternalStore(store.subscribeStructure, store.getStructure);
+  const structure = useSyncExternalStore(store.subscribeStructure, store.getStructure);
+  const view = structure?.view ?? null;
   const tap = useCallback((gate: number) => void host.tap(gate), [host]);
   const buy = useCallback((upgrade: UpgradeId) => void host.buy(upgrade), [host]);
   const close = useCallback(() => setSheet(null), []);
@@ -71,6 +73,7 @@ export function App(props: { host: AirportHost; install?: InstallPrompt }): Reac
       <BottomBar view={view} store={store} onUpgrades={() => setSheet('upgrades')} />
       {sheet === 'upgrades' && <UpgradeSheet view={view} store={store} onBuy={buy} onClose={close} />}
       {sheet === 'settings' && <SettingsSheet view={view} host={host} onClose={close} onToast={setToast} />}
+      {structure !== null && structure.recap !== null && sheet === null && <Recap recap={structure.recap} onCollect={() => void host.dismissRecap()} />}
       {toast !== null && (
         <div className="toast" role="status">
           {toast}

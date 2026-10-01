@@ -1,6 +1,6 @@
 # Progress
 Current state: **pivot in progress** to the idle airport game (decision record
-P1). Slices 1-3 of 8 are done: the deployed app is now the airport.
+P1). Slices 1-4 of 8 are done: the deployed app is the airport, with offline earnings.
 The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 (docs/PROGRESS.md there).
 
@@ -8,13 +8,34 @@ The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 - [x] 1. Pivot docs
 - [x] 2. Airport sim
 - [x] 3. Airport screen and upgrade sheet; Nations interface deleted
-- [ ] 4. Offline earnings and the away recap
+- [x] 4. Offline earnings and the away recap
 - [ ] 5. Prestige and the second city
 - [ ] 6. Pacing pass
 - [ ] 7. Juice and polish
 - [ ] 8. Remove the remaining Nations code; README
 
 ## Session log
+
+### 2026-10-01 - Pivot slice 4, offline earnings and the away recap (lanes U, P)
+**What changed.** Any gap of a minute or more (the app closed, hidden, or the
+phone asleep) is an absence: the host steps the airport through it quietly, up
+to the offline cap from the night-shift level (2 h at first, 24 h at most), and
+the time beyond the cap is lost. On return a sheet says, in three lines, how
+long you were away and whether the cap cut it short, what the airport earned
+from how many flights (and how many left full), and what happened: charters,
+passengers a full terminal turned away, or the bottleneck with the upgrade that
+fixes it. One tap collects. The recap uses lifetime stats, so it is right even
+if the gap spans more than one airport.
+**Tests.** Engine (fake clock): a 30 s gap plays live with no recap; an hour
+away is caught up in full with a recap; 5 hours away runs only the 2-hour cap
+and restarts the clock from now; a capped catch-up gives exactly the state of
+stepping the capped ticks; reopening yesterday's save runs the cap. Recap lines
+tested word for word.
+**Phone check.** 29/29: closed for 3 hours (the autosave's clock moved back) an
+8-gate airport reopens to the recap in 389 ms on a CPU slowed 4x (budget 2 s),
+ran 2 of the 3 hours, three lines, one tap collects.
+**How to see it.** Close the app for a few minutes and open it again.
+**What is left.** Selling the airport (slice 5), tuning (6), juice (7), cleanup (8).
 
 ### 2026-10-01 - Pivot slice 3, the airport on the phone (lanes U, P)
 **What changed.** The app is the airport. The Nations interface and its host
