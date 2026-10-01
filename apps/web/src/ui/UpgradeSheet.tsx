@@ -8,17 +8,21 @@ import type { AirportStore } from './store.ts';
 function UpgradeRow(props: { upgrade: UpgradeView; fixes: boolean; store: AirportStore; onBuy: (id: UpgradeId) => void }): ReactElement {
   const { upgrade: u, fixes, store, onBuy } = props;
   const progress = useRef<HTMLElement>(null);
+  const row = useRef<HTMLLIElement>(null);
   useLayoutEffect(
     () =>
       store.onFrame((update) => {
+        if (update.events.some((e) => e.type === 'bought' && e.payload.upgrade === u.id)) {
+          row.current?.animate?.([{ transform: 'scale(1.03)' }, { transform: 'scale(1)' }], { duration: 240, easing: 'ease-out' });
+        }
         if (progress.current === null || u.cost === null) return;
         progress.current.style.transform = `scaleX(${Math.min(1, update.view.cash / u.cost)})`;
       }),
-    [store, u.cost],
+    [store, u.cost, u.id],
   );
   const maxed = u.cost === null;
   return (
-    <li className={`upgrade${fixes ? ' fixes' : ''}`} data-testid={`upgrade-${u.id}`}>
+    <li ref={row} className={`upgrade${fixes ? ' fixes' : ''}`} data-testid={`upgrade-${u.id}`}>
       <div className="upgrade-main">
         <div className="upgrade-title">
           <span className="upgrade-name">{u.name}</span>

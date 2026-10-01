@@ -1,14 +1,20 @@
 import { useRef, useState, type ReactElement } from 'react';
 import type { AirportView } from '@nations/contracts';
-import type { AirportHost } from '../platform/index.ts';
+import type { AirportHost, Feedback } from '../platform/index.ts';
 import { formatCash, short } from './format.ts';
 import { Sheet } from './Sheet.tsx';
 
 /** Saves to a file and back, starting over, and the airport's lifetime numbers. */
-export function SettingsSheet(props: { view: AirportView; host: AirportHost; onClose: () => void; onToast: (text: string) => void }): ReactElement {
-  const { view, host, onClose, onToast } = props;
+export function SettingsSheet(props: { view: AirportView; host: AirportHost; feedback?: Feedback | undefined; onClose: () => void; onToast: (text: string) => void }): ReactElement {
+  const { view, host, feedback, onClose, onToast } = props;
   const file = useRef<HTMLInputElement>(null);
   const [confirming, setConfirming] = useState(false);
+  const [prefs, setPrefs] = useState(feedback?.prefs ?? { sound: false, haptics: false });
+  const toggle = (key: 'sound' | 'haptics'): void => {
+    const next = { ...prefs, [key]: !prefs[key] };
+    setPrefs(next);
+    feedback?.setPrefs(next);
+  };
 
   const exportSave = async (): Promise<void> => {
     const { name, text } = await host.exportFile();
@@ -55,6 +61,20 @@ export function SettingsSheet(props: { view: AirportView; host: AirportHost; onC
           <dd>up to {view.offlineCapMinutes >= 60 ? `${view.offlineCapMinutes / 60} h` : `${view.offlineCapMinutes} min`}</dd>
         </div>
       </dl>
+      {feedback !== undefined && (
+        <div className="switches">
+          <button type="button" role="switch" aria-checked={prefs.sound} className="switch" onClick={() => toggle('sound')} data-testid="sound">
+            <span>Sound</span>
+            <span className="switch-state">{prefs.sound ? 'On' : 'Off'}</span>
+          </button>
+          {feedback.canVibrate && (
+            <button type="button" role="switch" aria-checked={prefs.haptics} className="switch" onClick={() => toggle('haptics')} data-testid="haptics">
+              <span>Vibration</span>
+              <span className="switch-state">{prefs.haptics ? 'On' : 'Off'}</span>
+            </button>
+          )}
+        </div>
+      )}
       <div className="sheet-actions">
         <button type="button" className="btn" onClick={() => void exportSave()} data-testid="export">
           Save to a file

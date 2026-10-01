@@ -116,6 +116,8 @@ p {
 }
 
 .cash {
+  display: inline-block;
+  transform-origin: left center;
   font-size: 2.1rem;
   font-weight: 800;
   letter-spacing: -0.02em;
@@ -349,10 +351,10 @@ p {
 
 .pop {
   position: absolute;
-  right: 0.6rem;
-  top: 40%;
+  right: 0.5rem;
+  top: 0.35rem;
   font-weight: 800;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   color: var(--accent);
   text-shadow: 0 1px 2px rgb(0 0 0 / 60%);
   animation: pop-up 900ms ease-out forwards;
@@ -380,6 +382,78 @@ p {
     transform: translateY(-34px) scale(1);
     opacity: 0;
   }
+}
+
+/* ---- juice: take-off, flashes, ripples (transform and opacity only) ---- */
+.fly {
+  position: absolute;
+  left: 0.6rem;
+  top: 2.1rem;
+  width: 26px;
+  height: 26px;
+  color: var(--sky);
+  animation: take-off 700ms cubic-bezier(0.5, 0, 0.9, 0.4) forwards;
+}
+
+.fly-charter {
+  color: var(--gold);
+}
+
+@keyframes take-off {
+  from {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: translate(150px, -60px) rotate(-14deg) scale(0.6);
+    opacity: 0;
+  }
+}
+
+.flash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgb(86 211 160 / 22%);
+  animation: flash 420ms ease-out forwards;
+}
+
+.flash-charter {
+  background: rgb(255 204 92 / 28%);
+}
+
+@keyframes flash {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.ripple {
+  position: absolute;
+  width: 90px;
+  height: 90px;
+  margin: -45px 0 0 -45px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 18%);
+  animation: ripple 450ms ease-out forwards;
+}
+
+@keyframes ripple {
+  from {
+    transform: scale(0.2);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.buy:not(:disabled):active {
+  transform: scale(0.95);
 }
 
 /* ---- bottom: the thumb zone ---- */
@@ -702,6 +776,28 @@ p {
 }
 
 /* ---- settings ---- */
+.switches {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.switch {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0.5rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  font-weight: 600;
+}
+
+.switch[aria-checked='true'] .switch-state {
+  color: var(--accent);
+}
+
 .stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -748,15 +844,30 @@ p {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  top: calc(env(safe-area-inset-top) + 0.5rem);
+  /* Below the cash, over the terminal strip: news, never over the money or a sheet's buttons. */
+  top: calc(env(safe-area-inset-top) + 6.2rem);
   width: min(92vw, 30rem);
   background: var(--fg);
   color: var(--bg);
   border-radius: 12px;
-  padding: 0.65rem 0.9rem;
+  padding: 0.55rem 0.9rem;
   font-size: 0.9rem;
+  font-weight: 700;
+  text-align: center;
+  animation: toast-in 180ms ease-out;
   z-index: 30;
   pointer-events: none;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -765,7 +876,10 @@ p {
   .pop {
     animation: none;
   }
-  .pop {
+  .pop,
+  .fly,
+  .flash,
+  .ripple {
     display: none;
   }
 }

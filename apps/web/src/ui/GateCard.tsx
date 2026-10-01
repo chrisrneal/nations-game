@@ -1,7 +1,7 @@
 import { memo, useLayoutEffect, useRef, type ReactElement } from 'react';
 import { formatCash, formatDuration } from './format.ts';
 import { PlaneIcon } from './PlaneIcon.tsx';
-import { pop } from './pop.ts';
+import { flash, flyOff, pop, ripple } from './pop.ts';
 import type { AirportStore } from './store.ts';
 
 interface GateCardProps {
@@ -36,8 +36,10 @@ export const GateCard = memo(function GateCard(props: GateCardProps): ReactEleme
         if (g === undefined) return;
         for (const event of update.events) {
           if (event.type === 'departed' && event.payload.gate === index) {
-            const { cents, full } = event.payload;
-            pop(pops.current, `+${formatCash(cents)}`, event.payload.charter ? 'charter' : full ? 'full' : 'cash');
+            const { cents, full, charter } = event.payload;
+            flyOff(pops.current, charter);
+            if (full || charter) flash(pops.current, charter ? 'charter' : 'full');
+            pop(pops.current, `+${formatCash(cents)}${full ? ' full' : ''}`, charter ? 'charter' : full ? 'full' : 'cash');
           }
         }
         // A plane just left or arrived: React is about to swap the bars; leave these alone.
@@ -69,7 +71,10 @@ export const GateCard = memo(function GateCard(props: GateCardProps): ReactEleme
       data-testid={`gate-${index}`}
       aria-label={`Gate ${index + 1}, ${turning ? 'turning around' : model}. Tap to rush.`}
       onPointerDown={(event) => {
-        if (event.button === 0) rush();
+        if (event.button !== 0) return;
+        const box = event.currentTarget.getBoundingClientRect();
+        ripple(pops.current, event.clientX - box.left, event.clientY - box.top);
+        rush();
       }}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {

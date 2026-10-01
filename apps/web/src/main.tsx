@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
-import { createHost, installPrompt } from './platform/index.ts';
+import { createFeedback, createHost, installPrompt } from './platform/index.ts';
 import './styles.css';
 
 const root = document.getElementById('root');
@@ -11,9 +11,11 @@ if (root === null) throw new Error('index.html is missing #root');
 const host = createHost();
 // Listen for the browser's install event from the start: it fires once, early.
 const install = installPrompt();
+// Haptics where supported, sound off until the player turns it on.
+const feedback = createFeedback();
 
 createRoot(root).render(
   <StrictMode>
-    <App host={host} install={install} />
+    <App host={host} install={install} feedback={feedback} />
   </StrictMode>,
 );

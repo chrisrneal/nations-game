@@ -10,7 +10,13 @@ export function TopBar(props: { view: AirportView; store: AirportStore; onSettin
   useLayoutEffect(
     () =>
       store.onFrame((update) => {
-        if (cash.current) cash.current.textContent = formatCash(update.view.cash);
+        const el = cash.current;
+        if (el === null) return;
+        el.textContent = formatCash(update.view.cash);
+        // A little bump when fares come in; skipped while one is still running.
+        if (update.events.some((e) => e.type === 'departed') && el.getAnimations?.().length === 0) {
+          el.animate?.([{ transform: 'scale(1.07)' }, { transform: 'scale(1)' }], { duration: 220, easing: 'ease-out' });
+        }
       }),
     [store],
   );
