@@ -576,3 +576,19 @@ offline cap (2 h at first) means a player who checks in twice a day waits
 longer. Measured, not targeted; see docs/GAPS.md.
 **Reversing it.** Values in tunables.ts and the RULES table; the pacing test
 says whether the targets still hold.
+
+## P10 - Nations code removed; packages renamed `@airport/*`
+**Status.** Accepted, 2026-10-01, slice 8. Completes P1 and P8.
+**Decision.** Deleted, each in its own commit: the Nations harness suites, the
+AI package and its design document, the Nations sim and contract types, and the
+Nations data and documents (world data, 100x plan, gates, balance reports,
+playtest kit, reviews). The airport sim moved from packages/sim/src/airport up
+to packages/sim/src, so tunables live at packages/sim/src/tunables.ts as
+CLAUDE.md says. The workspace scope is now `@airport/` (sim, contracts,
+harness) and the local lint rule of T6 is `airport/allowed-imports`; T3's three
+purity guards are unchanged in substance. The repository and the Vercel project
+keep the name nations-game.
+**Why.** Dead code and data cost every future session reading time and invite
+edits to the wrong game. Everything removed is at commit 67d1d92.
+**Cost.** The Nations git history is the only copy of that work.
+**Reversing it.** `git checkout 67d1d92`.

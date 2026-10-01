@@ -1,5 +1,5 @@
-import type { AirportEvent, AirportIntent, AirportSaveFile, AirportState, AirportView, Bottleneck, Stats } from '@nations/contracts';
-import { AIRPORT_TUNABLES, AirportSession, UPGRADE_TEXT, airportView, createAirport, estimate, hashState, offlineCapTicks, offlineMinutesAt } from '@nations/sim/airport';
+import type { AirportEvent, AirportIntent, AirportSaveFile, AirportState, AirportView, Bottleneck, Stats } from '@airport/contracts';
+import { AIRPORT_TUNABLES, AirportSession, UPGRADE_TEXT, airportView, createAirport, estimate, hashState, offlineCapTicks, offlineMinutesAt } from '@airport/sim';
 import { LIVE_EVENT_TICKS, RECAP_MIN_AWAY_MS, capped, ticksDue } from './clock.ts';
 
 /**

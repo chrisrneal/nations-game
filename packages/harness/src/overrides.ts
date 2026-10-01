@@ -1,24 +1,16 @@
-import { TUNABLES, refreshRules } from '@nations/sim';
-import { AIRPORT_TUNABLES } from '@nations/sim/airport';
+import { AIRPORT_TUNABLES } from '@airport/sim';
 
 /**
- * `--set id=value[,id=value]` for tuning sweeps: replaces sim tunables (the
- * airport's first, then the Nations sim's until slice 8 removes it) for one
- * harness run, so several settings can be swept in parallel processes without
- * editing packages/sim/src/tunables.ts. Every value must be a whole number
- * inside the band tunables.ts declares (the band is the limit of tuning; going
- * outside it is a design change).
- *
- * The change reaches the numbers the sim reads from `TUNABLES` directly and,
- * through `refreshRules` (prompt 17), the copy of the rules every View carries,
- * so a number only the AI reads from its View sweeps too.
+ * `--set id=value[,id=value]` for tuning sweeps: replaces airport tunables for
+ * one harness run, so several settings can be swept in parallel processes
+ * without editing tunables.ts. Every value must be a whole number inside the
+ * band tunables.ts declares (the band is the limit of tuning; going outside it
+ * is a design change). The sim reads tunables at call time, so a change reaches
+ * every rule at once.
  */
 type Mutable = { value: number; min: number; max: number };
 
-function tableFor(id: string): Record<string, Mutable | undefined> {
-  const airport = AIRPORT_TUNABLES as unknown as Record<string, Mutable | undefined>;
-  return airport[id] !== undefined ? airport : (TUNABLES as unknown as Record<string, Mutable | undefined>);
-}
+const table = AIRPORT_TUNABLES as unknown as Record<string, Mutable | undefined>;
 
 /** Parses and validates a `--set` value. Throws an Error with a user-facing message. */
 export function parseOverrides(spec: string): Record<string, number> {
@@ -28,7 +20,7 @@ export function parseOverrides(spec: string): Record<string, number> {
     if (at < 1) throw new Error(`--set needs id=value pairs, got "${pair}".`);
     const id = pair.slice(0, at);
     const raw = pair.slice(at + 1);
-    const tunable = tableFor(id)[id];
+    const tunable = table[id];
     if (tunable === undefined) throw new Error(`Unknown tunable "${id}" in --set.`);
     const value = Number(raw);
     if (raw === '' || !Number.isSafeInteger(value)) throw new Error(`--set ${id} needs a whole number, got "${raw}".`);
@@ -39,13 +31,11 @@ export function parseOverrides(spec: string): Record<string, number> {
   return out;
 }
 
-/** Applies validated overrides to the sim's tunables. Returns a function that puts every value back. */
+/** Applies validated overrides. Returns a function that puts every value back. */
 export function applyOverrides(values: Readonly<Record<string, number>>): () => void {
-  const before = Object.entries(values).map(([id]) => [id, (tableFor(id)[id] as Mutable).value] as const);
-  for (const [id, value] of Object.entries(values)) (tableFor(id)[id] as Mutable).value = value;
-  refreshRules();
+  const before = Object.keys(values).map((id) => [id, (table[id] as Mutable).value] as const);
+  for (const [id, value] of Object.entries(values)) (table[id] as Mutable).value = value;
   return () => {
-    for (const [id, value] of before) (tableFor(id)[id] as Mutable).value = value;
-    refreshRules();
+    for (const [id, value] of before) (table[id] as Mutable).value = value;
   };
 }

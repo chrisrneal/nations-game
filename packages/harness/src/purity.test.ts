@@ -1,5 +1,5 @@
 /**
- * Gate 0, criterion 1, in executable form: "sim core has no UI, DOM, network or
+ * T3 in executable form: "the sim core has no UI, DOM, network or
  * clock imports".
  *
  * ESLint and the tsconfig lib/types settings already block these, but lint
@@ -17,7 +17,7 @@ const repoRoot = fileURLToPath(new URL('../../..', import.meta.url));
 const PURE_PACKAGES = ['packages/contracts/src', 'packages/sim/src'] as const;
 
 /** Imports allowed in pure packages. Everything else is a failure. */
-const ALLOWED_IMPORTS = /^(\.{1,2}\/|@nations\/contracts($|\/))/;
+const ALLOWED_IMPORTS = /^(\.{1,2}\/|@airport\/contracts($|\/))/;
 /** Extra imports allowed in *.test.ts inside pure packages: the test runner itself. */
 const ALLOWED_TEST_IMPORTS = /^(vitest|fast-check)$/;
 
@@ -82,7 +82,7 @@ describe('pure packages stay pure', () => {
           ALLOWED_IMPORTS.test(specifier) || (isTest && ALLOWED_TEST_IMPORTS.test(specifier));
         expect(
           allowed,
-          `${name} imports "${specifier}". Pure packages may import only @nations/contracts and relative files (CLAUDE.md).`,
+          `${name} imports "${specifier}". Pure packages may import only @airport/contracts and relative files (CLAUDE.md).`,
         ).toBe(true);
       }
     },
@@ -96,49 +96,6 @@ describe('pure packages stay pure', () => {
         expect(pattern.test(code), `${name} uses ${String(pattern)}: ${why} (CLAUDE.md).`).toBe(
           false,
         );
-      }
-    },
-  );
-});
-
-/**
- * packages/ai must be deterministic (D5) and must not be able to reach State:
- * it may import contracts (where NationView lives since prompt 06) and its own
- * files, nothing else. Any import of @nations/sim - even a type - is forbidden
- * outside tests, so the AI cannot even name the full State.
- */
-const aiFiles = listTypeScriptFiles(join(repoRoot, 'packages/ai/src')).filter(
-  (file) => !file.includes('.test.'),
-);
-const AI_BANNED = BANNED_IDENTIFIERS.filter(({ pattern }) =>
-  [/\bMath\s*\.\s*random\b/, /\bDate\b/, /\bcrypto\b/].some((p) => p.source === pattern.source),
-);
-
-describe('AI stays deterministic and View-only', () => {
-  it('finds AI source files to check', () => {
-    expect(aiFiles.length).toBeGreaterThan(0);
-    expect(AI_BANNED).toHaveLength(3);
-  });
-
-  it.each(aiFiles.map((file) => [relative(repoRoot, file), file] as const))(
-    '%s imports only contracts and relative files',
-    (name, file) => {
-      const code = stripComments(readFileSync(file, 'utf8'));
-      for (const match of code.matchAll(/\b(?:import|export)\s[^;]*?\bfrom\s*['"]([^'"]+)['"]/g)) {
-        const specifier = match[1] ?? '';
-        const allowed = ALLOWED_IMPORTS.test(specifier);
-        expect(allowed, `${name} imports "${specifier}" at runtime. The AI reads only a View (CLAUDE.md).`).toBe(true);
-      }
-      expect(/\b(?:import|require)\s*\(/.test(code), `${name} uses a dynamic import`).toBe(false);
-    },
-  );
-
-  it.each(aiFiles.map((file) => [relative(repoRoot, file), file] as const))(
-    '%s uses no clock or unseeded randomness',
-    (name, file) => {
-      const code = stripComments(readFileSync(file, 'utf8'));
-      for (const { pattern, why } of AI_BANNED) {
-        expect(pattern.test(code), `${name} uses ${String(pattern)}: ${why}`).toBe(false);
       }
     },
   );

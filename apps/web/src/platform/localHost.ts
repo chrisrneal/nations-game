@@ -1,4 +1,4 @@
-import type { AirportIntent, UpgradeId } from '@nations/contracts';
+import type { AirportIntent, UpgradeId } from '@airport/contracts';
 import type { AirportEngine, AirportUpdate, SavedAirport } from './engine.ts';
 import type { SaveStore } from './saves.ts';
 

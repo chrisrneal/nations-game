@@ -1,9 +1,9 @@
 {
-  "name": "nations-game",
+  "name": "airport-idle",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Mobile-first PWA: run a nation in a staged 2030 world alongside AI nations.",
+  "description": "Mobile-first idle PWA: run an airport, fill planes with passengers, earn while away.",
   "engines": {
     "node": ">=22"
   },

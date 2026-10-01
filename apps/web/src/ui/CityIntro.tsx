@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import type { AirportView } from '@nations/contracts';
+import type { AirportView } from '@airport/contracts';
 import { Sheet } from './Sheet.tsx';
 
 /** Welcome to the new city: its twist, and what the slots now add. */

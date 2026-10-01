@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AirportSession, advanceMany, createAirport, hashState } from '@nations/sim/airport';
+import { AirportSession, advanceMany, createAirport, hashState } from '@airport/sim';
 import { AirportEngine, type AirportUpdate } from './engine.ts';
 import { FakeClock } from './testClock.ts';
 

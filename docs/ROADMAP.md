@@ -52,6 +52,7 @@ passengers never negative, determinism across engines, catch-up equals
 stepping, save-reload-continue.
 
 ## Slices (one pull request each, game playable after every merge)
+Status: all eight merged on 2026-10-01 (PRs #41-#48); see docs/PROGRESS.md.
 1. **Pivot docs.** Decision records, RULES.md with formulas and tunables, this
    roadmap, CLAUDE.md.
 2. **Airport sim.** Gates, planes, passengers, boarding, departures, cash,

@@ -1,9 +1,9 @@
 /**
  * Command-line parsing for `npm run harness`. Strict on purpose: an unknown
  * flag or command is an error with a non-zero exit, never silently ignored
- * (Gate 1 review F1: `--suite gate1` used to run the default command).
+ * (a typo must never quietly run the default command).
  */
-export const COMMANDS = ['pacing', 'play', 'determinism', 'bench', 'gate1', 'gate2', 'predictions'] as const;
+export const COMMANDS = ['pacing', 'determinism', 'bench'] as const;
 export type HarnessCommand = (typeof COMMANDS)[number];
 
 interface FlagSpec {
@@ -15,13 +15,9 @@ interface FlagSpec {
 }
 
 const FLAGS: Record<HarnessCommand, FlagSpec> = {
-  pacing: { numbers: ['seed', 'minutes'], strings: ['out', 'set'], switches: [] },
-  play: { numbers: ['games', 'ticks', 'seed'], strings: ['out', 'set'], switches: [] },
+  pacing: { numbers: ['seed', 'minutes'], strings: ['out', 'set'], switches: [], positive: ['minutes'] },
   determinism: { numbers: ['seeds', 'ticks'], strings: [], switches: ['no-browser'] },
   bench: { numbers: ['ticks', 'runs'], strings: [], switches: ['no-browser'] },
-  gate1: { numbers: ['games', 'seed', 'ranges', 'ticks'], strings: ['out', 'set'], switches: [], positive: ['ranges'] },
-  gate2: { numbers: ['games', 'seed', 'ticks', 'absence'], strings: ['out', 'set'], switches: ['no-idle'], positive: ['games'] },
-  predictions: { numbers: [], strings: ['files', 'dir', 'out'], switches: [] },
 };
 
 export interface ParsedArgs {
@@ -56,7 +52,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       rest.push(word);
     }
   }
-  const resolved = command ?? 'play';
+  const resolved = command ?? 'pacing';
   if (explicit !== undefined && explicit !== resolved) throw new Error(`Got both "${explicit}" and --suite ${resolved}; give one.`);
   const spec = FLAGS[resolved];
   const numbers: Record<string, number> = {};

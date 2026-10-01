@@ -22,7 +22,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
  * would disable the architecture's main guard. This rule is 20 lines and says
  * exactly what it means.
  */
-const nationsPlugin = {
+const airportPlugin = {
   rules: {
     'allowed-imports': {
       meta: {
@@ -65,7 +65,7 @@ const nationsPlugin = {
 };
 
 const RELATIVE = '^\\.{1,2}/';
-const CONTRACTS = '^@nations/contracts($|/)';
+const CONTRACTS = '^@airport/contracts($|/)';
 
 const PURE_PACKAGES = ['packages/contracts/**/*.ts', 'packages/sim/**/*.ts'];
 
@@ -142,22 +142,22 @@ export default tseslint.config(
   },
   {
     files: ['packages/sim/**/*.ts'],
-    plugins: { nations: nationsPlugin },
+    plugins: { airport: airportPlugin },
     rules: {
-      'nations/allowed-imports': [
+      'airport/allowed-imports': [
         'error',
         {
           allow: [RELATIVE, CONTRACTS],
-          message: 'packages/sim may import only @nations/contracts and its own files. See CLAUDE.md.',
+          message: 'packages/sim may import only @airport/contracts and its own files. See CLAUDE.md.',
         },
       ],
     },
   },
   {
     files: ['packages/contracts/**/*.ts'],
-    plugins: { nations: nationsPlugin },
+    plugins: { airport: airportPlugin },
     rules: {
-      'nations/allowed-imports': [
+      'airport/allowed-imports': [
         'error',
         {
           allow: [RELATIVE],
@@ -170,12 +170,12 @@ export default tseslint.config(
   {
     files: ['packages/sim/**/*.test.ts', 'packages/contracts/**/*.test.ts'],
     rules: {
-      'nations/allowed-imports': [
+      'airport/allowed-imports': [
         'error',
         {
           allow: [RELATIVE, CONTRACTS, '^vitest$', '^fast-check$'],
           message:
-            'Tests in pure packages may import vitest, fast-check, @nations/contracts and their own files only.',
+            'Tests in pure packages may import vitest, fast-check, @airport/contracts and their own files only.',
         },
       ],
     },
@@ -200,7 +200,7 @@ export default tseslint.config(
         {
           paths: [
             {
-              name: '@nations/sim',
+              name: '@airport/sim',
               message:
                 'The interface reaches the sim only through the Host interface in apps/web/src/platform. See CLAUDE.md.',
             },

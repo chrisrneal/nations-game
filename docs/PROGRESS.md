@@ -1,6 +1,6 @@
 # Progress
-Current state: **pivot in progress** to the idle airport game (decision record
-P1). Slices 1-7 of 8 are done: the airport, offline earnings, selling it for slots, tuned, with juice.
+Current state: **the pivot is complete** (decision records P1-P10). The app is
+the idle airport game: all eight slices are merged.
 The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 (docs/PROGRESS.md there).
 
@@ -12,9 +12,27 @@ The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 - [x] 5. Prestige and the second city
 - [x] 6. Pacing pass
 - [x] 7. Juice and polish
-- [ ] 8. Remove the remaining Nations code; README
+- [x] 8. Remove the remaining Nations code; README
 
 ## Session log
+
+### 2026-10-01 - Pivot slice 8, Nations removed; README (architect, P10)
+**What changed.** The remaining Nations code and data are gone, each deletion in
+its own commit: the harness's Gate 1 and Gate 2 suites, bots, metrics and
+prediction reports; the AI package and docs/AI_DESIGN.md; the Nations sim
+(world, economy, trade, crises, projects, scoring) and its contract types; the
+2030 world data, the 100x plan, gate verdicts, balance reports, the playtest kit
+and the Nations reviews. The airport sim moved up to packages/sim/src and the
+packages are now `@airport/sim`, `@airport/contracts` and `@airport/harness`
+(the lint rule and the purity test follow). The harness has three commands:
+`pacing` (the default), `determinism` and `bench`. README rewritten for the
+airport: what it is, how to run it, how to install it on a phone, how to play.
+**Checks.** `npm test` (234 tests, including the 1,000-airport Node-vs-Chromium
+determinism test and the pacing targets) and `npm run check` pass; the phone
+check passes.
+**What is left.** See docs/GAPS.md: a real-phone check (iOS and Android),
+playtests, a long-run report across every city, and the owner's call on idle
+pacing.
 
 ### 2026-10-01 - Pivot slice 7, juice and polish (lanes U, P)
 **What changed.** A departing plane takes off from its gate and flies away; a

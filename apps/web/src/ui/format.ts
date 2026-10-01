@@ -1,4 +1,4 @@
-import type { EffectUnit } from '@nations/contracts';
+import type { EffectUnit } from '@airport/contracts';
 
 const UNITS = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi'];
 

@@ -6,17 +6,16 @@ import { describe, expect, it } from 'vitest';
 /**
  * Proof for seam 3: the interface (everything in apps/web/src outside
  * platform/) reaches the sim only through the Host. It may import React, the
- * contracts types, the static world data, its own files, and the platform's
- * public entry `platform/index.ts` - never the sim, the AI, Comlink, a
+ * contracts types, its own files, and the platform's
+ * public entry `platform/index.ts` - never the sim, Comlink, a
  * platform internal, or a Worker or storage API directly.
  *
- * ESLint already bans `@nations/sim` here; this test is stricter and cannot be
+ * ESLint already bans `@airport/sim` here; this test is stricter and cannot be
  * switched off with an inline comment.
  */
 const SRC = dirname(fileURLToPath(import.meta.url));
 const PLATFORM = join(SRC, 'platform');
 const PLATFORM_ENTRY = join(PLATFORM, 'index.ts');
-const DATA = resolve(SRC, '../../../data/world-2030.json');
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -32,7 +31,7 @@ function imports(source: string): string[] {
   return [...source.matchAll(IMPORT)].map((m) => m[1] ?? m[2] ?? m[3] ?? '');
 }
 
-const PACKAGES = new Set(['react', 'react-dom/client', '@nations/contracts']);
+const PACKAGES = new Set(['react', 'react-dom/client', '@airport/contracts']);
 const FORBIDDEN_APIS = [/\bnew\s+Worker\b/, /\bindexedDB\b/, /\bpostMessage\b/, /\bnew\s+SharedWorker\b/];
 
 export function violations(file: string, source: string): string[] {
@@ -43,7 +42,7 @@ export function violations(file: string, source: string): string[] {
       continue;
     }
     const target = resolve(dirname(file), spec);
-    if (target === DATA || target.endsWith('.css')) continue;
+    if (target.endsWith('.css')) continue;
     if (!target.startsWith(SRC)) problems.push(`imports "${spec}" from outside the app`);
     else if (target.startsWith(PLATFORM + '/') && target !== PLATFORM_ENTRY) {
       problems.push(`imports platform internal "${spec}" instead of platform/index.ts`);
@@ -66,10 +65,10 @@ describe('interface boundary (seam 3)', () => {
 
   it('catches the shortcuts it exists to stop', () => {
     const fake = join(SRC, 'ui', 'Fake.tsx');
-    expect(violations(fake, "import { step } from '@nations/sim';")).toHaveLength(1);
-    expect(violations(fake, "import type { NationView } from '@nations/sim';")).toHaveLength(1);
-    expect(violations(fake, "import { dummyDecide } from '@nations/ai';")).toHaveLength(1);
-    expect(violations(fake, "import { GameEngine } from '../platform/engine.ts';")).toHaveLength(1);
+    expect(violations(fake, "import { step } from '@airport/sim';")).toHaveLength(1);
+    expect(violations(fake, "import type { Derived } from '@airport/sim';")).toHaveLength(1);
+    expect(violations(fake, "import { stepAirport } from '@airport/sim';")).toHaveLength(1);
+    expect(violations(fake, "import { AirportEngine } from '../platform/engine.ts';")).toHaveLength(1);
     expect(violations(fake, "const m = await import('../platform/engine.ts');")).toHaveLength(1);
     expect(violations(fake, "const w = new Worker('x.js');")).toHaveLength(1);
     expect(violations(fake, "import { createHost } from '../platform/index.ts';")).toEqual([]);

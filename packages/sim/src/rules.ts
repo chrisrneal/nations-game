@@ -1,4 +1,4 @@
-import type { AirportState, UpgradeId } from '@nations/contracts';
+import type { AirportState, UpgradeId } from '@airport/contracts';
 import { cityAt, type CityTwist } from './catalog.ts';
 import { grow, isqrt, mulDiv } from './math.ts';
 import { AIRPORT_TUNABLES as T, type AirportTunableId } from './tunables.ts';

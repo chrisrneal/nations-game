@@ -1,4 +1,4 @@
-import type { AirportView, UpgradeView } from '@nations/contracts';
+import type { AirportView, UpgradeView } from '@airport/contracts';
 
 /**
  * The next thing worth saving for (RULES 11: something to aim for): the

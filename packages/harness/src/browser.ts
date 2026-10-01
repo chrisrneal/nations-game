@@ -1,6 +1,6 @@
 /**
  * Runs game.ts inside real headless Chromium and returns its hashes, so they
- * can be compared with Node's (Gate 0: "identical hashes in browser and Node").
+ * can be compared with Node's (S5: identical hashes in the browser and in Node).
  *
  * No new dependency: Vite (already used by apps/web) bundles browser-entry.ts
  * into one script, which is inlined into an HTML file and loaded with
@@ -59,7 +59,7 @@ async function bundle(outDir: string): Promise<string> {
       lib: {
         entry: join(here, 'browser-entry.ts'),
         formats: ['iife'],
-        name: 'nationsHarness',
+        name: 'airportHarness',
         fileName: () => 'harness.js',
       },
     },
@@ -73,7 +73,7 @@ function decodeHtml(text: string): string {
 
 export async function runInBrowser(options: BrowserRunOptions, browser = findChromium()): Promise<BrowserRun> {
   if (browser === undefined) throw new Error('No Chromium or Chrome found; set CHROME_PATH');
-  const work = mkdtempSync(join(tmpdir(), 'nations-harness-'));
+  const work = mkdtempSync(join(tmpdir(), 'airport-harness-'));
   try {
     const script = await bundle(join(work, 'dist'));
     const html = [

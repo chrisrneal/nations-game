@@ -13,8 +13,8 @@
  *
  * Both use the sim's own income estimate (P6) to value upgrades. Runs in Node.
  */
-import type { AirportState, UpgradeId } from '@nations/contracts';
-import { AIRPORT_TUNABLES, UPGRADE_IDS, advanceMany, airportView, earnedForSlots, estimate, slotsFor, stepAirport, createAirport, upgradeCost, lockReason, maxLevel } from '@nations/sim/airport';
+import type { AirportState, UpgradeId } from '@airport/contracts';
+import { AIRPORT_TUNABLES, UPGRADE_IDS, advanceMany, airportView, earnedForSlots, estimate, slotsFor, stepAirport, createAirport, upgradeCost, lockReason, maxLevel } from '@airport/sim';
 
 const TICKS_PER_SEC = 1000 / AIRPORT_TUNABLES.tickMs.value;
 

@@ -1,5 +1,5 @@
-import type { AirportState, GateState, Levels, RngState, Stats } from '@nations/contracts';
-import { seedRng } from '../rng.ts';
+import type { AirportState, GateState, Levels, RngState, Stats } from '@airport/contracts';
+import { seedRng } from './rng.ts';
 import { derive, type Derived } from './rules.ts';
 import { AIRPORT_TUNABLES as T } from './tunables.ts';
 

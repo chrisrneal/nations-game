@@ -1,4 +1,4 @@
-import type { AirportView } from '@nations/contracts';
+import type { AirportView } from '@airport/contracts';
 import type { AirportUpdate, AwayRecap } from '../platform/index.ts';
 
 /** What React renders from: the view and the recap, replaced only on a structural change. */
