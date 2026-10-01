@@ -3,12 +3,16 @@
 One record per decision. Each says what was decided, why, what it costs, and what
 would have to happen to reverse it. **Changing one of these needs a new record
 appended here, not an edit to an old one** - later sessions rely on these being
-stable. `D` records come from docs/ROADMAP.md, `S` records cover the nine
-architecture seams, `T` records cover the toolchain chosen in prompt 01, `G`
-records are rulings on how a gate is graded.
+stable.
 
-Status of everything below: **accepted**, 2026-09-27, prompt 01, unless a record
-gives its own status.
+**Read P1 first.** On 2026-10-01 the project pivoted from "Nations" to an idle
+airport game. P1 lists which of the records below still bind (the architecture
+ones) and which retired with Nations. `P` records cover the airport game. Older
+prefixes: `D` came from the Nations roadmap, `S` are the nine architecture seams,
+`T` the toolchain, `G` gate rulings, `H` the Nations "100x" work.
+
+Status of the D, S and T records: **accepted**, 2026-09-27, prompt 01, unless a
+record gives its own status.
 
 ---
 
@@ -437,3 +441,115 @@ consent (RULES 5.3), and no baseline moves.
 found, join and leave; the balance moves and is reported (H2).
 **Reversing it.** Remove the commands and the State field with a migration; the
 catalogue and AI module are self-contained.
+
+---
+
+## P1 - Pivot: Nations becomes an idle airport game
+**Status.** Accepted, 2026-10-01, by the owner's pivot brief.
+**Decision.** The game is now a single-player, offline-first idle game: you run
+an airport and earn cash by filling planes with passengers (docs/RULES.md). No
+backend, no multiplayer, no AI nations. The Nations game stays reachable at its
+last main commit, **`67d1d9279052dc215b82c45a0f76a618d4b26a0d`** ("[100x-10]
+Playtest kit", 2026-09-30): `git checkout 67d1d92` restores it whole. History is
+kept; main is never force-pushed.
+**What carries over.** The architecture, because it already fits an idle game:
+D6 (pure TypeScript sim), S1 (step), S2 (commands are the only mutation), S3
+(Host), S4 (the host owns the clock; catch-up is stepping), S5 (seeded RNG,
+integers, stable order, hash test), S6 (the UI reads a View), S9 (snapshot plus
+command log saves with migrations), and T1-T6 (toolchain and purity
+enforcement). The Web Worker host, IndexedDB saves, export and import files, the
+live wall clock with catch-up (now offline earnings), the PWA setup, the harness,
+the Node-vs-Chromium determinism test and the phone checks are kept and adapted.
+**What retires.** D1-D5 and D7-D9 (nations, multiplayer, co-opetition scoring,
+war, utility AI, the 2030 world), S7 (controller slots: there are no nations) and
+S8 (interactions with expiry ticks: there is no other side), G1 and H1-H4
+(Nations balance and gates). Their code and data are deleted slice by slice once
+the airport replaces them, each deletion in its own commit.
+**Why.** The owner's call. Nations' gates kept failing on balance between 17
+nations; an idle game has one player, one economy and a balance problem a
+harness bot can measure directly.
+**Cost.** Months of Nations content is retired. The architecture's multiplayer
+reasons (anti-cheat View, server-ready sim) now matter less, but they cost little
+and keep the sim testable, so they stay.
+**Reversing it.** Check out 67d1d92 on a branch.
+
+## P2 - An autonomous session is the architect for the pivot
+**Status.** Accepted, 2026-10-01.
+**Decision.** The session that runs the pivot brief may edit CLAUDE.md,
+docs/ROADMAP.md and docs/DECISIONS.md, works through eight slices (ROADMAP),
+one squash-merged pull request each, and records assumptions here rather than
+asking. Every slice merges only with `npm test` and `npm run check` green in CI.
+Work happens on the session's designated branch, reset to main after each merge.
+**Why.** The owner is unavailable for the pivot and asked for end-to-end work.
+**Cost.** Design calls are made without the owner; each is a record here that
+the owner can overturn.
+**Reversing it.** The owner takes the architect role back by editing CLAUDE.md.
+
+## P3 - Time and money units: 250 ms ticks, integer cents, milli-passengers
+**Decision.** One tick is 250 ms of wall clock (`tickMs`). Money is integer cents.
+Passengers are integer milli-passengers, so a rate of 1.6 a second is exactly
+400 a tick. Growth is in basis points with a floor at every step.
+**Why.** S5 needs integers. Cents keep $1.60 fares exact; milli-passengers keep
+slow arrival rates exact without fractional carry. 250 ms makes a tap land within
+a quarter second while 24 hours of catch-up stays 345,600 steps.
+**Cost.** Display code divides by 100 and 1000. Cash is capped at 9e15 cents
+(about $90 trillion), the safe-integer limit; the rules keep play far below it.
+**Reversing it.** A tick length change is one tunable plus retuning every per-tick
+rate.
+
+## P4 - Offline earnings are the same sim, stepped fast, with a cap
+**Decision.** Away time is caught up by stepping the sim every tick the wall
+clock owes, up to an offline cap that the night-shift upgrade raises (2 h to
+24 h). No closed-form shortcut and no reduced offline rate. The sim offers a
+multi-tick advance that copies the state once and steps in place; a test proves
+it equals stepping tick by tick.
+**Why.** "Catching up N hours equals stepping through them" is then true by
+construction, and charters and rotating gate order stay identical online and
+offline. The in-place advance keeps 24 hours (345,600 ticks) well under the
+2-second budget on a phone.
+**Cost.** Catch-up time grows with the cap and the number of gates; the phone
+check measures it with the CPU slowed 4x.
+**Reversing it.** A closed-form estimate would be faster but would break the
+equality test and S4.
+
+## P5 - Commands carry no player id; the View is the whole airport
+**Decision.** A command is `{ tick, type, payload }`: `tap`, `buy`, `sell`. The
+View is the player's airport with derived numbers (costs, the income estimate,
+the bottleneck) and design names. With one player and no hidden information,
+the View is everything the interface needs, and still the only thing it reads.
+**Why.** S7 and S8 retired with Nations (P1); a player id would be dead weight.
+Deriving costs and estimates in the sim keeps every balance number out of the UI.
+**Cost.** Multiplayer would need an id back; none is planned.
+**Reversing it.** Add `playerId` to commands with a save migration.
+
+## P6 - Income per second is a steady-state estimate, with the bottleneck named
+**Decision.** The headline income per second is computed from the current
+levels (RULES 8), not averaged from recent departures, and the sim names the
+current bottleneck and the upgrade that fixes it.
+**Why.** Payouts are lumpy (one plane at a time), so a running average jumps
+around and lags a purchase. An estimate moves the moment you buy, and the named
+bottleneck is what makes the upgrade trade-offs legible on a phone.
+**Cost.** The estimate can disagree with what actually happens; the harness
+checks it against measured idle income (within 20%).
+**Reversing it.** Show a running average from host-side events instead.
+
+## P7 - Animation runs outside React
+**Decision.** React renders structure (gates, planes, upgrade rows) and re-renders
+only when it changes: a plane arrives or leaves, a level changes, an upgrade
+becomes affordable. Fill bars, timers and the cash counter are written straight
+to the DOM on each update, and CSS transitions as long as one tick interpolate
+between ticks.
+**Why.** 60 fps on a phone with the CPU slowed 4x, which re-rendering the tree
+four times a second cannot promise.
+**Cost.** Two update paths in the interface, kept apart by a small store.
+**Reversing it.** Render everything from state if phones get fast enough.
+
+## P8 - Package names stay `@nations/*` until the last slice
+**Decision.** The workspace packages keep their `@nations/` scope while Nations
+code is being replaced, then are renamed `@airport/` in slice 8 with the rest of
+the cleanup. The airport sim is built inside packages/sim beside the Nations sim
+(slice 2) so the game stays playable after every merge.
+**Why.** Renaming early would touch every Nations file only to delete it later.
+**Cost.** For a few slices, a package called nations holds an airport.
+**Reversing it.** Not needed after slice 8.
+
