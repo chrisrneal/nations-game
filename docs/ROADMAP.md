@@ -1,55 +1,74 @@
 # Roadmap
 
 ## The game
-Mobile-first installable PWA. The player runs a real nation in a staged 2030 world, alongside AI-run nations; collaboration beats conquest. The world is modeled on real 2030 projections, like a geopolitical sim. Single-player first, then small async multiplayer (4-8 nations, games of days to weeks).
+Mobile-first installable PWA idle game. You run an airport: passengers arrive in
+the terminal, board planes at your gates, and each plane pays its fares when it
+leaves full or on its timer. Cash buys upgrades, each a trade-off that moves the
+bottleneck. The airport keeps running while the app is closed, up to a cap. Sell
+the airport for slots that permanently boost the next one, in a new city with a
+twist. Single player, offline-first, no backend. Rules: docs/RULES.md. Why it
+replaced Nations: decision record P1.
 
-## Decisions
-- D1 Real-time ticks on a wall clock. Single-player can pause, run 1x or 4x, or use a live-clock mode that advances while the app is closed. Multiplayer runs a fixed cadence. Players act through standing policies plus a short queue of decisions.
-- D2 Multiplayer: small async games, 4-8 nations, days to weeks.
-- D3 Co-opetition: final score = the nation's growth against its own 2030 baseline trajectory x a collective multiplier set by how well the world met shared goals. The baseline is what lets a small nation win. Never a binary "everyone loses" rule, or a trailing nation gains by sabotage.
-- D4 Limited war exists: Phase 4, abstracted, never the dominant strategy.
-- D5 AI nations use deterministic utility AI. No LLM in decisions.
-- D6 The sim core is a pure TypeScript package: Web Worker now, server later.
-- D7 MVP = trade + crisis response. Joint projects Phase 3. Treaties, alliances, blocs, limited war Phase 4.
-- D8 Depth lives in the simulation, not the interface.
-- D9 Real nations in a staged 2030 world: about 15 major nations modeled individually and playable, the rest of the world as regional aggregates in the background. Starting data comes from published 2030 projections in data/world-2030.json, sourced in data/SOURCES.md. AI personalities derive from structural data (trade dependence, energy imports, alliances, exposure), never stereotypes. Starting trust comes from real alliance and trade ties. No real people appear as characters.
+## Design pillars
+1. **Idle is complete, active is faster.** Tapping a gate rushes it; active play
+   earns about 2-3x idling and is never required.
+2. **Every upgrade is a trade-off.** Each fixes one bottleneck and moves the
+   pressure; the screen names the bottleneck so the choice is legible.
+3. **Every session is worth it.** A 30-second check-in collects and buys
+   something; a 5-minute session plans the next unlock.
+4. **Steady novelty.** Something new to aim for at least every 5 minutes; the
+   first sale at 30-60 minutes; each city changes the best strategy.
+5. **Exact and offline.** Same seed and commands give the same airport; catching
+   up offline equals stepping through it.
 
-## Architecture seams (built in Phase 0)
-1. Pure sim core: step(state, commands) -> state + events.
-2. Commands are the only mutation; UI and AI send the same validated, tick-stamped commands.
-3. Host interface: submit, subscribe, setPace. LocalHost in a Web Worker now; RemoteHost later.
-4. The host owns the clock; the sim advances by tick count; catch-up = run N ticks fast.
-5. Determinism: seeded RNG in State, integer maths, stable iteration order, state-hash test on every build.
-6. Per-nation View for UI and AI; in multiplayer it is the anti-cheat boundary.
-7. Controller slot per nation (human, ai, caretaker), switchable mid-game.
-8. Proposals, appeals and treaties are State objects with expiry ticks; absent humans answer through standing policies.
-9. Saves = snapshot + command log, versioned with migrations; also used for replay, bug repro and the harness.
-Deferred to Phase 5: networking, accounts, lobbies, hosting, push.
-Stack: TypeScript, Vite + React, Web Worker via Comlink, IndexedDB, vite-plugin-pwa, Vitest + fast-check.
+## Architecture (kept from Nations, decision record P1)
+1. Pure sim core: `step(state, commands) -> state + events` (S1, D6).
+2. Commands are the only mutation: `tap`, `buy`, `sell` (S2, P5).
+3. Host interface: the UI submits and subscribes; LocalHost runs the sim in a Web
+   Worker (S3).
+4. The host owns the clock; catch-up and offline earnings are "run N ticks fast"
+   (S4, P4).
+5. Determinism: seeded RNG in State, integer maths (cents, milli-passengers),
+   state-hash test in Node and Chromium on every build (S5, P3).
+6. The UI reads a View (S6, P5).
+7. Saves are snapshot plus command log, versioned with migrations, in IndexedDB,
+   with export and import files (S9).
+Stack: TypeScript, Vite + React, Web Worker via Comlink, IndexedDB,
+vite-plugin-pwa, Vitest + fast-check, playwright-core for the phone check.
 
-## AI nations (layered utility AI)
-Perception (own View only) -> Beliefs (trust ledger, needs, strength, threat; memory decays) -> Personality (cooperativeness; reciprocity strict, forgiving or exploiter; risk; time horizon; priorities) -> Goals (re-scored every N ticks) -> Action scoring (templated commands, tunable noise) -> Negotiation (accept, counter, reject; values shift with trust) -> Explanation (top reasons for every decision, shown to players).
-Must be legible but not farmable, stay within a per-tick compute budget (nations staggered), never cheat, and be able to act as caretaker for a human's nation.
-
-## Mobile depth budget (audited at every gate)
-Surfaces: decision inbox (home), relationship map, policy dials, away recap, why-sheets (tap a number for a one-sentence breakdown).
-Rules: any decision within 3 taps of home; no horizontal scroll; tables max 4 columns; 3-5 resources in one strip; every number actionable or explanatory; one-handed, primary actions in the bottom third; a 2-5 minute check-in is a full session.
-Cut: province micro-management, production chains deeper than two steps, manual logistics, ledgers.
-Every system is designed as decision cards plus standing policies before code; if it can't be, simplify it.
+## Phone UX budget (checked by apps/web/e2e/phone-check.ts)
+Portrait and one-handed; primary actions in the bottom third; touch targets at
+least 44 px; no horizontal scroll at 360 px; safe areas respected. The main
+screen is the airport: gates with planes and live fill bars, cash and income per
+second at the top, upgrades in a bottom sheet. 60 fps with the CPU slowed 4x:
+animation by CSS and direct DOM writes, not React re-renders (P7). Number
+formatting for big values. Satisfying feedback: fill bars, departures, cash pops.
 
 ## Balance harness
-Headless Node runner, many seeds, one metrics row per game. Bots: hoarder, isolationist, trade exploiter, free-rider; Phase 4 adds warmonger and betrayer. Invariants every build: conservation except defined sources and sinks, no negative stocks, stable hash.
-Metrics: how often each nation tops the score; win rate per archetype; crisis success rate; the same nation trading vs isolating; defection and retaliation; dead states; source and sink balance.
-Fair share = 1 / playable nations. Over 200 seeded games, with nations assigned to archetypes at random: no defecting archetype wins more than 1.5x its fair share (its share of the seats dealt) and none wins more often than the reciprocal cooperator (G1). No single nation tops the score in more than 2x its fair share of games: graded per 200 games through Gate 2 (waived at Gates 1 and 2), and from Gate 3 on pooled over 800 games on fresh seeds (G1). Every gate reruns earlier suites.
+`npm run harness -- pacing` runs a greedy bot (taps, buys the best value) and an
+idle bot (never taps, checks in every 15 minutes) and reports the time to each
+milestone against the targets in RULES 11. Invariants every build: cash and
+passengers never negative, determinism across engines, catch-up equals
+stepping, save-reload-continue.
 
-## Gate rules
-A phase closes only when every criterion is PASS or waived in writing in docs/gates/GATE-N.md. A new system merges when it keeps the invariants and creates a real decision; fairness lines are reported, not blocking (H2, which replaced "no new collaboration system before Gate 2 passes"). Thresholds are tuned before seeing the results they grade. Gate 1's top-scorer line was waived at Gates 1 and 2 and is graded pooled from Gate 3 on (G1); "earlier gates pass" counts a waived line as passed, but the reruns of Gate 1's suite in Gate 3 onward grade it.
+## Slices (one pull request each, game playable after every merge)
+1. **Pivot docs.** Decision records, RULES.md with formulas and tunables, this
+   roadmap, CLAUDE.md.
+2. **Airport sim.** Gates, planes, passengers, boarding, departures, cash,
+   upgrades, tests first with property tests (cash never negative, determinism,
+   catch-up equals stepping). Built beside the Nations sim (P8).
+3. **Airport screen.** The airport and the upgrade sheet on the phone; the Nations
+   interface deleted.
+4. **Offline earnings** with the cap and the three-line away recap.
+5. **Prestige.** Selling for slots, and the cities with their twists.
+6. **Pacing pass.** Greedy and idle harness bots; tune to RULES 11.
+7. **Juice.** Animations, haptics where supported, sound off by default.
+8. **Cleanup.** Remove the remaining Nations code and data, rename the packages,
+   update the README.
 
-## Gates
-Gate 0 (Foundations): sim core has no UI, DOM, network or clock imports; 1,000 seeds give identical hashes in browser and Node; dummy AI and UI use the same command API; save-reload-continue matches an uninterrupted run; 1,000 catch-up ticks under 2 s on a mid-range phone; PWA installs and runs offline on iOS and Android; owner completes three sample decisions one-handed; independent review signs off the nine seams.
-Gate 1 (Economy and trade): 200 seeded full-roster games with no crashes, no negative stocks, sources and sinks in band; the same nation does 15%+ better against its baseline trading than isolating (paired runs); isolationists worse off but alive; dead states under 2%; no nation tops the score in more than 2x its fair share of games; a trade in 3 taps or fewer; Gate 0 still passes.
-Gate 2 (MVP, go/no-go): crisis success 40-75%; no defecting archetype (free-rider, hoarder, exploiter, isolationist) over 1.5x its fair share, and none topping the score more often than the reciprocal cooperator, with nations assigned at random (reworded, G1); reciprocal cooperators beat free-riders; a trailing nation gains nothing by sabotage; owner predicts AI responses 70%+ after one game; 24 h absence test passes with a recap readable in under a minute; 10 playtests, 3+ by others, most want another game; depth budget and 60 fps hold; Gates 0-1 pass. If it fails on fun, iterate Phase 2.
-Gate 3 (Joint projects): no project built in over 50% of games; crisis success stays in band; withdrawal sometimes rational, always costs trust; earlier gates pass.
-Gate 4 (Diplomacy, blocs, war): warmonger and betrayer each at or under 1.5x fair share and neither topping the score more often than the reciprocal cooperator, with nations assigned at random (G1; the prompt states the archetype mix first); warring pairs usually end behind a peaceful pair; alliances usually form against bloc threats; AI war declarations are explained; earlier gates pass; backend chosen with a cost estimate.
-Gate 5 (Async multiplayer): server runs the same sim package unforked; clients never get another nation's hidden state; a week-long 5-player game survives a dropout via caretaker AI; security review passes; cost per game measured.
-Gate 6 (Launch): three outside players finish unaided; accessibility pass on core flows; crash-free target met.
+## Done when
+All eight slices are merged with CI green; the phone check passes at 360 px; the
+pacing report meets RULES 11; the app installs and plays offline.
+
+## Later (not planned)
+Achievements, more cities, cloud save. Any of these needs a decision record.
