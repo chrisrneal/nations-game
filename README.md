@@ -81,6 +81,13 @@ offline or install from there).
 - **Tap a gate** to rush it for a moment: faster boarding, walk-up passengers
   even when the terminal is empty, a faster turnaround. Playing actively earns
   about two and a half times what idling does. You never have to.
+- **The passenger flow** (above the gates): each dot is a passenger. Departing
+  ones come in at the left, queue through check-in and security (plus passport
+  control and preclearance on international routes), sit in the lounge and walk
+  down between the gates to board. Arriving ones step off each landed plane and
+  walk out through baggage claim (and passport control and customs) to the exit.
+  A crowded lounge means the gates are the bottleneck; an empty one means you
+  need more passengers. Orange dots turning back at the door: the lounge is full.
 - **Upgrades** (the big button at the bottom): the line above it names the
   bottleneck, and the sheet marks the upgrades that fix it.
 - **A full plane** earns a 25% bonus. A plane too big for your passengers leaves

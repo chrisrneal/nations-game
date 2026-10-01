@@ -14,6 +14,9 @@
  * shows a three-line recap that one tap collects.
  * Slice 5: an airport worth slots sells from the bottom bar in two taps and
  * opens Port Calder with its twist, the slots and one gate.
+ * Passenger flow: a new airport shows check-in, security and baggage claim
+ * with people walking through them; international routes add passport
+ * control and customs; the 60 fps check runs with the people walking.
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -100,6 +103,12 @@ async function main(): Promise<void> {
     check('a new airport opens with one gate', (await page.locator('.gate:not(.gate-next)').count()) === 1);
     check('the next gate shows as something to aim for', (await page.getByTestId('next-gate').count()) === 1);
     check('cash shows at the top', /\$/.test((await page.getByTestId('cash').textContent()) ?? ''));
+    const departures = (await page.getByTestId('lane-departures').textContent()) ?? '';
+    const arrivals = (await page.getByTestId('lane-arrivals').textContent()) ?? '';
+    check('the passenger flow shows check-in, security, baggage claim and the exit', /Check-in.*Security/.test(departures) && /Exit.*Baggage/.test(arrivals) && !/Passport/.test(departures), `${departures} | ${arrivals}`);
+    await page.waitForFunction(() => Number(document.querySelector('[data-testid="flow-dots"]')?.getAttribute('data-dots') ?? 0) > 0, undefined, { timeout: 5000 }).catch(() => undefined);
+    const walking = Number(await page.getByTestId('flow-dots').getAttribute('data-dots'));
+    check('people walk through the airport', walking > 0, `${walking} walking`);
     await noHorizontalScroll(page, 'airport');
     await touchTargets(page, 'airport');
     const upgradesBox = await page.getByTestId('open-upgrades').boundingBox();
@@ -154,6 +163,7 @@ async function main(): Promise<void> {
     await page.getByTestId('import-file').setInputFiles(busy.path);
     await page.getByTestId('gate-7').waitFor({ timeout: 5000 });
     check('import resumes the exported airport (8 gates)', (await page.locator('.gate:not(.gate-next)').count()) === 8);
+    check('an international route adds passport control and customs', /Passport/.test((await page.getByTestId('lane-departures').textContent()) ?? '') && /Customs/.test((await page.getByTestId('lane-arrivals').textContent()) ?? ''));
     await noHorizontalScroll(page, 'eight gates');
     await touchTargets(page, 'eight gates');
 
@@ -180,8 +190,9 @@ async function main(): Promise<void> {
       requestAnimationFrame(frame);
     })`)) as { frames: number; worst: number };
     await tapping;
+    const crowd = Number(await page.getByTestId('flow-dots').getAttribute('data-dots'));
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
-    check('60 fps with eight gates, tapping (CPU slowed 4x)', fps.frames >= 55, `${fps.frames.toFixed(1)} fps, worst frame ${fps.worst.toFixed(0)} ms`);
+    check('60 fps with eight gates, people walking, tapping (CPU slowed 4x)', fps.frames >= 55 && crowd > 0, `${fps.frames.toFixed(1)} fps, worst frame ${fps.worst.toFixed(0)} ms, ${crowd} people walking`);
 
     // Offline: the installed app reopens and continues from the autosave.
     await page.waitForTimeout(1000);
