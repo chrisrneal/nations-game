@@ -1,4 +1,4 @@
-import type { UpgradeId } from '@airport/contracts';
+import type { CheckpointView, JourneyView, UpgradeId } from '@airport/contracts';
 
 /**
  * Design data: names and words, no balance numbers (those are tunables).
@@ -51,6 +51,28 @@ export const ROUTES: readonly string[] = [
   'Round the world++',
   'Round the world+++',
 ];
+
+/**
+ * The checkpoints on the passenger journey (RULES 14), in walking order, each
+ * shown from the route level that needs it: international routes (Continental
+ * on) add passport control and customs, transoceanic ones (Transatlantic on)
+ * add preclearance. Scenery: no checkpoint slows anyone down.
+ */
+export const CHECKPOINTS: readonly { readonly way: 'departures' | 'arrivals'; readonly fromRoute: number; readonly view: CheckpointView }[] = [
+  { way: 'departures', fromRoute: 0, view: { id: 'checkin', name: 'Check-in', label: 'Check-in' } },
+  { way: 'departures', fromRoute: 0, view: { id: 'security', name: 'Security', label: 'Security' } },
+  { way: 'departures', fromRoute: 5, view: { id: 'passport', name: 'Passport control', label: 'Passport' } },
+  { way: 'departures', fromRoute: 6, view: { id: 'preclearance', name: 'Preclearance', label: 'Preclearance' } },
+  { way: 'arrivals', fromRoute: 5, view: { id: 'passport', name: 'Passport control', label: 'Passport' } },
+  { way: 'arrivals', fromRoute: 0, view: { id: 'baggage', name: 'Baggage claim', label: 'Baggage' } },
+  { way: 'arrivals', fromRoute: 5, view: { id: 'customs', name: 'Customs', label: 'Customs' } },
+];
+
+/** The journey at this route level. */
+export function journeyAt(route: number): JourneyView {
+  const on = (way: 'departures' | 'arrivals'): CheckpointView[] => CHECKPOINTS.filter((c) => c.way === way && route >= c.fromRoute).map((c) => c.view);
+  return { departures: on('departures'), arrivals: on('arrivals') };
+}
 
 export type CityTwist = 'none' | 'shortRunway' | 'hub' | 'waves';
 
