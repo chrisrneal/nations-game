@@ -5,13 +5,15 @@ import { BottomBar } from './ui/BottomBar.tsx';
 import { GateCard, NextGateCard } from './ui/GateCard.tsx';
 import { InstallBanner } from './ui/Install.tsx';
 import { Recap } from './ui/Recap.tsx';
+import { CityIntro } from './ui/CityIntro.tsx';
+import { SellSheet } from './ui/SellSheet.tsx';
 import { SettingsSheet } from './ui/SettingsSheet.tsx';
 import { AirportStore } from './ui/store.ts';
 import { TerminalStrip } from './ui/TerminalStrip.tsx';
 import { TopBar } from './ui/TopBar.tsx';
 import { UpgradeSheet } from './ui/UpgradeSheet.tsx';
 
-type SheetName = 'upgrades' | 'settings' | null;
+type SheetName = 'upgrades' | 'settings' | 'sell' | null;
 
 /** The airport screen (docs/ROADMAP.md, phone UX): money on top, gates in the middle, actions under the thumb. */
 export function App(props: { host: AirportHost; install?: InstallPrompt }): ReactElement {
@@ -19,8 +21,16 @@ export function App(props: { host: AirportHost; install?: InstallPrompt }): Reac
   const store = useMemo(() => new AirportStore(), []);
   const [sheet, setSheet] = useState<SheetName>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [intro, setIntro] = useState(false);
 
   useEffect(() => host.subscribe((update) => store.push(update)), [host, store]);
+  useEffect(
+    () =>
+      store.onFrame((update) => {
+        if (update.events.some((e) => e.type === 'sold')) setIntro(true);
+      }),
+    [store],
+  );
   useEffect(() => {
     void host.start();
   }, [host]);
@@ -70,8 +80,20 @@ export function App(props: { host: AirportHost; install?: InstallPrompt }): Reac
           <NextGateCard number={view.gates.length + 1} cost={nextGate.cost} affordable={nextGate.affordable} onOpen={() => setSheet('upgrades')} />
         )}
       </main>
-      <BottomBar view={view} store={store} onUpgrades={() => setSheet('upgrades')} />
-      {sheet === 'upgrades' && <UpgradeSheet view={view} store={store} onBuy={buy} onClose={close} />}
+      <BottomBar view={view} store={store} onUpgrades={() => setSheet('upgrades')} onSell={() => setSheet('sell')} />
+      {sheet === 'upgrades' && <UpgradeSheet view={view} store={store} onBuy={buy} onSell={() => setSheet('sell')} onClose={close} />}
+      {sheet === 'sell' && (
+        <SellSheet
+          view={view}
+          store={store}
+          onSell={() => {
+            void host.sell();
+            setSheet(null);
+          }}
+          onClose={close}
+        />
+      )}
+      {intro && sheet === null && <CityIntro view={view} onClose={() => setIntro(false)} />}
       {sheet === 'settings' && <SettingsSheet view={view} host={host} onClose={close} onToast={setToast} />}
       {structure !== null && structure.recap !== null && sheet === null && <Recap recap={structure.recap} onCollect={() => void host.dismissRecap()} />}
       {toast !== null && (

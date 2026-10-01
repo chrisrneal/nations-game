@@ -114,7 +114,10 @@ export function maxLevel(id: UpgradeId, state: Pick<AirportState, 'city'>): numb
 
 /** Why the next level cannot be bought, cash aside; null if it can. */
 export function lockReason(id: UpgradeId, state: Pick<AirportState, 'city' | 'levels'>): string | null {
-  if (state.levels[id] >= maxLevel(id, state)) return 'Maxed out';
+  if (state.levels[id] >= maxLevel(id, state)) {
+    const runway = (id === 'plane' || id === 'route') && twistOf(state) === 'shortRunway' && state.levels[id] < T.maxPlaneLevel.value;
+    return runway ? 'Short runway' : 'Maxed out';
+  }
   if (id === 'route' && state.levels.route >= state.levels.plane) return 'Needs bigger planes first';
   return null;
 }

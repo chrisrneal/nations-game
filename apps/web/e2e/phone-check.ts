@@ -12,6 +12,8 @@
  * Slice 4: closed for 3 hours (the autosave's clock moved back), it reopens on
  * a CPU slowed 4x inside the 2 s budget, runs only the 2-hour offline cap, and
  * shows a three-line recap that one tap collects.
+ * Slice 5: an airport worth slots sells from the bottom bar in two taps and
+ * opens Port Calder with its twist, the slots and one gate.
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -63,11 +65,13 @@ async function cashCents(page: Page): Promise<number> {
 }
 
 /** A file holding an 8-gate airport, made with the sim itself, anchored at `now`. */
-function busyFile(dir: string): { path: string; hash: string } {
-  const state = busyAirport();
+function busyFile(dir: string, earned = 0): { path: string; hash: string } {
+  const busy = busyAirport();
+  // A test fixture: an airport that has earned enough to be worth slots.
+  const state = earned === 0 ? busy : { ...busy, run: { ...busy.run, earned }, life: { ...busy.life, earned } };
   const session = new AirportSession(state);
   const game = { save: session.save({ compact: true }), anchor: Date.now() };
-  const path = join(dir, 'busy.json');
+  const path = join(dir, `busy-${earned}.json`);
   writeFileSync(path, JSON.stringify({ format: 'airport-idle-save', version: 1, exportedAt: Date.now(), game }));
   return { path, hash: hashState(state) };
 }
@@ -219,6 +223,25 @@ async function main(): Promise<void> {
     await back.getByTestId('collect').tap();
     await back.getByTestId('recap').waitFor({ state: 'detached', timeout: 2000 });
     check('one tap collects and closes the recap', (await back.getByTestId('recap').count()) === 0);
+
+    // Selling: an airport that has earned $90K is worth 3 slots.
+    const worth = busyFile(profile, 9_000_000);
+    await back.getByTestId('settings').tap();
+    await back.getByTestId('import-file').setInputFiles(worth.path);
+    await back.getByTestId('open-sell').waitFor({ timeout: 5000 });
+    check('the bottom bar offers the sale', ((await back.getByTestId('open-sell').textContent()) ?? '').includes('+3'), (await back.getByTestId('open-sell').textContent()) ?? '');
+    await touchTargets(back, 'bottom bar with sell');
+    await noHorizontalScroll(back, 'bottom bar with sell');
+    await back.getByTestId('open-sell').tap();
+    await back.getByTestId('sell-worth').waitFor();
+    await noHorizontalScroll(back, 'sell sheet');
+    await touchTargets(back, 'sell sheet');
+    check('the sell sheet names the next city', ((await back.getByTestId('next-city').textContent()) ?? '') === 'Port Calder');
+    await back.getByTestId('confirm-sell').tap();
+    await back.getByTestId('city-twist').waitFor({ timeout: 3000 });
+    check('Port Calder opens with its twist', /Short runway/.test((await back.getByTestId('city-twist').textContent()) ?? ''));
+    await back.getByTestId('open-city').tap();
+    check('the new airport has the slots and one gate', /Port Calder · 3 slots/.test((await back.getByTestId('city').textContent()) ?? '') && (await back.locator('.gate:not(.gate-next)').count()) === 1, (await back.getByTestId('city').textContent()) ?? '');
 
     await context.close();
   } finally {

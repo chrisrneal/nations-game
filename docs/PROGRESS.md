@@ -1,6 +1,6 @@
 # Progress
 Current state: **pivot in progress** to the idle airport game (decision record
-P1). Slices 1-4 of 8 are done: the deployed app is the airport, with offline earnings.
+P1). Slices 1-5 of 8 are done: the airport, offline earnings, and selling it for slots in a new city.
 The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 (docs/PROGRESS.md there).
 
@@ -9,12 +9,30 @@ The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 - [x] 2. Airport sim
 - [x] 3. Airport screen and upgrade sheet; Nations interface deleted
 - [x] 4. Offline earnings and the away recap
-- [ ] 5. Prestige and the second city
+- [x] 5. Prestige and the second city
 - [ ] 6. Pacing pass
 - [ ] 7. Juice and polish
 - [ ] 8. Remove the remaining Nations code; README
 
 ## Session log
+
+### 2026-10-01 - Pivot slice 5, selling the airport and the cities (lanes S, U, P)
+**What changed.** Selling was already in the sim (slice 2); now it is on the
+phone. Once the airport is worth a slot, a gold "Sell +N" button joins
+Upgrades in the thumb zone; the Upgrades sheet always ends with a "Sell the
+airport" row showing the first slot's target. The sell sheet shows what the
+airport is worth, progress to the next slot, the fare bonus now and after, the
+next city and its twist, and what resets. After a sale, a welcome sheet names
+the city's twist and the slots' bonus. Port Calder's plane and route rows now
+say "Short runway" when they stop. Four cities cycle (Millbrook, Port Calder,
+Highmoor Hub, Sunvale, then Millbrook II and so on).
+**Tests.** Sim: the short-runway lock reason; five sales visit five cities and
+name the second round. Phone check 37/37: an airport worth 3 slots sells in two
+taps from the bottom bar and opens Port Calder with its twist, 3 slots and one
+gate; no horizontal scroll and 44 px targets on the new screens.
+**How to see it.** Play until "Sell +1" appears (about $10K earned), or load a
+file. Time to the first sale is tuned in slice 6.
+**What is left.** Tuning (6), juice (7), cleanup (8).
 
 ### 2026-10-01 - Pivot slice 4, offline earnings and the away recap (lanes U, P)
 **What changed.** Any gap of a minute or more (the app closed, hidden, or the

@@ -19,6 +19,8 @@ export interface AirportHost {
   submit(intent: AirportIntent): Promise<void>;
   tap(gate: number): Promise<void>;
   buy(upgrade: UpgradeId): Promise<void>;
+  /** Sell this airport for slots and open the next city (RULES 10). */
+  sell(): Promise<void>;
   /** Throw this airport away and open a new one at the first city. */
   newGame(): Promise<void>;
   /** The running game as a file: a name and the text to write into it. */
@@ -104,6 +106,10 @@ export class LocalHost implements AirportHost {
 
   buy(upgrade: UpgradeId): Promise<void> {
     return this.submit({ type: 'buy', payload: { upgrade } });
+  }
+
+  sell(): Promise<void> {
+    return this.submit({ type: 'sell', payload: {} });
   }
 
   async newGame(): Promise<void> {
