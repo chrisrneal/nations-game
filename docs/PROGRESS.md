@@ -1,13 +1,13 @@
 # Progress
 Current state: **pivot in progress** to the idle airport game (decision record
-P1). Slices 1-2 of 8 are done (docs, the airport sim); the deployed app is still Nations until slice 3.
+P1). Slices 1-3 of 8 are done: the deployed app is now the airport.
 The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 (docs/PROGRESS.md there).
 
 ## Slices (docs/ROADMAP.md)
 - [x] 1. Pivot docs
 - [x] 2. Airport sim
-- [ ] 3. Airport screen and upgrade sheet; Nations interface deleted
+- [x] 3. Airport screen and upgrade sheet; Nations interface deleted
 - [ ] 4. Offline earnings and the away recap
 - [ ] 5. Prestige and the second city
 - [ ] 6. Pacing pass
@@ -15,6 +15,33 @@ The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 - [ ] 8. Remove the remaining Nations code; README
 
 ## Session log
+
+### 2026-10-01 - Pivot slice 3, the airport on the phone (lanes U, P)
+**What changed.** The app is the airport. The Nations interface and its host
+(AI director, journal, predictions, month clock) were deleted in their own
+commit. New host: `AirportEngine` in the Web Worker steps the sim by the wall
+clock every 250 ms, catching up quietly when a timer was late; `LocalHost`
+continues the autosave on open (or opens a new airport), autosaves every 10 s and
+when hidden, and exports and imports save files. New screen: cash and income
+per second at the top, the terminal strip, the gates in two columns (fill bar,
+departure timer, turnaround bar, charter badge, rush glow, "+$12" cash pops),
+a dashed card for the next gate, and in the thumb zone the bottleneck, the next
+goal with a countdown and the Upgrades button. The upgrade sheet shows each
+upgrade's effect now and next, its catch, a buy button that fills as cash comes
+in, and which upgrades fix the bottleneck. Settings: lifetime numbers, save to
+and load from a file, start over. Fill bars, timers and cash are written to the
+DOM directly with one-tick CSS transitions; React re-renders only when a plane
+arrives or leaves or an upgrade changes (P7).
+**Phone check** (`npm run build && npm run e2e --workspace web`, headless
+Chromium at 360 x 740 with touch): 22/22. Installable; no horizontal scroll and
+every button at least 44 px on the airport, both sheets and an 8-gate airport;
+Upgrades in the bottom third; first upgrade bought 5.5 s after opening; a tap
+rushes the gate; 60.2 fps with eight gates animating and the CPU slowed 4x
+(worst frame 17 ms); export, clear site data, import; reopens offline.
+**How to see it.** Open the Vercel address on a phone. Tap a gate to rush it;
+open Upgrades to buy.
+**What is left.** The away recap and the offline cap (slice 4), selling the
+airport (slice 5), tuning (6), juice (7), cleanup (8).
 
 ### 2026-10-01 - Pivot slice 2, the airport sim (lanes C, S, H)
 **What changed.** packages/sim/src/airport is the whole airport game as a pure
