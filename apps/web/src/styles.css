@@ -612,6 +612,79 @@ p {
   font-size: 0.85rem;
 }
 
+/* ---- selling the airport ---- */
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.actions > .btn-primary {
+  flex: 2;
+}
+
+.btn-sell {
+  flex: 1;
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #2a1d00;
+}
+
+.sell-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.sell-worth {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--gold);
+}
+
+.bar-slots {
+  margin: 0.2rem 0 0.7rem;
+}
+
+.bar-slots > i {
+  background: linear-gradient(90deg, #c9952a, var(--gold));
+}
+
+.sell-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+}
+
+.sell-facts div {
+  padding: 0.5rem 0.6rem;
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+
+.sell-facts dt {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.sell-facts dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.twist {
+  padding: 0.6rem 0.7rem;
+  border-radius: 10px;
+  border-left: 3px solid var(--gold);
+  background: var(--panel-2);
+  font-size: 0.9rem;
+  margin-bottom: 0.6rem;
+}
+
 /* ---- away recap ---- */
 .recap-earned {
   font-size: 2rem;

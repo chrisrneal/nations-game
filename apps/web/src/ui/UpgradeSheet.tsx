@@ -48,8 +48,8 @@ function UpgradeRow(props: { upgrade: UpgradeView; fixes: boolean; store: Airpor
 }
 
 /** Every upgrade in a bottom sheet, under the thumb. Stays open while buying. */
-export function UpgradeSheet(props: { view: AirportView; store: AirportStore; onBuy: (id: UpgradeId) => void; onClose: () => void }): ReactElement {
-  const { view, store, onBuy, onClose } = props;
+export function UpgradeSheet(props: { view: AirportView; store: AirportStore; onBuy: (id: UpgradeId) => void; onSell: () => void; onClose: () => void }): ReactElement {
+  const { view, store, onBuy, onSell, onClose } = props;
   return (
     <Sheet title="Upgrades" onClose={onClose}>
       <p className="sheet-note">{view.bottleneck.text}</p>
@@ -58,6 +58,12 @@ export function UpgradeSheet(props: { view: AirportView; store: AirportStore; on
           <UpgradeRow key={u.id} upgrade={u} fixes={view.bottleneck.fix.includes(u.id)} store={store} onBuy={onBuy} />
         ))}
       </ul>
+      <button type="button" className="btn sell-row" onClick={onSell} data-testid="sell-row">
+        <span>Sell the airport</span>
+        <span className="muted">
+          {view.slots.claimable === 0 ? `first slot at ${formatCash(view.slots.nextAt)} earned` : `worth ${view.slots.claimable} ${view.slots.claimable === 1 ? 'slot' : 'slots'}`}
+        </span>
+      </button>
     </Sheet>
   );
 }
