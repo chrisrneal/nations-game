@@ -1,9 +1,9 @@
-import type { AirportCommand, AirportEvent, AirportState, GateState, Levels, RngState, Stats, UpgradeId } from '@airport/contracts';
+import type { AirportCommand, AirportEvent, AirportState, BoostId, BoostState, GateState, Levels, RngState, Stats, UpgradeId } from '@airport/contracts';
 import { randomInt } from './rng.ts';
-import { UPGRADE_IDS } from './catalog.ts';
+import { BOOST_IDS, UPGRADE_IDS } from './catalog.ts';
 import { airportCommandProblem } from './commands.ts';
 import { mulDiv } from './math.ts';
-import { arrivalBpAt, cashCap, derive, lockReason, slotsFor, turnTicksFor, upgradeCost, type Derived } from './rules.ts';
+import { arrivalBpAt, boostProblem, boostTicks, cashCap, derive, lockReason, slotsFor, turnTicksFor, upgradeCost, type Derived } from './rules.ts';
 import { arrivingGate, openAirport } from './state.ts';
 import { AIRPORT_TUNABLES as T } from './tunables.ts';
 
@@ -24,6 +24,7 @@ interface MState {
   nextPlane: number;
   city: number;
   slots: number;
+  boosts: Record<BoostId, Mutable<BoostState>>;
   run: MStats;
   life: MStats;
 }
@@ -40,6 +41,7 @@ function clone(s: AirportState): MState {
     nextPlane: s.nextPlane,
     city: s.city,
     slots: s.slots,
+    boosts: { rushHour: { ...s.boosts.rushHour }, allHands: { ...s.boosts.allHands }, surge: { ...s.boosts.surge } },
     run: { ...s.run },
     life: { ...s.life },
   };
@@ -87,6 +89,7 @@ function depart(m: MState, index: number, d: Derived, events: Sink): void {
   if (full) cents = mulDiv(cents, BP + T.fullBonusBp.value, BP);
   if (gate.charter) cents = mulDiv(cents, T.charterFareBp.value, BP);
   cents = mulDiv(cents, d.fareMulBp, BP);
+  if (m.boosts.surge.left > 0) cents = mulDiv(cents, T.surgeFareBp.value, BP);
   m.cash = Math.min(cashCap(), m.cash + cents);
   bump(m, 'earned', cents);
   bump(m, 'flights', 1);
@@ -104,8 +107,8 @@ function depart(m: MState, index: number, d: Derived, events: Sink): void {
 /** One gate's tick (RULES 5 and 6). */
 function gateTick(m: MState, index: number, d: Derived, events: Sink): void {
   const gate = m.gates[index] as MGate;
-  const rushed = gate.rush > 0;
-  if (rushed) gate.rush -= 1;
+  const rushed = gate.rush > 0 || m.boosts.allHands.left > 0;
+  if (gate.rush > 0) gate.rush -= 1;
   if (gate.turn > 0) {
     gate.turn = Math.max(0, gate.turn - (rushed ? T.rushTurnSpeed.value : 1));
     if (gate.turn === 0) arrive(m, index, d, events);
@@ -151,6 +154,31 @@ function buy(m: MState, upgrade: UpgradeId, events: Sink): boolean {
   return true;
 }
 
+/** Starts a boost (RULES 15). The tick it is used on is its first. */
+function useBoost(m: MState, id: BoostId, events: Sink): void {
+  if (!BOOST_IDS.includes(id)) {
+    reject(m, events, 'boost', 'unknown boost');
+    return;
+  }
+  const problem = boostProblem(id, m);
+  if (problem !== null) {
+    reject(m, events, 'boost', problem);
+    return;
+  }
+  const { length, recharge } = boostTicks(id);
+  m.boosts[id] = { left: length, recharge };
+  emit(events, { tick: m.tick, type: 'boosted', payload: { boost: id, ticks: length } });
+}
+
+/** Boost clocks run down at the end of every tick, in play and in catch-up alike. */
+function boostClocks(m: MState): void {
+  for (const id of BOOST_IDS) {
+    const b = m.boosts[id];
+    if (b.left > 0) b.left -= 1;
+    if (b.recharge > 0) b.recharge -= 1;
+  }
+}
+
 function sell(m: MState, events: Sink): boolean {
   const slots = slotsFor(m.run.earned);
   if (slots < 1) {
@@ -183,6 +211,9 @@ function apply(m: MState, command: AirportCommand, events: Sink): boolean {
     }
     case 'buy':
       return buy(m, command.payload.upgrade, events);
+    case 'boost':
+      useBoost(m, command.payload.boost, events);
+      return false;
     case 'sell':
       return sell(m, events);
   }
@@ -194,10 +225,12 @@ function tickInPlace(m: MState, commands: readonly AirportCommand[], d: Derived,
   for (const command of commands.slice(0, T.maxCommandsPerTick.value)) {
     if (apply(m, command, events)) current = derive(m);
   }
-  addWaiting(m, mulDiv(current.arrivalMilli, arrivalBpAt(current.twist, m.tick), BP), current);
+  const arrivals = mulDiv(current.arrivalMilli, arrivalBpAt(current.twist, m.tick), BP);
+  addWaiting(m, m.boosts.rushHour.left > 0 ? mulDiv(arrivals, T.rushHourArrivalBp.value, BP) : arrivals, current);
   const n = m.gates.length;
   const start = m.tick % n;
   for (let k = 0; k < n; k++) gateTick(m, (start + k) % n, current, events);
+  boostClocks(m);
   m.tick += 1;
   return current;
 }

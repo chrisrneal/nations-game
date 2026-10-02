@@ -71,5 +71,9 @@ Status: all eight merged on 2026-10-01 (PRs #41-#48); see docs/PROGRESS.md.
 All eight slices are merged with CI green; the phone check passes at 360 px; the
 pacing report meets RULES 11; the app installs and plays offline.
 
+## After the pivot
+- **Boosts** (P11, owner request, 2026-10-02): three free, timed boosts on
+  recharge clocks (RULES 15).
+
 ## Later (not planned)
 Achievements, more cities, cloud save. Any of these needs a decision record.

@@ -1,8 +1,8 @@
-import type { AirportCommand, AirportState, UpgradeId } from '@airport/contracts';
+import type { AirportCommand, AirportState, BoostId, UpgradeId } from '@airport/contracts';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { hashState } from './hash.ts';
-import { UPGRADE_IDS } from './catalog.ts';
+import { BOOST_IDS, UPGRADE_IDS } from './catalog.ts';
 import { maxLevel } from './rules.ts';
 import { AirportSession } from './session.ts';
 import { createAirport } from './state.ts';
@@ -10,13 +10,18 @@ import { advanceMany, step } from './step.ts';
 
 /**
  * The invariants of RULES 13, as properties over random play: random taps,
- * purchases and sales at random ticks, from random seeds and starting cash.
+ * purchases, boosts and sales at random ticks, from random seeds and starting cash.
  */
-type Move = { at: number; kind: 'tap'; gate: number } | { at: number; kind: 'buy'; upgrade: UpgradeId } | { at: number; kind: 'sell' };
+type Move =
+  | { at: number; kind: 'tap'; gate: number }
+  | { at: number; kind: 'buy'; upgrade: UpgradeId }
+  | { at: number; kind: 'boost'; boost: BoostId }
+  | { at: number; kind: 'sell' };
 
 const move: fc.Arbitrary<Move> = fc.oneof(
   fc.record({ at: fc.nat(400), kind: fc.constant('tap' as const), gate: fc.nat(8) }),
   fc.record({ at: fc.nat(400), kind: fc.constant('buy' as const), upgrade: fc.constantFrom(...UPGRADE_IDS) }),
+  fc.record({ at: fc.nat(400), kind: fc.constant('boost' as const), boost: fc.constantFrom(...BOOST_IDS) }),
   fc.record({ at: fc.nat(400), kind: fc.constant('sell' as const) }),
 );
 
@@ -39,6 +44,7 @@ const game: fc.Arbitrary<Game> = fc.record({
 function commandFor(m: Move, tick: number): AirportCommand {
   if (m.kind === 'tap') return { tick, type: 'tap', payload: { gate: m.gate } };
   if (m.kind === 'buy') return { tick, type: 'buy', payload: { upgrade: m.upgrade } };
+  if (m.kind === 'boost') return { tick, type: 'boost', payload: { boost: m.boost } };
   return { tick, type: 'sell', payload: {} };
 }
 
@@ -76,6 +82,10 @@ function invariants(s: AirportState): void {
     expect(g.rush).toBeGreaterThanOrEqual(0);
   }
   for (const id of UPGRADE_IDS) expect(s.levels[id]).toBeLessThanOrEqual(maxLevel(id, s));
+  for (const id of BOOST_IDS) {
+    expect(s.boosts[id].left).toBeGreaterThanOrEqual(0);
+    expect(s.boosts[id].recharge).toBeGreaterThanOrEqual(s.boosts[id].left);
+  }
   expect(s.levels.route).toBeLessThanOrEqual(s.levels.plane);
 }
 
@@ -135,6 +145,7 @@ describe('catch-up equals stepping (P4)', () => {
     const loud = new AirportSession(createAirport({ seed: 9 }));
     for (const s of [quiet, loud]) {
       s.submit({ tick: 0, type: 'tap', payload: { gate: 0 } });
+      s.submit({ tick: 300, type: 'boost', payload: { boost: 'rushHour' } });
       s.submit({ tick: 500, type: 'buy', payload: { upgrade: 'boarding' } });
       s.submit({ tick: 9000, type: 'buy', payload: { upgrade: 'gates' } });
     }

@@ -18,7 +18,8 @@ you can sell it for **slots**, which permanently raise your income, and start
 again in a new city with its own twist.
 
 Tapping a gate gives it a short **rush**. Playing actively earns about 2-3x what
-idling earns; it is never required.
+idling earns; it is never required. Three free **boosts** (section 15) each fix
+one bottleneck for a minute, then recharge.
 
 ## 2. Time and units
 
@@ -64,7 +65,8 @@ idling earns; it is never required.
 
 Every tick, in this order:
 
-1. Arrivals join the terminal, capped at `W`; the excess is missed.
+1. Arrivals join the terminal (x3 during Rush hour, section 15), capped at `W`;
+   the excess is missed.
 2. Gates are visited in a rotating order that starts at `tick mod gates`, so no
    gate is always first in line. A boarding gate moves `min(rate, seats left,
    waiting)` passengers from the terminal onto its plane, where `rate =
@@ -76,8 +78,9 @@ Every tick, in this order:
 4. It pays `pax x fare x multipliers`, where `fare = fareBase x
    fareGrowth^routeLevel` ($1.00 at level 0, +60% a level), and the
    multipliers are, all in basis points and applied in this order: full flight
-   `+fullBonus` (+25%), charter x`charterFare`, city fare twist, and slots
-   `+slotBonus` per slot (+25% each). Each is floored to whole cents.
+   `+fullBonus` (+25%), charter x`charterFare`, city fare twist, slots
+   `+slotBonus` per slot (+25% each), and Fare surge x`surgeFare` while it runs
+   (section 15). Each is floored to whole cents.
 5. The gate starts turnaround: `turn = (turnBase + seats / turnSeatsPerSecond) x
    crewTurn^crewLevel`, never below `turnMin` (4.5 s for 10 seats, -12% per crew
    level, at least 1 s). When it ends, a new plane arrives.
@@ -93,6 +96,8 @@ cannot fill it before its timer runs out it leaves without the full-flight bonus
   terminal first; when the terminal is empty a rush also boards **walk-ups**
   from the check-in hall, up to the same rate. A rushed gate in turnaround runs
   its turnaround `rushTurn` (3x) as fast.
+- A gate is also rushed, with no taps, while the All hands boost runs
+  (section 15); taps bank rush as usual meanwhile.
 - So a rush helps whatever the bottleneck is: boarding, passengers or
   turnaround. Tapping every gate as its rush runs out earns about 2-3x idle
   income (section 11); not tapping at all is a complete, slower game.
@@ -187,19 +192,20 @@ its upgrades once a second, buys the best income per dollar (one purchase
 ahead), and sells once a sale adds at least half again to fares (3 slots the
 first time) and the next slot is further away than a quarter of the airport's
 age. The idle bot never taps, checks in every 15 minutes, and sells at the
-first check-in where the sale adds half again.
+first check-in where the sale adds half again. Both use every boost that is
+ready: the greedy bot at once, the idle bot as it leaves each check-in.
 
-| Target | Measured (seeds 1-5, after the slice 6 pacing pass) |
+| Target | Measured (seeds 1-5, with boosts, P11) |
 | --- | --- |
 | First upgrade within 10 s | 3 s |
 | First new gate within 2 minutes | 19-29 s |
-| Something new (a gate, plane, route or sale) at least every 5 minutes before the first sale | longest wait 4.4-4.5 min |
-| First sale at roughly 30-60 minutes (greedy) | 35.5-35.9 min, 3 slots |
-| First sale for an idle player (no taps, check-ins every 15 min) | about 2 h 45 min, 3 slots (reported, no target) |
-| Active income about 2-3x idle at the same levels | 2.3-2.8x |
+| Something new (a gate, plane, route or sale) at least every 5 minutes before the first sale | longest wait 4.4-4.6 min |
+| First sale at roughly 30-60 minutes (greedy) | 33.5-33.9 min, 3 slots (35.5-35.9 without boosts) |
+| First sale for an idle player (no taps, check-ins every 15 min) | about 2 h 15 min, 3 slots (2 h 45 min without boosts; reported, no target) |
+| Active income about 2-3x idle at the same levels (tapping; measured at the levels the greedy bot reaches without boosts, where the pacing pass tuned it) | 2.3-2.8x (2.3-3.2x at the levels it reaches with boosts, reported) |
 | A 30-second check-in buys at least one upgrade | 100% of idle check-ins |
-| A 5-minute session reaches its next unlock | 11 of 11 idle check-ins at the first airport, every seed (target 80%) |
-| Income estimate within 20% of measured idle income | within 3% |
+| A 5-minute session reaches its next unlock | 9 of 9 idle check-ins at the first airport, every seed (target 80%) |
+| Income estimate within 20% of measured idle income | within 4% |
 
 ## 12. Tunables
 
@@ -269,6 +275,16 @@ disagree.
 | `waveTicks` | 240 | 60 | 600 | Sunvale: length of a wave (60 s). |
 | `waveArrivalBp` | 30000 | 15000 | 50000 | Sunvale: arrivals during a wave (3x). |
 | `offWaveArrivalBp` | 6000 | 3000 | 10000 | Sunvale: arrivals between waves (0.6x). |
+| `rushHourTicks` | 240 | 80 | 480 | Boost: how long Rush hour runs (60 s). Long enough to watch the lounge fill. |
+| `rushHourRechargeTicks` | 1200 | 480 | 4800 | Boost: Rush hour recharge, counted from use (5 min): about once per unlock. |
+| `rushHourArrivalBp` | 30000 | 15000 | 50000 | Boost: arrivals during Rush hour (3x). Beyond the waiting room they are missed, so a big terminal stores more of it. |
+| `allHandsTicks` | 240 | 80 | 480 | Boost: how long All hands rushes every gate (60 s). |
+| `allHandsRechargeTicks` | 1200 | 480 | 4800 | Boost: All hands recharge (5 min): a minute of tapping for a one-handed or idle player. |
+| `allHandsMinGates` | 3 | 1 | 4 | Boost: gates before All hands opens (about minute 2), so the boost bar fills in one at a time. |
+| `surgeTicks` | 240 | 80 | 480 | Boost: how long Fare surge runs (60 s). |
+| `surgeRechargeTicks` | 3600 | 1200 | 7200 | Boost: Fare surge recharge (15 min): one per idle check-in. |
+| `surgeFareBp` | 20000 | 15000 | 30000 | Boost: fare multiplier during Fare surge (2x). |
+| `surgeMinRoute` | 1 | 0 | 3 | Boost: route level before Fare surge opens (the first new route, about minute 4). |
 
 ## 13. Invariants
 
@@ -283,6 +299,9 @@ Checked by property tests on every build:
 - A save reloads to the same state hash and continues identically.
 - Cash only changes by fares (up) and purchases (down); a purchase never makes
   cash negative.
+- A boost's time left is never negative and never more than its recharge left.
+- An old save loads: it migrates to the current version and replays to the
+  airport it recorded (tested with a real version-1 save).
 
 ## 14. The passenger journey (what the screen shows)
 
@@ -312,3 +331,29 @@ a save.
   second walk in however big the airport grows; the lounge shows the scale.
 - Display limits, not balance: at most 220 people on screen, and none walk for
   ticks caught up quietly (an absence or a late timer).
+
+## 15. Boosts
+
+Three free boosts sit in the thumb zone above the Upgrades button. A tap starts
+one: it runs for a minute, then recharges. Each fixes one bottleneck of
+section 8, so the screen points at the one the airport needs now. Boosts cost
+nothing and are never required; they give a 30-second check-in something to
+do and an active player a burst to plan around.
+
+| Boost | While it runs | Length | Recharge | Opens | Fixes |
+| --- | --- | --- | --- | --- | --- |
+| Rush hour | arrivals x`rushHourArrival` (3x); past the waiting room they are missed | `rushHourTicks` (60 s) | `rushHourRechargeTicks` (5 min) | at once | Planes are waiting for passengers; planes leave before they fill |
+| All hands | every gate is rushed as if tapped (section 6), walk-ups included | `allHandsTicks` (60 s) | `allHandsRechargeTicks` (5 min) | at `allHandsMinGates` gates (3) | Passengers queuing at the gates; gates busy turning around |
+| Fare surge | every fare x`surgeFare` (2x), after every other multiplier | `surgeTicks` (60 s) | `surgeRechargeTicks` (15 min) | with route level `surgeMinRoute` (1) | any bottleneck |
+
+- The recharge counts from the tick the boost is used, so it includes the
+  minute the boost runs. That tick is the boost's first.
+- A boost cannot be used while it runs, while it recharges, or before it
+  opens; the command is rejected and nothing changes.
+- Boost clocks are ticks in State, so a boost keeps running and recharging
+  while the app is closed, exactly as if it were open (P4). Use one on the way
+  out and it pays during the first minute away.
+- Selling the airport opens the next one with every boost ready.
+- The headline income stays the plain estimate of section 8. While a boost
+  runs, the screen also shows the boosted estimate: the same formulas with the
+  boost applied, as if it ran for good.

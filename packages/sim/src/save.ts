@@ -1,17 +1,32 @@
 import type { AirportCommand, AirportSaveFile, AirportState } from '@airport/contracts';
 import { hashState } from './hash.ts';
-import { AIRPORT_SCHEMA_VERSION } from './state.ts';
+import { AIRPORT_SCHEMA_VERSION, READY_BOOSTS } from './state.ts';
 import { advanceMany, step } from './step.ts';
 
 type Migration = (save: Record<string, unknown>) => Record<string, unknown>;
 
 /**
- * Migrations keyed by the version they upgrade FROM (S9): `AIRPORT_MIGRATIONS[1]`
- * turns a version-1 save into version 2. Version 1 is the first airport save, so
- * there are none yet. When AIRPORT_SCHEMA_VERSION is bumped, add the entry and a
- * test with a real old save file.
+ * Version 1 to 2: boosts (RULES 15, P11). A version-1 airport had none, and a
+ * boost that is ready and not running changes nothing, so the version-1 game
+ * replays exactly with every boost ready. The migration replays it once to
+ * prove that against the version-1 hash, then records the version-2 hash.
  */
-export const AIRPORT_MIGRATIONS: Readonly<Record<number, Migration>> = {};
+function addBoosts(raw: Record<string, unknown>): Record<string, unknown> {
+  const save = raw as unknown as AirportSaveFile;
+  if (typeof save.snapshot !== 'object' || save.snapshot === null || !Array.isArray(save.commandLog)) throw new Error('Save is missing its snapshot or command log');
+  const snapshot: AirportState = { ...save.snapshot, schemaVersion: 2, boosts: READY_BOOSTS };
+  const replayed = replay(snapshot, save.commandLog.filter((c) => c.tick < save.savedAtTick), save.savedAtTick);
+  const v1 = Object.fromEntries(Object.entries({ ...replayed, schemaVersion: 1 }).filter(([key]) => key !== 'boosts'));
+  if (hashState(v1) !== save.stateHash) throw new Error('Save does not replay to its recorded state (version 1)');
+  return { ...raw, schemaVersion: 2, snapshot, stateHash: hashState(replayed) };
+}
+
+/**
+ * Migrations keyed by the version they upgrade FROM (S9): `AIRPORT_MIGRATIONS[1]`
+ * turns a version-1 save into version 2. Each has a test with a real old save
+ * file (packages/harness/fixtures).
+ */
+export const AIRPORT_MIGRATIONS: Readonly<Record<number, Migration>> = { 1: addBoosts };
 
 /** Brings a parsed save up to the current schema, or throws a message a player can act on. */
 export function migrateAirportSave(raw: unknown, migrations: Readonly<Record<number, Migration>> = AIRPORT_MIGRATIONS, target = AIRPORT_SCHEMA_VERSION): Record<string, unknown> {

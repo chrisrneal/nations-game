@@ -62,9 +62,11 @@ export function structuralKey(view: AirportView): string {
     view.route,
     view.fare,
     view.incomePerSec,
+    view.boostedIncomePerSec,
     view.offlineCapMinutes,
     view.bottleneck.kind,
     view.gates.map((g) => `${g.plane}${g.turn > 0 ? 't' : 'b'}${g.charter ? 'c' : ''}`).join(','),
     view.upgrades.map((u) => `${u.level}${u.affordable ? 'a' : ''}${u.locked === null ? '' : 'l'}`).join(','),
+    view.boosts.map((b) => `${b.ready ? 'r' : ''}${b.left > 0 ? 'a' : ''}${b.locked === null ? '' : 'l'}${b.helps ? 'h' : ''}`).join(','),
   ].join('|');
 }

@@ -17,6 +17,10 @@
  * Passenger flow: a new airport shows check-in, security and baggage claim
  * with people walking through them; international routes add passport
  * control and customs; the 60 fps check runs with the people walking.
+ * Boosts: a new airport has Rush hour ready and the other two locked, in the
+ * bottom third; a tap starts Rush hour with a countdown; the eight-gate airport
+ * runs All hands (every gate glows) and Fare surge (boosted income in gold)
+ * during the 60 fps check.
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -141,6 +145,17 @@ async function main(): Promise<void> {
     }
     check('flights pay as the planes leave', (await cashCents(page)) > cashBefore, `${cashBefore} -> ${await cashCents(page)} cents`);
 
+    // Boosts (RULES 15): Rush hour ready from the start, the others locked; one tap starts it.
+    const boostClass = async (id: string): Promise<string> => (await page.getByTestId(`boost-${id}`).getAttribute('class')) ?? '';
+    check('Rush hour is ready, All hands and Fare surge are locked', (await boostClass('rushHour')).includes('boost-ready') && (await boostClass('allHands')).includes('boost-locked') && (await boostClass('surge')).includes('boost-locked'));
+    const boostBox = await page.getByTestId('boost-rushHour').boundingBox();
+    check('boosts in the bottom third', boostBox !== null && boostBox.y >= HEIGHT / 2 && boostBox.y + boostBox.height / 2 >= (HEIGHT * 2) / 3, `centre at ${Math.round((boostBox?.y ?? 0) + (boostBox?.height ?? 0) / 2)}`);
+    await page.getByTestId('boost-rushHour').tap();
+    await page.waitForTimeout(600);
+    const rushStatus = (await page.getByTestId('boost-rushHour').locator('.boost-status').textContent()) ?? '';
+    check('a tap starts Rush hour, counting down from a minute', (await boostClass('rushHour')).includes('boost-running') && /^(1m 0s|5\ds)$/.test(rushStatus), rushStatus);
+    check('starting a boost says what it does', /Rush hour! 3x passengers/.test((await page.locator('.toast').textContent()) ?? ''));
+
     // Settings: export, clear site data, import a busy airport file.
     await page.getByTestId('settings').tap();
     await page.getByTestId('stats').waitFor();
@@ -166,6 +181,13 @@ async function main(): Promise<void> {
     check('an international route adds passport control and customs', /Passport/.test((await page.getByTestId('lane-departures').textContent()) ?? '') && /Customs/.test((await page.getByTestId('lane-arrivals').textContent()) ?? ''));
     await noHorizontalScroll(page, 'eight gates');
     await touchTargets(page, 'eight gates');
+    await page.getByTestId('boost-allHands').tap();
+    await page.getByTestId('boost-surge').tap();
+    await page.waitForTimeout(400);
+    const glowing = await page.locator('.gate.rushing').count();
+    check('All hands rushes every gate with no taps', glowing === 8, `${glowing} of 8 gates rushing`);
+    const income = page.getByTestId('income');
+    check('Fare surge shows the boosted income in gold', ((await income.getAttribute('class')) ?? '').includes('income-boosted') && /⚡/.test((await income.textContent()) ?? ''), (await income.textContent()) ?? '');
 
     // 60 fps with eight gates animating, take-offs, pops and a thumb tapping, the CPU slowed 4x.
     await page.waitForTimeout(500);
@@ -192,7 +214,7 @@ async function main(): Promise<void> {
     await tapping;
     const crowd = Number(await page.getByTestId('flow-dots').getAttribute('data-dots'));
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
-    check('60 fps with eight gates, people walking, tapping (CPU slowed 4x)', fps.frames >= 55 && crowd > 0, `${fps.frames.toFixed(1)} fps, worst frame ${fps.worst.toFixed(0)} ms, ${crowd} people walking`);
+    check('60 fps with eight gates, people walking, two boosts running, tapping (CPU slowed 4x)', fps.frames >= 55 && crowd > 0, `${fps.frames.toFixed(1)} fps, worst frame ${fps.worst.toFixed(0)} ms, ${crowd} people walking`);
 
     // Offline: the installed app reopens and continues from the autosave.
     await page.waitForTimeout(1000);

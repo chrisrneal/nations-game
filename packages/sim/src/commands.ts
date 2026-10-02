@@ -1,7 +1,7 @@
 import type { AirportCommand } from '@airport/contracts';
-import { UPGRADE_IDS } from './catalog.ts';
+import { BOOST_IDS, UPGRADE_IDS } from './catalog.ts';
 
-const TYPES = new Set(['tap', 'buy', 'sell']);
+const TYPES = new Set(['tap', 'buy', 'boost', 'sell']);
 
 /**
  * Shape check for a command from outside (the interface, a save file, a bot).
@@ -17,5 +17,6 @@ export function airportCommandProblem(command: unknown): string | null {
   const p = c.payload as Record<string, unknown>;
   if (c.type === 'tap' && (typeof p.gate !== 'number' || !Number.isSafeInteger(p.gate) || p.gate < 0)) return 'bad gate';
   if (c.type === 'buy' && !UPGRADE_IDS.includes(p.upgrade as never)) return 'unknown upgrade';
+  if (c.type === 'boost' && !BOOST_IDS.includes(p.boost as never)) return 'unknown boost';
   return null;
 }

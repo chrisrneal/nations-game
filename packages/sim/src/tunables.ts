@@ -72,6 +72,16 @@ export const AIRPORT_TUNABLES = {
   waveTicks: { value: 240, min: 60, max: 600, note: 'Sunvale: length of a wave (60 s).' },
   waveArrivalBp: { value: 30_000, min: 15_000, max: 50_000, note: 'Sunvale: arrivals during a wave (3x).' },
   offWaveArrivalBp: { value: 6000, min: 3000, max: 10_000, note: 'Sunvale: arrivals between waves (0.6x).' },
+  rushHourTicks: { value: 240, min: 80, max: 480, note: 'Boost: how long Rush hour runs (60 s). Long enough to watch the lounge fill.' },
+  rushHourRechargeTicks: { value: 1200, min: 480, max: 4800, note: 'Boost: Rush hour recharge, counted from use (5 min): about once per unlock.' },
+  rushHourArrivalBp: { value: 30_000, min: 15_000, max: 50_000, note: 'Boost: arrivals during Rush hour (3x). Beyond the waiting room they are missed, so a big terminal stores more of it.' },
+  allHandsTicks: { value: 240, min: 80, max: 480, note: 'Boost: how long All hands rushes every gate (60 s).' },
+  allHandsRechargeTicks: { value: 1200, min: 480, max: 4800, note: 'Boost: All hands recharge (5 min): a minute of tapping for a one-handed or idle player.' },
+  allHandsMinGates: { value: 3, min: 1, max: 4, note: 'Boost: gates before All hands opens (about minute 2), so the boost bar fills in one at a time.' },
+  surgeTicks: { value: 240, min: 80, max: 480, note: 'Boost: how long Fare surge runs (60 s).' },
+  surgeRechargeTicks: { value: 3600, min: 1200, max: 7200, note: 'Boost: Fare surge recharge (15 min): one per idle check-in.' },
+  surgeFareBp: { value: 20_000, min: 15_000, max: 30_000, note: 'Boost: fare multiplier during Fare surge (2x).' },
+  surgeMinRoute: { value: 1, min: 0, max: 3, note: 'Boost: route level before Fare surge opens (the first new route, about minute 4).' },
 } as const satisfies Readonly<Record<string, Tunable>>;
 
 export type AirportTunableId = keyof typeof AIRPORT_TUNABLES;

@@ -10,11 +10,29 @@
  * - The idle bot never taps. It checks in every 15 minutes, spends what it can
  *   with the same picker, and sells at the first check-in where the sale is
  *   worth at least half again in fares (no waiting for the airport to slow).
+ * - Both use every boost that is ready (RULES 15): the greedy bot as soon as
+ *   it is, the idle bot as it leaves each check-in, so it runs while away.
  *
  * Both use the sim's own income estimate (P6) to value upgrades. Runs in Node.
  */
-import type { AirportState, UpgradeId } from '@airport/contracts';
-import { AIRPORT_TUNABLES, UPGRADE_IDS, advanceMany, airportView, earnedForSlots, estimate, slotsFor, stepAirport, createAirport, upgradeCost, lockReason, maxLevel } from '@airport/sim';
+import type { AirportCommand, AirportState, UpgradeId } from '@airport/contracts';
+import {
+  AIRPORT_TUNABLES,
+  BOOST_IDS,
+  READY_BOOSTS,
+  UPGRADE_IDS,
+  advanceMany,
+  airportView,
+  boostProblem,
+  earnedForSlots,
+  estimate,
+  slotsFor,
+  stepAirport,
+  createAirport,
+  upgradeCost,
+  lockReason,
+  maxLevel,
+} from '@airport/sim';
 
 const TICKS_PER_SEC = 1000 / AIRPORT_TUNABLES.tickMs.value;
 
@@ -123,6 +141,8 @@ export interface PacingOptions {
   readonly from?: AirportState;
   readonly minutes?: number;
   readonly snapshotMinutes?: readonly number[];
+  /** False: the bots never use boosts (to see what boosts are worth). */
+  readonly boosts?: boolean;
 }
 
 const LEVEL_NAMES: Partial<Record<UpgradeId, string>> = { gates: 'gate', plane: 'plane', route: 'route' };
@@ -188,6 +208,16 @@ function act(state: AirportState, command: 'sell' | UpgradeId, note: (what: stri
   return next;
 }
 
+/** Every boost that is ready now (RULES 15). */
+function boosts(state: AirportState): AirportCommand[] {
+  return BOOST_IDS.filter((id) => boostProblem(id, state) === null).map((boost) => ({ tick: state.tick, type: 'boost' as const, payload: { boost } }));
+}
+
+/** The airport with no boost running or recharging: income comparisons measure taps and levels alone. */
+export function unboosted(state: AirportState): AirportState {
+  return { ...state, boosts: READY_BOOSTS };
+}
+
 /** Taps for this tick: three a second, each to the gate with the least rush banked. */
 function taps(state: AirportState): { tick: number; type: 'tap'; payload: { gate: number } }[] {
   if (state.tick % 4 === 0) return [];
@@ -225,7 +255,7 @@ export function runGreedy(options: PacingOptions = {}): BotRun {
         if (sales.n === 0) note('slot on offer', state.tick, false);
       }
     }
-    state = stepAirport(state, taps(state)).state;
+    state = stepAirport(state, [...(options.boosts === false ? [] : boosts(state)), ...taps(state)]).state;
   }
   return summarise('greedy', milestones, state, snapshots, null);
 }
@@ -261,6 +291,7 @@ export function runIdle(options: PacingOptions & { readonly checkInMinutes?: num
     if (bought) withPurchase += 1;
     states.push(state);
     if (sales.n === 0 && slotsFor(state.run.earned) >= 1 && !milestones.some((m) => m.what === 'slot on offer')) note('slot on offer', state.tick, false);
+    if (options.boosts !== false) state = stepAirport(state, boosts(state)).state;
     state = advanceMany(state, Math.min(every, end - state.tick));
   }
   return summarise('idle', milestones, state, [], checkIns === 0 ? null : withPurchase / checkIns, states);
@@ -278,8 +309,13 @@ export function earnedOver(state: AirportState, seconds: number, tapping: boolea
 export interface PacingReport {
   readonly greedy: BotRun;
   readonly idle: BotRun;
+  /** The same bots never using a boost: what boosts are worth. */
+  readonly greedyNoBoosts: BotRun;
+  readonly idleNoBoosts: BotRun;
   /** Active over idle income at the greedy bot's snapshots. */
   readonly activeRatios: readonly { readonly minute: number; readonly ratio: number }[];
+  /** The same at the levels the greedy bot reaches using boosts. */
+  readonly boostedRatios: readonly { readonly minute: number; readonly ratio: number }[];
   /** Estimate over measured idle income at the snapshots. */
   readonly estimateErrors: readonly { readonly minute: number; readonly error: number }[];
   readonly checks: readonly { readonly name: string; readonly value: string; readonly target: string; readonly pass: boolean }[];
@@ -289,24 +325,38 @@ export interface PacingReport {
 export function runPacing(options: PacingOptions = {}): PacingReport {
   const greedy = runGreedy(options);
   const idle = runIdle({ ...options, minutes: Math.max(240, options.minutes ?? 0) });
+  const greedyNoBoosts = runGreedy({ ...options, boosts: false });
+  const idleNoBoosts = runIdle({ ...options, minutes: Math.max(240, options.minutes ?? 0), boosts: false });
   // A 5-minute session: from each of the idle player's check-ins (first airport), play actively for 5 minutes.
   const sessions = idle.checkIns.filter((s) => s.city === 0 && s.tick > 0);
   const sessionsWithUnlock = sessions.filter((from) => runGreedy({ from, minutes: 5, sell: false, snapshotMinutes: [] }).milestones.some((m) => m.novel)).length;
-  const activeRatios = greedy.snapshots.map(({ minute, state }) => ({ minute, ratio: earnedOver(state, 120, true) / Math.max(1, earnedOver(state, 120, false)) }));
-  const estimateErrors = greedy.snapshots.map(({ minute, state }) => {
+  // What a tap is worth depends on the levels alone, and swings by about 1x from one minute's levels to the next.
+  // The check samples the path it was tuned on (no boosts, P9); the boosted path is reported beside it (P11).
+  const ratios = (run: BotRun): { minute: number; ratio: number }[] =>
+    run.snapshots.map(({ minute, state: s }) => {
+      const state = unboosted(s);
+      return { minute, ratio: earnedOver(state, 120, true) / Math.max(1, earnedOver(state, 120, false)) };
+    });
+  const activeRatios = ratios(greedyNoBoosts);
+  const boostedRatios = ratios(greedy);
+  const estimateErrors = greedy.snapshots.map(({ minute, state: s }) => {
+    const state = unboosted(s);
     const measured = earnedOver(state, 600, false) / 600;
     return { minute, error: measured === 0 ? 0 : (estimate(state).incomePerSec - measured) / measured };
   });
   const s = (n: number | null): string => (n === null ? 'never' : n < 120 ? `${n.toFixed(1)} s` : `${(n / 60).toFixed(1)} min`);
   const minRatio = Math.min(...activeRatios.map((r) => r.ratio));
   const maxRatio = Math.max(...activeRatios.map((r) => r.ratio));
+  const range = (rs: readonly { ratio: number }[]): string => `${Math.min(...rs.map((r) => r.ratio)).toFixed(2)}-${Math.max(...rs.map((r) => r.ratio)).toFixed(2)}x`;
   const checks = [
     { name: 'First upgrade', value: s(greedy.firstUpgrade), target: '<= 10 s', pass: greedy.firstUpgrade !== null && greedy.firstUpgrade <= 10 },
     { name: 'First new gate (greedy)', value: s(greedy.firstGate), target: '<= 2 min', pass: greedy.firstGate !== null && greedy.firstGate <= 120 },
     { name: 'Longest wait for something new before the first sale (greedy)', value: s(greedy.longestGap), target: '<= 5 min', pass: greedy.longestGap <= 300 },
     { name: 'First sale (greedy)', value: `${s(greedy.firstSale)}${greedy.slotsAtFirstSale === null ? '' : `, ${greedy.slotsAtFirstSale} slots`}`, target: '30-60 min', pass: greedy.firstSale !== null && greedy.firstSale >= 1800 && greedy.firstSale <= 3600 },
     { name: 'First sale (idle, 15-minute check-ins)', value: `${s(idle.firstSale)}${idle.slotsAtFirstSale === null ? '' : `, ${idle.slotsAtFirstSale} slots`}`, target: 'reported', pass: true },
-    { name: 'Active over idle income', value: `${minRatio.toFixed(2)}-${maxRatio.toFixed(2)}x`, target: 'about 2-3x (1.8-3.2)', pass: minRatio >= 1.8 && maxRatio <= 3.2 },
+    { name: 'First sale without boosts (greedy; idle)', value: `${s(greedyNoBoosts.firstSale)}; ${s(idleNoBoosts.firstSale)}`, target: 'reported', pass: true },
+    { name: 'Active over idle income (tapping, at the no-boost greedy levels)', value: range(activeRatios), target: 'about 2-3x (1.8-3.2)', pass: minRatio >= 1.8 && maxRatio <= 3.2 },
+    { name: 'Active over idle income (tapping, at the boosted greedy levels)', value: range(boostedRatios), target: 'reported', pass: true },
     { name: 'Check-ins that buy something (idle, every 15 min)', value: `${Math.round((idle.checkInsWithPurchase ?? 0) * 100)}%`, target: '>= 90%', pass: (idle.checkInsWithPurchase ?? 0) >= 0.9 },
     {
       name: 'A 5-minute active session reaches a new gate, plane or route (from each idle check-in)',
@@ -316,7 +366,7 @@ export function runPacing(options: PacingOptions = {}): PacingReport {
     },
     { name: 'Income estimate vs measured idle', value: estimateErrors.map((e) => `${e.error >= 0 ? '+' : ''}${Math.round(e.error * 100)}%`).join(', '), target: 'within 20%', pass: estimateErrors.every((e) => Math.abs(e.error) <= 0.2) },
   ];
-  return { greedy, idle, activeRatios, estimateErrors, checks, pass: checks.every((c) => c.pass) };
+  return { greedy, idle, greedyNoBoosts, idleNoBoosts, activeRatios, boostedRatios, estimateErrors, checks, pass: checks.every((c) => c.pass) };
 }
 
 export function formatPacing(report: PacingReport, seed: number): string {
@@ -330,7 +380,11 @@ export function formatPacing(report: PacingReport, seed: number): string {
   lines.push('', `## Greedy bot: what it reached and when`, ...timeline(report.greedy));
   lines.push('', `Ended at ${view.city.name} with ${view.slots.owned} slots, levels ${JSON.stringify(report.greedy.final.levels)}.`);
   lines.push('', `## Idle bot (no taps, a check-in every 15 minutes)`, ...timeline(report.idle));
-  lines.push('', `## Active over idle income (2 minutes from the greedy bot's airport at each minute)`, ...report.activeRatios.map((r) => `- minute ${r.minute}: ${r.ratio.toFixed(2)}x`));
+  lines.push(
+    '',
+    `## Active over idle income (2 minutes of tapping from the greedy bot's airport at each minute; no boosts, with boosts)`,
+    ...report.activeRatios.map((r, i) => `- minute ${r.minute}: ${r.ratio.toFixed(2)}x, ${report.boostedRatios[i]?.ratio.toFixed(2) ?? '-'}x`),
+  );
   lines.push('', `Overall: ${report.pass ? 'PASS' : 'FAIL'}`);
   return lines.join('\n');
 }

@@ -36,7 +36,7 @@ export function savePrefs(prefs: Prefs, storage: Pick<Storage, 'setItem'> | unde
   }
 }
 
-export type Cue = 'tap' | 'depart' | 'full' | 'charter' | 'buy' | 'unlock' | 'collect';
+export type Cue = 'tap' | 'depart' | 'full' | 'charter' | 'buy' | 'unlock' | 'collect' | 'boost';
 
 export interface Feedback {
   readonly prefs: Prefs;
@@ -52,6 +52,7 @@ const VIBRATE: Readonly<Partial<Record<Cue, number | number[]>>> = {
   charter: [15, 40, 15],
   unlock: [20, 50, 30],
   collect: [10, 30, 10, 30, 25],
+  boost: [30, 30, 60],
 };
 
 /** Notes for each cue: [frequency Hz, start s, length s]. */
@@ -77,6 +78,13 @@ const NOTES: Readonly<Partial<Record<Cue, readonly (readonly [number, number, nu
   collect: [
     [784, 0, 0.08],
     [1047, 0.08, 0.2],
+  ],
+  // A quick rising sweep: something just got faster.
+  boost: [
+    [392, 0, 0.06],
+    [587, 0.05, 0.06],
+    [784, 0.1, 0.06],
+    [1175, 0.15, 0.22],
   ],
 };
 
@@ -105,7 +113,7 @@ export function createFeedback(initial: Prefs = loadPrefs()): Feedback {
     const now = ctx.currentTime;
     const wall = performance.now();
     recent = recent.filter((t) => wall - t < 1000);
-    if (cue !== 'buy' && cue !== 'unlock' && cue !== 'collect' && recent.length >= MAX_SOUNDS_PER_SEC) return;
+    if (cue !== 'buy' && cue !== 'unlock' && cue !== 'collect' && cue !== 'boost' && recent.length >= MAX_SOUNDS_PER_SEC) return;
     recent.push(wall);
     for (const [freq, start, length] of notes) {
       const osc = ctx.createOscillator();
