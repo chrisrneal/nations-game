@@ -3,7 +3,7 @@
  * every milestone against the targets.
  *
  * - The greedy bot plays actively: it taps three times a second (the gate with
- *   the least rush banked), looks at its upgrades once a second, buys the best
+ *   the least rush banked, or the security line while people queue there), looks at its upgrades once a second, buys the best
  *   value (income gained per dollar, looking one purchase ahead so that
  *   upgrades which only pay together still get bought), and sells the airport
  *   once the next slot is further away than half the time this airport has run.
@@ -218,11 +218,16 @@ export function unboosted(state: AirportState): AirportState {
   return { ...state, boosts: READY_BOOSTS };
 }
 
-/** Taps for this tick: three a second, each to the gate with the least rush banked. */
-function taps(state: AirportState): { tick: number; type: 'tap'; payload: { gate: number } }[] {
+/**
+ * Taps for this tick: three a second, each to the gate with the least rush
+ * banked, or to the security line when people are queuing there and it has
+ * less rush banked than any gate (RULES 6).
+ */
+function taps(state: AirportState): AirportCommand[] {
   if (state.tick % 4 === 0) return [];
   let gate = 0;
   for (let i = 1; i < state.gates.length; i++) if ((state.gates[i]?.rush ?? 0) < (state.gates[gate]?.rush ?? 0)) gate = i;
+  if (state.line > 0 && state.securityRush <= (state.gates[gate]?.rush ?? 0)) return [{ tick: state.tick, type: 'tapSecurity', payload: {} }];
   return [{ tick: state.tick, type: 'tap', payload: { gate } }];
 }
 

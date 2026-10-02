@@ -7,17 +7,18 @@ import type { AirportState, UpgradeId } from '@airport/contracts';
 import { AirportSession, BOOST_IDS, advanceMany, airportView, createAirport, hashState, stepAirport, upgradeCost } from '@airport/sim';
 
 /**
- * A scripted player that uses every command: taps a gate every other tick, buys
- * the cheapest affordable upgrade every 8 ticks, tries a boost every 96 ticks
- * (some are refused: locked or recharging), sells when the airport is worth a
- * slot. Integer decisions only, so it is identical everywhere.
+ * A scripted player that uses every command: taps a gate every other tick (the
+ * security line every eighth instead), buys the cheapest affordable upgrade
+ * every 8 ticks, tries a boost every 96 ticks (some are refused: locked or
+ * recharging), sells when the airport is worth a slot. Integer decisions only, so it is identical everywhere.
  */
 export function scriptedAirport(seed: number, ticks: number): AirportState {
   // Every third seed starts with $500 (a test fixture), so purchases differ between seeds from the first tick.
   const session = new AirportSession({ ...createAirport({ seed }), cash: seed % 3 === 0 ? 50_000 : 0 });
   for (let i = 0; i < ticks; i++) {
     const s = session.state;
-    if (s.tick % 2 === 0) session.submit({ tick: s.tick, type: 'tap', payload: { gate: (s.tick >> 1) % s.gates.length } });
+    if (s.tick % 8 === 4) session.submit({ tick: s.tick, type: 'tapSecurity', payload: {} });
+    else if (s.tick % 2 === 0) session.submit({ tick: s.tick, type: 'tap', payload: { gate: (s.tick >> 1) % s.gates.length } });
     if (s.tick % 96 === 48) session.submit({ tick: s.tick, type: 'boost', payload: { boost: BOOST_IDS[Math.floor(s.tick / 96) % BOOST_IDS.length] ?? 'rushHour' } });
     if (s.tick % 8 === 0) {
       const view = airportView(s);
@@ -55,7 +56,7 @@ export function benchAirportCatchUp(ticks: number, runs: number, now: () => numb
 /** A busy 8-gate, mid-game airport reached by ordinary commands: the benchmark's starting point. */
 export function busyAirport(): AirportState {
   let s: AirportState = { ...createAirport({ seed: 11 }), cash: 10 ** 12 };
-  const buys: [UpgradeId, number][] = [['gates', 7], ['plane', 5], ['route', 5], ['boarding', 15], ['terminal', 15], ['crew', 10]];
+  const buys: [UpgradeId, number][] = [['gates', 7], ['plane', 5], ['route', 5], ['boarding', 15], ['terminal', 15], ['security', 10], ['crew', 10]];
   for (const [upgrade, times] of buys) {
     for (let i = 0; i < times; i++) s = stepAirport(s, [{ tick: s.tick, type: 'buy', payload: { upgrade } }]).state;
   }
