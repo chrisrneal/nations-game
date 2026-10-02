@@ -213,7 +213,7 @@ export interface BoostView {
   readonly rechargeLength: number;
   /** Not running, recharged and unlocked: a tap uses it. */
   readonly ready: boolean;
-  /** What opens it ("Opens at 3 gates"), or null once open. */
+  /** What opens it, short enough for its button ("Needs 3 gates"), or null once open. */
   readonly locked: string | null;
   /** It fixes the current bottleneck (RULES 8), so the interface can point at it. */
   readonly helps: boolean;

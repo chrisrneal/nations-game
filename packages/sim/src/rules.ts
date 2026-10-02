@@ -1,5 +1,5 @@
 import type { AirportState, BoostId, UpgradeId } from '@airport/contracts';
-import { cityAt, type CityTwist } from './catalog.ts';
+import { ROUTES, cityAt, nameAt, type CityTwist } from './catalog.ts';
 import { grow, isqrt, mulDiv } from './math.ts';
 import { AIRPORT_TUNABLES as T, type AirportTunableId } from './tunables.ts';
 
@@ -202,10 +202,10 @@ export function boostTicks(id: BoostId): { readonly length: number; readonly rec
   }
 }
 
-/** What opens a boost, or null once it is open. */
+/** What opens a boost, short enough for its button, or null once it is open. */
 export function boostLock(id: BoostId, state: Pick<AirportState, 'levels'>): string | null {
-  if (id === 'allHands' && 1 + state.levels.gates < T.allHandsMinGates.value) return `Opens at ${T.allHandsMinGates.value} gates`;
-  if (id === 'surge' && state.levels.route < T.surgeMinRoute.value) return 'Opens with a new route';
+  if (id === 'allHands' && 1 + state.levels.gates < T.allHandsMinGates.value) return `Needs ${T.allHandsMinGates.value} gates`;
+  if (id === 'surge' && state.levels.route < T.surgeMinRoute.value) return `Needs ${nameAt(ROUTES, T.surgeMinRoute.value)}`;
   return null;
 }
 

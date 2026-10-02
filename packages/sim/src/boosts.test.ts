@@ -67,8 +67,8 @@ describe('boosts (RULES 15)', () => {
 
   it('All hands opens at 3 gates and Fare surge with the first new route', () => {
     const s = createAirport({ seed: 1 });
-    expect(use(s, 'allHands').events).toContainEqual(expect.objectContaining({ type: 'rejected', payload: { command: 'boost', reason: `Opens at ${T.allHandsMinGates.value} gates` } }));
-    expect(use(s, 'surge').events).toContainEqual(expect.objectContaining({ type: 'rejected', payload: { command: 'boost', reason: 'Opens with a new route' } }));
+    expect(use(s, 'allHands').events).toContainEqual(expect.objectContaining({ type: 'rejected', payload: { command: 'boost', reason: `Needs ${T.allHandsMinGates.value} gates` } }));
+    expect(use(s, 'surge').events).toContainEqual(expect.objectContaining({ type: 'rejected', payload: { command: 'boost', reason: 'Needs Regional' } }));
     const u = unlocked();
     expect(use(u, 'allHands').state.boosts.allHands.left).toBe(T.allHandsTicks.value - 1);
     expect(use(u, 'surge').state.boosts.surge.left).toBe(T.surgeTicks.value - 1);
@@ -129,8 +129,8 @@ describe('boosts in the view (RULES 15)', () => {
     expect(view.boosts.map((b) => b.id)).toEqual(['rushHour', 'allHands', 'surge']);
     const [rush, hands, surge] = view.boosts;
     expect(rush).toMatchObject({ name: 'Rush hour', effect: '3x passengers for 60 s', ready: true, locked: null, left: 0, length: T.rushHourTicks.value });
-    expect(hands).toMatchObject({ name: 'All hands', effect: 'Every gate rushed for 60 s', ready: false, locked: 'Opens at 3 gates' });
-    expect(surge).toMatchObject({ name: 'Fare surge', effect: '2x fares for 60 s', ready: false, locked: 'Opens with a new route' });
+    expect(hands).toMatchObject({ name: 'All hands', effect: 'Every gate rushed for 60 s', ready: false, locked: 'Needs 3 gates' });
+    expect(surge).toMatchObject({ name: 'Fare surge', effect: '2x fares for 60 s', ready: false, locked: 'Needs Regional' });
   });
 
   it('points at the boost that fixes the bottleneck', () => {
