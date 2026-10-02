@@ -88,6 +88,11 @@ offline or install from there).
   walk out through baggage claim (and passport control and customs) to the exit.
   A crowded lounge means the gates are the bottleneck; an empty one means you
   need more passengers. Orange dots turning back at the door: the lounge is full.
+- **Boosts** (the three buttons above Upgrades): free, a minute long, then they
+  recharge. Rush hour brings 3x passengers (ready from the start), All hands
+  rushes every gate for you (opens at 3 gates), Fare surge doubles fares (opens
+  with the Regional route). The one that fixes your bottleneck glows. They keep
+  running while the app is closed, so use one on your way out.
 - **Upgrades** (the big button at the bottom): the line above it names the
   bottleneck, and the sheet marks the upgrades that fix it.
 - **A full plane** earns a 25% bonus. A plane too big for your passengers leaves

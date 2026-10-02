@@ -592,3 +592,42 @@ keep the name nations-game.
 edits to the wrong game. Everything removed is at commit 67d1d92.
 **Cost.** The Nations git history is the only copy of that work.
 **Reversing it.** `git checkout 67d1d92`.
+
+## P11 - Boosts: three free, timed power-ups on recharge clocks in State
+**Status.** Accepted, 2026-10-02, at the owner's request ("it needs boosts").
+The owner asked for the feature directly, so this session wrote the record
+(P2's architect role, for this change only).
+**Decision.** Three boosts (RULES 15), each a minute long and each fixing one
+bottleneck of RULES 8: Rush hour (3x arrivals, 5-minute recharge, ready at
+once), All hands (every gate rushed as if tapped, 5 minutes, opens at 3
+gates) and Fare surge (2x fares, 15 minutes, opens with the first new route).
+A new command, `boost`, starts one; its clock (`left`, `recharge`, in ticks)
+lives in State, so boosts are hashed, saved, replayed and caught up like
+everything else, and run on while the app is closed (P4). They are free:
+no currency, no ads, no purchase. Selling resets them to ready. Ten new
+tunables with bands. Save schema 2; the migration from 1 replays the old save
+once to prove it against its old hash, then records the new one, and is tested
+with a real version-1 save (packages/harness/fixtures). The headline income
+stays the plain estimate (P6); a boosted estimate shows beside it, in gold,
+while a boost runs.
+**Why.** The owner felt the game was missing them, and they serve three
+pillars: idle play gets something to do at each check-in (pillar 3); the
+boost that fixes the named bottleneck glows, so the trade-offs stay legible
+(pillar 2); and All hands gives a one-handed or idle player a minute of the
+active game (pillar 1). Clocks in State, not the host, keep P4's equality
+and S5's determinism without exceptions.
+**Measured** (`npm run harness -- pacing`, seeds 1-5, bots using every boost as
+soon as it is ready): the greedy first sale moves from 35.5-35.9 to
+33.5-33.9 minutes, inside the 30-60 target, with no retune; the idle player's
+from about 2 h 45 min to 2 h 15 min (the gap in docs/GAPS.md narrows); every
+other RULES 11 target holds. The tapping-over-idle check now samples the
+no-boost greedy path it was tuned on (P9): a tap's worth depends only on the
+levels, and swings by about 1x between one minute's levels and the next, so
+the boosted path's one-minute shift put one sample at 3.21-3.24x on two
+seeds. The boosted path's figures are reported beside it.
+**Cost.** A save migration; a new State field in the hash; a fourth command;
+a row of three buttons in the thumb zone (the gates lose about 50 px of
+height); with All hands on eight gates, departures and their effects roughly
+double, and the phone check reads 56-59 fps (budget 55; 58-60 before).
+**Reversing it.** Remove the command and the State field with a migration
+from 2 to 3; the tunables, RULES 15 and the boost bar are self-contained.

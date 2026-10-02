@@ -1,6 +1,7 @@
 # Progress
 Current state: **the pivot is complete** (decision records P1-P10). The app is
-the idle airport game: all eight slices are merged.
+the idle airport game: all eight slices are merged. Since then: the passenger
+flow, and boosts (P11).
 The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 (docs/PROGRESS.md there).
 
@@ -15,6 +16,33 @@ The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 - [x] 8. Remove the remaining Nations code; README
 
 ## Session log
+
+### 2026-10-02 - Boosts (lanes C, S, H, U, P, D; owner request, P11)
+**What changed.** Three free boosts sit above the Upgrades button (RULES 15).
+Rush hour: 3x passengers for 60 s, recharges in 5 minutes, ready from the
+start. All hands: every gate rushed for 60 s with no taps, 5 minutes, opens at
+3 gates. Fare surge: 2x fares for 60 s, 15 minutes, opens with the Regional
+route. Each button shows Ready, a countdown while it runs (a gold bar draining)
+or while it recharges (a bar refilling), or what opens it; the boost that fixes
+the bottleneck glows. Starting one plays a rising sweep, buzzes, and says what
+it does. While Rush hour runs the passenger flow brings 3x the people; while
+All hands runs every gate glows; while any boost runs, the boosted income shows
+in gold with a ⚡. Boost clocks are in State: hashed, saved, caught up offline
+(a boost used on the way out pays for its minute away). Save schema 2 with a
+tested migration from a real version-1 save. The pacing bots use boosts.
+**Checks.** `npm test` (284 tests: 15 boost rules, boosts in the random-play
+properties and the Node-vs-Chromium determinism run, the v1 save migration)
+and `npm run check` pass. Pacing, seeds 1-5: greedy first sale 33.5-33.9 min
+(was 35.5-35.9), idle about 2 h 15 min (was 2 h 45 min), every target holds.
+Phone check 48/48: the boosts are in the bottom third with 44 px targets and
+no horizontal scroll at 360 px, Rush hour starts with a one-minute countdown,
+All hands lights all 8 gates, Fare surge turns the income gold; 56-59 fps with
+eight gates, two boosts and a thumb tapping on a CPU slowed 4x (budget 55).
+**How to see it.** Open the app and tap Rush hour (bottom left): the lounge
+fills. Buy a third gate for All hands and the Regional route for Fare surge.
+**What is left.** Playtests: whether players save boosts for the right moment
+(docs/GAPS.md); thinning departure effects if a real phone stutters under All
+hands.
 
 ### 2026-10-01 - Passenger flow: people walking through the airport (lanes C, S, U, D; owner request)
 **What changed.** The terminal strip above the gates is replaced by a passenger
