@@ -6,6 +6,7 @@ const base: AwayRecap = {
   awayMs: 3_600_000,
   ranMs: 3_600_000,
   capMinutes: 120,
+  skipped: false,
   earned: 1_240_000,
   flights: 214,
   fullFlights: 180,
@@ -25,13 +26,23 @@ describe('the away recap (RULES 9)', () => {
     ]);
   });
 
+  it('says when the testing time skip ran it', () => {
+    expect(recapLines({ ...base, skipped: true })[0]).toBe('You skipped 1h 0m ahead.');
+  });
+
   it('says when the offline cap cut the night short', () => {
     expect(recapLines({ ...base, awayMs: 5 * 3_600_000, ranMs: 2 * 3_600_000 })[0]).toBe(
       'You were away 5h 0m. The airport ran for 2h 0m, then closed for the night: Night shift keeps it open longer.',
     );
   });
 
-  it('points at the terminal when it turned passengers away', () => {
-    expect(recapLines({ ...base, missed: 1204, charters: 0 })[2]).toBe('1.2K passengers found the terminal full: a Bigger terminal would have caught them.');
+  it('points at Security lanes when a long line turned passengers away', () => {
+    const security = { ...base, missed: 1204, charters: 0, bottleneck: { kind: 'security' as const, text: 'Long lines at security.', fix: ['security' as const] }, fixName: 'Security lanes' };
+    expect(recapLines(security)[2]).toBe('1.2K passengers turned back at the security line: more Security lanes would have let them through.');
+  });
+
+  it('points at the bottleneck when a full lounge held the line and passengers turned back', () => {
+    const gates = { ...base, missed: 1204, charters: 0, bottleneck: { kind: 'boarding' as const, text: 'Passengers are queuing at the gates.', fix: ['boarding' as const, 'gates' as const] }, fixName: 'Faster boarding' };
+    expect(recapLines(gates)[2]).toBe('1.2K passengers turned back at the door. Passengers are queuing at the gates. Try Faster boarding.');
   });
 });

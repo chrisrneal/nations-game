@@ -28,6 +28,7 @@ export function BottomBar(props: { view: AirportView; store: AirportStore; onUpg
     <footer className="bottom">
       <p className="hint" data-testid="bottleneck">
         {view.bottleneck.text}
+        {view.bottleneck.kind === 'security' && <span className="muted"> Tap the line for a lane.</span>}
       </p>
       {goal !== null && goal.cost !== null && (
         <p className="goal" data-testid="goal">

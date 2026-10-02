@@ -36,7 +36,7 @@ function unlockText(upgrade: UpgradeId, level: number, view: AirportView, before
 
 type SheetName = 'upgrades' | 'settings' | 'sell' | null;
 
-/** The airport screen (docs/ROADMAP.md, phone UX): money on top, the passenger flow and the gates in the middle, actions under the thumb. */
+/** The airport screen (docs/ROADMAP.md, phone UX): money on top, the passenger flow (the security line at its heart) and the gates in the middle, actions under the thumb. */
 export function App(props: { host: AirportHost; install?: InstallPrompt; feedback?: Feedback }): ReactElement {
   const { host, install, feedback } = props;
   const store = useMemo(() => new AirportStore(), []);
@@ -87,6 +87,10 @@ export function App(props: { host: AirportHost; install?: InstallPrompt; feedbac
     },
     [host, feedback],
   );
+  const tapSecurity = useCallback(() => {
+    feedback?.cue('tap');
+    void host.submit({ type: 'tapSecurity', payload: {} });
+  }, [host, feedback]);
   const buy = useCallback((upgrade: UpgradeId) => void host.buy(upgrade), [host]);
   const boost = useCallback((id: BoostId) => void host.boost(id), [host]);
   const close = useCallback(() => setSheet(null), []);
@@ -105,7 +109,7 @@ export function App(props: { host: AirportHost; install?: InstallPrompt; feedbac
     <div className="app">
       <TopBar view={view} store={store} onSettings={() => setSheet('settings')} />
       <InstallBanner install={install} onToast={setToast} />
-      <Concourse journey={view.journey} tickMs={view.tickMs} store={store}>
+      <Concourse journey={view.journey} securityLevel={view.upgrades.find((u) => u.id === 'security')?.level ?? 0} tickMs={view.tickMs} store={store} onTapSecurity={tapSecurity}>
         <main className="gates" data-testid="gates">
           {view.gates.map((g) => (
             <GateCard
