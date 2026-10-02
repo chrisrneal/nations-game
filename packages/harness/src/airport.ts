@@ -4,12 +4,13 @@
  * touch Node APIs.
  */
 import type { AirportState, UpgradeId } from '@airport/contracts';
-import { AirportSession, advanceMany, airportView, createAirport, hashState, stepAirport, upgradeCost } from '@airport/sim';
+import { AirportSession, BOOST_IDS, advanceMany, airportView, createAirport, hashState, stepAirport, upgradeCost } from '@airport/sim';
 
 /**
  * A scripted player that uses every command: taps a gate every other tick, buys
- * the cheapest affordable upgrade every 8 ticks, sells when the airport is worth
- * a slot. Integer decisions only, so it is identical everywhere.
+ * the cheapest affordable upgrade every 8 ticks, tries a boost every 96 ticks
+ * (some are refused: locked or recharging), sells when the airport is worth a
+ * slot. Integer decisions only, so it is identical everywhere.
  */
 export function scriptedAirport(seed: number, ticks: number): AirportState {
   // Every third seed starts with $500 (a test fixture), so purchases differ between seeds from the first tick.
@@ -17,6 +18,7 @@ export function scriptedAirport(seed: number, ticks: number): AirportState {
   for (let i = 0; i < ticks; i++) {
     const s = session.state;
     if (s.tick % 2 === 0) session.submit({ tick: s.tick, type: 'tap', payload: { gate: (s.tick >> 1) % s.gates.length } });
+    if (s.tick % 96 === 48) session.submit({ tick: s.tick, type: 'boost', payload: { boost: BOOST_IDS[Math.floor(s.tick / 96) % BOOST_IDS.length] ?? 'rushHour' } });
     if (s.tick % 8 === 0) {
       const view = airportView(s);
       const options = view.upgrades.filter((u) => u.affordable);
