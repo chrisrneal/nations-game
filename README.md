@@ -79,15 +79,20 @@ offline or install from there).
 ## How to play
 
 - **Tap a gate** to rush it for a moment: faster boarding, walk-up passengers
-  even when the terminal is empty, a faster turnaround. Playing actively earns
+  even when the lounge is empty, a faster turnaround. Tap the security maze to
+  open an extra lane. Playing actively earns
   about two and a half times what idling does. You never have to.
-- **The passenger flow** (above the gates): each dot is a passenger. Departing
-  ones come in at the left, queue through check-in and security (plus passport
-  control and preclearance on international routes), sit in the lounge and walk
-  down between the gates to board. Arriving ones step off each landed plane and
-  walk out through baggage claim (and passport control and customs) to the exit.
-  A crowded lounge means the gates are the bottleneck; an empty one means you
-  need more passengers. Orange dots turning back at the door: the lounge is full.
+- **The passenger flow** (the middle of the screen): each dot is a passenger.
+  Departing ones come in at the left, pass check-in and line up in the
+  **security maze**, go through the scanners (and passport control and
+  preclearance on international routes), sit in the lounge and walk down
+  between the gates to board. The line in the maze is real: when it grows,
+  security is falling behind; buy **Security lanes** (each adds speed, and
+  every second level a scanner), or **tap the maze** to open an extra lane for
+  a moment. Arriving ones step off each landed plane and walk out through
+  baggage claim (and passport control and customs) to the exit. A crowded
+  lounge means the gates are the bottleneck; an empty one means you need more
+  passengers. Orange dots turning back at the door: the line is too long to join.
 - **Boosts** (the three buttons above Upgrades): free, a minute long, then they
   recharge. Rush hour brings 3x passengers (ready from the start), All hands
   rushes every gate for you (opens at 3 gates), Fare surge doubles fares (opens
@@ -99,7 +104,9 @@ offline or install from there).
   on its timer without it.
 - **Sell** appears once the airport is worth a slot (about half an hour of
   active play for the first sale worth making).
-- **Settings** (the gear): sound (off at first), vibration, save files, start over.
+- **Settings** (the gear): sound (off at first), vibration, save files, start
+  over, and a testing time skip (+5 min, +1 hour, +8 hours) that runs the
+  airport ahead at once.
 
 ## A few words you will see
 
