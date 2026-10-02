@@ -17,6 +17,10 @@
  * Passenger flow: a new airport shows check-in, security and baggage claim
  * with people walking through them; international routes add passport
  * control and customs; the 60 fps check runs with the people walking.
+ * The security line: a new airport has none; the maze is a big tap target and
+ * a tap opens an extra lane; the busy airport's real line stands in the maze,
+ * its six lanes shown, and the bottleneck names it. The testing time skip runs
+ * an hour at once and recaps it.
  * Boosts: a new airport has Rush hour ready and the other two locked, in the
  * bottom third; a tap starts Rush hour with a countdown; the eight-gate airport
  * runs All hands (every gate glows) and Fare surge (boosted income in gold)
@@ -107,9 +111,10 @@ async function main(): Promise<void> {
     check('a new airport opens with one gate', (await page.locator('.gate:not(.gate-next)').count()) === 1);
     check('the next gate shows as something to aim for', (await page.getByTestId('next-gate').count()) === 1);
     check('cash shows at the top', /\$/.test((await page.getByTestId('cash').textContent()) ?? ''));
-    const departures = (await page.getByTestId('lane-departures').textContent()) ?? '';
+    const departures = (await page.getByTestId('security').textContent()) ?? '';
     const arrivals = (await page.getByTestId('lane-arrivals').textContent()) ?? '';
-    check('the passenger flow shows check-in, security, baggage claim and the exit', /Check-in.*Security/.test(departures) && /Exit.*Baggage/.test(arrivals) && !/Passport/.test(departures), `${departures} | ${arrivals}`);
+    check('the passenger flow shows security, check-in, baggage claim and the exit', /Security.*Check-in/.test(departures) && /Exit.*Baggage/.test(arrivals) && (await page.locator('[data-booth="passport"]').count()) === 0, `${departures} | ${arrivals}`);
+    check('a new airport has no line at security', ((await page.getByTestId('security-line').textContent()) ?? '') === 'No line', (await page.getByTestId('security-line').textContent()) ?? '');
     await page.waitForFunction(() => Number(document.querySelector('[data-testid="flow-dots"]')?.getAttribute('data-dots') ?? 0) > 0, undefined, { timeout: 5000 }).catch(() => undefined);
     const walking = Number(await page.getByTestId('flow-dots').getAttribute('data-dots'));
     check('people walk through the airport', walking > 0, `${walking} walking`);
@@ -145,6 +150,13 @@ async function main(): Promise<void> {
     }
     check('flights pay as the planes leave', (await cashCents(page)) > cashBefore, `${cashBefore} -> ${await cashCents(page)} cents`);
 
+    // The security line (RULES 3, 6): a big tap target in the middle of the screen; a tap opens an extra lane.
+    const secBox = await page.getByTestId('security').boundingBox();
+    check('the security maze is a big tap target', secBox !== null && secBox.height >= 60 && secBox.width >= 300, `${Math.round(secBox?.width ?? 0)}x${Math.round(secBox?.height ?? 0)}`);
+    await page.getByTestId('security').tap();
+    await page.waitForTimeout(350);
+    check('a tap on security opens an extra lane', ((await page.getByTestId('security').getAttribute('class')) ?? '').includes('rushed') && (await page.locator('.sec-lane-extra').isVisible()));
+
     // Boosts (RULES 15): Rush hour ready from the start, the others locked; one tap starts it.
     const boostClass = async (id: string): Promise<string> => (await page.getByTestId(`boost-${id}`).getAttribute('class')) ?? '';
     check('Rush hour is ready, All hands and Fare surge are locked', (await boostClass('rushHour')).includes('boost-ready') && (await boostClass('allHands')).includes('boost-locked') && (await boostClass('surge')).includes('boost-locked'));
@@ -178,7 +190,12 @@ async function main(): Promise<void> {
     await page.getByTestId('import-file').setInputFiles(busy.path);
     await page.getByTestId('gate-7').waitFor({ timeout: 5000 });
     check('import resumes the exported airport (8 gates)', (await page.locator('.gate:not(.gate-next)').count()) === 8);
-    check('an international route adds passport control and customs', /Passport/.test((await page.getByTestId('lane-departures').textContent()) ?? '') && /Customs/.test((await page.getByTestId('lane-arrivals').textContent()) ?? ''));
+    check('an international route adds passport control and customs', (await page.locator('.lounge [data-booth="passport"]').count()) === 1 && /Customs/.test((await page.getByTestId('lane-arrivals').textContent()) ?? ''));
+    await page.waitForFunction(() => Number(document.querySelector('[data-testid="flow-dots"]')?.getAttribute('data-queued') ?? 0) > 5, undefined, { timeout: 5000 }).catch(() => undefined);
+    const lineText = (await page.getByTestId('security-line').textContent()) ?? '';
+    const queued = Number(await page.getByTestId('flow-dots').getAttribute('data-queued'));
+    check('the busy airport queues at security: the real line stands in the maze', /in line/.test(lineText) && queued > 5 && /security/.test(((await page.getByTestId('bottleneck').textContent()) ?? '').toLowerCase()), `${lineText}, ${queued} dots in the maze`);
+    check('Security lanes show as scanner lanes', (await page.locator('.sec-lane:not(.sec-lane-extra)').count()) === 6);
     await noHorizontalScroll(page, 'eight gates');
     await touchTargets(page, 'eight gates');
     await page.getByTestId('boost-allHands').tap();
@@ -267,6 +284,26 @@ async function main(): Promise<void> {
     await back.getByTestId('collect').tap();
     await back.getByTestId('recap').waitFor({ state: 'detached', timeout: 2000 });
     check('one tap collects and closes the recap', (await back.getByTestId('recap').count()) === 0);
+
+    // The testing time skip: Settings, +1 hour, and the recap sums up the hour.
+    const tickAt = async (): Promise<number> => Number(await back.evaluate(`new Promise((resolve) => {
+      const req = indexedDB.open('airport', 1);
+      req.onsuccess = () => {
+        const get = req.result.transaction('slots', 'readonly').objectStore('slots').get('autosave');
+        get.onsuccess = () => resolve(get.result.tick);
+      };
+    })`));
+    const beforeSkip = await tickAt();
+    await back.getByTestId('settings').tap();
+    await touchTargets(back, 'settings with the time skip');
+    await noHorizontalScroll(back, 'settings with the time skip');
+    await back.getByTestId('skip-60').tap();
+    await back.getByTestId('recap').waitFor({ timeout: 5000 });
+    const skipLines = await back.getByTestId('recap').locator('li').allTextContents();
+    await back.waitForTimeout(300);
+    const afterSkip = await tickAt();
+    check('the time skip runs an hour at once and recaps it', afterSkip - beforeSkip >= 14_400 && /skipped 1h 0m/.test(skipLines[0] ?? ''), `tick ${beforeSkip} -> ${afterSkip}; ${skipLines.join(' | ')}`);
+    await back.getByTestId('collect').tap();
 
     // Selling: an airport that has earned 9 slot units ($5.4M) is worth 3 slots.
     const worth = busyFile(profile, 9 * AIRPORT_TUNABLES.slotUnitCents.value);

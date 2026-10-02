@@ -13,6 +13,8 @@ export interface AwayRecap {
   /** How much of it the airport ran: less than `awayMs` when the offline cap cut it short. */
   readonly ranMs: number;
   readonly capMinutes: number;
+  /** The testing time skip ran it, not an absence. */
+  readonly skipped: boolean;
   readonly earned: number;
   readonly flights: number;
   readonly fullFlights: number;
@@ -49,7 +51,7 @@ function diff(after: Stats, before: Stats): Stats {
 }
 
 /** The recap for a catch-up from `before` to `after`. Lifetime stats, so a sale in between still counts. */
-export function awayRecap(before: AirportState, after: AirportState, awayMs: number, ranMs: number): AwayRecap {
+export function awayRecap(before: AirportState, after: AirportState, awayMs: number, ranMs: number, skipped = false): AwayRecap {
   const d = diff(after.life, before.life);
   const { bottleneck } = estimate(after);
   const fix = bottleneck.fix[0];
@@ -57,6 +59,7 @@ export function awayRecap(before: AirportState, after: AirportState, awayMs: num
     awayMs,
     ranMs,
     capMinutes: offlineMinutesAt(after.levels.night),
+    skipped,
     earned: d.earned,
     flights: d.flights,
     fullFlights: d.fullFlights,
@@ -154,6 +157,23 @@ export class AirportEngine {
     if (quiet > 0) session.advance(quiet, { events: false });
     const events = session.advance(due.ticks - quiet);
     return this.emit(events);
+  }
+
+  /**
+   * A testing cheat: run the airport `minutes` ahead at once, exactly as a
+   * catch-up after an absence runs it (P4), but with no offline cap, and sum
+   * it up in the away recap. The wall clock does not move, so nothing is owed
+   * for the skipped time afterwards.
+   */
+  skip(minutes: number): AirportUpdate {
+    const session = this.requireSession();
+    const tickMs = AIRPORT_TUNABLES.tickMs.value;
+    const ticks = Math.max(0, Math.floor((minutes * 60_000) / tickMs));
+    const before = session.state;
+    this.pump();
+    session.advance(ticks, { events: false });
+    this.recap = awayRecap(before, session.state, ticks * tickMs, ticks * tickMs, true);
+    return this.emit([]);
   }
 
   /** The player has read the away recap. */

@@ -132,4 +132,16 @@ describe('AirportEngine (the host clock, S4)', () => {
     expect(update.recap?.ranMs).toBe(2 * 3_600_000);
     expect(update.view.tick).toBe(4 + 2 * 14_400);
   });
+
+  it('the testing skip runs the airport ahead exactly as catching up would, with no cap, and owes nothing after', () => {
+    const { clock, engine: e, seen } = engine();
+    e.newGame(8);
+    const skipped = e.skip(5 * 60);
+    expect(skipped.view.tick).toBe(5 * 3600 * 4);
+    expect(skipped.fingerprint).toBe(hashState(advanceMany(createAirport({ seed: 8 }), 5 * 3600 * 4)));
+    expect(skipped.recap?.ranMs).toBe(5 * 3600 * 1000);
+    expect(skipped.recap?.earned).toBeGreaterThan(0);
+    clock.advance(250);
+    expect(seen.at(-1)?.view.tick).toBe(5 * 3600 * 4 + 1);
+  });
 });

@@ -4,7 +4,14 @@ import type { AirportHost, Feedback } from '../platform/index.ts';
 import { formatCash, short } from './format.ts';
 import { Sheet } from './Sheet.tsx';
 
-/** Saves to a file and back, starting over, and the airport's lifetime numbers. */
+/** The testing cheat's choices: run the airport this far ahead at once (an away recap sums it up). */
+const SKIPS: readonly (readonly [string, number])[] = [
+  ['+5 min', 5],
+  ['+1 hour', 60],
+  ['+8 hours', 480],
+];
+
+/** Saves to a file and back, starting over, the airport's lifetime numbers, and the testing time skip. */
 export function SettingsSheet(props: { view: AirportView; host: AirportHost; feedback?: Feedback | undefined; onClose: () => void; onToast: (text: string) => void }): ReactElement {
   const { view, host, feedback, onClose, onToast } = props;
   const file = useRef<HTMLInputElement>(null);
@@ -75,6 +82,25 @@ export function SettingsSheet(props: { view: AirportView; host: AirportHost; fee
           )}
         </div>
       )}
+      <div className="skip" data-testid="skip">
+        <p className="skip-title">Testing: skip ahead</p>
+        <div className="skip-row">
+          {SKIPS.map(([label, minutes]) => (
+            <button
+              key={label}
+              type="button"
+              className="btn"
+              data-testid={`skip-${minutes}`}
+              onClick={() => {
+                void host.skip(minutes);
+                onClose();
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="sheet-actions">
         <button type="button" className="btn" onClick={() => void exportSave()} data-testid="export">
           Save to a file
