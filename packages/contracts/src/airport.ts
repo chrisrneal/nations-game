@@ -13,6 +13,19 @@ export type UpgradeId = 'gates' | 'plane' | 'boarding' | 'terminal' | 'route' | 
 
 export type Levels = Readonly<Record<UpgradeId, number>>;
 
+/** The three boosts (RULES 15), in the order the boost bar shows them. */
+export type BoostId = 'rushHour' | 'allHands' | 'surge';
+
+/** One boost's clock, in ticks. Both 0: ready (or locked, if its unlock is not reached). */
+export interface BoostState {
+  /** Ticks of effect left; > 0 while the boost is running. */
+  readonly left: number;
+  /** Ticks until it can be used again, counted from when it was used. */
+  readonly recharge: number;
+}
+
+export type Boosts = Readonly<Record<BoostId, BoostState>>;
+
 /**
  * One gate. `turn > 0` means the gate is in turnaround and has no plane;
  * otherwise a plane is boarding. A plane keeps the seats it arrived with.
@@ -60,6 +73,8 @@ export interface AirportState {
   /** How many airports have been sold: the city is CITIES[city mod count]. */
   readonly city: number;
   readonly slots: number;
+  /** Boost clocks (RULES 15); reset to ready when a new airport opens. */
+  readonly boosts: Boosts;
   /** This airport since it opened. */
   readonly run: Stats;
   /** Every airport, ever. */
@@ -72,11 +87,15 @@ export interface TapPayload {
 export interface BuyPayload {
   readonly upgrade: UpgradeId;
 }
+export interface BoostPayload {
+  readonly boost: BoostId;
+}
 
 /** Intent from the player (S2, P5). `tick` is the tick it applies to. */
 export type AirportCommand =
   | { readonly tick: number; readonly type: 'tap'; readonly payload: TapPayload }
   | { readonly tick: number; readonly type: 'buy'; readonly payload: BuyPayload }
+  | { readonly tick: number; readonly type: 'boost'; readonly payload: BoostPayload }
   | { readonly tick: number; readonly type: 'sell'; readonly payload: Record<string, never> };
 
 export type AirportCommandType = AirportCommand['type'];
@@ -85,12 +104,14 @@ export type AirportCommandType = AirportCommand['type'];
 export type AirportIntent =
   | { readonly type: 'tap'; readonly payload: TapPayload }
   | { readonly type: 'buy'; readonly payload: BuyPayload }
+  | { readonly type: 'boost'; readonly payload: BoostPayload }
   | { readonly type: 'sell'; readonly payload: Record<string, never> };
 
 export interface AirportEventPayloads {
   readonly departed: { gate: number; plane: number; pax: number; seats: number; cents: number; full: boolean; charter: boolean };
   readonly arrived: { gate: number; plane: number; seats: number; charter: boolean };
   readonly bought: { upgrade: UpgradeId; level: number; cents: number };
+  readonly boosted: { boost: BoostId; ticks: number };
   readonly sold: { slots: number; city: number };
   readonly rejected: { command: AirportCommandType; reason: string };
 }
@@ -129,6 +150,8 @@ export interface GateView extends GateState {
   readonly model: string;
   /** Boarding rate at this gate now, milli-passengers per tick (rush included). */
   readonly rate: number;
+  /** Rushed now, by taps or by the All hands boost. */
+  readonly rushed: boolean;
 }
 
 export type BottleneckKind = 'passengers' | 'boarding' | 'turnaround' | 'timer';
@@ -177,13 +200,34 @@ export interface JourneyView {
   readonly arrivals: readonly CheckpointView[];
 }
 
+export interface BoostView {
+  readonly id: BoostId;
+  readonly name: string;
+  /** What it does, with its numbers, in one short line ("3x passengers for 60 s"). */
+  readonly effect: string;
+  /** Ticks of effect left (0: not running) and the full length. */
+  readonly left: number;
+  readonly length: number;
+  /** Ticks until it can be used again, and the full recharge. */
+  readonly recharge: number;
+  readonly rechargeLength: number;
+  /** Not running, recharged and unlocked: a tap uses it. */
+  readonly ready: boolean;
+  /** What opens it ("Opens at 3 gates"), or null once open. */
+  readonly locked: string | null;
+  /** It fixes the current bottleneck (RULES 8), so the interface can point at it. */
+  readonly helps: boolean;
+}
+
 /** What the interface reads (S6, P5): the airport plus derived numbers and names. */
 export interface AirportView {
   readonly tick: number;
   readonly tickMs: number;
   readonly cash: number;
-  /** Steady-state estimate, cents per second (P6). */
+  /** Steady-state estimate, cents per second (P6). Boosts aside. */
   readonly incomePerSec: number;
+  /** The same estimate with the running boosts applied; equal to incomePerSec when none runs. */
+  readonly boostedIncomePerSec: number;
   readonly fare: number;
   readonly route: string;
   readonly planeModel: string;
@@ -192,6 +236,7 @@ export interface AirportView {
   readonly gates: readonly GateView[];
   readonly upgrades: readonly UpgradeView[];
   readonly bottleneck: Bottleneck;
+  readonly boosts: readonly BoostView[];
   readonly city: CityView;
   readonly slots: SlotsView;
   readonly offlineCapMinutes: number;

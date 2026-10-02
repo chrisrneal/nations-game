@@ -11,11 +11,14 @@
  * `airportView(state)`.
  */
 export { AIRPORT_TUNABLES, type AirportTunableId } from './tunables.ts';
-export { CHECKPOINTS, CITIES, PLANE_MODELS, ROUTES, UPGRADE_IDS, UPGRADE_TEXT, cityAt, journeyAt } from './catalog.ts';
+export { BOOST_IDS, BOOST_NAMES, CHECKPOINTS, CITIES, PLANE_MODELS, ROUTES, UPGRADE_IDS, UPGRADE_TEXT, cityAt, journeyAt } from './catalog.ts';
 export { grow, isqrt, mulDiv } from './math.ts';
 export { canonicalJson, hashState, hashString } from './hash.ts';
 export { mix32, nextUint32, randomInt, seedRng } from './rng.ts';
 export {
+  boostLock,
+  boostProblem,
+  boostTicks,
   derive,
   earnedForSlots,
   lockReason,
@@ -27,9 +30,9 @@ export {
   upgradeCost,
   type Derived,
 } from './rules.ts';
-export { AIRPORT_SCHEMA_VERSION, EMPTY_STATS, createAirport, type CreateAirportOptions } from './state.ts';
+export { AIRPORT_SCHEMA_VERSION, EMPTY_STATS, READY_BOOSTS, createAirport, type CreateAirportOptions } from './state.ts';
 export { airportCommandProblem } from './commands.ts';
 export { advanceMany, step, step as stepAirport, type AirportStepResult } from './step.ts';
-export { airportView, estimate, type Estimate } from './view.ts';
+export { NO_BOOST, airportView, estimate, runningBoosts, type BoostEffect, type Estimate } from './view.ts';
 export { AIRPORT_MIGRATIONS, createAirportSave, loadAirportSave, migrateAirportSave, replay, type LoadedAirport } from './save.ts';
 export { AirportSession, type AirportSubmitResult } from './session.ts';

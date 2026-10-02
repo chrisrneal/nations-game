@@ -5,7 +5,7 @@ import { DOTS_MAX, FlowModel, choosePerDot, visible, type FlowGeometry } from '.
 const STATS: Stats = { earned: 0, flights: 0, fullFlights: 0, pax: 0, missed: 0, charters: 0, taps: 0 };
 
 function gate(index: number, over: Partial<GateView> = {}): GateView {
-  return { index, plane: index + 1, seats: 10, boarded: 0, timer: 60, timerMax: 60, turn: 0, turnMax: 0, rush: 0, charter: false, model: 'Puddle Jumper', rate: 500, ...over };
+  return { index, plane: index + 1, seats: 10, boarded: 0, timer: 60, timerMax: 60, turn: 0, turnMax: 0, rush: 0, charter: false, model: 'Puddle Jumper', rate: 500, rushed: false, ...over };
 }
 
 /** The parts of a View the flow reads; the rest is never touched. */

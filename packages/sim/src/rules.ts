@@ -1,4 +1,4 @@
-import type { AirportState, UpgradeId } from '@airport/contracts';
+import type { AirportState, BoostId, UpgradeId } from '@airport/contracts';
 import { cityAt, type CityTwist } from './catalog.ts';
 import { grow, isqrt, mulDiv } from './math.ts';
 import { AIRPORT_TUNABLES as T, type AirportTunableId } from './tunables.ts';
@@ -187,5 +187,47 @@ export function twistText(twist: CityTwist): string {
       const secs = (ticks: number): number => Math.round((ticks * T.tickMs.value) / 1000);
       return `Holiday waves: ${secs(T.waveTicks.value)} s of ${T.waveArrivalBp.value / BP}x arrivals every ${Math.round(secs(T.wavePeriodTicks.value) / 60)} minutes, quieter between.`;
     }
+  }
+}
+
+/** A boost's length and recharge in ticks (RULES 15). */
+export function boostTicks(id: BoostId): { readonly length: number; readonly recharge: number } {
+  switch (id) {
+    case 'rushHour':
+      return { length: T.rushHourTicks.value, recharge: T.rushHourRechargeTicks.value };
+    case 'allHands':
+      return { length: T.allHandsTicks.value, recharge: T.allHandsRechargeTicks.value };
+    case 'surge':
+      return { length: T.surgeTicks.value, recharge: T.surgeRechargeTicks.value };
+  }
+}
+
+/** What opens a boost, or null once it is open. */
+export function boostLock(id: BoostId, state: Pick<AirportState, 'levels'>): string | null {
+  if (id === 'allHands' && 1 + state.levels.gates < T.allHandsMinGates.value) return `Opens at ${T.allHandsMinGates.value} gates`;
+  if (id === 'surge' && state.levels.route < T.surgeMinRoute.value) return 'Opens with a new route';
+  return null;
+}
+
+/** Why a boost cannot be used now, or null if a tap would use it. */
+export function boostProblem(id: BoostId, state: Pick<AirportState, 'levels' | 'boosts'>): string | null {
+  const locked = boostLock(id, state);
+  if (locked !== null) return locked;
+  const clock = state.boosts[id];
+  if (clock.left > 0) return 'Already running';
+  if (clock.recharge > 0) return 'Recharging';
+  return null;
+}
+
+/** A boost in one short line, numbers from the tunables. */
+export function boostEffect(id: BoostId): string {
+  const secs = Math.round((boostTicks(id).length * T.tickMs.value) / 1000);
+  switch (id) {
+    case 'rushHour':
+      return `${T.rushHourArrivalBp.value / BP}x passengers for ${secs} s`;
+    case 'allHands':
+      return `Every gate rushed for ${secs} s`;
+    case 'surge':
+      return `${T.surgeFareBp.value / BP}x fares for ${secs} s`;
   }
 }

@@ -1,14 +1,17 @@
-import type { AirportState, GateState, Levels, RngState, Stats } from '@airport/contracts';
+import type { AirportState, Boosts, GateState, Levels, RngState, Stats } from '@airport/contracts';
 import { seedRng } from './rng.ts';
 import { derive, type Derived } from './rules.ts';
 import { AIRPORT_TUNABLES as T } from './tunables.ts';
 
 /** Current airport save schema. Bump it with a migration in save.ts. */
-export const AIRPORT_SCHEMA_VERSION = 1;
+export const AIRPORT_SCHEMA_VERSION = 2;
 
 export const EMPTY_STATS: Stats = { earned: 0, flights: 0, fullFlights: 0, pax: 0, missed: 0, charters: 0, taps: 0 };
 
 export const ZERO_LEVELS: Levels = { gates: 0, plane: 0, boarding: 0, terminal: 0, route: 0, crew: 0, night: 0 };
+
+/** Every boost recharged and not running (RULES 15). */
+export const READY_BOOSTS: Boosts = { rushHour: { left: 0, recharge: 0 }, allHands: { left: 0, recharge: 0 }, surge: { left: 0, recharge: 0 } };
 
 /** A plane arriving at a gate (RULES 4). The charter roll is the caller's. */
 export function arrivingGate(plane: number, d: Derived, charter: boolean, rush = 0): GateState {
@@ -57,6 +60,7 @@ export function openAirport(keep: {
     nextPlane: keep.nextPlane + 1,
     city: keep.city,
     slots: keep.slots,
+    boosts: READY_BOOSTS,
     run: EMPTY_STATS,
     life: keep.life,
   };

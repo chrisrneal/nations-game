@@ -1,4 +1,4 @@
-import type { CheckpointView, JourneyView, UpgradeId } from '@airport/contracts';
+import type { BoostId, CheckpointView, JourneyView, UpgradeId } from '@airport/contracts';
 
 /**
  * Design data: names and words, no balance numbers (those are tunables).
@@ -16,6 +16,15 @@ export const UPGRADE_TEXT: Readonly<Record<UpgradeId, { name: string; catch: str
   route: { name: 'Better routes', catch: 'Higher fares, but each route needs planes at least as big as its level.' },
   crew: { name: 'Ground crew', catch: 'Shorter turnaround. Worth most with small planes that fill fast.' },
   night: { name: 'Night shift', catch: 'Keeps the airport running longer while you are away. Earns nothing while you play.' },
+};
+
+/** The boost bar's order (RULES 15). What each does, with its numbers: rules.ts `boostEffect`. */
+export const BOOST_IDS: readonly BoostId[] = ['rushHour', 'allHands', 'surge'];
+
+export const BOOST_NAMES: Readonly<Record<BoostId, string>> = {
+  rushHour: 'Rush hour',
+  allHands: 'All hands',
+  surge: 'Fare surge',
 };
 
 /** Plane models by plane level. */
