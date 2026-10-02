@@ -1,12 +1,15 @@
 import { useLayoutEffect, useRef, type ReactElement, type ReactNode } from 'react';
 import type { CheckpointId, JourneyView } from '@airport/contracts';
-import { FlowModel, visible, type FlowGeometry, type Span, type Tint } from './flow.ts';
+import { FlowModel, seatSpots, visible, type FlowGeometry, type Load, type Span, type Tint } from './flow.ts';
 import { formatDuration, formatRate, short } from './format.ts';
 import { ripple } from './pop.ts';
 import type { AirportStore } from './store.ts';
 
 const TINT: Readonly<Record<Tint, string>> = { out: '#8fd0ff', in: '#d7b4ff', charter: '#ffcc5c', away: '#ff9d6c' };
 const CROWD = '#8fd0ff';
+/** A plane's seats: empty, taken, and all taken (it leaves full). */
+const SEAT_EMPTY = 'rgb(255 255 255 / 14%)';
+const SEAT_FULL = '#56d3a0';
 /** Scanner lanes drawn for a Security lanes level: one more every other level, up to six. */
 export function lanesFor(level: number): number {
   return Math.min(6, 1 + Math.floor(level / 2));
@@ -17,8 +20,9 @@ export function lanesFor(level: number): number {
  * arrivals walk out along the top lane; departures come in at the door, pass
  * check-in and snake through the security maze, whose line is the real one,
  * into the scanners, then past any international checkpoints into the lounge
- * and down to the gates. Tapping the maze opens an extra lane (RULES 6). The
- * checkpoints and lounge are DOM; the people are dots on one canvas over the
+ * and down the pier to the gates, where they fill the parked planes' seats.
+ * Tapping the maze opens an extra lane (RULES 6). The checkpoints, lounge and
+ * stands are DOM; the people and the seats are dots on one canvas over the
  * whole floor, drawn each animation frame from a FlowModel (P7: nothing here
  * re-renders React per tick).
  */
@@ -125,6 +129,7 @@ export function Concourse(props: { journey: JourneyView; securityLevel: number; 
       if (g === null || still?.matches === true) return;
       flow.advance(Math.min(dt, 100), now, g);
       drawCrowd(ctx, g, flow.lounge);
+      drawSeats(ctx, g, flow.loads);
       drawDots(ctx, flow, now);
       if (now - counted > 500) {
         counted = now;
@@ -244,8 +249,9 @@ function measureFloor(root: HTMLElement, box: DOMRect, gates: HTMLElement | null
   const top = view === undefined ? 0 : view.top - box.top + 4;
   const bottom = view === undefined ? box.height : view.bottom - box.top;
   const cards = gates === null ? [] : [...gates.querySelectorAll('.gate:not(.gate-next)')];
-  // The grid's padding is even, so the gap between its two columns is its middle.
+  // The grid is symmetric, so the pier, its middle column, is its middle.
   const pier = view === undefined ? box.width / 2 : (view.left + view.right) / 2 - box.left;
+  const inView = (y: number): number => Math.min(bottom + 8, Math.max(top, y));
   // Three rows, centred in thirds of the maze, between the ropes.
   const rows = [1, 3, 5].map((k) => m.top - box.top + (m.height * k) / 6);
   const lastRow = rows[rows.length - 1] as number;
@@ -268,10 +274,36 @@ function measureFloor(root: HTMLElement, box: DOMRect, gates: HTMLElement | null
     pier: { x: pier, top: l.bottom - box.top + 6 },
     gates: cards.map((card) => {
       const r = card.getBoundingClientRect();
-      const x = r.right - box.left < pier ? r.right - box.left - 10 : r.left - box.left + 10;
-      return { x, y: Math.min(bottom + 8, Math.max(top, r.top - box.top + 34)) };
+      const s = seatBox(card, r, box);
+      const seats = seatSpots(s);
+      return {
+        x: (r.left + r.right) / 2 - box.left,
+        // In the gap above the stand: the walkway along its row.
+        door: inView(r.top - box.top - 3.5),
+        y: inView(s.top - 6),
+        // A stand scrolled half out of view shows only the seats still in it.
+        seats: seats.filter((p) => p.y > top && p.y < bottom - 2),
+      };
     }),
   };
+}
+
+/**
+ * Where a stand's seats are, relative to the floor. Read from the layout
+ * (offsets, which ignore transforms), not the screen: a plane that has just
+ * arrived is still sliding into its stand when the floor is measured.
+ */
+function seatBox(card: Element, r: DOMRect, box: DOMRect): { left: number; top: number; right: number; bottom: number } {
+  const seats = card.querySelector<HTMLElement>('.gate-seats');
+  let left = 0;
+  let top = 0;
+  for (let el: HTMLElement | null = seats; el !== null && el !== card; el = el.offsetParent as HTMLElement | null) {
+    left += el.offsetLeft;
+    top += el.offsetTop;
+  }
+  const x = r.left - box.left + (card as HTMLElement).clientLeft + left;
+  const y = r.top - box.top + (card as HTMLElement).clientTop + top;
+  return { left: x, top: y, right: x + (seats?.offsetWidth ?? 0), bottom: y + (seats?.offsetHeight ?? 0) };
 }
 
 /** The lounge crowd: one dot per seat in use, filling from the left in three rows (the real waiting count). */
@@ -293,6 +325,35 @@ function drawCrowd(ctx: CanvasRenderingContext2D, g: FlowGeometry, share: number
     ctx.arc(x, y, 1.8, 0, Math.PI * 2);
   }
   ctx.fill();
+}
+
+/**
+ * The parked planes' seats: one square a seat while they fit (a bigger plane
+ * looks bigger), the stand's whole cabin past that; every seat drawn faint,
+ * the taken ones (the real load, front rows first) in colour, gold on a
+ * charter, green once full. One path per colour per frame; squares are
+ * cheaper than circles.
+ */
+function drawSeats(ctx: CanvasRenderingContext2D, g: FlowGeometry, loads: readonly Load[]): void {
+  const paths: Record<string, Path2D> = {};
+  const add = (colour: string, x: number, y: number): void => {
+    (paths[colour] ??= new Path2D()).rect(x - 1.5, y - 1.5, 3, 3);
+  };
+  g.gates.forEach((spot, i) => {
+    const load = loads[i];
+    if (load === undefined || load.share === null) return;
+    const n = Math.min(spot.seats.length, load.seats);
+    const taken = load.share > 0 ? Math.max(1, Math.round(load.share * n)) : 0;
+    const colour = load.share >= 1 ? SEAT_FULL : load.charter ? TINT.charter : CROWD;
+    for (let k = 0; k < n; k++) {
+      const p = spot.seats[k] as { x: number; y: number };
+      add(k < taken ? colour : SEAT_EMPTY, p.x, p.y);
+    }
+  });
+  for (const [colour, path] of Object.entries(paths)) {
+    ctx.fillStyle = colour;
+    ctx.fill(path);
+  }
 }
 
 const ORDER: readonly Tint[] = ['out', 'in', 'charter', 'away'];

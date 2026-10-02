@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { AirportView, BoostId, UpgradeId } from '@airport/contracts';
 import type { AirportHost, Feedback, InstallPrompt } from './platform/index.ts';
 import { BottomBar } from './ui/BottomBar.tsx';
-import { GateCard, NextGateCard } from './ui/GateCard.tsx';
+import { GateCard, NextGateCard, Pier } from './ui/GateCard.tsx';
 import { InstallBanner } from './ui/Install.tsx';
 import { Recap } from './ui/Recap.tsx';
 import { CityIntro } from './ui/CityIntro.tsx';
@@ -110,7 +110,7 @@ export function App(props: { host: AirportHost; install?: InstallPrompt; feedbac
       <TopBar view={view} store={store} onSettings={() => setSheet('settings')} />
       <InstallBanner install={install} onToast={setToast} />
       <Concourse journey={view.journey} securityLevel={view.upgrades.find((u) => u.id === 'security')?.level ?? 0} tickMs={view.tickMs} store={store} onTapSecurity={tapSecurity}>
-        <main className="gates" data-testid="gates">
+        <Pier model={view.planeModel}>
           {view.gates.map((g) => (
             <GateCard
               key={g.index}
@@ -128,7 +128,7 @@ export function App(props: { host: AirportHost; install?: InstallPrompt; feedbac
           {nextGate !== undefined && nextGate.cost !== null && (
             <NextGateCard number={view.gates.length + 1} cost={nextGate.cost} affordable={nextGate.affordable} onOpen={() => setSheet('upgrades')} />
           )}
-        </main>
+        </Pier>
       </Concourse>
       <BottomBar view={view} store={store} onUpgrades={() => setSheet('upgrades')} onSell={() => setSheet('sell')} onBoost={boost} />
       {sheet === 'upgrades' && <UpgradeSheet view={view} store={store} onBuy={buy} onSell={() => setSheet('sell')} onClose={close} />}

@@ -150,18 +150,6 @@ p {
   will-change: transform;
 }
 
-.bar-turn > i {
-  background: linear-gradient(90deg, #3a5788, var(--sky));
-}
-
-.bar-terminal {
-  height: 6px;
-}
-
-.bar-terminal > i {
-  background: linear-gradient(90deg, var(--sky), #b3dbff);
-}
-
 /* ---- the floor: the passenger flow over the gates (RULES 14) ---- */
 .floor {
   position: relative;
@@ -435,16 +423,57 @@ p {
   font-size: 0.64rem;
 }
 
-/* ---- gates ---- */
+/* ---- gates: a panel of stands like the scanners, two each side of the pier people walk down ---- */
+.pier {
+  flex: 0 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 0 0.75rem 0.5rem;
+  padding: 4px 6px 6px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.pier-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.pier-title {
+  font-weight: 700;
+}
+
+.pier-model {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+}
+
+.pier-tag {
+  margin-left: auto;
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* The middle column is the pier; the gaps above each row are the walkways to the stands' doors. */
 .gates {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr)) 6px repeat(2, minmax(0, 1fr));
   grid-auto-rows: min-content;
-  gap: 0.5rem;
-  padding: 0 0.75rem 0.5rem;
+  column-gap: 5px;
+  row-gap: 7px;
+  padding-top: 7px;
   align-content: start;
 }
 
@@ -452,13 +481,13 @@ p {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  min-height: 108px;
-  padding: 0.55rem 0.6rem;
-  text-align: left;
-  border-radius: 14px;
+  align-items: center;
+  gap: 2px;
+  min-height: 88px;
+  padding: 3px 4px;
+  border-radius: 10px;
   border: 1px solid var(--line);
-  background: var(--panel);
+  background: var(--panel-2);
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
@@ -466,11 +495,7 @@ p {
 }
 
 .gate:active {
-  transform: scale(0.97);
-}
-
-.gate.charter {
-  border-color: var(--gold);
+  transform: scale(0.96);
 }
 
 .gate.rushing {
@@ -478,17 +503,14 @@ p {
   box-shadow: 0 0 0 1px var(--accent) inset;
 }
 
-.gate.rushing .bar > i {
-  background: linear-gradient(90deg, #8ff0c6, #e2fff1);
-}
-
-.gate-head,
-.gate-foot {
+.gate-head {
   display: flex;
-  justify-content: space-between;
+  align-self: stretch;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.75rem;
+  gap: 3px;
+  font-size: 0.66rem;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
 }
 
 .gate-no {
@@ -496,62 +518,87 @@ p {
   color: var(--muted);
 }
 
+.gate-head .badge {
+  padding: 0 0.25rem;
+  font-size: 0.58rem;
+}
+
+/* Seconds to departure: the timer, as text. */
+.gate-time {
+  margin-left: auto;
+  font-weight: 700;
+  color: var(--warn);
+}
+
+/* The parked plane from above, nose up to the pier: wings behind the fuselage, where the canvas seats its people. */
 .gate-plane {
+  position: relative;
+  flex: 1;
   display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  min-width: 0;
-  animation: taxi-in 420ms ease-out;
+  width: 44px;
+  min-height: 52px;
+  animation: park 420ms ease-out;
 }
 
-.plane-icon {
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  color: var(--sky);
+.gate-plane::before {
+  content: '';
+  position: absolute;
+  left: -11px;
+  right: -11px;
+  top: 42%;
+  height: 9px;
+  border-radius: 4px;
+  background: #24406c;
 }
 
-.plane-icon.away {
-  opacity: 0.35;
+.gate-body {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  border: 1px solid #3b5a8e;
+  border-radius: 22px 22px 7px 7px;
+  background: #16294a;
 }
 
-.gate.charter .plane-icon {
-  color: var(--gold);
+.gate.charter .gate-body {
+  border-color: var(--gold);
 }
 
-.gate-model {
-  font-size: 0.8rem;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* No plane: the empty stand's markings while the next one turns around. */
+.gate-plane.away .gate-body {
+  border-style: dashed;
+  border-color: var(--line);
+  background: transparent;
+}
+
+.gate-plane.away::before {
+  display: none;
+}
+
+.gate-seats {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  top: 12px;
+  bottom: 3px;
 }
 
 .gate-count {
+  font-size: 0.7rem;
   font-weight: 700;
+  line-height: 1.25;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.timer {
-  flex: 1;
-  max-width: 50%;
-  height: 3px;
-  border-radius: 2px;
-  background: rgb(255 255 255 / 8%);
-  overflow: hidden;
+.gate.turning .gate-count {
+  font-weight: 600;
+  color: var(--muted);
 }
 
-.timer > i {
-  display: block;
-  height: 100%;
-  background: var(--warn);
-  transform-origin: left center;
-  transition: transform var(--tick) linear;
-}
-
-@keyframes taxi-in {
+@keyframes park {
   from {
-    transform: translateX(-28px);
+    transform: translateY(18px);
     opacity: 0;
   }
 }
@@ -572,10 +619,17 @@ p {
 }
 
 .gate-next {
-  justify-content: space-between;
+  justify-content: center;
+  gap: 0.3rem;
   border-style: dashed;
   background: transparent;
   color: var(--muted);
+}
+
+.gate-next .gate-head {
+  position: absolute;
+  top: 3px;
+  left: 4px;
 }
 
 .gate-next.ready {
@@ -584,11 +638,11 @@ p {
 }
 
 .gate-next-label {
-  font-size: 0.8rem;
+  font-size: 0.66rem;
 }
 
 .gate-next-cost {
-  font-size: 1.1rem;
+  font-size: 0.85rem;
   font-weight: 800;
 }
 
@@ -601,10 +655,13 @@ p {
 
 .pop {
   position: absolute;
-  right: 0.5rem;
-  top: 0.35rem;
+  left: 0;
+  right: 0;
+  top: 1.6rem;
+  text-align: center;
+  white-space: nowrap;
   font-weight: 800;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: var(--accent);
   text-shadow: 0 1px 2px rgb(0 0 0 / 60%);
   animation: pop-up 900ms ease-out forwards;
@@ -616,7 +673,7 @@ p {
 
 .pop-charter {
   color: var(--gold);
-  font-size: 1.1rem;
+  font-size: 0.95rem;
 }
 
 @keyframes pop-up {
@@ -635,12 +692,14 @@ p {
 }
 
 /* ---- juice: take-off, flashes, ripples (transform and opacity only) ---- */
+/* The plane leaves its stand nose first, up past the pier. */
 .fly {
   position: absolute;
-  left: 0.6rem;
-  top: 2.1rem;
-  width: 26px;
-  height: 26px;
+  left: 50%;
+  top: 1.6rem;
+  width: 30px;
+  height: 30px;
+  margin-left: -15px;
   color: var(--sky);
   animation: take-off 700ms cubic-bezier(0.5, 0, 0.9, 0.4) forwards;
 }
@@ -651,11 +710,11 @@ p {
 
 @keyframes take-off {
   from {
-    transform: translate(0, 0) rotate(0deg) scale(1);
+    transform: translateY(0) rotate(-90deg) scale(1);
     opacity: 1;
   }
   to {
-    transform: translate(150px, -60px) rotate(-14deg) scale(0.6);
+    transform: translateY(-70px) rotate(-90deg) scale(0.7);
     opacity: 0;
   }
 }

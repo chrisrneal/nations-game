@@ -13,7 +13,8 @@ import type { AirportEvent, AirportView, CheckpointId } from '@airport/contracts
  * real line (RULES 3), and security lets the head of it through as fast as the
  * sim clears it, so the maze fills when security falls behind and empties when
  * a lane is added. The lounge crowd is the real waiting count; one walks to a
- * gate for each passenger it boards. Check-in, passport control, preclearance
+ * gate for each passenger it boards, down the pier and in at the stand's door,
+ * and the seats in each parked plane are its real load. Check-in, passport control, preclearance
  * and the arrivals checkpoints are scenery. One dot stands for `perDot`
  * people, chosen so a few dots a second walk in however big the airport grows.
  */
@@ -26,6 +27,18 @@ export interface Span {
 export interface Point {
   readonly x: number;
   readonly y: number;
+}
+
+/** A gate's stand: a parked plane seen from above, nose up to the walkway. */
+export interface GateSpot {
+  /** The middle of the stand: the plane's aisle. */
+  readonly x: number;
+  /** The walkway past the stand's door, between it and the row above. */
+  readonly door: number;
+  /** Where people board and step off: the plane's front door. */
+  readonly y: number;
+  /** Every seat in the plane, front row first: the canvas fills them from the load. */
+  readonly seats: readonly Point[];
 }
 
 /** Where things are on the canvas, in CSS pixels. Measured by the component when the layout changes. */
@@ -54,10 +67,17 @@ export interface FlowGeometry {
   /** Arrival checkpoints in walking order (right to left). */
   readonly arr: readonly (Span & { readonly id: CheckpointId })[];
   readonly exit: Span;
-  /** The walkway down between the two columns of gates, from the lounge (`top`) down. */
+  /** The walkway down the middle of the stands, from the lounge (`top`) down. */
   readonly pier: { readonly x: number; readonly top: number };
-  /** Where each gate's passengers board and step off: the card's side on the pier, kept inside the visible gates. */
-  readonly gates: readonly Point[];
+  /** Each gate's stand, kept inside the visible gates. */
+  readonly gates: readonly GateSpot[];
+}
+
+/** A parked plane's load: share of its seats taken (0-1), or null while the gate waits for a plane. */
+export interface Load {
+  readonly share: number | null;
+  readonly seats: number;
+  readonly charter: boolean;
 }
 
 export type DotKind = 'dep' | 'board' | 'arr' | 'away';
@@ -111,6 +131,9 @@ const SPAWN_MAX = 6;
 export const DOTS_MAX = 260;
 /** Most dots standing in the maze: past this a dot stands for more of the line. */
 export const MAZE_MAX = 150;
+/** Space between seats in a parked plane, px, and the aisle down its middle. */
+const SEAT_GAP = 5;
+const AISLE = 4;
 /** Updates further apart than this were caught up quietly: no one walks for them. */
 const LIVE_TICKS = 8;
 /** A dot lost by a layout change gives up after this long. */
@@ -132,6 +155,26 @@ export function choosePerDot(perSec: number, current: number): number {
   const rate = perSec / current;
   if (rate <= 6 && (rate >= 1 || current === 1)) return current;
   return STEPS.find((k) => perSec / k <= 4) ?? (STEPS[STEPS.length - 1] as number);
+}
+
+/**
+ * The seats of a plane filling the box (a fuselage seen from above, nose up):
+ * rows across with an aisle down the middle, front row first and, within a
+ * row, from the aisle out, so a filling plane fills from the front.
+ */
+export function seatSpots(box: { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number }): Point[] {
+  const mid = (box.left + box.right) / 2;
+  const side = Math.max(1, Math.floor((box.right - box.left - AISLE) / 2 / SEAT_GAP));
+  const rows = Math.max(1, Math.floor((box.bottom - box.top) / SEAT_GAP));
+  const spots: Point[] = [];
+  for (let r = 0; r < rows; r++) {
+    const y = box.top + SEAT_GAP / 2 + r * SEAT_GAP;
+    for (let k = 0; k < side; k++) {
+      const off = AISLE / 2 + SEAT_GAP / 2 + k * SEAT_GAP;
+      spots.push({ x: mid - off, y }, { x: mid + off, y });
+    }
+  }
+  return spots;
 }
 
 /** The maze as a walking path: along each row, turning down at alternate ends. */
@@ -191,6 +234,8 @@ export class FlowModel {
   turningAway = false;
   /** Dots the real line stands for now. */
   lineDots = 0;
+  /** Each gate's parked plane (RULES 2): what its seats show. */
+  loads: Load[] = [];
   private prev: AirportView | null = null;
   private accDep = 0;
   private accAway = 0;
@@ -209,6 +254,7 @@ export class FlowModel {
     const prev = this.prev;
     this.prev = view;
     this.lounge = view.terminal.cap === 0 ? 0 : Math.min(1, view.terminal.waiting / view.terminal.cap);
+    this.loads = view.gates.map((g) => ({ share: g.turn > 0 ? null : Math.min(1, g.boarded / Math.max(1, g.seats * 1000)), seats: g.seats, charter: g.charter }));
     const perSec = (view.terminal.arrivalPerTick * 1000) / view.tickMs / 1000;
     this.perDot = choosePerDot(Math.max(perSec, 0.001), this.perDot);
     this.lineDots = Math.min(MAZE_MAX, Math.round(view.security.line / (this.perDot * 1000)));
@@ -370,7 +416,7 @@ export class FlowModel {
   private add(kind: DotKind, tint: Tint, gate: number, at?: Point): void {
     if (this.dots.length >= DOTS_MAX) return;
     const placed = at !== undefined;
-    this.dots.push({ kind, tint, gate, jy: this.jitter() * 3, placed, x: at?.x ?? 0, y: at?.y ?? 0, leg: kind === 'arr' ? -4 : 0, phase: 'checkin', pos: 0, start: 0, release: 0, alpha: 1, age: 0 });
+    this.dots.push({ kind, tint, gate, jy: this.jitter() * 3, placed, x: at?.x ?? 0, y: at?.y ?? 0, leg: kind === 'arr' ? -5 : 0, phase: 'checkin', pos: 0, start: 0, release: 0, alpha: 1, age: 0 });
   }
 
   /** Puts a new dot where its walk starts. */
@@ -400,22 +446,36 @@ export class FlowModel {
       case 'dep':
         return this.depart(d, step, now, geo);
       case 'board': {
-        // Down the pier, then into the gate.
+        // Down the pier, along the walkway to the stand's door, then aboard.
         const at = geo.gates[d.gate];
         if (at === undefined) return false;
+        const j = d.jy * 0.4;
         if (d.leg === 0) {
-          if (toward(d, geo.pier.x - 2, at.y + d.jy, step)) d.leg = 1;
+          if (toward(d, geo.pier.x - 1.5, at.door + j, step)) d.leg = 1;
           return true;
         }
-        return !toward(d, at.x, at.y + d.jy, step);
+        if (d.leg === 1) {
+          if (toward(d, at.x, at.door + j, step)) d.leg = 2;
+          return true;
+        }
+        return !toward(d, at.x, at.y, step);
       }
       case 'arr': {
         if (d.leg < 0) {
-          // Off the plane onto the pier, up it, along under the lounge, up the side corridor (round the maze) to the arrivals lane.
+          // Out of the plane to the walkway, along it to the pier, up the pier, along under the lounge, up the side corridor (round the maze) to the arrivals lane.
           const at = geo.gates[d.gate];
+          const door = at?.door ?? d.y;
           const [x, y] =
-            d.leg === -4 ? [geo.pier.x + 2, at?.y ?? d.y] : d.leg === -3 ? [geo.pier.x + 2, geo.pier.top] : d.leg === -2 ? [geo.side, geo.pier.top] : [geo.side, geo.arrY];
-          if (toward(d, x, y + d.jy, step)) d.leg += 1;
+            d.leg === -5
+              ? [at?.x ?? d.x, door]
+              : d.leg === -4
+                ? [geo.pier.x + 1.5, door]
+                : d.leg === -3
+                  ? [geo.pier.x + 1.5, geo.pier.top]
+                  : d.leg === -2
+                    ? [geo.side, geo.pier.top]
+                    : [geo.side, geo.arrY];
+          if (toward(d, x, y + d.jy * 0.4, step)) d.leg += 1;
           return true;
         }
         const booth = geo.arr[d.leg];

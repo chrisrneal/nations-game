@@ -1,6 +1,6 @@
 import type { AirportEvent, AirportView, GateView, Stats } from '@airport/contracts';
 import { describe, expect, it } from 'vitest';
-import { DOTS_MAX, FlowModel, MAZE_MAX, Path, choosePerDot, mazePath, visible, type FlowGeometry } from './flow.ts';
+import { DOTS_MAX, FlowModel, MAZE_MAX, Path, choosePerDot, mazePath, seatSpots, visible, type FlowGeometry } from './flow.ts';
 
 const STATS: Stats = { earned: 0, flights: 0, fullFlights: 0, pax: 0, missed: 0, charters: 0, taps: 0 };
 
@@ -36,8 +36,8 @@ const GEO: FlowGeometry = {
   exit: { left: 10, right: 30 },
   pier: { x: 175, top: 122 },
   gates: [
-    { x: 160, y: 160 },
-    { x: 190, y: 160 },
+    { x: 120, door: 140, y: 160, seats: [] },
+    { x: 230, door: 140, y: 160, seats: [] },
   ],
 };
 
@@ -102,7 +102,7 @@ describe('the passenger flow (RULES 14)', () => {
     model.advance(16, 250, GEO);
     expect(model.dots).toHaveLength(1);
     expect(model.dots[0]).toMatchObject({ kind: 'arr', tint: 'charter' });
-    expect(Math.hypot((model.dots[0]?.x ?? 0) - 160, (model.dots[0]?.y ?? 0) - 160)).toBeLessThan(5);
+    expect(Math.hypot((model.dots[0]?.x ?? 0) - 120, (model.dots[0]?.y ?? 0) - 160)).toBeLessThan(5);
     let now = 250;
     for (let i = 0; i < 120; i++) model.advance(16, (now += 16), GEO);
     expect(model.dots.length).toBe(10);
@@ -115,6 +115,45 @@ describe('the passenger flow (RULES 14)', () => {
     }
     expect(crossed).toBe(false);
     expect(model.dots).toHaveLength(0);
+  });
+
+  it('walks a boarding passenger down the pier, along the walkway and in at the stand door', () => {
+    const model = new FlowModel();
+    model.ingest(view(0, { arrivalPerTick: 0, gates: [gate(0), gate(1)] }), [], 0);
+    model.ingest(view(1, { arrivalPerTick: 0, gates: [gate(0), gate(1, { boarded: 1000 })] }), [], 250);
+    const seen: { x: number; y: number }[] = [];
+    let now = 250;
+    for (let i = 0; i < 400 && model.dots.length > 0; i++) {
+      model.advance(16, (now += 16), GEO);
+      const d = model.dots[0];
+      if (d !== undefined) seen.push({ x: d.x, y: d.y });
+    }
+    expect(model.dots).toHaveLength(0);
+    // Above the walkway it keeps to the pier; it only leaves it along the walkway, and boards at the stand's middle.
+    expect(seen.filter((p) => p.y < 138).every((p) => Math.abs(p.x - GEO.pier.x) < 4)).toBe(true);
+    expect(seen.filter((p) => p.y > 142).every((p) => Math.abs(p.x - 230) < 0.5)).toBe(true);
+    const last = seen[seen.length - 1];
+    expect(Math.hypot((last?.x ?? 0) - 230, (last?.y ?? 0) - 160)).toBeLessThan(3);
+  });
+
+  it('keeps each parked plane\'s load for its seats, and none while the plane is away', () => {
+    const model = new FlowModel();
+    model.ingest(view(0, { gates: [gate(0, { boarded: 2500 }), gate(1, { turn: 4, turnMax: 18, charter: true })] }), [], 0);
+    expect(model.loads).toEqual([
+      { share: 0.25, seats: 10, charter: false },
+      { share: null, seats: 10, charter: true },
+    ]);
+  });
+
+  it('seats a plane front row first, from the aisle out, inside its fuselage', () => {
+    const box = { left: 0, top: 0, right: 44, bottom: 30 };
+    const seats = seatSpots(box);
+    expect(seats).toHaveLength(4 * 2 * 6);
+    expect(seats.every((p) => p.x > 0 && p.x < 44 && p.y > 0 && p.y < 30)).toBe(true);
+    // The first two face each other across the aisle in the front row.
+    expect(seats[0]?.y).toBe(seats[1]?.y);
+    expect((seats[0]?.x ?? 0) + (seats[1]?.x ?? 0)).toBe(44);
+    expect(seats.every((p, i) => i === 0 || p.y >= (seats[i - 1]?.y ?? 0))).toBe(true);
   });
 
   it('walks the maze as a snake: along each row, turning at alternate ends, into the scanners', () => {

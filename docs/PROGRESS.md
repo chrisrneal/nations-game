@@ -1,8 +1,8 @@
 # Progress
 Current state: **the pivot is complete** (decision records P1-P10). The app is
 the idle airport game: all eight slices are merged. Since then: the passenger
-flow, boosts (P11), and the security line as a real queue at the centre of the
-screen (P12).
+flow, boosts (P11), the security line as a real queue at the centre of the
+screen (P12), and the gates as a panel of stands whose seats fill with people.
 The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 (docs/PROGRESS.md there).
 
@@ -17,6 +17,32 @@ The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 - [x] 8. Remove the remaining Nations code; README
 
 ## Session log
+
+### 2026-10-02 - The gates as stands, like the security lanes (lanes U, D; owner request)
+**What changed.** The gates are now a "Gates" panel drawn like the security
+panel: its header names the plane the gates are getting ("Gates · Midsize
+Twin", "Tap: rush"), and each gate is a narrow stand, two each side of a pier
+down the middle. In each stand a plane sits nose up, seen from above, and its
+seats are the load: one square per seat (a bigger plane looks bigger), filled
+front rows first in blue, gold on a charter, green once full. The fill bar,
+the departure timer bar and the turnaround bar are gone. The load ("14/73")
+and the seconds to departure ("45s", in orange) are text, and an empty stand
+shows its dashed markings and "Back 2s" while the next plane turns around.
+People walk down the pier, along the walkway above their row and in at the
+plane's nose; arriving passengers walk the same way out. A plane parks with a
+short slide in and leaves nose first, up out of its stand. Cash pops are
+centred and drop the word "full" (the green flash and colour still say it).
+Eight gates take two rows instead of four, so the whole airport fits a 740 px
+phone without scrolling once the install banner is closed.
+**Checks.** `npm test` (318 tests; new: boarders keep to the pier and the
+walkway and board at the stand's middle, each gate's load is kept for its
+seats, seats fill front row first inside the fuselage) and `npm run check`
+pass. Phone check 56/56: no horizontal scroll and every stand at least 44 px
+with eight gates; 55.0 fps with eight gates, boosts and tapping on a CPU
+slowed 4x (budget 55).
+**How to see it.** Open the app: the gates are under the lounge. Watch a
+plane's seats fill as people walk in, and tap a stand to rush it.
+**What is left.** See docs/GAPS.md (gates as stands).
 
 ### 2026-10-02 - The security line: a real queue at the centre of the screen (lanes C, S, H, U, P, D; owner request, P12)
 **What changed.** Security is now a real queue (RULES 3). Arrivals join a line,

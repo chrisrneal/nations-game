@@ -1,8 +1,36 @@
-import { memo, useLayoutEffect, useRef, type ReactElement } from 'react';
+import { memo, useLayoutEffect, useRef, type ReactElement, type ReactNode } from 'react';
 import { formatCash, formatDuration } from './format.ts';
-import { PlaneIcon } from './PlaneIcon.tsx';
 import { flash, flyOff, pop, ripple } from './pop.ts';
 import type { AirportStore } from './store.ts';
+
+/** Stands per row: two each side of the pier, the walkway down the middle. */
+export const STANDS_PER_ROW = 4;
+
+/** The grid column of a stand: the pier takes the middle column. */
+export function standColumn(index: number): number {
+  const c = index % STANDS_PER_ROW;
+  return c < STANDS_PER_ROW / 2 ? c + 1 : c + 2;
+}
+
+/**
+ * The gates, drawn like the security scanners: a panel of narrow stands, two
+ * each side of a pier that the people walk down. Its header names the plane
+ * the gates are getting now.
+ */
+export function Pier(props: { model: string; children: ReactNode }): ReactElement {
+  return (
+    <section className="pier" aria-label="Gates">
+      <span className="pier-head">
+        <span className="pier-title">Gates</span>
+        <span className="pier-model">{props.model}</span>
+        <span className="pier-tag">Tap: rush</span>
+      </span>
+      <main className="gates" data-testid="gates">
+        {props.children}
+      </main>
+    </section>
+  );
+}
 
 interface GateCardProps {
   readonly index: number;
@@ -17,16 +45,18 @@ interface GateCardProps {
 }
 
 /**
- * One gate: the plane, its fill bar and timer, or the turnaround bar. Tapping
- * anywhere on the card rushes it (RULES 6). React renders it when the plane or
- * phase changes; the bars move by direct DOM writes on every tick (P7).
+ * One gate's stand: the parked plane seen from above, nose up to the pier,
+ * whose seats the canvas fills with the people aboard (Concourse); its load
+ * and the seconds to departure as text, or the turnaround countdown while the
+ * stand is empty. Tapping anywhere on it rushes the gate (RULES 6). React
+ * renders it when the plane or phase changes; the text moves by direct DOM
+ * writes on every tick (P7).
  */
 export const GateCard = memo(function GateCard(props: GateCardProps): ReactElement {
   const { index, plane, turning, charter, model, tickMs, store, onTap } = props;
   const card = useRef<HTMLButtonElement>(null);
-  const bar = useRef<HTMLElement>(null);
   const label = useRef<HTMLSpanElement>(null);
-  const timer = useRef<HTMLElement>(null);
+  const timer = useRef<HTMLSpanElement>(null);
   const pops = useRef<HTMLSpanElement>(null);
 
   useLayoutEffect(
@@ -39,19 +69,17 @@ export const GateCard = memo(function GateCard(props: GateCardProps): ReactEleme
             const { cents, full, charter } = event.payload;
             flyOff(pops.current, charter);
             if (full || charter) flash(pops.current, charter ? 'charter' : 'full');
-            pop(pops.current, `+${formatCash(cents)}${full ? ' full' : ''}`, charter ? 'charter' : full ? 'full' : 'cash');
+            pop(pops.current, `+${formatCash(cents)}`, charter ? 'charter' : full ? 'full' : 'cash');
           }
         }
-        // A plane just left or arrived: React is about to swap the bars; leave these alone.
+        // A plane just left or arrived: React is about to swap the stand; leave it alone.
         if (g.plane !== plane || g.turn > 0 !== turning) return;
         if (g.turn > 0) {
-          const done = 1 - g.turn / Math.max(1, g.turnMax);
-          if (bar.current) bar.current.style.transform = `scaleX(${done})`;
-          if (label.current) label.current.textContent = formatDuration((g.turn * tickMs) / 1000);
+          if (label.current) label.current.textContent = `Back ${formatDuration((g.turn * tickMs) / 1000)}`;
+          if (timer.current) timer.current.textContent = '';
         } else {
-          if (bar.current) bar.current.style.transform = `scaleX(${g.boarded / (g.seats * 1000)})`;
           if (label.current) label.current.textContent = `${Math.floor(g.boarded / 1000)}/${g.seats}`;
-          if (timer.current) timer.current.style.transform = `scaleX(${g.timerMax === 0 ? 0 : g.timer / g.timerMax})`;
+          if (timer.current) timer.current.textContent = g.timerMax === 0 ? '' : formatDuration((g.timer * tickMs) / 1000);
         }
         card.current?.classList.toggle('rushing', g.rushed);
       }),
@@ -68,6 +96,7 @@ export const GateCard = memo(function GateCard(props: GateCardProps): ReactEleme
       type="button"
       ref={card}
       className={`gate${turning ? ' turning' : ''}${charter ? ' charter' : ''}`}
+      style={{ gridColumn: standColumn(index) }}
       data-testid={`gate-${index}`}
       aria-label={`Gate ${index + 1}, ${turning ? 'turning around' : model}. Tap to rush.`}
       onPointerDown={(event) => {
@@ -84,37 +113,36 @@ export const GateCard = memo(function GateCard(props: GateCardProps): ReactEleme
       }}
     >
       <span className="gate-head">
-        <span className="gate-no">Gate {index + 1}</span>
-        {charter && !turning && <span className="badge">Charter x2</span>}
+        <span className="gate-no">{index + 1}</span>
+        {charter && !turning && <span className="badge">x2</span>}
+        <span ref={timer} className="gate-time" />
       </span>
-      <span className="gate-plane" key={`p${plane}${turning ? 't' : 'b'}`}>
-        <PlaneIcon className={`plane-icon${turning ? ' away' : ''}`} />
-        <span className="gate-model">{turning ? 'Turnaround' : model}</span>
+      <span className={`gate-plane${turning ? ' away' : ''}`} key={`p${plane}${turning ? 't' : 'b'}`}>
+        <span className="gate-body">
+          <span className="gate-seats" />
+        </span>
       </span>
-      <span className={`bar${turning ? ' bar-turn' : ''}`} key={`b${plane}${turning ? 't' : 'b'}`}>
-        <i ref={bar} />
-      </span>
-      <span className="gate-foot">
-        <span ref={label} className="gate-count" />
-        {!turning && (
-          <span className="timer" key={`t${plane}`} aria-hidden="true">
-            <i ref={timer} />
-          </span>
-        )}
-      </span>
+      <span ref={label} className="gate-count" />
       <span ref={pops} className="pops" aria-hidden="true" />
     </button>
   );
 });
 
-/** The next gate to buy, as a dashed card where it will stand: something to aim for. Opens the upgrade sheet. */
+/** The next gate to buy, as a dashed stand where it will be: something to aim for. Opens the upgrade sheet. */
 export function NextGateCard(props: { number: number; cost: number; affordable: boolean; onOpen: () => void }): ReactElement {
   return (
-    <button type="button" className={`gate gate-next${props.affordable ? ' ready' : ''}`} onClick={props.onOpen} data-testid="next-gate">
+    <button
+      type="button"
+      className={`gate gate-next${props.affordable ? ' ready' : ''}`}
+      style={{ gridColumn: standColumn(props.number - 1) }}
+      onClick={props.onOpen}
+      data-testid="next-gate"
+      aria-label={`Gate ${props.number}, ${props.affordable ? 'open it now' : 'not built yet'}: ${formatCash(props.cost)}`}
+    >
       <span className="gate-head">
-        <span className="gate-no">Gate {props.number}</span>
+        <span className="gate-no">{props.number}</span>
       </span>
-      <span className="gate-next-label">{props.affordable ? 'Open it now' : 'Not built yet'}</span>
+      <span className="gate-next-label">{props.affordable ? 'Open it' : 'Not built'}</span>
       <span className="gate-next-cost">{formatCash(props.cost)}</span>
     </button>
   );
