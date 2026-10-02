@@ -11,7 +11,7 @@ export interface Structure {
  * Two update paths (P7). React re-renders only when the airport's structure
  * changes (a plane arrives or leaves, a level changes, an upgrade becomes
  * affordable): `getStructure` returns a new object only then. Everything that
- * moves every tick (fill bars, timers, cash) is written straight to the DOM by
+ * moves every tick (seats, timers, cash) is written straight to the DOM by
  * frame listeners, with CSS transitions one tick long to interpolate.
  */
 export class AirportStore {
