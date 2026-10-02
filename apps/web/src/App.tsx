@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from 'react';
-import type { AirportView, UpgradeId } from '@airport/contracts';
+import type { AirportView, BoostId, UpgradeId } from '@airport/contracts';
 import type { AirportHost, Feedback, InstallPrompt } from './platform/index.ts';
 import { BottomBar } from './ui/BottomBar.tsx';
 import { GateCard, NextGateCard } from './ui/GateCard.tsx';
@@ -55,6 +55,10 @@ export function App(props: { host: AirportHost; install?: InstallPrompt; feedbac
             feedback?.cue('unlock');
           } else if (e.type === 'departed') {
             feedback?.cue(e.payload.charter ? 'charter' : e.payload.full ? 'full' : 'depart');
+          } else if (e.type === 'boosted') {
+            const b = update.view.boosts.find((x) => x.id === e.payload.boost);
+            feedback?.cue('boost');
+            if (b !== undefined) setToast(`${b.name}! ${b.effect}`);
           } else if (e.type === 'bought') {
             const text = unlockText(e.payload.upgrade, e.payload.level, update.view, checkpoints.current);
             feedback?.cue(text === null ? 'buy' : 'unlock');
@@ -84,6 +88,7 @@ export function App(props: { host: AirportHost; install?: InstallPrompt; feedbac
     [host, feedback],
   );
   const buy = useCallback((upgrade: UpgradeId) => void host.buy(upgrade), [host]);
+  const boost = useCallback((id: BoostId) => void host.boost(id), [host]);
   const close = useCallback(() => setSheet(null), []);
 
   const nextGate = view?.upgrades.find((u) => u.id === 'gates');
@@ -121,7 +126,7 @@ export function App(props: { host: AirportHost; install?: InstallPrompt; feedbac
           )}
         </main>
       </Concourse>
-      <BottomBar view={view} store={store} onUpgrades={() => setSheet('upgrades')} onSell={() => setSheet('sell')} />
+      <BottomBar view={view} store={store} onUpgrades={() => setSheet('upgrades')} onSell={() => setSheet('sell')} onBoost={boost} />
       {sheet === 'upgrades' && <UpgradeSheet view={view} store={store} onBuy={buy} onSell={() => setSheet('sell')} onClose={close} />}
       {sheet === 'sell' && (
         <SellSheet

@@ -53,7 +53,7 @@ export const GateCard = memo(function GateCard(props: GateCardProps): ReactEleme
           if (label.current) label.current.textContent = `${Math.floor(g.boarded / 1000)}/${g.seats}`;
           if (timer.current) timer.current.style.transform = `scaleX(${g.timerMax === 0 ? 0 : g.timer / g.timerMax})`;
         }
-        card.current?.classList.toggle('rushing', g.rush > 0);
+        card.current?.classList.toggle('rushing', g.rushed);
       }),
     [store, index, plane, turning, tickMs],
   );

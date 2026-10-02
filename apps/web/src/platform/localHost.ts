@@ -1,4 +1,4 @@
-import type { AirportIntent, UpgradeId } from '@airport/contracts';
+import type { AirportIntent, BoostId, UpgradeId } from '@airport/contracts';
 import type { AirportEngine, AirportUpdate, SavedAirport } from './engine.ts';
 import type { SaveStore } from './saves.ts';
 
@@ -19,6 +19,8 @@ export interface AirportHost {
   submit(intent: AirportIntent): Promise<void>;
   tap(gate: number): Promise<void>;
   buy(upgrade: UpgradeId): Promise<void>;
+  /** Start a boost (RULES 15). */
+  boost(boost: BoostId): Promise<void>;
   /** Sell this airport for slots and open the next city (RULES 10). */
   sell(): Promise<void>;
   /** Throw this airport away and open a new one at the first city. */
@@ -106,6 +108,10 @@ export class LocalHost implements AirportHost {
 
   buy(upgrade: UpgradeId): Promise<void> {
     return this.submit({ type: 'buy', payload: { upgrade } });
+  }
+
+  boost(boost: BoostId): Promise<void> {
+    return this.submit({ type: 'boost', payload: { boost } });
   }
 
   sell(): Promise<void> {

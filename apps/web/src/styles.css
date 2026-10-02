@@ -575,6 +575,130 @@ p {
   text-overflow: ellipsis;
 }
 
+/* ---- boosts (RULES 15): a bar behind each button drains while it runs, refills while it recharges ---- */
+.boosts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin-bottom: 0.45rem;
+}
+
+.boost {
+  position: relative;
+  overflow: hidden;
+  min-height: var(--tap);
+  padding: 0.3rem 0.2rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.05rem;
+  line-height: 1.15;
+  min-width: 0;
+}
+
+.boost-fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  transition: transform var(--tick) linear;
+  pointer-events: none;
+}
+
+.boost-name,
+.boost-status {
+  position: relative;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.boost-name {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.boost-icon {
+  margin-right: 0.2rem;
+  font-size: 0.72rem;
+}
+
+.boost-status {
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.boost-ready {
+  border-color: var(--gold);
+}
+
+.boost-ready .boost-fill {
+  background: rgb(255 204 92 / 14%);
+}
+
+.boost-ready .boost-status {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+/* The boost that fixes the bottleneck calls for a tap: a glow that fades in and out (opacity only, so no repaint). */
+.boost-ready.helps::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 2px var(--gold) inset, 0 0 12px rgb(255 204 92 / 55%) inset;
+  opacity: 0;
+  animation: boost-call 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes boost-call {
+  50% {
+    opacity: 1;
+  }
+}
+
+.boost-running {
+  border-color: var(--gold);
+}
+
+.boost-running .boost-fill {
+  background: linear-gradient(90deg, rgb(255 204 92 / 55%), rgb(255 204 92 / 25%));
+}
+
+.boost-running .boost-status {
+  color: var(--fg);
+  font-weight: 700;
+}
+
+.boost-recharging .boost-fill {
+  background: rgb(255 255 255 / 6%);
+}
+
+.boost:disabled {
+  cursor: default;
+}
+
+.boost-locked {
+  opacity: 0.5;
+  border-style: dashed;
+}
+
+.boost-ready:active {
+  transform: scale(0.96);
+}
+
+.income-boosted {
+  color: var(--gold);
+}
+
 /* ---- buttons ---- */
 .btn {
   min-height: var(--tap);
@@ -970,6 +1094,7 @@ p {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .boost-ready.helps::after,
   .gate-plane,
   .sheet,
   .pop {

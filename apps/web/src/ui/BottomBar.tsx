@@ -1,15 +1,17 @@
 import { useLayoutEffect, useRef, type ReactElement } from 'react';
-import type { AirportView } from '@airport/contracts';
+import type { AirportView, BoostId } from '@airport/contracts';
+import { BoostBar } from './BoostBar.tsx';
 import { formatCash, formatDuration } from './format.ts';
 import { nextGoal, secondsUntil } from './goal.ts';
 import type { AirportStore } from './store.ts';
 
 /**
  * The thumb zone: what the airport is waiting for, the next goal with a
- * countdown, and the Upgrades button (primary actions in the bottom third).
+ * countdown, the boosts, and the Upgrades button (primary actions in the
+ * bottom third).
  */
-export function BottomBar(props: { view: AirportView; store: AirportStore; onUpgrades: () => void; onSell: () => void }): ReactElement {
-  const { view, store, onUpgrades, onSell } = props;
+export function BottomBar(props: { view: AirportView; store: AirportStore; onUpgrades: () => void; onSell: () => void; onBoost: (id: BoostId) => void }): ReactElement {
+  const { view, store, onUpgrades, onSell, onBoost } = props;
   const eta = useRef<HTMLSpanElement>(null);
   const goal = nextGoal(view);
   const affordable = view.upgrades.filter((u) => u.affordable).length;
@@ -32,6 +34,7 @@ export function BottomBar(props: { view: AirportView; store: AirportStore; onUpg
           Next: {goal.nextName ?? goal.name} · {formatCash(goal.cost)} <span ref={eta} className="muted" />
         </p>
       )}
+      <BoostBar boosts={view.boosts} tickMs={view.tickMs} store={store} onBoost={onBoost} />
       <div className="actions">
         <button type="button" className="btn btn-primary btn-wide" onClick={onUpgrades} data-testid="open-upgrades">
           Upgrades

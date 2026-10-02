@@ -33,9 +33,15 @@ export function TopBar(props: { view: AirportView; store: AirportStore; onSettin
       </div>
       <div className="money">
         <span ref={cash} className="cash" data-testid="cash" />
-        <span className="income" data-testid="income">
-          +{formatCash(view.incomePerSec)}/s
-        </span>
+        {view.boostedIncomePerSec > view.incomePerSec ? (
+          <span className="income income-boosted" data-testid="income" title={`${formatCash(view.incomePerSec)}/s without boosts`}>
+            +{formatCash(view.boostedIncomePerSec)}/s ⚡
+          </span>
+        ) : (
+          <span className="income" data-testid="income">
+            +{formatCash(view.incomePerSec)}/s
+          </span>
+        )}
       </div>
     </header>
   );
