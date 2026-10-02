@@ -10,7 +10,7 @@ export function Recap(props: { recap: AwayRecap; onCollect: () => void }): React
     <div className="sheet-layer">
       <button type="button" className="sheet-backdrop" aria-label="Collect" onClick={props.onCollect} />
       <section className="sheet recap" role="dialog" aria-modal="true" aria-label="While you were away" data-testid="recap">
-        <h2 className="sheet-title">While you were away</h2>
+        <h2 className="sheet-title">{props.recap.skipped ? 'Skipped ahead' : 'While you were away'}</h2>
         <p className="recap-earned">+{formatCash(props.recap.earned)}</p>
         <ol className="recap-lines">
           {lines.map((line) => (

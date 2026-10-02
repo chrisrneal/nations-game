@@ -1,6 +1,6 @@
 import type { AirportEvent, AirportView, GateView, Stats } from '@airport/contracts';
 import { describe, expect, it } from 'vitest';
-import { DOTS_MAX, FlowModel, choosePerDot, visible, type FlowGeometry } from './flow.ts';
+import { DOTS_MAX, FlowModel, MAZE_MAX, Path, choosePerDot, mazePath, visible, type FlowGeometry } from './flow.ts';
 
 const STATS: Stats = { earned: 0, flights: 0, fullFlights: 0, pax: 0, missed: 0, charters: 0, taps: 0 };
 
@@ -9,11 +9,12 @@ function gate(index: number, over: Partial<GateView> = {}): GateView {
 }
 
 /** The parts of a View the flow reads; the rest is never touched. */
-function view(tick: number, over: { waiting?: number; arrivalPerTick?: number; missed?: number; gates?: GateView[]; city?: number } = {}): AirportView {
+function view(tick: number, over: { waiting?: number; arrivalPerTick?: number; missed?: number; gates?: GateView[]; city?: number; line?: number } = {}): AirportView {
   return {
     tick,
     tickMs: 250,
     terminal: { waiting: over.waiting ?? 10_000, cap: 40_000, arrivalPerTick: over.arrivalPerTick ?? 400 },
+    security: { line: over.line ?? 0, cap: 72_000, ratePerTick: 600, baseRatePerTick: 600, rushed: false, waitTicks: 0, slowBp: 10_000 },
     gates: over.gates ?? [gate(0)],
     city: { index: over.city ?? 0, name: 'Millbrook', twist: '' },
     run: { ...STATS, missed: over.missed ?? 0 },
@@ -21,21 +22,22 @@ function view(tick: number, over: { waiting?: number; arrivalPerTick?: number; m
 }
 
 const GEO: FlowGeometry = {
-  depY: 60,
   arrY: 30,
-  door: 10,
-  dep: [
-    { left: 60, right: 100 },
-    { left: 140, right: 180 },
-  ],
-  lounge: { left: 60, top: 70, right: 330, bottom: 90 },
-  arrStart: 240,
+  door: { x: 10, y: 55 },
+  checkin: { left: 14, right: 60, y: 55 },
+  maze: { left: 14, right: 280, entry: 64, rows: [55, 70, 85] },
+  scanner: { enter: { x: 284, y: 85 }, exit: { x: 310, y: 85 } },
+  after: [{ left: 290, right: 330 }],
+  afterY: 110,
+  lounge: { left: 20, top: 104, right: 285, bottom: 116 },
+  arrStart: 330,
+  side: 336,
   arr: [{ left: 150, right: 200, id: 'baggage' }],
   exit: { left: 10, right: 30 },
-  pier: { x: 175, top: 95 },
+  pier: { x: 175, top: 122 },
   gates: [
-    { x: 160, y: 130 },
-    { x: 190, y: 130 },
+    { x: 160, y: 160 },
+    { x: 190, y: 160 },
   ],
 };
 
@@ -60,16 +62,16 @@ describe('people per dot', () => {
 });
 
 describe('the passenger flow (RULES 14)', () => {
-  it('sends one dot through the door per person entering the lounge', () => {
+  it('sends one dot through the door per person joining the security line', () => {
     const model = new FlowModel();
     // 1.6 people a second for 10 seconds.
     feed(model, 0, 41, (t) => view(t));
     expect(model.dots.filter((d) => d.kind === 'dep')).toHaveLength(16);
   });
 
-  it('turns people away at the door when the lounge is full', () => {
+  it('turns people away at the door when the line is full', () => {
     const model = new FlowModel();
-    feed(model, 0, 41, (t) => view(t, { waiting: 40_000, missed: t * 400 }));
+    feed(model, 0, 41, (t) => view(t, { waiting: 40_000, line: 72_000, missed: t * 400 }));
     expect(model.dots.filter((d) => d.kind === 'dep')).toHaveLength(0);
     expect(model.dots.filter((d) => d.kind === 'away')).toHaveLength(16);
     expect(model.turningAway).toBe(true);
@@ -100,29 +102,90 @@ describe('the passenger flow (RULES 14)', () => {
     model.advance(16, 250, GEO);
     expect(model.dots).toHaveLength(1);
     expect(model.dots[0]).toMatchObject({ kind: 'arr', tint: 'charter' });
-    expect(Math.hypot((model.dots[0]?.x ?? 0) - 160, (model.dots[0]?.y ?? 0) - 130)).toBeLessThan(5);
+    expect(Math.hypot((model.dots[0]?.x ?? 0) - 160, (model.dots[0]?.y ?? 0) - 160)).toBeLessThan(5);
     let now = 250;
     for (let i = 0; i < 120; i++) model.advance(16, (now += 16), GEO);
     expect(model.dots.length).toBe(10);
-    for (let i = 0; i < 1500 && model.dots.length > 0; i++) model.advance(16, (now += 16), GEO);
+    // They walk round the security maze, never through it.
+    const inMaze = (x: number, y: number): boolean => x > GEO.maze.left && x < GEO.scanner.exit.x && y > 50 && y < 90;
+    let crossed = false;
+    for (let i = 0; i < 1500 && model.dots.length > 0; i++) {
+      model.advance(16, (now += 16), GEO);
+      crossed ||= model.dots.some((d) => inMaze(d.x, d.y));
+    }
+    expect(crossed).toBe(false);
     expect(model.dots).toHaveLength(0);
   });
 
-  it('queues people at a checkpoint and hides each one inside while served', () => {
+  it('walks the maze as a snake: along each row, turning at alternate ends, into the scanners', () => {
+    const path = new Path(mazePath(GEO.maze));
+    expect(path.length).toBe(216 + 15 + 266 + 15 + 266);
+    expect(path.at(0)).toEqual({ x: 64, y: 55 });
+    expect(path.at(216 + 15 + 266)).toEqual({ x: 14, y: 70 });
+    expect(path.at(path.length)).toEqual({ x: 280, y: 85 });
+  });
+
+  it('the line in the maze is the real line: people stand in it while security holds them', () => {
+    const model = new FlowModel();
+    // 1.6 a second join; security lets nobody through (a full lounge): the line grows by 0.4 a tick.
+    let tick = feed(model, 0, 1, (t) => view(t, { line: 0 }));
+    tick = feed(model, tick, 80, (t) => view(t, { line: t * 400 }));
+    let now = tick * 250;
+    for (let i = 0; i < 1200; i++) model.advance(16, (now += 16), GEO);
+    expect(model.lineDots).toBe(32);
+    expect(model.queue.length).toBeGreaterThanOrEqual(30);
+    expect(model.queue.length).toBeLessThanOrEqual(34);
+    // They stand head to tail, the head at the scanners, in the order they came.
+    const path = new Path(mazePath(GEO.maze));
+    expect(model.queue[0]?.pos).toBeCloseTo(path.length, 0);
+    for (let i = 1; i < model.queue.length; i++) expect(model.queue[i]?.pos ?? 0).toBeLessThan(model.queue[i - 1]?.pos ?? 0);
+  });
+
+  it('security lets the head through as fast as the sim clears the line, and they walk on to the lounge', () => {
+    const model = new FlowModel();
+    // A line of 20 already standing; nobody arrives, security clears 0.6 a tick.
+    let tick = feed(model, 0, 1, (t) => view(t, { arrivalPerTick: 0, line: 20_000 }));
+    let now = tick * 250;
+    for (let i = 0; i < 60; i++) model.advance(16, (now += 16), GEO);
+    expect(model.queue.length).toBe(20);
+    let scanned = 0;
+    // 34 ticks clear it all.
+    for (let k = 0; k < 40; k++) {
+      tick = feed(model, tick, 1, (t) => view(t, { arrivalPerTick: 0, line: Math.max(0, 20_000 - t * 600) }));
+      for (let i = 0; i < 16; i++) {
+        model.advance(16, (now += 16), GEO);
+        scanned = Math.max(scanned, model.dots.filter((d) => d.phase === 'scan' && !visible(d, now)).length);
+      }
+    }
+    expect(scanned).toBeGreaterThan(0);
+    expect(model.queue.length).toBeLessThanOrEqual(2);
+    for (let i = 0; i < 600; i++) model.advance(16, (now += 16), GEO);
+    expect(model.dots.filter((d) => d.kind === 'dep')).toHaveLength(0);
+  });
+
+  it('a line longer than the maze holds squeezes up, and dots stand for more of it', () => {
+    const model = new FlowModel();
+    feed(model, 0, 1, (t) => view(t, { arrivalPerTick: 0, line: 900_000 }));
+    let now = 250;
+    for (let i = 0; i < 10; i++) model.advance(16, (now += 16), GEO);
+    expect(model.lineDots).toBe(MAZE_MAX);
+    expect(model.queue.length).toBe(MAZE_MAX);
+    const path = new Path(mazePath(GEO.maze));
+    expect(model.gap(path) * MAZE_MAX).toBeLessThanOrEqual(path.length + 1);
+  });
+
+  it('check-in and the checkpoints after security queue people for show and hide each one inside while served', () => {
     const model = new FlowModel();
     feed(model, 0, 41, (t) => view(t, { arrivalPerTick: 4000 }));
     let now = 41 * 250;
     let hidden = 0;
-    let queued = 0;
     for (let i = 0; i < 200; i++) {
       model.advance(16, (now += 16), GEO);
       hidden = Math.max(hidden, model.dots.filter((d) => !visible(d, now)).length);
-      queued = Math.max(queued, model.dots.filter((d) => d.release > 0 && now < d.start).length);
     }
     expect(hidden).toBeGreaterThan(0);
-    expect(queued).toBeGreaterThan(0);
-    // Everyone walks toward the lounge and is never behind the door or past it.
-    expect(model.dots.every((d) => d.x >= GEO.door && d.x <= GEO.lounge.right && d.y <= GEO.lounge.bottom)).toBe(true);
+    // Everyone stays on the floor: never behind the door, never right of the checkpoints.
+    expect(model.dots.every((d) => d.x >= GEO.door.x - 1 && d.x <= 332)).toBe(true);
   });
 
   it('shows nothing for a quiet catch-up, and starts afresh in a new city', () => {

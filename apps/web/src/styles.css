@@ -211,11 +211,7 @@ p {
   border-top: 1px dashed var(--line);
 }
 
-/* Departures come in at the left; arrivals come up from the gates at the right. */
-.lane-dep {
-  padding: 0 0.3rem 0 1.4rem;
-}
-
+/* Arrivals come up from the gates at the right and leave at the left. */
 .lane-arr {
   padding: 0 1.4rem 0 0;
 }
@@ -240,12 +236,152 @@ p {
   color: var(--muted);
 }
 
+/* ---- the security line (RULES 3): a maze the real line snakes through, scanners at its end; one tap opens a lane ---- */
+.security {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 84px;
+  padding: 4px 6px 6px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgb(255 255 255 / 2.5%);
+  text-align: left;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 90ms ease-out, border-color 200ms;
+}
+
+.security:active {
+  transform: scale(0.985);
+}
+
+.security.queued {
+  border-color: #3b5a8e;
+}
+
+.security.slow {
+  border-color: var(--warn);
+}
+
+.security.full {
+  border-color: var(--warn);
+  box-shadow: 0 0 0 1px var(--warn) inset;
+}
+
+.security.rushed {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+.sec-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.sec-title {
+  font-weight: 700;
+}
+
+.sec-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+}
+
+.security.slow .sec-line,
+.security.full .sec-line {
+  color: var(--warn);
+}
+
+.sec-tag {
+  margin-left: auto;
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.sec-body {
+  flex: 1;
+  display: flex;
+  gap: 4px;
+  min-height: 60px;
+}
+
+/* The maze: three rows between two ropes, open at alternate ends. */
+.sec-maze {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.rope {
+  position: absolute;
+  height: 0;
+  border-top: 1px dashed #36507f;
+}
+
+.rope-1 {
+  top: 33.3%;
+  left: 0;
+  right: 12px;
+}
+
+.rope-2 {
+  top: 66.6%;
+  left: 12px;
+  right: 0;
+}
+
+.booth-checkin {
+  position: absolute;
+  left: 0;
+  top: 16.6%;
+  transform: translateY(-50%);
+}
+
+/* The scanners: one bar per lane; a tap lights an extra one. */
+.sec-scan {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+}
+
+.sec-lane {
+  width: 4px;
+  border-radius: 2px;
+  background: var(--sky);
+  opacity: 0.75;
+}
+
+.sec-lane-extra {
+  display: none;
+  background: var(--accent);
+  opacity: 1;
+}
+
+.security.rushed .sec-lane-extra {
+  display: block;
+}
+
+/* ---- the lounge: the real waiting crowd, past the international checkpoints ---- */
 .lounge {
   display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  height: 22px;
-  padding: 0 0.4rem;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 0.4rem 4px;
   border-radius: 8px;
   border: 1px solid var(--line);
   background: var(--panel-2);
@@ -257,6 +393,13 @@ p {
 
 .lounge.full {
   border-color: var(--warn);
+}
+
+.lounge-info {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  line-height: 1.2;
 }
 
 .lounge-name {
@@ -272,6 +415,13 @@ p {
   font-weight: 700;
 }
 
+.lounge-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+}
+
 /* The bench: the canvas seats the waiting crowd here. */
 .lounge-seats {
   flex: 1;
@@ -280,6 +430,7 @@ p {
 }
 
 .flow-key {
+  margin-left: auto;
   color: var(--muted);
   font-size: 0.64rem;
 }
@@ -1106,4 +1257,31 @@ p {
   .ripple {
     display: none;
   }
+}
+
+/* ---- settings: the testing time skip ---- */
+.skip {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.6rem 0.6rem;
+  border-radius: 10px;
+  border: 1px dashed var(--line);
+}
+
+.skip-title {
+  margin-bottom: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.skip-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.skip-row .btn {
+  min-height: var(--tap);
+  padding-left: 0.2rem;
+  padding-right: 0.2rem;
+  white-space: nowrap;
 }

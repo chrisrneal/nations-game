@@ -3,23 +3,26 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { hashState } from './hash.ts';
 import { BOOST_IDS, UPGRADE_IDS } from './catalog.ts';
-import { maxLevel } from './rules.ts';
+import { lineCapMilliFor, maxLevel, securityMilliAt, waitCapMilliAt } from './rules.ts';
+import { AIRPORT_TUNABLES } from './tunables.ts';
 import { AirportSession } from './session.ts';
 import { createAirport } from './state.ts';
 import { advanceMany, step } from './step.ts';
 
 /**
- * The invariants of RULES 13, as properties over random play: random taps,
- * purchases, boosts and sales at random ticks, from random seeds and starting cash.
+ * The invariants of RULES 13, as properties over random play: random taps (at
+ * gates and at security), purchases, boosts and sales at random ticks, from random seeds and starting cash.
  */
 type Move =
   | { at: number; kind: 'tap'; gate: number }
+  | { at: number; kind: 'tapSecurity' }
   | { at: number; kind: 'buy'; upgrade: UpgradeId }
   | { at: number; kind: 'boost'; boost: BoostId }
   | { at: number; kind: 'sell' };
 
 const move: fc.Arbitrary<Move> = fc.oneof(
   fc.record({ at: fc.nat(400), kind: fc.constant('tap' as const), gate: fc.nat(8) }),
+  fc.record({ at: fc.nat(400), kind: fc.constant('tapSecurity' as const) }),
   fc.record({ at: fc.nat(400), kind: fc.constant('buy' as const), upgrade: fc.constantFrom(...UPGRADE_IDS) }),
   fc.record({ at: fc.nat(400), kind: fc.constant('boost' as const), boost: fc.constantFrom(...BOOST_IDS) }),
   fc.record({ at: fc.nat(400), kind: fc.constant('sell' as const) }),
@@ -43,6 +46,7 @@ const game: fc.Arbitrary<Game> = fc.record({
 
 function commandFor(m: Move, tick: number): AirportCommand {
   if (m.kind === 'tap') return { tick, type: 'tap', payload: { gate: m.gate } };
+  if (m.kind === 'tapSecurity') return { tick, type: 'tapSecurity', payload: {} };
   if (m.kind === 'buy') return { tick, type: 'buy', payload: { upgrade: m.upgrade } };
   if (m.kind === 'boost') return { tick, type: 'boost', payload: { boost: m.boost } };
   return { tick, type: 'sell', payload: {} };
@@ -73,6 +77,12 @@ function invariants(s: AirportState): void {
   expect(s.cash).toBeGreaterThanOrEqual(0);
   expect(Number.isSafeInteger(s.cash)).toBe(true);
   expect(s.waiting).toBeGreaterThanOrEqual(0);
+  expect(s.waiting).toBeLessThanOrEqual(waitCapMilliAt(s.levels.terminal));
+  // The security line (RULES 3): never negative, never longer than its longest at this level (a new route can slow security below it).
+  expect(s.line).toBeGreaterThanOrEqual(0);
+  expect(s.line).toBeLessThanOrEqual(lineCapMilliFor(securityMilliAt(s.levels.security, 0)));
+  expect(s.securityRush).toBeGreaterThanOrEqual(0);
+  expect(s.securityRush).toBeLessThanOrEqual(AIRPORT_TUNABLES.rushMaxTicks.value);
   expect(s.gates.length).toBe(1 + s.levels.gates);
   for (const g of s.gates) {
     expect(g.boarded).toBeGreaterThanOrEqual(0);
@@ -92,7 +102,7 @@ function invariants(s: AirportState): void {
 describe('airport invariants under random play (RULES 13)', () => {
   it('cash, passengers and loads are never negative and never over their limits', () => {
     fc.assert(fc.property(game, (g) => void play(g, 420, invariants)), { numRuns: 60 });
-  });
+  }, 20_000);
 
   it('cash only moves by fares and purchases', () => {
     fc.assert(

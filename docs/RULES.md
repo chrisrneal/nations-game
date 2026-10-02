@@ -7,7 +7,8 @@ the code runs them in integer units (section 2).
 
 ## 1. The game in one paragraph
 
-You run a small airport. Passengers arrive in the terminal and wait. Each gate
+You run a small airport. Passengers arrive, queue at security, and wait in the
+lounge. Each gate
 holds one plane; passengers board it at the gate's boarding rate. When the plane
 is full, or its departure timer runs out, it leaves and pays its fare for every
 passenger on board, with a bonus if it left full. The gate then turns around and
@@ -36,14 +37,30 @@ one bottleneck for a minute, then recharge.
 - Cash never exceeds `cashCapCents` (the vault is full); nothing in normal play
   gets near it.
 
-## 3. The terminal
+## 3. The terminal: the security line and the lounge
+
+Passengers arrive, join the **security line**, and security lets them into the
+**lounge**, where they wait for a gate. The line is the game's queue: it is in
+State, it grows when security falls behind, and it is what the middle of the
+screen shows (section 14). Decision record P12.
 
 - Passengers arrive at `A = arrivalBase x arrivalGrowth^terminalLevel` per second
-  (1.6/s at level 0, +35% a level).
+  (1.6/s at level 0, +35% a level) and join the line.
+- Security clears `S = securityBase x securityGrowth^securityLevel` per second
+  (2.4/s at level 0, +50% a level, from the Security lanes upgrade), times
+  `intlCheck` (x0.95) for each international departure checkpoint the route
+  adds: passport control from Continental (route 5), preclearance from
+  Transatlantic (route 6). A tapped security, or All hands, opens an extra lane:
+  `rushBoard` (2.5x) as fast (section 6).
+- People will not join a line longer than `lineWait` (30 s) of clearing: the
+  line holds at most `L = S x lineWait` (the rate before any extra lane).
+  Arrivals beyond that are **missed**: they turn back at the door, rebook
+  elsewhere, and are counted for the recap.
 - At most `W = terminalCapBase x terminalCapGrowth^terminalLevel` passengers wait
-  (40 at level 0). Arrivals beyond that are **missed**: they rebook elsewhere and
-  are counted for the recap.
-- A new airport opens with `startingWaiting` passengers already in the terminal.
+  in the lounge (40 at level 0). When it is full, security stops and the line
+  backs up behind it.
+- A new airport opens with `startingWaiting` passengers already in the lounge
+  and no line.
 
 ## 4. Gates and planes
 
@@ -65,13 +82,14 @@ one bottleneck for a minute, then recharge.
 
 Every tick, in this order:
 
-1. Arrivals join the terminal (x3 during Rush hour, section 15), capped at `W`;
-   the excess is missed.
+1. Arrivals join the security line (x3 during Rush hour, section 15), capped at
+   `L`; the excess is missed. Security then moves `min(S, line, lounge room)`
+   from the head of the line into the lounge (section 3).
 2. Gates are visited in a rotating order that starts at `tick mod gates`, so no
    gate is always first in line. A boarding gate moves `min(rate, seats left,
    waiting)` passengers from the terminal onto its plane, where `rate =
    boardBase x boardGrowth^boardingLevel` per second (2/s at level 0, +25% a
-   level). A rushed gate boards faster (section 6).
+   level). "Waiting" is the lounge. A rushed gate boards faster (section 6).
 3. A plane departs when it is full, or when its timer reaches zero with at least
    one passenger on board. (An empty plane waits for its first passenger; its
    timer stays at zero.)
@@ -98,7 +116,10 @@ cannot fill it before its timer runs out it leaves without the full-flight bonus
   its turnaround `rushTurn` (3x) as fast.
 - A gate is also rushed, with no taps, while the All hands boost runs
   (section 15); taps bank rush as usual meanwhile.
-- So a rush helps whatever the bottleneck is: boarding, passengers or
+- Tapping the security line opens an extra lane: the same `rushPerTap` and
+  `rushMax`, and security clears `rushBoard` (2.5x) as fast while it lasts.
+  All hands opens it too.
+- So a rush helps whatever the bottleneck is: boarding, passengers, security or
   turnaround. Tapping every gate as its rush runs out earns about 2-3x idle
   income (section 11); not tapping at all is a complete, slower game.
 
@@ -113,8 +134,9 @@ upgrade fixes one bottleneck and none is strictly better than the others:
 | More gates | +1 gate | gates share the same passengers: with a small terminal, more gates means emptier planes and lost full-flight bonuses | $100 | x4.0 | 7 |
 | Bigger planes | +50% seats on the next plane at each gate | slower to fill, longer timer, longer turnaround; leaves without the bonus if it cannot fill in time | $300 | x3.5 | 9 |
 | Faster boarding | +25% boarding rate (jet bridges, more agents) | only pays while passengers are waiting | $10 | x1.9 | 40 |
-| Bigger terminal | +35% arrivals and +35% waiting room | only pays while the gates can board them | $30 | x2.0 | 40 |
-| Better routes | +60% fare per passenger | route level n needs plane level n or more | $750 | x4.0 | 9 |
+| Bigger terminal | +35% arrivals and +35% lounge seats | only pays while security and the gates keep up: more arrivals make the line longer | $30 | x2.0 | 40 |
+| Security lanes | +50% security speed, and so +50% line people will join | only pays while people are queuing | $25 | x1.8 | 40 |
+| Better routes | +60% fare per passenger | route level n needs plane level n or more; from Continental each new international checkpoint slows security 5% | $750 | x4.0 | 9 |
 | Ground crew | -12% turnaround | worth most with small planes that fill fast | $60 | x2.2 | 20 |
 | Night shift | doubles how long the airport runs while you are away (2 h, 4 h, 8 h, 16 h, 24 h) | earns nothing while you are playing | $500 | x10 | 4 |
 
@@ -131,11 +153,12 @@ upgrade is bought:
 - One gate's cycle is `fill + turn`, where `fill = min(seats / rate, timer)`.
 - Gate capacity `G = gates x min(seats, rate x timer) / cycle` passengers a
   second.
-- If arrivals `A >= G` the gates are the bottleneck: throughput is `G`, and
+- Supply is what reaches the lounge: `min(A, S)` (section 3).
+- If supply `>= G` the gates are the bottleneck: throughput is `G`, and
   flights leave full when `seats / rate <= timer`.
-- Otherwise passengers are the bottleneck: throughput is `A`, and flights leave
-  full when the arrivals shared between gates fill a plane before its timer:
-  `seats x gates / A - turn <= timer`.
+- Otherwise passengers are the bottleneck, held back by security when `S <= A`:
+  throughput is the supply, and flights leave full when it, shared between
+  gates, fills a plane before its timer: `seats x gates / supply - turn <= timer`.
 - Income = throughput x fare x multipliers (the full-flight bonus only if flights
   leave full; charters at their expected 5%).
 
@@ -143,10 +166,11 @@ The bottleneck is named on screen in one line, with the upgrade that fixes it:
 
 | Case | Says | Points to |
 | --- | --- | --- |
-| A < G | Planes are waiting for passengers | Bigger terminal |
+| A < G, A < S | Planes are waiting for passengers | Bigger terminal |
+| S <= A, S < G | Long lines at security | Security lanes |
 | A >= G, fill is most of the cycle | Passengers are queuing at the gates | Faster boarding, or more gates |
 | A >= G, turnaround is most of the cycle | Gates are busy turning planes around | Ground crew, or bigger planes |
-| Flights leave not full | Planes leave before they fill | Bigger terminal or faster boarding |
+| Flights leave not full (security not the limit) | Planes leave before they fill | Bigger terminal or faster boarding |
 
 The harness checks the estimate against measured idle income (within 20%).
 
@@ -162,8 +186,12 @@ The harness checks the estimate against measured idle income (within 20%).
   recap of three lines shows once:
   1. how long you were away, and whether the cap cut it short;
   2. cash earned, flights flown and how many left full;
-  3. what happened: charters landed, passengers missed, and the bottleneck that
-     cost the most, as a hint.
+  3. what happened: charters landed, passengers who turned back at the door,
+     and the bottleneck that cost the most, as a hint.
+- A testing time skip in Settings (+5 min, +1 hour, +8 hours) runs the airport
+  ahead at once, exactly as a catch-up does but with no cap, and shows the same
+  recap. It is a host cheat for playtesting (the sim is unchanged); see
+  docs/GAPS.md.
 
 ## 10. Selling the airport: slots and cities
 
@@ -179,8 +207,8 @@ The harness checks the estimate against measured idle income (within 20%).
 | --- | --- | --- |
 | 1 | Millbrook | None: a quiet regional field to learn on. |
 | 2 | Port Calder | Short runway: planes stop at size `shortRunwayMaxPlane` (level 5), so routes stop there too, but every fare is +`shortRunwayFare` (+50%). Gates and terminal carry the rest. |
-| 3 | Highmoor Hub | Hub: every full flight sends `hubTransfer` (20%) of its seats back into the terminal as connecting passengers. Full flights feed themselves. |
-| 4 | Sunvale | Holiday waves: for `waveTicks` (60 s) of every `wavePeriod` (5 min) arrivals run at `waveArrival` (3x), and at `offWaveArrival` (0.6x) otherwise. A big terminal stores the wave. |
+| 3 | Highmoor Hub | Hub: every full flight sends `hubTransfer` (20%) of its seats back into the lounge as connecting passengers (they are already past security). Full flights feed themselves. |
+| 4 | Sunvale | Holiday waves: for `waveTicks` (60 s) of every `wavePeriod` (5 min) arrivals run at `waveArrival` (3x), and at `offWaveArrival` (0.6x) otherwise. The line and a big lounge store the wave. |
 
 The first sale is meant for about 30-60 minutes into the game (section 11).
 
@@ -189,20 +217,21 @@ The first sale is meant for about 30-60 minutes into the game (section 11).
 Measured by the harness bots (`npm run harness -- pacing`; packages/harness/src/pacing.test.ts
 holds them on every build). The greedy bot taps three times a second, looks at
 its upgrades once a second, buys the best income per dollar (one purchase
-ahead), and sells once a sale adds at least half again to fares (3 slots the
+ahead), taps the security line instead of a gate while people queue there and
+it has the least rush banked, and sells once a sale adds at least half again to fares (3 slots the
 first time) and the next slot is further away than a quarter of the airport's
 age. The idle bot never taps, checks in every 15 minutes, and sells at the
 first check-in where the sale adds half again. Both use every boost that is
 ready: the greedy bot at once, the idle bot as it leaves each check-in.
 
-| Target | Measured (seeds 1-5, with boosts, P11) |
+| Target | Measured (seeds 1-5, with boosts and the security line, P12) |
 | --- | --- |
 | First upgrade within 10 s | 3 s |
 | First new gate within 2 minutes | 19-29 s |
-| Something new (a gate, plane, route or sale) at least every 5 minutes before the first sale | longest wait 4.4-4.6 min |
-| First sale at roughly 30-60 minutes (greedy) | 33.5-33.9 min, 3 slots (35.5-35.9 without boosts) |
-| First sale for an idle player (no taps, check-ins every 15 min) | about 2 h 15 min, 3 slots (2 h 45 min without boosts; reported, no target) |
-| Active income about 2-3x idle at the same levels (tapping; measured at the levels the greedy bot reaches without boosts, where the pacing pass tuned it) | 2.3-2.8x (2.3-3.2x at the levels it reaches with boosts, reported) |
+| Something new (a gate, plane, route or sale) at least every 5 minutes before the first sale | longest wait 4.3-4.4 min |
+| First sale at roughly 30-60 minutes (greedy) | 34.1-34.4 min, 3 slots (36.7-37.1 without boosts) |
+| First sale for an idle player (no taps, check-ins every 15 min) | about 2 h 15 min, 3 slots (2 h 30 min without boosts; reported, no target) |
+| Active income about 2-3x idle at the same levels (tapping; measured at the levels the greedy bot reaches without boosts, where the pacing pass tuned it) | 2.3-2.8x (2.3-3.0x at the levels it reaches with boosts, reported) |
 | A 30-second check-in buys at least one upgrade | 100% of idle check-ins |
 | A 5-minute session reaches its next unlock | 9 of 9 idle check-ins at the first airport, every seed (target 80%) |
 | Income estimate within 20% of measured idle income | within 4% |
@@ -224,6 +253,10 @@ disagree.
 | `arrivalGrowthBp` | 13500 | 12000 | 15000 | Arrivals per terminal level (+35%). |
 | `terminalCapBase` | 40 | 20 | 100 | Passengers who can wait at terminal level 0. |
 | `terminalCapGrowthBp` | 13500 | 12000 | 15000 | Waiting room per terminal level; matches arrivals so the room holds the same seconds of arrivals. |
+| `securityBaseMilliPerTick` | 600 | 400 | 1500 | Milli-passengers security clears a tick at level 0 (2.4 a second): ahead of level-0 arrivals, so the first minutes have no line. |
+| `securityGrowthBp` | 15000 | 12500 | 16000 | Security per Security lanes level (+50%): ahead of the terminal's +35%, so a lane bought keeps up for a while. |
+| `lineWaitTicks` | 120 | 40 | 240 | The longest wait people will join (30 s of clearing): the line holds this many ticks of security; beyond it they turn back at the door. |
+| `intlCheckBp` | 9500 | 6000 | 10000 | Security speed for each international departure checkpoint (passport control, preclearance): x0.95 each. The catch of the long routes; at x0.8 the greedy bot put off Transatlantic for 6 minutes (P12). |
 | `maxGates` | 8 | 4 | 12 | Most gates: 8 fit a phone screen in two columns. |
 | `planeSeatsBase` | 10 | 6 | 20 | Seats at plane level 0. |
 | `planeSeatsGrowthBp` | 15000 | 13000 | 18000 | Seats per plane level (+50%). |
@@ -253,6 +286,8 @@ disagree.
 | `boardCostGrowthBp` | 19000 | 15000 | 25000 | Boarding cost growth (x1.9). |
 | `terminalCostBase` | 3000 | 1000 | 10000 | Cents for terminal level 1 ($30). |
 | `terminalCostGrowthBp` | 20000 | 15000 | 25000 | Terminal cost growth (x2.0). |
+| `securityCostBase` | 2500 | 1000 | 20000 | Cents for Security lanes level 1 ($25). |
+| `securityCostGrowthBp` | 18000 | 15000 | 25000 | Security lanes cost growth (x1.8), a little under the terminal's x2 it keeps up with. |
 | `routeCostBase` | 75000 | 10000 | 200000 | Cents for route level 1 ($750). |
 | `routeCostGrowthBp` | 40000 | 35000 | 80000 | Route cost growth (x4). |
 | `crewCostBase` | 6000 | 2000 | 20000 | Cents for crew level 1 ($60). |
@@ -261,6 +296,7 @@ disagree.
 | `nightCostGrowthBp` | 100000 | 50000 | 200000 | Night shift cost growth (x10). |
 | `maxBoardLevel` | 40 | 20 | 60 | Boarding levels. |
 | `maxTerminalLevel` | 40 | 20 | 60 | Terminal levels. |
+| `maxSecurityLevel` | 40 | 20 | 60 | Security lanes levels, as many as the terminal. |
 | `maxCrewLevel` | 20 | 10 | 30 | Crew levels; turnaround hits its floor first. |
 | `maxNightLevel` | 4 | 2 | 6 | Night shift levels. |
 | `offlineBaseMinutes` | 120 | 30 | 240 | Offline cap with no night shift (2 h). |
@@ -290,8 +326,11 @@ disagree.
 
 Checked by property tests on every build:
 
-- Cash, waiting passengers and every plane's load are never negative; a plane
-  never holds more than its seats; the terminal never holds more than `W`.
+- Cash, the security line, waiting passengers and every plane's load are never
+  negative; a plane never holds more than its seats; the lounge never holds
+  more than `W`; the line never holds more than `L` at route level 0 (a new
+  international route can slow security below a line already standing); an
+  extra lane is never banked past `rushMax`.
 - The same seed and the same commands always give the same state hash, in Node
   and in Chromium.
 - Catching up N ticks at once gives exactly the state that stepping N single
@@ -300,22 +339,33 @@ Checked by property tests on every build:
 - Cash only changes by fares (up) and purchases (down); a purchase never makes
   cash negative.
 - A boost's time left is never negative and never more than its recharge left.
-- An old save loads: it migrates to the current version and replays to the
-  airport it recorded (tested with a real version-1 save).
+- An old save loads: it migrates to the current version. A compact save (what
+  the game writes) is checked against its recorded hash and becomes exactly
+  the airport it recorded, with an empty line and the Security lanes level that
+  keeps up with its terminal; a save with history replays it under today's
+  rules (tested with a real version-1 and a real version-2 save).
 
 ## 14. The passenger journey (what the screen shows)
 
-Above the gates the screen shows passengers walking through the airport. It is
-**scenery**: it reads the numbers of sections 3-5 and changes none of them, so
-no checkpoint ever slows anyone down, and nothing here is in State, the hash or
-a save.
+The middle of the screen, above the gates, shows passengers walking through the
+airport. The **security line is real** (section 3): the dots standing in the
+security maze are the line in State, so it fills when security falls behind,
+empties when a lane is bought, and backs up when the lounge is full. The lounge
+crowd is the real waiting count. Everything else here is **scenery**: check-in,
+passport control, preclearance and the arrivals checkpoints never hold anyone
+(passport control and preclearance only slow security, section 3), and nothing
+but the line and the lounge is in State, the hash or a save.
 
-- **Departures:** door, the departure checkpoints, the lounge (the terminal's
-  waiting room of section 3, its crowd the real waiting count), then down the
-  walkway between the gates to the gate that boards them. People enter at the
-  arrival rate less those a full lounge turns away (section 3's missed
-  passengers, shown turning back at the door), and one walks to a gate for each
-  passenger it boards (section 5).
+- **Departures:** door, check-in, the security maze (a line that snakes along
+  three rows into the scanners), any international checkpoints, the lounge, then
+  down the walkway between the gates to the gate that boards them. People enter
+  at the arrival rate less those a full line turns away (shown turning back at
+  the door), the head of the line steps into a scanner as fast as security
+  clears it, and one walks to a gate for each passenger it boards (section 5).
+- **The maze is the security button.** Tapping it opens an extra lane (section
+  6). It shows the line's length and the wait ("34 in line · 14 s"), "held:
+  lounge full" when the lounge stops it, one scanner bar per two Security lanes
+  levels (up to six), and the extra lane in green while it is open.
 - **Arrivals:** each plane that arrives at a gate (section 4) lets off one
   person per seat, at most 10, who walk out through the arrival checkpoints to
   the exit. They pay nothing and never enter the terminal.
@@ -324,13 +374,14 @@ a save.
 | From route level | Departures add | Arrivals add |
 | --- | --- | --- |
 | 0 (Island hops) | Check-in, Security | Baggage claim |
-| 5 (Continental: international) | Passport control | Passport control, Customs |
-| 6 (Transatlantic: transoceanic) | Preclearance | - |
+| 5 (Continental: international) | Passport control (slows security) | Passport control, Customs |
+| 6 (Transatlantic: transoceanic) | Preclearance (slows security) | - |
 
 - One dot stands for 1, 2, 5, 10, 20, 50... people, picked so a few dots a
   second walk in however big the airport grows; the lounge shows the scale.
-- Display limits, not balance: at most 220 people on screen, and none walk for
-  ticks caught up quietly (an absence or a late timer).
+- Display limits, not balance: at most 260 people on screen and 150 in the
+  maze (a longer line squeezes up), and none walk for ticks caught up quietly
+  (an absence or a late timer); the maze is filled in from the real line.
 
 ## 15. Boosts
 
@@ -343,7 +394,7 @@ do and an active player a burst to plan around.
 | Boost | While it runs | Length | Recharge | Opens | Fixes |
 | --- | --- | --- | --- | --- | --- |
 | Rush hour | arrivals x`rushHourArrival` (3x); past the waiting room they are missed | `rushHourTicks` (60 s) | `rushHourRechargeTicks` (5 min) | at once | Planes are waiting for passengers; planes leave before they fill |
-| All hands | every gate is rushed as if tapped (section 6), walk-ups included | `allHandsTicks` (60 s) | `allHandsRechargeTicks` (5 min) | at `allHandsMinGates` gates (3) | Passengers queuing at the gates; gates busy turning around |
+| All hands | every gate and the security line are rushed as if tapped (section 6), walk-ups included | `allHandsTicks` (60 s) | `allHandsRechargeTicks` (5 min) | at `allHandsMinGates` gates (3) | Passengers queuing at the gates; gates busy turning around; long lines at security |
 | Fare surge | every fare x`surgeFare` (2x), after every other multiplier | `surgeTicks` (60 s) | `surgeRechargeTicks` (15 min) | with route level `surgeMinRoute` (1) | any bottleneck |
 
 - The recharge counts from the tick the boost is used, so it includes the

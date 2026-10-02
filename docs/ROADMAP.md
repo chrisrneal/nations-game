@@ -3,7 +3,8 @@
 ## The game
 Mobile-first installable PWA idle game. You run an airport: passengers arrive in
 the terminal, board planes at your gates, and each plane pays its fares when it
-leaves full or on its timer. Cash buys upgrades, each a trade-off that moves the
+leaves full or on its timer. Passengers queue at security on the way in, and
+that line is the centre of the screen. Cash buys upgrades, each a trade-off that moves the
 bottleneck. The airport keeps running while the app is closed, up to a cap. Sell
 the airport for slots that permanently boost the next one, in a new city with a
 twist. Single player, offline-first, no backend. Rules: docs/RULES.md. Why it
@@ -74,6 +75,9 @@ pacing report meets RULES 11; the app installs and plays offline.
 ## After the pivot
 - **Boosts** (P11, owner request, 2026-10-02): three free, timed boosts on
   recharge clocks (RULES 15).
+- **The security line** (P12, owner request, 2026-10-02): a real queue with
+  its own upgrade and tap, shown as the centre of the screen (RULES 3, 14);
+  a testing time skip in Settings.
 
 ## Later (not planned)
 Achievements, more cities, cloud save. Any of these needs a decision record.

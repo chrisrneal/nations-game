@@ -631,3 +631,53 @@ height); with All hands on eight gates, departures and their effects roughly
 double, and the phone check reads 56-59 fps (budget 55; 58-60 before).
 **Reversing it.** Remove the command and the State field with a migration
 from 2 to 3; the tunables, RULES 15 and the boost bar are self-contained.
+
+## P12 - The security line is a real queue; the flow is the centre of the screen
+**Status.** Accepted, 2026-10-02, at the owner's request ("improve the queueing
+system ... I want it to be more of the focus, watch your empire move"). The
+owner asked for the change directly, so this session wrote the record (P2's
+architect role, for this change only, as for P11). This answers the open
+question in docs/GAPS.md: should checkpoints be real bottlenecks.
+**Decision.** Security becomes a real queue (RULES 3). Arrivals join a line in
+State (`line`, milli-passengers); security clears it into the lounge at its
+own rate, set by a new eighth upgrade, Security lanes ($25, x1.8 a level, +50%
+speed a level); a full lounge holds the line; people will not join a line
+longer than 30 s of clearing and turn back at the door instead (the missed
+count). Passport control and preclearance, scenery until now, each slow
+security by 5%: the catch of the long routes. A new command, `tapSecurity`,
+opens an extra lane for the tap rush's 2.5 s (`securityRush` in State), and All
+hands opens it too. The income estimate takes `min(arrivals, security)` and
+names a new bottleneck, "Long lines at security", fixed by Security lanes.
+Seven new tunables with bands. Save schema 3.
+On screen (P7 still holds: canvas and direct DOM writes), the passenger flow
+grows from a strip into the middle of the screen: the security maze, a
+tappable panel where the dots standing in line are the real line, snaking
+along three rows into a bank of scanners (one bar per two lanes levels), with
+its length and wait written above it; a bigger lounge with the international
+checkpoints beside it; arrivals along the top.
+**Migration.** Old rules are not kept, so a migration changes only the
+snapshot and the history since it is replayed under today's rules. The game's
+own saves are compact (snapshot at the save point, no history): those are
+checked against their old hash and migrate exactly, with an empty line and the
+lowest Security lanes level that keeps up with their terminal, so an old
+airport is not suddenly choked. Saves with history (the version-1 fixture) are
+no longer proven against their old hash; the v1-to-2 migration's replay proof
+retired with this one.
+**Why.** The owner wants the queue to be the thing to watch. A queue that is
+only scenery cannot carry that: it never builds, so there is nothing to see.
+A real line gives the screen a story the player reads at a glance (the maze
+filling is the bottleneck) and a new trade-off in the loop pillar 2 asks for:
+a bigger terminal makes the line longer, lanes fix it, routes slow it.
+**Measured** (`npm run harness -- pacing`, seeds 1-5): the greedy first sale
+34.1-34.4 min (was 33.5-33.9), the idle player's about 2 h 15 min (unchanged),
+the longest wait for something new 4.3-4.4 min (was 4.4-4.6), tapping 2.3-2.8x
+idle; every RULES 11 target holds. The first numbers (security x2 cost, +40%
+a level, international x0.8) put a 6-minute wait before Transatlantic, which
+slowed security enough that the bot put it off; the shipped numbers are the
+sweep that held every target with the old margin.
+**Cost.** A save migration and a weaker proof for old saves with history; two
+State fields in the hash; a fifth command; an eighth upgrade row; the
+concourse takes about 70 px more of the screen, so the gates scroll sooner.
+**Reversing it.** Drop the line (arrivals straight into the lounge), the
+command, the upgrade and the State fields with a migration from 3 to 4; the
+maze becomes the old strip again.

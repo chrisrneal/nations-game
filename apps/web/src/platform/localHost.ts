@@ -35,6 +35,8 @@ export interface AirportHost {
   back(): Promise<void>;
   /** The player has read the away recap. */
   dismissRecap(): Promise<void>;
+  /** Testing cheat: run the airport this many minutes ahead at once, with a recap. */
+  skip(minutes: number): Promise<void>;
 }
 
 /** Marker and version of an exported save file. */
@@ -44,7 +46,7 @@ export const FILE_VERSION = 1;
 type Async<T> = T | Promise<T>;
 /** The engine as LocalHost sees it: in-process in tests, a Comlink Remote in the app. */
 export type EngineApi = {
-  [K in 'newGame' | 'submit' | 'subscribe' | 'current' | 'pump' | 'pause' | 'resume' | 'exportGame' | 'importGame' | 'dismissRecap']: (
+  [K in 'newGame' | 'submit' | 'subscribe' | 'current' | 'pump' | 'pause' | 'resume' | 'exportGame' | 'importGame' | 'dismissRecap' | 'skip']: (
     ...args: Parameters<AirportEngine[K]>
   ) => Async<ReturnType<AirportEngine[K]>>;
 };
@@ -164,6 +166,12 @@ export class LocalHost implements AirportHost {
 
   async dismissRecap(): Promise<void> {
     await this.options.engine.dismissRecap();
+  }
+
+  async skip(minutes: number): Promise<void> {
+    await this.ready;
+    this.publish(await this.options.engine.skip(minutes));
+    await this.autosave();
   }
 
   /** Write the autosave slot now, if an airport is running. */

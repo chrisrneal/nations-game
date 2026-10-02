@@ -6,14 +6,15 @@ import type { BoostId, CheckpointView, JourneyView, UpgradeId } from '@airport/c
  */
 
 /** The upgrade sheet's order. */
-export const UPGRADE_IDS: readonly UpgradeId[] = ['gates', 'plane', 'boarding', 'terminal', 'route', 'crew', 'night'];
+export const UPGRADE_IDS: readonly UpgradeId[] = ['gates', 'plane', 'boarding', 'terminal', 'security', 'route', 'crew', 'night'];
 
 export const UPGRADE_TEXT: Readonly<Record<UpgradeId, { name: string; catch: string }>> = {
   gates: { name: 'More gates', catch: 'Gates share the same passengers: with a small terminal, planes leave emptier.' },
   plane: { name: 'Bigger planes', catch: 'Slower to fill, longer turnaround; miss the timer and lose the full-flight bonus.' },
   boarding: { name: 'Faster boarding', catch: 'Jet bridges and agents. Only pays while passengers are waiting.' },
-  terminal: { name: 'Bigger terminal', catch: 'More arrivals and waiting room. Only pays if the gates can board them.' },
-  route: { name: 'Better routes', catch: 'Higher fares, but each route needs planes at least as big as its level.' },
+  terminal: { name: 'Bigger terminal', catch: 'More arrivals and lounge seats. Only pays if security and the gates keep up.' },
+  security: { name: 'Security lanes', catch: 'A faster, longer line. Only pays while people are queuing.' },
+  route: { name: 'Better routes', catch: 'Higher fares; needs planes as big as its level. Passport control slows security.' },
   crew: { name: 'Ground crew', catch: 'Shorter turnaround. Worth most with small planes that fill fast.' },
   night: { name: 'Night shift', catch: 'Keeps the airport running longer while you are away. Earns nothing while you play.' },
 };
@@ -65,16 +66,18 @@ export const ROUTES: readonly string[] = [
  * The checkpoints on the passenger journey (RULES 14), in walking order, each
  * shown from the route level that needs it: international routes (Continental
  * on) add passport control and customs, transoceanic ones (Transatlantic on)
- * add preclearance. Scenery: no checkpoint slows anyone down.
+ * add preclearance. Security is the real queue (RULES 3); the departure
+ * checkpoints marked `slowsSecurity` slow it by `intlCheckBp` each. The rest
+ * are scenery.
  */
-export const CHECKPOINTS: readonly { readonly way: 'departures' | 'arrivals'; readonly fromRoute: number; readonly view: CheckpointView }[] = [
-  { way: 'departures', fromRoute: 0, view: { id: 'checkin', name: 'Check-in', label: 'Check-in' } },
-  { way: 'departures', fromRoute: 0, view: { id: 'security', name: 'Security', label: 'Security' } },
-  { way: 'departures', fromRoute: 5, view: { id: 'passport', name: 'Passport control', label: 'Passport' } },
-  { way: 'departures', fromRoute: 6, view: { id: 'preclearance', name: 'Preclearance', label: 'Preclearance' } },
-  { way: 'arrivals', fromRoute: 5, view: { id: 'passport', name: 'Passport control', label: 'Passport' } },
-  { way: 'arrivals', fromRoute: 0, view: { id: 'baggage', name: 'Baggage claim', label: 'Baggage' } },
-  { way: 'arrivals', fromRoute: 5, view: { id: 'customs', name: 'Customs', label: 'Customs' } },
+export const CHECKPOINTS: readonly { readonly way: 'departures' | 'arrivals'; readonly fromRoute: number; readonly slowsSecurity: boolean; readonly view: CheckpointView }[] = [
+  { way: 'departures', fromRoute: 0, slowsSecurity: false, view: { id: 'checkin', name: 'Check-in', label: 'Check-in' } },
+  { way: 'departures', fromRoute: 0, slowsSecurity: false, view: { id: 'security', name: 'Security', label: 'Security' } },
+  { way: 'departures', fromRoute: 5, slowsSecurity: true, view: { id: 'passport', name: 'Passport control', label: 'Passport' } },
+  { way: 'departures', fromRoute: 6, slowsSecurity: true, view: { id: 'preclearance', name: 'Preclearance', label: 'Preclearance' } },
+  { way: 'arrivals', fromRoute: 5, slowsSecurity: false, view: { id: 'passport', name: 'Passport control', label: 'Passport' } },
+  { way: 'arrivals', fromRoute: 0, slowsSecurity: false, view: { id: 'baggage', name: 'Baggage claim', label: 'Baggage' } },
+  { way: 'arrivals', fromRoute: 5, slowsSecurity: false, view: { id: 'customs', name: 'Customs', label: 'Customs' } },
 ];
 
 /** The journey at this route level. */

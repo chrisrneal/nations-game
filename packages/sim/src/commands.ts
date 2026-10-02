@@ -1,7 +1,7 @@
 import type { AirportCommand } from '@airport/contracts';
 import { BOOST_IDS, UPGRADE_IDS } from './catalog.ts';
 
-const TYPES = new Set(['tap', 'buy', 'boost', 'sell']);
+const TYPES = new Set(['tap', 'tapSecurity', 'buy', 'boost', 'sell']);
 
 /**
  * Shape check for a command from outside (the interface, a save file, a bot).

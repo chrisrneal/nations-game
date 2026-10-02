@@ -1,7 +1,8 @@
 # Progress
 Current state: **the pivot is complete** (decision records P1-P10). The app is
 the idle airport game: all eight slices are merged. Since then: the passenger
-flow, and boosts (P11).
+flow, boosts (P11), and the security line as a real queue at the centre of the
+screen (P12).
 The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 (docs/PROGRESS.md there).
 
@@ -16,6 +17,42 @@ The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 - [x] 8. Remove the remaining Nations code; README
 
 ## Session log
+
+### 2026-10-02 - The security line: a real queue at the centre of the screen (lanes C, S, H, U, P, D; owner request, P12)
+**What changed.** Security is now a real queue (RULES 3). Arrivals join a line,
+security lets them into the lounge at its own speed, a full lounge holds the
+line, and people turn back at the door rather than join a line longer than
+30 s. A new upgrade, Security lanes ($25, +50% speed a level), fixes it; a
+tap on the line opens an extra lane for 2.5 s (All hands opens it too);
+passport control and preclearance each slow security 5%. "Long lines at
+security" is a new bottleneck the screen names. On the phone the thin flow
+strip is now the middle of the screen: a security maze where the dots
+standing in line are the real line, shuffling forward into a bank of scanners
+(one bar per two lanes levels), its length and wait written above ("1.1K in
+line · 9s"); a bigger lounge with passport control beside it; arrivals walking
+round the side to the exit. The away recap blames the right thing when people
+turned back. For testing, Settings has a time skip (+5 min, +1 hour, +8 hours)
+that runs the airport ahead exactly as a catch-up does and recaps it. Save
+schema 3: the game's own saves migrate exactly (checked against their hash),
+with the lanes level that keeps up with their terminal; a real version-2
+autosave is the new fixture.
+**Checks.** `npm test` (316 tests: 15 security rules with worked numbers, the
+line and taps in the random-play properties, two real old saves, the maze
+model, the time skip in the engine) and `npm run check` pass. Pacing, seeds
+1-5: greedy first sale 34.1-34.4 min (was 33.5-33.9), longest wait for
+something new 4.3-4.4 min, idle about 2 h 15 min, tapping 2.3-2.8x idle;
+every RULES 11 target holds (docs/balance/airport-pacing.md). Phone check
+55/56: the maze is a 318x87 px tap target, a tap opens a lane, the busy
+airport's 1.1K line stands in the maze with six scanners, the time skip runs
+an hour; no horizontal scroll and 44 px targets everywhere. The 60 fps run
+read 38.7 fps on a CPU slowed 4x, but the build before this change reads the
+same 40-46 fps on this machine (earlier sessions read 56-59), so it is logged
+in docs/GAPS.md to recheck on a real phone.
+**How to see it.** Open the app: the security maze is in the middle. Buy a
+few Bigger terminal levels and watch the line build; buy Security lanes or tap
+the maze to clear it. Settings > Testing: skip ahead to jump forward.
+**What is left.** Hide the time skip before real players; a real-phone frame
+rate check (docs/GAPS.md).
 
 ### 2026-10-02 - Boosts (lanes C, S, H, U, P, D; owner request, P11)
 **What changed.** Three free boosts sit above the Upgrades button (RULES 15).

@@ -1,4 +1,4 @@
-import type { AirportState, AirportView, BoostId, BoostView, Bottleneck, BottleneckKind, CityView, EffectUnit, GateView, UpgradeId, UpgradeView } from '@airport/contracts';
+import type { AirportState, AirportView, BoostId, BoostView, Bottleneck, BottleneckKind, CityView, EffectUnit, GateView, SecurityView, UpgradeId, UpgradeView } from '@airport/contracts';
 import { BOOST_IDS, BOOST_NAMES, PLANE_MODELS, ROUTES, UPGRADE_IDS, UPGRADE_TEXT, cityAt, journeyAt, nameAt } from './catalog.ts';
 import { mulDiv } from './math.ts';
 import {
@@ -18,6 +18,8 @@ import {
   meanArrivalBp,
   offlineMinutesAt,
   seatsAt,
+  securityMilliAt,
+  securitySlowBpAt,
   slotsFor,
   turnTicksFor,
   twistText,
@@ -38,6 +40,7 @@ export interface Estimate {
 
 const BOTTLENECK_TEXT: Readonly<Record<BottleneckKind, string>> = {
   passengers: 'Planes are waiting for passengers.',
+  security: 'Long lines at security.',
   boarding: 'Passengers are queuing at the gates.',
   turnaround: 'Gates are busy turning planes around.',
   timer: 'Planes leave before they fill.',
@@ -45,8 +48,9 @@ const BOTTLENECK_TEXT: Readonly<Record<BottleneckKind, string>> = {
 
 /**
  * Passengers a second the gates can actually take when arrivals average
- * `mean`. Sunvale's waves arrive faster than the gates can board for a minute,
- * then slower: the terminal stores what it can of the wave for the quiet spell.
+ * `mean`, with `capacity` the slower of security and the gates. Sunvale's
+ * waves arrive faster than that for a minute, then slower: the line and the
+ * lounge store what they can of the wave for the quiet spell.
  */
 function supplyThroughput(twist: ReturnType<typeof derive>['twist'], mean: number, capacity: number, room: number): number {
   if (twist !== 'waves') return mean;
@@ -99,13 +103,15 @@ export function estimate(state: AirportState, boost: BoostEffect = NO_BOOST): Es
   const fill = seats / board;
   const cycle = Math.min(fill, timer) + turn;
   const capacity = (d.gates * Math.min(seats, board * timer)) / cycle;
+  // Security clears the line into the lounge (RULES 3); All hands opens an extra lane.
+  const security = (boost.rushed ? mulDiv(d.securityMilli, T.rushBoardBp.value, BP) : d.securityMilli) / 1000 / tickSec;
 
   let throughput: number;
   let full: boolean;
   let kind: BottleneckKind;
   let fix: UpgradeId[];
-  const supply = supplyThroughput(d.twist, arrivals, capacity, d.waitCapMilli / 1000);
-  // Rushed gates board walk-ups when the terminal is empty (RULES 6): the gates are the limit.
+  const supply = Math.min(security, supplyThroughput(d.twist, arrivals, Math.min(capacity, security), (d.waitCapMilli + d.lineCapMilli) / 1000));
+  // Rushed gates board walk-ups when the lounge is empty (RULES 6): the gates are the limit.
   if (boost.rushed || supply >= capacity * 0.999) {
     throughput = capacity;
     full = fill <= timer;
@@ -113,11 +119,12 @@ export function estimate(state: AirportState, boost: BoostEffect = NO_BOOST): Es
     fix = kind === 'turnaround' ? ['crew', 'plane'] : ['boarding', 'gates'];
   } else {
     full = (seats * d.gates) / supply - turn <= timer;
-    // Highmoor Hub: full flights send a share of their seats back to the terminal.
+    // Highmoor Hub: full flights send a share of their seats back to the lounge, past security.
     const fed = full && d.twist === 'hub' ? supply / (1 - T.hubTransferBp.value / BP) : supply;
     throughput = Math.min(capacity, fed);
-    kind = full ? 'passengers' : 'timer';
-    fix = ['terminal'];
+    const queued = supply >= security * 0.999;
+    kind = queued ? 'security' : full ? 'passengers' : 'timer';
+    fix = queued ? ['security'] : ['terminal'];
   }
   const charter = 1 + (T.charterChanceBp.value / BP) * (T.charterFareBp.value / BP - 1);
   const bonus = full ? 1 + T.fullBonusBp.value / BP : 1;
@@ -148,6 +155,8 @@ function effect(id: UpgradeId, level: number, state: AirportState, fareMul: numb
       return { unit: 'paxPerSec', value: perSec(boardMilliAt(level)), name: null };
     case 'terminal':
       return { unit: 'paxPerSec', value: perSec(arrivalMilliAt(level)), name: null };
+    case 'security':
+      return { unit: 'paxPerSec', value: perSec(securityMilliAt(level, state.levels.route)), name: null };
     case 'route':
       return { unit: 'cents', value: mulDiv(fareCentsAt(level), fareMul, BP) * 1000, name: nameAt(ROUTES, level) };
     case 'crew':
@@ -183,6 +192,7 @@ function upgradeView(id: UpgradeId, state: AirportState, fareMul: number): Upgra
 /** Which boost fixes each bottleneck (RULES 8, 15). Fare surge pays whatever the bottleneck. */
 const BOOST_FIXES: Readonly<Record<BottleneckKind, BoostId>> = {
   passengers: 'rushHour',
+  security: 'allHands',
   timer: 'rushHour',
   boarding: 'allHands',
   turnaround: 'allHands',
@@ -210,6 +220,21 @@ function cityView(sold: number): CityView {
   return { index: sold, name: city.label, twist: twistText(city.twist) };
 }
 
+/** The security line now (RULES 3). */
+function securityView(state: AirportState, d: ReturnType<typeof derive>, boost: BoostEffect): SecurityView {
+  const rushed = state.securityRush > 0 || boost.rushed;
+  const rate = rushed ? mulDiv(d.securityMilli, T.rushBoardBp.value, BP) : d.securityMilli;
+  return {
+    line: state.line,
+    cap: d.lineCapMilli,
+    ratePerTick: rate,
+    baseRatePerTick: d.securityMilli,
+    rushed,
+    waitTicks: rate === 0 ? 0 : Math.ceil(state.line / rate),
+    slowBp: securitySlowBpAt(state.levels.route),
+  };
+}
+
 /** Everything the interface reads (S6, P5). */
 export function airportView(state: AirportState): AirportView {
   const d = derive(state);
@@ -233,6 +258,7 @@ export function airportView(state: AirportState): AirportView {
     route: nameAt(ROUTES, state.levels.route),
     planeModel: nameAt(PLANE_MODELS, state.levels.plane),
     terminal: { waiting: state.waiting, cap: d.waitCapMilli, arrivalPerTick: mulDiv(mulDiv(d.arrivalMilli, arrivalBpAt(d.twist, state.tick), BP), boost.arrivalBp, BP) },
+    security: securityView(state, d, boost),
     journey: journeyAt(state.levels.route),
     gates,
     upgrades: UPGRADE_IDS.map((id) => upgradeView(id, state, d.fareMulBp)),

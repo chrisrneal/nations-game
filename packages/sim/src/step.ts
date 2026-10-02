@@ -18,6 +18,8 @@ interface MState {
   tick: number;
   rng: RngState;
   cash: number;
+  line: number;
+  securityRush: number;
   waiting: number;
   levels: Mutable<Levels>;
   gates: MGate[];
@@ -35,6 +37,8 @@ function clone(s: AirportState): MState {
     tick: s.tick,
     rng: s.rng,
     cash: s.cash,
+    line: s.line,
+    securityRush: s.securityRush,
     waiting: s.waiting,
     levels: { ...s.levels },
     gates: s.gates.map((g) => ({ ...g })),
@@ -58,7 +62,25 @@ function bump(m: MState, key: keyof Stats, by: number): void {
   m.life[key] = Math.min(cashCap(), m.life[key] + by);
 }
 
-/** Adds passengers to the terminal up to its waiting room; the rest are missed (RULES 3). */
+/** Arrivals join the security line up to the longest line people will join; the rest are missed (RULES 3). */
+function joinLine(m: MState, milli: number, d: Derived): void {
+  const room = Math.max(0, d.lineCapMilli - m.line);
+  const added = Math.min(milli, room);
+  m.line += added;
+  if (milli > added) bump(m, 'missed', milli - added);
+}
+
+/** Security clears the head of the line into the lounge; a full lounge holds the line (RULES 3, 6). */
+function securityTick(m: MState, d: Derived): void {
+  const rushed = m.securityRush > 0 || m.boosts.allHands.left > 0;
+  if (m.securityRush > 0) m.securityRush -= 1;
+  const rate = rushed ? mulDiv(d.securityMilli, T.rushBoardBp.value, BP) : d.securityMilli;
+  const cleared = Math.min(rate, m.line, Math.max(0, d.waitCapMilli - m.waiting));
+  m.line -= cleared;
+  m.waiting += cleared;
+}
+
+/** Adds passengers straight to the lounge (connecting passengers stay airside) up to its seats; the rest are missed (RULES 10). */
 function addWaiting(m: MState, milli: number, d: Derived): void {
   const room = Math.max(0, d.waitCapMilli - m.waiting);
   const added = Math.min(milli, room);
@@ -209,6 +231,10 @@ function apply(m: MState, command: AirportCommand, events: Sink): boolean {
       bump(m, 'taps', 1);
       return false;
     }
+    case 'tapSecurity':
+      m.securityRush = Math.min(T.rushMaxTicks.value, m.securityRush + T.rushTicksPerTap.value);
+      bump(m, 'taps', 1);
+      return false;
     case 'buy':
       return buy(m, command.payload.upgrade, events);
     case 'boost':
@@ -219,14 +245,15 @@ function apply(m: MState, command: AirportCommand, events: Sink): boolean {
   }
 }
 
-/** One tick, in place: commands, arrivals, then every gate in rotating order (RULES 5). */
+/** One tick, in place: commands, arrivals into the line, security into the lounge, then every gate in rotating order (RULES 3, 5). */
 function tickInPlace(m: MState, commands: readonly AirportCommand[], d: Derived, events: Sink): Derived {
   let current = d;
   for (const command of commands.slice(0, T.maxCommandsPerTick.value)) {
     if (apply(m, command, events)) current = derive(m);
   }
   const arrivals = mulDiv(current.arrivalMilli, arrivalBpAt(current.twist, m.tick), BP);
-  addWaiting(m, m.boosts.rushHour.left > 0 ? mulDiv(arrivals, T.rushHourArrivalBp.value, BP) : arrivals, current);
+  joinLine(m, m.boosts.rushHour.left > 0 ? mulDiv(arrivals, T.rushHourArrivalBp.value, BP) : arrivals, current);
+  securityTick(m, current);
   const n = m.gates.length;
   const start = m.tick % n;
   for (let k = 0; k < n; k++) gateTick(m, (start + k) % n, current, events);
