@@ -1,5 +1,5 @@
 import type { AirportState, BoostId, UpgradeId } from '@airport/contracts';
-import { ROUTES, cityAt, nameAt, type CityTwist } from './catalog.ts';
+import { CHECKPOINTS, ROUTES, cityAt, nameAt, type CityTwist } from './catalog.ts';
 import { grow, isqrt, mulDiv } from './math.ts';
 import { AIRPORT_TUNABLES as T, type AirportTunableId } from './tunables.ts';
 
@@ -76,11 +76,32 @@ export function meanArrivalBp(twist: CityTwist): number {
   return Math.floor((T.waveArrivalBp.value * wave + T.offWaveArrivalBp.value * (period - wave)) / period);
 }
 
+/** International departure checkpoints open at this route level (passport control, preclearance): each slows security (RULES 3). */
+export function slowCheckpointsAt(route: number): number {
+  return CHECKPOINTS.filter((c) => c.way === 'departures' && c.slowsSecurity && route >= c.fromRoute).length;
+}
+
+/** Security's speed multiplier at this route level, basis points: x`intlCheckBp` per international checkpoint. */
+export function securitySlowBpAt(route: number): number {
+  return grow(BP, T.intlCheckBp.value, slowCheckpointsAt(route));
+}
+
+/** Milli-passengers security clears a tick (RULES 3), before any extra lane. */
+export function securityMilliAt(level: number, route: number): number {
+  return mulDiv(grow(T.securityBaseMilliPerTick.value, T.securityGrowthBp.value, level), securitySlowBpAt(route), BP);
+}
+
+/** The longest line people will join, milli-passengers: `lineWaitTicks` of clearing. */
+export function lineCapMilliFor(securityMilli: number): number {
+  return securityMilli * T.lineWaitTicks.value;
+}
+
 const COST: Readonly<Record<UpgradeId, readonly [AirportTunableId, AirportTunableId]>> = {
   gates: ['gatesCostBase', 'gatesCostGrowthBp'],
   plane: ['planeCostBase', 'planeCostGrowthBp'],
   boarding: ['boardCostBase', 'boardCostGrowthBp'],
   terminal: ['terminalCostBase', 'terminalCostGrowthBp'],
+  security: ['securityCostBase', 'securityCostGrowthBp'],
   route: ['routeCostBase', 'routeCostGrowthBp'],
   crew: ['crewCostBase', 'crewCostGrowthBp'],
   night: ['nightCostBase', 'nightCostGrowthBp'],
@@ -105,6 +126,8 @@ export function maxLevel(id: UpgradeId, state: Pick<AirportState, 'city'>): numb
       return T.maxBoardLevel.value;
     case 'terminal':
       return T.maxTerminalLevel.value;
+    case 'security':
+      return T.maxSecurityLevel.value;
     case 'crew':
       return T.maxCrewLevel.value;
     case 'night':
@@ -150,6 +173,9 @@ export interface Derived {
   readonly boardMilli: number;
   readonly arrivalMilli: number;
   readonly waitCapMilli: number;
+  /** Security per tick, international checkpoints included, extra lane not. */
+  readonly securityMilli: number;
+  readonly lineCapMilli: number;
   readonly fareCents: number;
   readonly crewBp: number;
   readonly fareMulBp: number;
@@ -159,6 +185,7 @@ export interface Derived {
 export function derive(state: Pick<AirportState, 'levels' | 'city' | 'slots'>): Derived {
   const { levels } = state;
   const seats = seatsAt(levels.plane);
+  const securityMilli = securityMilliAt(levels.security, levels.route);
   return {
     gates: 1 + levels.gates,
     seats,
@@ -166,6 +193,8 @@ export function derive(state: Pick<AirportState, 'levels' | 'city' | 'slots'>): 
     boardMilli: boardMilliAt(levels.boarding),
     arrivalMilli: arrivalMilliAt(levels.terminal),
     waitCapMilli: waitCapMilliAt(levels.terminal),
+    securityMilli,
+    lineCapMilli: lineCapMilliFor(securityMilli),
     fareCents: fareCentsAt(levels.route),
     crewBp: crewBpAt(levels.crew),
     fareMulBp: fareMulBp(state),

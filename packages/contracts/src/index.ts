@@ -32,6 +32,7 @@ export type {
   GateView,
   JourneyView,
   Levels,
+  SecurityView,
   SlotsView,
   Stats,
   TapPayload,

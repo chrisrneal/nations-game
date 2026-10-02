@@ -83,8 +83,10 @@ describe('boosts (RULES 15)', () => {
 
   it('Rush hour: 3x arrivals while it runs', () => {
     const s = { ...createAirport({ seed: 1 }), waiting: 0, gates: [{ ...gate(createAirport({ seed: 1 })), turn: 400, turnMax: 400 }] };
-    const plain = step(s, []).state.waiting;
-    const boosted = use(s, 'rushHour').state.waiting;
+    // Everyone who arrives is in the lounge or the security line (RULES 3).
+    const total = (x: AirportState): number => x.waiting + x.line;
+    const plain = total(step(s, []).state);
+    const boosted = total(use(s, 'rushHour').state);
     expect(plain).toBe(T.arrivalBaseMilliPerTick.value);
     expect(boosted).toBe((T.arrivalBaseMilliPerTick.value * T.rushHourArrivalBp.value) / 10_000);
   });

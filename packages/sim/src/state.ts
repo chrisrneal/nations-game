@@ -4,11 +4,11 @@ import { derive, type Derived } from './rules.ts';
 import { AIRPORT_TUNABLES as T } from './tunables.ts';
 
 /** Current airport save schema. Bump it with a migration in save.ts. */
-export const AIRPORT_SCHEMA_VERSION = 2;
+export const AIRPORT_SCHEMA_VERSION = 3;
 
 export const EMPTY_STATS: Stats = { earned: 0, flights: 0, fullFlights: 0, pax: 0, missed: 0, charters: 0, taps: 0 };
 
-export const ZERO_LEVELS: Levels = { gates: 0, plane: 0, boarding: 0, terminal: 0, route: 0, crew: 0, night: 0 };
+export const ZERO_LEVELS: Levels = { gates: 0, plane: 0, boarding: 0, terminal: 0, security: 0, route: 0, crew: 0, night: 0 };
 
 /** Every boost recharged and not running (RULES 15). */
 export const READY_BOOSTS: Boosts = { rushHour: { left: 0, recharge: 0 }, allHands: { left: 0, recharge: 0 }, surge: { left: 0, recharge: 0 } };
@@ -54,6 +54,8 @@ export function openAirport(keep: {
     tick: keep.tick,
     rng: keep.rng,
     cash: T.startingCashCents.value,
+    line: 0,
+    securityRush: 0,
     waiting: T.startingWaiting.value * 1000,
     levels: ZERO_LEVELS,
     gates: [arrivingGate(keep.nextPlane, d, false)],

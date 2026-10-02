@@ -8,8 +8,8 @@ import type { RngState } from './state.ts';
  * Nothing here is a float; State is hashed and must match on every machine.
  */
 
-/** The seven upgrades, in the order the upgrade sheet lists them. */
-export type UpgradeId = 'gates' | 'plane' | 'boarding' | 'terminal' | 'route' | 'crew' | 'night';
+/** The eight upgrades, in the order the upgrade sheet lists them. */
+export type UpgradeId = 'gates' | 'plane' | 'boarding' | 'terminal' | 'security' | 'route' | 'crew' | 'night';
 
 export type Levels = Readonly<Record<UpgradeId, number>>;
 
@@ -65,7 +65,11 @@ export interface AirportState {
   readonly rng: RngState;
   /** Cents. Never negative. */
   readonly cash: number;
-  /** Milli-passengers waiting in the terminal. */
+  /** Milli-passengers in the security line, not yet in the lounge (RULES 3). */
+  readonly line: number;
+  /** Ticks of rush banked at security by taps (an extra lane open, RULES 6). */
+  readonly securityRush: number;
+  /** Milli-passengers waiting in the lounge, past security. */
   readonly waiting: number;
   readonly levels: Levels;
   readonly gates: readonly GateState[];
@@ -91,9 +95,10 @@ export interface BoostPayload {
   readonly boost: BoostId;
 }
 
-/** Intent from the player (S2, P5). `tick` is the tick it applies to. */
+/** Intent from the player (S2, P5). `tick` is the tick it applies to. `tapSecurity` opens an extra lane at security for a moment. */
 export type AirportCommand =
   | { readonly tick: number; readonly type: 'tap'; readonly payload: TapPayload }
+  | { readonly tick: number; readonly type: 'tapSecurity'; readonly payload: Record<string, never> }
   | { readonly tick: number; readonly type: 'buy'; readonly payload: BuyPayload }
   | { readonly tick: number; readonly type: 'boost'; readonly payload: BoostPayload }
   | { readonly tick: number; readonly type: 'sell'; readonly payload: Record<string, never> };
@@ -103,6 +108,7 @@ export type AirportCommandType = AirportCommand['type'];
 /** A command before the host stamps it with the tick it applies to: what the interface sends. */
 export type AirportIntent =
   | { readonly type: 'tap'; readonly payload: TapPayload }
+  | { readonly type: 'tapSecurity'; readonly payload: Record<string, never> }
   | { readonly type: 'buy'; readonly payload: BuyPayload }
   | { readonly type: 'boost'; readonly payload: BoostPayload }
   | { readonly type: 'sell'; readonly payload: Record<string, never> };
@@ -154,7 +160,7 @@ export interface GateView extends GateState {
   readonly rushed: boolean;
 }
 
-export type BottleneckKind = 'passengers' | 'boarding' | 'turnaround' | 'timer';
+export type BottleneckKind = 'passengers' | 'security' | 'boarding' | 'turnaround' | 'timer';
 
 export interface Bottleneck {
   readonly kind: BottleneckKind;
@@ -182,7 +188,7 @@ export interface SlotsView {
   readonly nextCity: CityView;
 }
 
-/** A checkpoint passengers walk through (RULES 14). Scenery: it never slows anyone down. */
+/** A checkpoint passengers walk through (RULES 14). Security is a real queue (RULES 3); the others are scenery, though passport control and preclearance slow security down. */
 export type CheckpointId = 'checkin' | 'security' | 'passport' | 'preclearance' | 'baggage' | 'customs';
 
 export interface CheckpointView {
@@ -219,6 +225,24 @@ export interface BoostView {
   readonly helps: boolean;
 }
 
+/** The security line (RULES 3): the queue between the door and the lounge. */
+export interface SecurityView {
+  /** Milli-passengers in line. */
+  readonly line: number;
+  /** The longest line people will join, milli-passengers; beyond it they turn back at the door. */
+  readonly cap: number;
+  /** Milli-passengers security clears a tick now, extra lane included. */
+  readonly ratePerTick: number;
+  /** The same without the extra lane: what the upgrade sets. */
+  readonly baseRatePerTick: number;
+  /** An extra lane is open (a tap, or All hands). */
+  readonly rushed: boolean;
+  /** Ticks a person joining the line now would wait, at today's rate. */
+  readonly waitTicks: number;
+  /** Departure checkpoints that slow it (passport control, preclearance), as a multiplier in basis points. */
+  readonly slowBp: number;
+}
+
 /** What the interface reads (S6, P5): the airport plus derived numbers and names. */
 export interface AirportView {
   readonly tick: number;
@@ -232,6 +256,7 @@ export interface AirportView {
   readonly route: string;
   readonly planeModel: string;
   readonly terminal: { readonly waiting: number; readonly cap: number; readonly arrivalPerTick: number };
+  readonly security: SecurityView;
   readonly journey: JourneyView;
   readonly gates: readonly GateView[];
   readonly upgrades: readonly UpgradeView[];

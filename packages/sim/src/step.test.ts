@@ -89,11 +89,12 @@ describe('boarding and departures (RULES 5)', () => {
     expect(three.events.find((e) => e.type === 'departed')?.payload).toMatchObject({ pax: 1 });
   });
 
-  it('counts passengers the full terminal turns away', () => {
+  it('counts passengers turned away when the lounge is full and the security line too (RULES 3)', () => {
     const s = createAirport({ seed: 1 });
-    const full = tweak(s, { waiting: 40_000, gates: [{ ...gate(s), turn: 50, turnMax: 50 }] });
+    const full = tweak(s, { waiting: 40_000, line: 72_000, gates: [{ ...gate(s), turn: 50, turnMax: 50 }] });
     const after = step(full, []).state;
     expect(after.waiting).toBe(40_000);
+    expect(after.line).toBe(72_000);
     expect(after.run.missed).toBe(400);
   });
 
@@ -289,7 +290,10 @@ describe('city twists (RULES 10)', () => {
 
   it('Sunvale runs 3x arrivals in a wave and 0.6x between', () => {
     const s = tweak(createAirport({ seed: 1, city: 3 }), { waiting: 0, gates: [{ ...gate(createAirport({ seed: 1 })), turn: 9999, turnMax: 9999 }] });
-    expect(step(s, []).state.waiting).toBe(1200);
+    const wave = step(s, []).state;
+    // 1.2 arrive in a tick of the wave; security clears 0.6 of them and the rest queue.
+    expect(wave.waiting + wave.line).toBe(1200);
+    expect(wave.line).toBe(600);
     const later = tweak(s, { tick: T.waveTicks.value });
     expect(step(later, []).state.waiting).toBe(240);
   });
