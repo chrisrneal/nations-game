@@ -147,3 +147,12 @@ export function NextGateCard(props: { number: number; cost: number; affordable: 
     </button>
   );
 }
+
+/** A stand not built yet past the next one: a faint outline filling the pier's first two rows, so the room the airport will grow into shows. */
+export function EmptyStand(props: { number: number }): ReactElement {
+  return (
+    <span className="gate-empty" style={{ gridColumn: standColumn(props.number - 1) }} aria-hidden="true">
+      {props.number}
+    </span>
+  );
+}

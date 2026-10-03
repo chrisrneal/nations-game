@@ -36,8 +36,10 @@ import { AIRPORT_TUNABLES, AirportSession, hashState } from '@airport/sim';
 
 const PORT = 4179;
 const URL = `http://localhost:${PORT}/`;
-const WIDTH = 360;
-const HEIGHT = 740;
+/** The budget phone by default; `PHONE=pixel10xl` checks a Pixel 10 Pro XL (412 x 915) instead. */
+const PHONE = process.env.PHONE === 'pixel10xl' ? { width: 412, height: 915, dpr: 3.25 } : { width: 360, height: 740, dpr: 2 };
+const WIDTH = PHONE.width;
+const HEIGHT = PHONE.height;
 
 function chromiumPath(): string {
   const candidates = [process.env.CHROMIUM, '/opt/pw-browsers/chromium', '/usr/bin/chromium', '/usr/bin/google-chrome'];
@@ -95,7 +97,7 @@ async function main(): Promise<void> {
     const context = await chromium.launchPersistentContext(profile, {
       executablePath: chromiumPath(),
       viewport: { width: WIDTH, height: HEIGHT },
-      deviceScaleFactor: 2,
+      deviceScaleFactor: PHONE.dpr,
       isMobile: true,
       hasTouch: true,
     });

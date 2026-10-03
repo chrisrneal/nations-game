@@ -29,3 +29,5 @@ Nations-era gaps retired with the pivot (decision record P1); they are at commit
 - Gates as stands, the `maxGates` note in RULES 12 and tunables.ts still says "8 fit a phone screen in two columns"; they now fit in two rows of four. Wording only. Lanes D, S.
 - Gates as stands, a plane bigger than its stand's cabin (about 42 seats on a 360 px phone) shows the cabin full of squares, each standing for more than one seat; the "14/73" text gives the exact load. Lane U.
 - Gates as stands, the plane's model shows once in the panel header (the newest plane); a gate still flying an older, smaller plane shows its own model only in its screen-reader label. Lane U.
+- Big-phone layout, on a tall phone a parked plane's fuselage grows with its stand but its seats stay one 3 px square each, so a small or midsize plane fills only the front of it. Scaling the seats to the stand would make sizes comparable only within one phone. Lane U.
+- Big-phone layout, the stands past the next gate show as faint outlines up to eight (two rows); past eight gates the third row appears only as gates open. Lane U.

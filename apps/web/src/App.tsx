@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { AirportView, BoostId, UpgradeId } from '@airport/contracts';
 import type { AirportHost, Feedback, InstallPrompt } from './platform/index.ts';
 import { BottomBar } from './ui/BottomBar.tsx';
-import { GateCard, NextGateCard, Pier } from './ui/GateCard.tsx';
+import { EmptyStand, GateCard, NextGateCard, Pier, STANDS_PER_ROW } from './ui/GateCard.tsx';
 import { InstallBanner } from './ui/Install.tsx';
 import { Recap } from './ui/Recap.tsx';
 import { CityIntro } from './ui/CityIntro.tsx';
@@ -128,6 +128,9 @@ export function App(props: { host: AirportHost; install?: InstallPrompt; feedbac
           {nextGate !== undefined && nextGate.cost !== null && (
             <NextGateCard number={view.gates.length + 1} cost={nextGate.cost} affordable={nextGate.affordable} onOpen={() => setSheet('upgrades')} />
           )}
+          {nextGate !== undefined &&
+            nextGate.cost !== null &&
+            Array.from({ length: Math.max(0, 2 * STANDS_PER_ROW - view.gates.length - 1) }, (_, i) => <EmptyStand key={i} number={view.gates.length + 2 + i} />)}
         </Pier>
       </Concourse>
       <BottomBar view={view} store={store} onUpgrades={() => setSheet('upgrades')} onSell={() => setSheet('sell')} onBoost={boost} />

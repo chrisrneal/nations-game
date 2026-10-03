@@ -306,10 +306,10 @@ function seatBox(card: Element, r: DOMRect, box: DOMRect): { left: number; top: 
   return { left: x, top: y, right: x + (seats?.offsetWidth ?? 0), bottom: y + (seats?.offsetHeight ?? 0) };
 }
 
-/** The lounge crowd: one dot per seat in use, filling from the left in three rows (the real waiting count). */
+/** The lounge crowd: one dot per seat in use, filling from the left in three rows, more on a taller bench (the real waiting count). */
 function drawCrowd(ctx: CanvasRenderingContext2D, g: FlowGeometry, share: number): void {
   const { left, right, top, bottom } = g.lounge;
-  const rows = 3;
+  const rows = Math.max(3, Math.min(5, Math.floor((bottom - top - 2) / 4.5)));
   const cols = Math.max(1, Math.floor((right - left - 4) / 5));
   const filled = Math.round(share * cols * rows);
   if (filled === 0) return;
@@ -319,8 +319,8 @@ function drawCrowd(ctx: CanvasRenderingContext2D, g: FlowGeometry, share: number
   ctx.beginPath();
   for (let i = 0; i < filled; i++) {
     const row = i % rows;
-    const x = left + 4 + Math.floor(i / rows) * 5 + (row === 1 ? 2.5 : 0);
-    const y = mid + (row - 1) * 4.5;
+    const x = left + 4 + Math.floor(i / rows) * 5 + (row % 2 === 1 ? 2.5 : 0);
+    const y = mid + (row - (rows - 1) / 2) * 4.5;
     ctx.moveTo(x + 1.8, y);
     ctx.arc(x, y, 1.8, 0, Math.PI * 2);
   }
