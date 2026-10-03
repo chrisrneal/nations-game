@@ -18,6 +18,27 @@ The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
 
 ## Session log
 
+### 2026-10-03 - The airport fills a big phone (lane U; owner request)
+**What changed.** On a Pixel 10 Pro XL (412 x 915) the airport sat in the top
+half with a blank band under it and small text. Now the floor shares the
+phone's spare height: about a third goes to the security maze (its rows spread
+out) and two thirds to the gates, whose two rows of stands grow taller, with
+longer planes that seat more rows. The labels on the floor (checkpoints,
+Security, Lounge, Gates, the loads and timers) scale with the phone's width,
+about 15% bigger at 412 px and unchanged at 360 px; the planes are wider and
+the scanner lanes thicker. A taller lounge seats its crowd in up to five rows.
+A new airport shows the stands still to build as faint numbered outlines, so
+the gates panel holds its two rows from the start and nothing jumps when gate
+5 opens. `apps/web/e2e/shots.ts` takes screenshots on both phones, and
+`PHONE=pixel10xl npm run e2e --workspace web` runs the phone check at the
+Pixel's size.
+**Checks.** `npm test` (318) and `npm run check` pass. Phone check 56/56 at
+360 x 740 (59.0 fps with the CPU slowed 4x) and 56/56 at 412 x 915.
+**How to see it.** Open the app on a large phone: the security line and the
+gates fill the screen down to the boosts.
+**What is left.** A 73-seat plane fills only the front of a tall fuselage
+(seats are drawn one square each); see docs/GAPS.md.
+
 ### 2026-10-02 - The gates as stands, like the security lanes (lanes U, D; owner request)
 **What changed.** The gates are now a "Gates" panel drawn like the security
 panel: its header names the plane the gates are getting ("Gates · Midsize
