@@ -29,8 +29,8 @@ describe('number formatting', () => {
   });
 
   it('shows upgrade effects in their units', () => {
-    expect(formatEffect('count', 2000)).toBe('2 gates');
-    expect(formatEffect('seats', 15_000)).toBe('15 seats');
+    expect(formatEffect('count', 2000)).toBe('2 docks');
+    expect(formatEffect('parcels', 15_000)).toBe('15 parcels');
     expect(formatEffect('cents', 160_000)).toBe('$1.60');
     expect(formatEffect('seconds', 4500)).toBe('4.50s');
     expect(formatEffect('minutes', 120_000)).toBe('2h');

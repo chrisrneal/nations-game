@@ -17,9 +17,9 @@ export default defineConfig({
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
         id: '/',
-        name: 'Airport Idle',
-        short_name: 'Airport Idle',
-        description: 'Run an airport: fill planes with passengers, upgrade, and earn while you are away.',
+        name: 'Warehouse Idle',
+        short_name: 'Warehouse Idle',
+        description: 'Run a warehouse: fill trucks with passengers, upgrade, and earn while you are away.',
         start_url: '/',
         scope: '/',
         display: 'standalone',

@@ -1,9 +1,9 @@
 import { memo, useLayoutEffect, useRef, type ReactElement } from 'react';
-import type { BoostId, BoostView } from '@airport/contracts';
+import type { BoostId, BoostView } from '@warehouse/contracts';
 import { formatDuration } from './format.ts';
-import type { AirportStore } from './store.ts';
+import type { WarehouseStore } from './store.ts';
 
-const ICONS: Readonly<Record<BoostId, string>> = { rushHour: '🧳', allHands: '🙌', surge: '💰' };
+const ICONS: Readonly<Record<BoostId, string>> = { flashSale: '🧳', allHands: '🙌', surge: '💰' };
 
 type Phase = 'locked' | 'ready' | 'running' | 'recharging';
 
@@ -20,7 +20,7 @@ function phaseOf(b: BoostView): Phase {
  * bar behind it are written to the DOM every tick (P7). The boost that fixes
  * the bottleneck pulses while it is ready.
  */
-export function BoostBar(props: { boosts: readonly BoostView[]; tickMs: number; store: AirportStore; onBoost: (id: BoostId) => void }): ReactElement {
+export function BoostBar(props: { boosts: readonly BoostView[]; tickMs: number; store: WarehouseStore; onBoost: (id: BoostId) => void }): ReactElement {
   return (
     <div className="boosts" data-testid="boosts">
       {props.boosts.map((b, i) => (
@@ -39,7 +39,7 @@ interface BoostButtonProps {
   readonly locked: string | null;
   readonly helps: boolean;
   readonly tickMs: number;
-  readonly store: AirportStore;
+  readonly store: WarehouseStore;
   readonly onBoost: (id: BoostId) => void;
 }
 

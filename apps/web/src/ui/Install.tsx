@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactElement } from 'react';
 import type { InstallPrompt, InstallState } from '../platform/index.ts';
 
 /**
- * The install prompt: one tap to add the airport to the home screen, so it opens
+ * The install prompt: one tap to add the warehouse to the home screen, so it opens
  * full screen and offline. Android and desktop show the browser's own dialog;
  * iPhone and iPad get the two Share-menu steps, because Safari has no dialog.
  * Nothing shows once the app is installed.
@@ -19,7 +19,7 @@ export function InstallBanner(props: { install: InstallPrompt | undefined; onToa
         📲
       </span>
       <span className="install-text">
-        {state === 'prompt' ? 'Install it: opens full screen, works offline, and the airport keeps earning while closed.' : 'Install on iPhone: tap Share, then “Add to Home Screen”.'}
+        {state === 'prompt' ? 'Install it: opens full screen, works offline, and the warehouse keeps earning while closed.' : 'Install on iPhone: tap Share, then “Add to Home Screen”.'}
       </span>
       {state === 'prompt' && (
         <button
@@ -27,7 +27,7 @@ export function InstallBanner(props: { install: InstallPrompt | undefined; onToa
           className="btn btn-small btn-primary"
           onClick={() =>
             void install.prompt().then((outcome) => {
-              if (outcome === 'accepted') onToast('Installed. Open the airport from your home screen.');
+              if (outcome === 'accepted') onToast('Installed. Open the warehouse from your home screen.');
             })
           }
         >

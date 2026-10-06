@@ -2,20 +2,20 @@
 /**
  * `npm run harness` entry point.
  *
- *   npm run harness [-- pacing] [--seed 1]           the airport pacing pass (RULES 11): greedy and idle
+ *   npm run harness [-- pacing] [--seed 1]           the warehouse pacing pass (RULES 11): greedy and idle
  *     [--minutes 90] [--out DIR]                     bots, time to each milestone; writes pacing.md
- *   npm run harness -- determinism [--seeds 1000]    same airport hashes twice in Node and in Chromium
+ *   npm run harness -- determinism [--seeds 1000]    same warehouse hashes twice in Node and in Chromium
  *     [--ticks 240] [--no-browser]
- *   npm run harness -- bench [--ticks 345600]        time airport catch-up (default 24 h) in Node and Chromium
+ *   npm run harness -- bench [--ticks 345600]        time warehouse catch-up (default 24 h) in Node and Chromium
  *     [--runs 5] [--no-browser]
- *   `--set id=value[,id=value]` (pacing) replaces airport tunables for that run, inside their bands
+ *   `--set id=value[,id=value]` (pacing) replaces warehouse tunables for that run, inside their bands
  *   (overrides.ts). An unknown command or flag is an error (exit 2), never silently ignored.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
-import { benchAirportCatchUp, hashAirportSeeds } from './airport.ts';
+import { benchWarehouseCatchUp, hashWarehouseSeeds } from './warehouse.ts';
 import { formatPacing, runPacing } from './pacing.ts';
 import { findChromium, runInBrowser } from './browser.ts';
 import { parseArgs, type HarnessCommand, type ParsedArgs } from './args.ts';
@@ -54,15 +54,15 @@ function stats(times: readonly number[]): string {
 async function determinism(): Promise<void> {
   const seeds = flag('seeds', 1000);
   const ticks = flag('ticks', 240);
-  const first = hashAirportSeeds(1, seeds, ticks);
-  const second = hashAirportSeeds(1, seeds, ticks);
+  const first = hashWarehouseSeeds(1, seeds, ticks);
+  const second = hashWarehouseSeeds(1, seeds, ticks);
   const repeatMismatch = first.filter((hash, i) => hash !== second[i]).length;
-  console.log(`node repeat run: ${seeds - repeatMismatch}/${seeds} airports identical`);
+  console.log(`node repeat run: ${seeds - repeatMismatch}/${seeds} warehouses identical`);
   let failed = repeatMismatch > 0;
   if (useBrowser) {
     const run = await runInBrowser({ firstSeed: 1, seeds, ticks, benchTicks: 0, benchRuns: 0 });
     const browserMismatch = first.filter((hash, i) => hash !== run.hashes[i]).length;
-    console.log(`node vs browser: ${seeds - browserMismatch}/${seeds} airports identical (${run.userAgent})`);
+    console.log(`node vs browser: ${seeds - browserMismatch}/${seeds} warehouses identical (${run.userAgent})`);
     failed ||= browserMismatch > 0 || run.hashes.length !== seeds;
   }
   console.log(failed ? 'DETERMINISM: FAIL' : 'DETERMINISM: PASS');
@@ -72,9 +72,9 @@ async function determinism(): Promise<void> {
 async function bench(): Promise<void> {
   const ticks = flag('ticks', 345_600);
   const runs = flag('runs', 5);
-  console.log(`catch-up benchmark: ${ticks} ticks (${(ticks / 14_400).toFixed(1)} h) of a busy 8-gate airport`);
-  benchAirportCatchUp(ticks, 1, () => performance.now()); // warm-up
-  console.log(`node:     ${stats(benchAirportCatchUp(ticks, runs, () => performance.now()))}`);
+  console.log(`catch-up benchmark: ${ticks} ticks (${(ticks / 14_400).toFixed(1)} h) of a busy 8-dock warehouse`);
+  benchWarehouseCatchUp(ticks, 1, () => performance.now()); // warm-up
+  console.log(`node:     ${stats(benchWarehouseCatchUp(ticks, runs, () => performance.now()))}`);
   if (useBrowser && findChromium() !== undefined) {
     const run = await runInBrowser({ firstSeed: 1, seeds: 0, ticks: 0, benchTicks: ticks, benchRuns: runs });
     console.log(`chromium: ${stats(run.benchMs)} (first run includes JIT warm-up)`);

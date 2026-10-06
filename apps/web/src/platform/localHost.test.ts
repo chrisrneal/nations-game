@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { AirportEngine, type AirportUpdate } from './engine.ts';
+import { WarehouseEngine, type WarehouseUpdate } from './engine.ts';
 import { AUTOSAVE_EVERY_TICKS, AUTOSAVE_SLOT, LocalHost } from './localHost.ts';
 import { MemorySaveStore } from './saves.ts';
 import { FakeClock } from './testClock.ts';
 
 function setup(store = new MemorySaveStore(), clock = new FakeClock()) {
-  const engine = new AirportEngine(clock);
+  const engine = new WarehouseEngine(clock);
   const host = new LocalHost({ engine, store, now: () => clock.time, newSeed: () => 9 });
-  const seen: AirportUpdate[] = [];
+  const seen: WarehouseUpdate[] = [];
   host.subscribe((u) => seen.push(u));
   return { clock, engine, host, store, seen };
 }
@@ -15,7 +15,7 @@ function setup(store = new MemorySaveStore(), clock = new FakeClock()) {
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('LocalHost (S3)', () => {
-  it('opens a new airport when there is no autosave, and autosaves it', async () => {
+  it('opens a new warehouse when there is no autosave, and autosaves it', async () => {
     const { host, store } = setup();
     expect(await host.start()).toBe('new');
     expect((await store.get(AUTOSAVE_SLOT))?.tick).toBe(0);
@@ -34,7 +34,7 @@ describe('LocalHost (S3)', () => {
     const clock = new FakeClock();
     const first = setup(store, clock);
     await first.host.start();
-    await first.host.buy('boarding');
+    await first.host.buy('loading');
     for (let i = 0; i < 40; i++) clock.advance(250);
     await first.host.away();
     const saved = first.seen.at(-1);
@@ -43,15 +43,15 @@ describe('LocalHost (S3)', () => {
     expect(await second.host.start()).toBe('continued');
     const resumed = second.seen.at(-1);
     expect(resumed?.view.tick).toBe((saved?.view.tick ?? 0) + 120);
-    expect(resumed?.view.run.flights).toBeGreaterThan(saved?.view.run.flights ?? 0);
+    expect(resumed?.view.run.shipments).toBeGreaterThan(saved?.view.run.shipments ?? 0);
   });
 
-  it('exports a file that resumes the same airport on a device with no saves', async () => {
+  it('exports a file that resumes the same warehouse on a device with no saves', async () => {
     const first = setup();
     await first.host.start();
     first.clock.advance(5_000);
     const file = await first.host.exportFile();
-    expect(file.name).toMatch(/^airport-tick-\d+\.json$/);
+    expect(file.name).toMatch(/^warehouse-tick-\d+\.json$/);
     const fingerprint = first.seen.at(-1)?.fingerprint;
     const second = setup(new MemorySaveStore(), first.clock);
     await second.host.importFile(file.text);
@@ -59,14 +59,14 @@ describe('LocalHost (S3)', () => {
     expect((await second.store.get(AUTOSAVE_SLOT))?.tick).toBe(first.seen.at(-1)?.view.tick);
   });
 
-  it('refuses files that are not airport saves', async () => {
+  it('refuses files that are not warehouse saves', async () => {
     const { host } = setup();
-    await expect(host.importFile('not json')).rejects.toThrow(/not a saved airport/);
-    await expect(host.importFile('{"format":"nations-game-save","version":1,"game":{}}')).rejects.toThrow(/not a saved airport/);
-    await expect(host.importFile('{"format":"airport-idle-save","version":99,"game":{}}')).rejects.toThrow(/newer version/);
+    await expect(host.importFile('not json')).rejects.toThrow(/not a saved warehouse/);
+    await expect(host.importFile('{"format":"nations-game-save","version":1,"game":{}}')).rejects.toThrow(/not a saved warehouse/);
+    await expect(host.importFile('{"format":"warehouse-idle-save","version":99,"game":{}}')).rejects.toThrow(/newer version/);
   });
 
-  it('starts over with a new airport', async () => {
+  it('starts over with a new warehouse', async () => {
     const { host, seen, clock } = setup();
     await host.start();
     clock.advance(10_000);

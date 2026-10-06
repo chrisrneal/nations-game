@@ -1,5 +1,5 @@
 /**
- * The shared vocabulary of the airport game.
+ * The shared vocabulary of the warehouse game.
  *
  * Types only: no runtime code, no dependencies, no DOM, no Node. Every other
  * package may import this one; this one imports nothing. See CLAUDE.md.
@@ -7,15 +7,15 @@
 export type { RngState } from './state.ts';
 export type { Tunable } from './tunable.ts';
 export type {
-  AirportCommand,
-  AirportCommandType,
-  AirportEvent,
-  AirportEventPayloads,
-  AirportEventType,
-  AirportIntent,
-  AirportSaveFile,
-  AirportState,
-  AirportView,
+  WarehouseCommand,
+  WarehouseCommandType,
+  WarehouseEvent,
+  WarehouseEventPayloads,
+  WarehouseEventType,
+  WarehouseIntent,
+  WarehouseSaveFile,
+  WarehouseState,
+  WarehouseView,
   BoostId,
   BoostPayload,
   BoostState,
@@ -26,16 +26,16 @@ export type {
   BuyPayload,
   CheckpointId,
   CheckpointView,
-  CityView,
+  SiteView,
   EffectUnit,
-  GateState,
-  GateView,
+  DockState,
+  DockView,
   JourneyView,
   Levels,
-  SecurityView,
-  SlotsView,
+  PickingView,
+  StarsView,
   Stats,
   TapPayload,
   UpgradeId,
   UpgradeView,
-} from './airport.ts';
+} from './warehouse.ts';

@@ -1,58 +1,58 @@
 /**
- * The pacing pass (RULES 11): two bots play the airport and the harness times
+ * The pacing pass (RULES 11): two bots play the warehouse and the harness times
  * every milestone against the targets.
  *
- * - The greedy bot plays actively: it taps three times a second (the gate with
- *   the least rush banked, or the security line while people queue there), looks at its upgrades once a second, buys the best
+ * - The greedy bot plays actively: it taps three times a second (the dock with
+ *   the least rush banked, or the picking line while people queue there), looks at its upgrades once a second, buys the best
  *   value (income gained per dollar, looking one purchase ahead so that
- *   upgrades which only pay together still get bought), and sells the airport
- *   once the next slot is further away than half the time this airport has run.
+ *   upgrades which only pay together still get bought), and sells the warehouse
+ *   once the next star is further away than half the time this warehouse has run.
  * - The idle bot never taps. It checks in every 15 minutes, spends what it can
  *   with the same picker, and sells at the first check-in where the sale is
- *   worth at least half again in fares (no waiting for the airport to slow).
+ *   worth at least half again in pays (no staged for the warehouse to slow).
  * - Both use every boost that is ready (RULES 15): the greedy bot as soon as
  *   it is, the idle bot as it leaves each check-in, so it runs while away.
  *
  * Both use the sim's own income estimate (P6) to value upgrades. Runs in Node.
  */
-import type { AirportCommand, AirportState, UpgradeId } from '@airport/contracts';
+import type { WarehouseCommand, WarehouseState, UpgradeId } from '@warehouse/contracts';
 import {
-  AIRPORT_TUNABLES,
+  WAREHOUSE_TUNABLES,
   BOOST_IDS,
   READY_BOOSTS,
   UPGRADE_IDS,
   advanceMany,
-  airportView,
+  warehouseView,
   boostProblem,
-  earnedForSlots,
+  earnedForStars,
   estimate,
-  slotsFor,
-  stepAirport,
-  createAirport,
+  starsFor,
+  stepWarehouse,
+  createWarehouse,
   upgradeCost,
   lockReason,
   maxLevel,
-} from '@airport/sim';
+} from '@warehouse/sim';
 
-const TICKS_PER_SEC = 1000 / AIRPORT_TUNABLES.tickMs.value;
+const TICKS_PER_SEC = 1000 / WAREHOUSE_TUNABLES.tickMs.value;
 
 /** Upgrades that earn: the night shift only matters when away, so bots value it separately. */
 const EARNING: readonly UpgradeId[] = UPGRADE_IDS.filter((id) => id !== 'night');
 
-function canBuy(state: AirportState, id: UpgradeId): boolean {
+function canBuy(state: WarehouseState, id: UpgradeId): boolean {
   return lockReason(id, state) === null && state.levels[id] < maxLevel(id, state);
 }
 
-function withLevel(state: AirportState, id: UpgradeId): AirportState {
+function withLevel(state: WarehouseState, id: UpgradeId): WarehouseState {
   return { ...state, levels: { ...state.levels, [id]: state.levels[id] + 1 } };
 }
 
 /**
  * The upgrade the greedy picker wants next: the best income gained per cent
  * spent, where a purchase may also be valued together with the best one after
- * it (a route needs a plane; gates need passengers). Null if nothing earns.
+ * it (a contract needs a truck; docks need passengers). Null if nothing earns.
  */
-export function bestUpgrade(state: AirportState): UpgradeId | null {
+export function bestUpgrade(state: WarehouseState): UpgradeId | null {
   const base = estimate(state).incomePerSec;
   let best: UpgradeId | null = null;
   let bestValue = 0;
@@ -81,71 +81,71 @@ export function bestUpgrade(state: AirportState): UpgradeId | null {
 /** The night shift is worth buying once it costs less than this many seconds of income. */
 const NIGHT_PAYBACK_SEC = 300;
 
-function wantsNight(state: AirportState): boolean {
+function wantsNight(state: WarehouseState): boolean {
   if (!canBuy(state, 'night')) return false;
   return upgradeCost('night', state.levels.night) <= estimate(state).incomePerSec * NIGHT_PAYBACK_SEC;
 }
 
 /**
- * Sell once the sale would raise fares by at least half again (the slots it
- * adds are at least half the slots owned, and at least `minFirstSlots` the
- * first time), and the next slot is further away than a quarter of the time
- * this airport has run: the airport is slowing down.
+ * Sell once the sale would raise pays by at least half again (the stars it
+ * adds are at least half the stars owned, and at least `minFirstStars` the
+ * first time), and the next star is further away than a quarter of the time
+ * this warehouse has run: the warehouse is slowing down.
  */
-export function wantsToSell(state: AirportState, runTicks: number, minFirstSlots = 3, patient = true): boolean {
-  const claimable = slotsFor(state.run.earned);
-  const bonus = AIRPORT_TUNABLES.slotBonusBp.value;
-  const now = 10_000 + state.slots * bonus;
+export function wantsToSell(state: WarehouseState, runTicks: number, minFirstStars = 3, patient = true): boolean {
+  const claimable = starsFor(state.run.earned);
+  const bonus = WAREHOUSE_TUNABLES.starBonusBp.value;
+  const now = 10_000 + state.stars * bonus;
   const after = now + claimable * bonus;
-  if (claimable < 1 || after * 2 < now * 3 || claimable < (state.slots === 0 ? minFirstSlots : 1)) return false;
+  if (claimable < 1 || after * 2 < now * 3 || claimable < (state.stars === 0 ? minFirstStars : 1)) return false;
   if (!patient) return true;
   const income = estimate(state).incomePerSec;
   if (income <= 0) return true;
-  const toNext = (earnedForSlots(claimable + 1) - state.run.earned) / income;
+  const toNext = (earnedForStars(claimable + 1) - state.run.earned) / income;
   return toNext > runTicks / TICKS_PER_SEC / 4;
 }
 
 export interface Milestone {
   readonly what: string;
-  /** Seconds from the first airport opening. */
+  /** Seconds from the first warehouse opening. */
   readonly at: number;
-  /** A new thing to have reached: a gate, a plane, a route, a sale. */
+  /** A new thing to have reached: a dock, a truck, a contract, a sale. */
   readonly novel: boolean;
 }
 
 export interface BotRun {
   readonly bot: 'greedy' | 'idle';
   readonly milestones: readonly Milestone[];
-  /** Seconds to the first purchase, the second gate, the first slot on offer, the first sale (null: not within the run). */
+  /** Seconds to the first purchase, the second dock, the first star on offer, the first sale (null: not within the run). */
   readonly firstUpgrade: number | null;
-  readonly firstGate: number | null;
-  readonly firstSlot: number | null;
+  readonly firstDock: number | null;
+  readonly firstStar: number | null;
   readonly firstSale: number | null;
-  readonly slotsAtFirstSale: number | null;
+  readonly starsAtFirstSale: number | null;
   /** Longest wait between new things before the first sale, seconds. */
   readonly longestGap: number;
-  readonly final: AirportState;
+  readonly final: WarehouseState;
   /** States at fixed minutes, for the active-versus-idle comparison. */
-  readonly snapshots: readonly { readonly minute: number; readonly state: AirportState }[];
+  readonly snapshots: readonly { readonly minute: number; readonly state: WarehouseState }[];
   /** Idle bot only: share of check-ins that bought at least one upgrade. */
   readonly checkInsWithPurchase: number | null;
-  /** Idle bot only: the airport after each check-in's purchases. */
-  readonly checkIns: readonly AirportState[];
+  /** Idle bot only: the warehouse after each check-in's purchases. */
+  readonly checkIns: readonly WarehouseState[];
 }
 
 export interface PacingOptions {
   readonly seed?: number;
-  /** False keeps the first airport forever (for tuning the content curve). */
+  /** False keeps the first warehouse forever (for tuning the content curve). */
   readonly sell?: boolean;
-  /** Start from this airport instead of a new one (the 5-minute session check). */
-  readonly from?: AirportState;
+  /** Start from this warehouse instead of a new one (the 5-minute session check). */
+  readonly from?: WarehouseState;
   readonly minutes?: number;
   readonly snapshotMinutes?: readonly number[];
   /** False: the bots never use boosts (to see what boosts are worth). */
   readonly boosts?: boolean;
 }
 
-const LEVEL_NAMES: Partial<Record<UpgradeId, string>> = { gates: 'gate', plane: 'plane', route: 'route' };
+const LEVEL_NAMES: Partial<Record<UpgradeId, string>> = { docks: 'dock', truck: 'truck', contract: 'contract' };
 
 function recorder(): {
   milestones: Milestone[];
@@ -158,10 +158,10 @@ function recorder(): {
 function summarise(
   bot: 'greedy' | 'idle',
   milestones: Milestone[],
-  final: AirportState,
-  snapshots: { minute: number; state: AirportState }[],
+  final: WarehouseState,
+  snapshots: { minute: number; state: WarehouseState }[],
   checkIns: number | null,
-  checkInStates: AirportState[] = [],
+  checkInStates: WarehouseState[] = [],
 ): BotRun {
   const find = (what: string): Milestone | undefined => milestones.find((m) => m.what === what);
   const sale = find('sale 1');
@@ -177,10 +177,10 @@ function summarise(
     bot,
     milestones,
     firstUpgrade: milestones.find((m) => m.what.startsWith('bought'))?.at ?? null,
-    firstGate: find('gate 2')?.at ?? null,
-    firstSlot: find('slot on offer')?.at ?? null,
+    firstDock: find('dock 2')?.at ?? null,
+    firstStar: find('star on offer')?.at ?? null,
     firstSale: sale?.at ?? null,
-    slotsAtFirstSale: sale === undefined ? null : Number(/\((\d+) slots\)/.exec(milestones.find((m) => m.what.startsWith('sold'))?.what ?? '')?.[1] ?? NaN),
+    starsAtFirstSale: sale === undefined ? null : Number(/\((\d+) stars\)/.exec(milestones.find((m) => m.what.startsWith('sold'))?.what ?? '')?.[1] ?? NaN),
     longestGap,
     final,
     snapshots,
@@ -190,45 +190,45 @@ function summarise(
 }
 
 /** Applies one purchase or sale and records it. Returns the new state. */
-function act(state: AirportState, command: 'sell' | UpgradeId, note: (what: string, tick: number, novel: boolean) => void, sales: { n: number }): AirportState {
+function act(state: WarehouseState, command: 'sell' | UpgradeId, note: (what: string, tick: number, novel: boolean) => void, sales: { n: number }): WarehouseState {
   const tick = state.tick;
   if (command === 'sell') {
-    const slots = slotsFor(state.run.earned);
-    const next = stepAirport(state, [{ tick, type: 'sell', payload: {} }]).state;
+    const stars = starsFor(state.run.earned);
+    const next = stepWarehouse(state, [{ tick, type: 'sell', payload: {} }]).state;
     sales.n += 1;
-    note(`sold (${slots} slots)`, tick, false);
+    note(`sold (${stars} stars)`, tick, false);
     note(`sale ${sales.n}`, tick, true);
     return next;
   }
-  const next = stepAirport(state, [{ tick, type: 'buy', payload: { upgrade: command } }]).state;
+  const next = stepWarehouse(state, [{ tick, type: 'buy', payload: { upgrade: command } }]).state;
   if (next.levels[command] === state.levels[command]) return next;
   note(`bought ${command} ${next.levels[command]}`, tick, false);
   const kind = LEVEL_NAMES[command];
-  if (kind !== undefined) note(`${kind} ${command === 'gates' ? next.levels.gates + 1 : next.levels[command]}`, tick, true);
+  if (kind !== undefined) note(`${kind} ${command === 'docks' ? next.levels.docks + 1 : next.levels[command]}`, tick, true);
   return next;
 }
 
 /** Every boost that is ready now (RULES 15). */
-function boosts(state: AirportState): AirportCommand[] {
+function boosts(state: WarehouseState): WarehouseCommand[] {
   return BOOST_IDS.filter((id) => boostProblem(id, state) === null).map((boost) => ({ tick: state.tick, type: 'boost' as const, payload: { boost } }));
 }
 
-/** The airport with no boost running or recharging: income comparisons measure taps and levels alone. */
-export function unboosted(state: AirportState): AirportState {
+/** The warehouse with no boost running or recharging: income comparisons measure taps and levels alone. */
+export function unboosted(state: WarehouseState): WarehouseState {
   return { ...state, boosts: READY_BOOSTS };
 }
 
 /**
- * Taps for this tick: three a second, each to the gate with the least rush
- * banked, or to the security line when people are queuing there and it has
- * less rush banked than any gate (RULES 6).
+ * Taps for this tick: three a second, each to the dock with the least rush
+ * banked, or to the picking line when people are queuing there and it has
+ * less rush banked than any dock (RULES 6).
  */
-function taps(state: AirportState): AirportCommand[] {
+function taps(state: WarehouseState): WarehouseCommand[] {
   if (state.tick % 4 === 0) return [];
-  let gate = 0;
-  for (let i = 1; i < state.gates.length; i++) if ((state.gates[i]?.rush ?? 0) < (state.gates[gate]?.rush ?? 0)) gate = i;
-  if (state.line > 0 && state.securityRush <= (state.gates[gate]?.rush ?? 0)) return [{ tick: state.tick, type: 'tapSecurity', payload: {} }];
-  return [{ tick: state.tick, type: 'tap', payload: { gate } }];
+  let dock = 0;
+  for (let i = 1; i < state.docks.length; i++) if ((state.docks[i]?.rush ?? 0) < (state.docks[dock]?.rush ?? 0)) dock = i;
+  if (state.backlog > 0 && state.pickRush <= (state.docks[dock]?.rush ?? 0)) return [{ tick: state.tick, type: 'tapPick', payload: {} }];
+  return [{ tick: state.tick, type: 'tap', payload: { dock } }];
 }
 
 export function runGreedy(options: PacingOptions = {}): BotRun {
@@ -236,10 +236,10 @@ export function runGreedy(options: PacingOptions = {}): BotRun {
   const snapshotAt = new Set((options.snapshotMinutes ?? [2, 10, 30, 60]).map((m) => m * 60 * TICKS_PER_SEC));
   const { milestones, note } = recorder();
   const sales = { n: 0 };
-  let state = options.from ?? createAirport({ seed: options.seed ?? 1 });
+  let state = options.from ?? createWarehouse({ seed: options.seed ?? 1 });
   let runStart = 0;
   let offered = false;
-  const snapshots: { minute: number; state: AirportState }[] = [];
+  const snapshots: { minute: number; state: WarehouseState }[] = [];
   const end = state.tick + minutes * 60 * TICKS_PER_SEC;
   while (state.tick < end) {
     if (snapshotAt.has(state.tick)) snapshots.push({ minute: state.tick / TICKS_PER_SEC / 60, state });
@@ -255,12 +255,12 @@ export function runGreedy(options: PacingOptions = {}): BotRun {
         if (pick === null || upgradeCost(pick, state.levels[pick]) > state.cash) break;
         state = act(state, pick, note, sales);
       }
-      if (!offered && slotsFor(state.run.earned) >= 1) {
+      if (!offered && starsFor(state.run.earned) >= 1) {
         offered = true;
-        if (sales.n === 0) note('slot on offer', state.tick, false);
+        if (sales.n === 0) note('star on offer', state.tick, false);
       }
     }
-    state = stepAirport(state, [...(options.boosts === false ? [] : boosts(state)), ...taps(state)]).state;
+    state = stepWarehouse(state, [...(options.boosts === false ? [] : boosts(state)), ...taps(state)]).state;
   }
   return summarise('greedy', milestones, state, snapshots, null);
 }
@@ -270,11 +270,11 @@ export function runIdle(options: PacingOptions & { readonly checkInMinutes?: num
   const every = (options.checkInMinutes ?? 15) * 60 * TICKS_PER_SEC;
   const { milestones, note } = recorder();
   const sales = { n: 0 };
-  let state = createAirport({ seed: options.seed ?? 1 });
+  let state = createWarehouse({ seed: options.seed ?? 1 });
   let runStart = 0;
   let checkIns = 0;
   let withPurchase = 0;
-  const states: AirportState[] = [];
+  const states: WarehouseState[] = [];
   const end = minutes * 60 * TICKS_PER_SEC;
   // The first visit: the player opens the app, buys what they can in a few seconds, and leaves.
   state = advanceMany(state, 10 * TICKS_PER_SEC);
@@ -295,19 +295,19 @@ export function runIdle(options: PacingOptions & { readonly checkInMinutes?: num
     }
     if (bought) withPurchase += 1;
     states.push(state);
-    if (sales.n === 0 && slotsFor(state.run.earned) >= 1 && !milestones.some((m) => m.what === 'slot on offer')) note('slot on offer', state.tick, false);
-    if (options.boosts !== false) state = stepAirport(state, boosts(state)).state;
+    if (sales.n === 0 && starsFor(state.run.earned) >= 1 && !milestones.some((m) => m.what === 'star on offer')) note('star on offer', state.tick, false);
+    if (options.boosts !== false) state = stepWarehouse(state, boosts(state)).state;
     state = advanceMany(state, Math.min(every, end - state.tick));
   }
   return summarise('idle', milestones, state, [], checkIns === 0 ? null : withPurchase / checkIns, states);
 }
 
 /** Cents earned over `seconds` from this state, tapping like the greedy bot or not at all, buying nothing. */
-export function earnedOver(state: AirportState, seconds: number, tapping: boolean): number {
+export function earnedOver(state: WarehouseState, seconds: number, tapping: boolean): number {
   let s = state;
   const end = s.tick + seconds * TICKS_PER_SEC;
   if (!tapping) return advanceMany(s, seconds * TICKS_PER_SEC).run.earned - state.run.earned;
-  while (s.tick < end) s = stepAirport(s, taps(s)).state;
+  while (s.tick < end) s = stepWarehouse(s, taps(s)).state;
   return s.run.earned - state.run.earned;
 }
 
@@ -332,8 +332,8 @@ export function runPacing(options: PacingOptions = {}): PacingReport {
   const idle = runIdle({ ...options, minutes: Math.max(240, options.minutes ?? 0) });
   const greedyNoBoosts = runGreedy({ ...options, boosts: false });
   const idleNoBoosts = runIdle({ ...options, minutes: Math.max(240, options.minutes ?? 0), boosts: false });
-  // A 5-minute session: from each of the idle player's check-ins (first airport), play actively for 5 minutes.
-  const sessions = idle.checkIns.filter((s) => s.city === 0 && s.tick > 0);
+  // A 5-minute session: from each of the idle player's check-ins (first warehouse), play actively for 5 minutes.
+  const sessions = idle.checkIns.filter((s) => s.site === 0 && s.tick > 0);
   const sessionsWithUnlock = sessions.filter((from) => runGreedy({ from, minutes: 5, sell: false, snapshotMinutes: [] }).milestones.some((m) => m.novel)).length;
   // What a tap is worth depends on the levels alone, and swings by about 1x from one minute's levels to the next.
   // The check samples the path it was tuned on (no boosts, P9); the boosted path is reported beside it (P11).
@@ -355,16 +355,16 @@ export function runPacing(options: PacingOptions = {}): PacingReport {
   const range = (rs: readonly { ratio: number }[]): string => `${Math.min(...rs.map((r) => r.ratio)).toFixed(2)}-${Math.max(...rs.map((r) => r.ratio)).toFixed(2)}x`;
   const checks = [
     { name: 'First upgrade', value: s(greedy.firstUpgrade), target: '<= 10 s', pass: greedy.firstUpgrade !== null && greedy.firstUpgrade <= 10 },
-    { name: 'First new gate (greedy)', value: s(greedy.firstGate), target: '<= 2 min', pass: greedy.firstGate !== null && greedy.firstGate <= 120 },
+    { name: 'First new dock (greedy)', value: s(greedy.firstDock), target: '<= 2 min', pass: greedy.firstDock !== null && greedy.firstDock <= 120 },
     { name: 'Longest wait for something new before the first sale (greedy)', value: s(greedy.longestGap), target: '<= 5 min', pass: greedy.longestGap <= 300 },
-    { name: 'First sale (greedy)', value: `${s(greedy.firstSale)}${greedy.slotsAtFirstSale === null ? '' : `, ${greedy.slotsAtFirstSale} slots`}`, target: '30-60 min', pass: greedy.firstSale !== null && greedy.firstSale >= 1800 && greedy.firstSale <= 3600 },
-    { name: 'First sale (idle, 15-minute check-ins)', value: `${s(idle.firstSale)}${idle.slotsAtFirstSale === null ? '' : `, ${idle.slotsAtFirstSale} slots`}`, target: 'reported', pass: true },
+    { name: 'First sale (greedy)', value: `${s(greedy.firstSale)}${greedy.starsAtFirstSale === null ? '' : `, ${greedy.starsAtFirstSale} stars`}`, target: '30-60 min', pass: greedy.firstSale !== null && greedy.firstSale >= 1800 && greedy.firstSale <= 3600 },
+    { name: 'First sale (idle, 15-minute check-ins)', value: `${s(idle.firstSale)}${idle.starsAtFirstSale === null ? '' : `, ${idle.starsAtFirstSale} stars`}`, target: 'reported', pass: true },
     { name: 'First sale without boosts (greedy; idle)', value: `${s(greedyNoBoosts.firstSale)}; ${s(idleNoBoosts.firstSale)}`, target: 'reported', pass: true },
     { name: 'Active over idle income (tapping, at the no-boost greedy levels)', value: range(activeRatios), target: 'about 2-3x (1.8-3.2)', pass: minRatio >= 1.8 && maxRatio <= 3.2 },
     { name: 'Active over idle income (tapping, at the boosted greedy levels)', value: range(boostedRatios), target: 'reported', pass: true },
     { name: 'Check-ins that buy something (idle, every 15 min)', value: `${Math.round((idle.checkInsWithPurchase ?? 0) * 100)}%`, target: '>= 90%', pass: (idle.checkInsWithPurchase ?? 0) >= 0.9 },
     {
-      name: 'A 5-minute active session reaches a new gate, plane or route (from each idle check-in)',
+      name: 'A 5-minute active session reaches a new dock, truck or contract (from each idle check-in)',
       value: `${sessionsWithUnlock}/${sessions.length}`,
       target: '>= 80%',
       pass: sessions.length > 0 && sessionsWithUnlock >= 0.8 * sessions.length,
@@ -375,19 +375,19 @@ export function runPacing(options: PacingOptions = {}): PacingReport {
 }
 
 export function formatPacing(report: PacingReport, seed: number): string {
-  const lines = [`# Airport pacing report (seed ${seed})`, '', '| Check | Result | Target | |', '| --- | --- | --- | --- |'];
+  const lines = [`# Warehouse pacing report (seed ${seed})`, '', '| Check | Result | Target | |', '| --- | --- | --- | --- |'];
   for (const c of report.checks) lines.push(`| ${c.name} | ${c.value} | ${c.target} | ${c.pass ? 'PASS' : 'FAIL'} |`);
   const timeline = (run: BotRun): string[] => {
-    const novel = run.milestones.filter((m) => m.novel || m.what.startsWith('slot') || m.what.startsWith('sold'));
+    const novel = run.milestones.filter((m) => m.novel || m.what.startsWith('star') || m.what.startsWith('sold'));
     return novel.map((m) => `- ${(m.at / 60).toFixed(1)} min: ${m.what}`);
   };
-  const view = airportView(report.greedy.final);
+  const view = warehouseView(report.greedy.final);
   lines.push('', `## Greedy bot: what it reached and when`, ...timeline(report.greedy));
-  lines.push('', `Ended at ${view.city.name} with ${view.slots.owned} slots, levels ${JSON.stringify(report.greedy.final.levels)}.`);
+  lines.push('', `Ended at ${view.site.name} with ${view.stars.owned} stars, levels ${JSON.stringify(report.greedy.final.levels)}.`);
   lines.push('', `## Idle bot (no taps, a check-in every 15 minutes)`, ...timeline(report.idle));
   lines.push(
     '',
-    `## Active over idle income (2 minutes of tapping from the greedy bot's airport at each minute; no boosts, with boosts)`,
+    `## Active over idle income (2 minutes of tapping from the greedy bot's warehouse at each minute; no boosts, with boosts)`,
     ...report.activeRatios.map((r, i) => `- minute ${r.minute}: ${r.ratio.toFixed(2)}x, ${report.boostedRatios[i]?.ratio.toFixed(2) ?? '-'}x`),
   );
   lines.push('', `Overall: ${report.pass ? 'PASS' : 'FAIL'}`);

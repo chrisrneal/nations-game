@@ -1,9 +1,9 @@
 {
-  "name": "@airport/sim",
+  "name": "@warehouse/sim",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Pure simulation core of the airport. Imports nothing but @airport/contracts.",
+  "description": "Pure simulation core of the warehouse. Imports nothing but @warehouse/contracts.",
   "exports": {
     ".": "./src/index.ts",
     "./tunables": "./src/tunables.ts"
@@ -12,6 +12,6 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@airport/contracts": "*"
+    "@warehouse/contracts": "*"
   }
 }

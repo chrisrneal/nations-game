@@ -1,4 +1,4 @@
-/* The airport on a phone (docs/ROADMAP.md, phone UX): portrait, one-handed,
+/* The warehouse on a phone (docs/ROADMAP.md, phone UX): portrait, one-handed,
    no horizontal scroll at 360 px, safe areas, touch targets of 44 px or more,
    actions in the bottom third. Anything that moves every tick animates with a
    CSS transition one tick long on `transform` only (P7), so it stays on the
@@ -7,7 +7,7 @@
   --bg: #0b1424;
   --panel: #13213a;
   --panel-2: #1a2c4b;
-  --line: #29406a;
+  --backlog: #29406a;
   --fg: #eef3fb;
   --muted: #98aac6;
   --accent: #56d3a0;
@@ -77,7 +77,7 @@ p {
   color: var(--muted);
 }
 
-/* ---- top: city, cash, income ---- */
+/* ---- top: site, cash, income ---- */
 .top {
   padding: max(0.4rem, env(safe-area-inset-top)) 0.75rem 0.35rem;
 }
@@ -89,7 +89,7 @@ p {
   gap: 0.5rem;
 }
 
-.city {
+.site {
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--muted);
@@ -98,7 +98,7 @@ p {
   text-overflow: ellipsis;
 }
 
-.slots {
+.stars {
   color: var(--gold);
 }
 
@@ -154,7 +154,7 @@ p {
   will-change: transform;
 }
 
-/* ---- the floor: the passenger flow over the gates (RULES 14) ---- */
+/* ---- the floor: the passenger flow over the docks (RULES 14) ---- */
 .floor {
   position: relative;
   flex: 1;
@@ -163,7 +163,7 @@ p {
   flex-direction: column;
 }
 
-/* The people: one canvas over the concourse and the gates, never in the way of a thumb. */
+/* The people: one canvas over the concourse and the docks, never in the way of a thumb. */
 .flow-dots {
   position: absolute;
   inset: 0;
@@ -174,7 +174,7 @@ p {
 }
 
 .concourse {
-  /* The floor's spare height goes a third to the security line, two thirds to the gates. */
+  /* The floor's spare height goes a third to the picking line, two thirds to the docks. */
   flex: 1 0 auto;
   max-height: 22rem;
   display: flex;
@@ -208,7 +208,7 @@ p {
   border-top: 1px dashed var(--line);
 }
 
-/* Arrivals come up from the gates at the right and leave at the left. */
+/* Arrivals come up from the docks at the right and leave at the left. */
 .lane-arr {
   padding: 0 1.4rem 0 0;
 }
@@ -233,8 +233,8 @@ p {
   color: var(--muted);
 }
 
-/* ---- the security line (RULES 3): a maze the real line snakes through, scanners at its end; one tap opens a lane ---- */
-.security {
+/* ---- the picking line (RULES 3): a maze the real line snakes through, scanners at its end; one tap opens a lane ---- */
+.picking {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -252,24 +252,24 @@ p {
   transition: transform 90ms ease-out, border-color 200ms;
 }
 
-.security:active {
+.picking:active {
   transform: scale(0.985);
 }
 
-.security.queued {
+.picking.queued {
   border-color: #3b5a8e;
 }
 
-.security.slow {
+.picking.slow {
   border-color: var(--warn);
 }
 
-.security.full {
+.picking.full {
   border-color: var(--warn);
   box-shadow: 0 0 0 1px var(--warn) inset;
 }
 
-.security.rushed {
+.picking.rushed {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent) inset;
 }
@@ -295,8 +295,8 @@ p {
   color: var(--muted);
 }
 
-.security.slow .sec-line,
-.security.full .sec-line {
+.picking.slow .sec-line,
+.picking.full .sec-line {
   color: var(--warn);
 }
 
@@ -370,12 +370,12 @@ p {
   opacity: 1;
 }
 
-.security.rushed .sec-lane-extra {
+.picking.rushed .sec-lane-extra {
   display: block;
 }
 
-/* ---- the lounge: the real waiting crowd, past the international checkpoints ---- */
-.lounge {
+/* ---- the staging: the real staged crowd, past the international checkpoints ---- */
+.staging {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -390,22 +390,22 @@ p {
   transition: border-color 200ms;
 }
 
-.lounge.full {
+.staging.full {
   border-color: var(--warn);
 }
 
-.lounge-info {
+.staging-info {
   display: flex;
   align-items: baseline;
   gap: 0.35rem;
   line-height: 1.2;
 }
 
-.lounge-name {
+.staging-name {
   font-weight: 700;
 }
 
-.lounge-count {
+.staging-count {
   color: var(--muted);
 }
 
@@ -414,15 +414,15 @@ p {
   font-weight: 700;
 }
 
-.lounge-row {
+.staging-row {
   display: flex;
   align-items: center;
   gap: 4px;
   height: clamp(18px, 6vw, 26px);
 }
 
-/* The bench: the canvas seats the waiting crowd here. */
-.lounge-seats {
+/* The bench: the canvas parcels the staged crowd here. */
+.staging-parcels {
   flex: 1;
   align-self: stretch;
   min-width: 0;
@@ -434,7 +434,7 @@ p {
   font-size: var(--fs-small);
 }
 
-/* ---- gates: a panel of stands like the scanners, two each side of the pier people walk down ---- */
+/* ---- docks: a panel of stands like the scanners, two each side of the pier people walk down ---- */
 .pier {
   flex: 2 1 auto;
   min-height: 0;
@@ -475,13 +475,13 @@ p {
 }
 
 /* The middle column is the pier; the gaps above each row are the walkways to the stands' doors. */
-.gates {
+.docks {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr)) 6px repeat(2, minmax(0, 1fr));
-  /* Two rows of stands from the start (the room the next gates will take), sharing the pier's height; more rows scroll. */
+  /* Two rows of stands from the start (the room the next docks will take), sharing the pier's height; more rows scroll. */
   grid-template-rows: repeat(2, minmax(88px, 1fr));
   grid-auto-rows: minmax(88px, 1fr);
   column-gap: 5px;
@@ -489,7 +489,7 @@ p {
   padding-top: 7px;
 }
 
-.gate {
+.dock {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -506,16 +506,16 @@ p {
   transition: transform 90ms ease-out, border-color 150ms;
 }
 
-.gate:active {
+.dock:active {
   transform: scale(0.96);
 }
 
-.gate.rushing {
+.dock.rushing {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent) inset;
 }
 
-.gate-head {
+.dock-head {
   display: flex;
   align-self: stretch;
   align-items: center;
@@ -525,36 +525,36 @@ p {
   font-variant-numeric: tabular-nums;
 }
 
-.gate-no {
+.dock-no {
   font-weight: 700;
   color: var(--muted);
 }
 
-.gate-head .badge {
+.dock-head .badge {
   padding: 0 0.25rem;
   font-size: 0.58rem;
 }
 
 /* Seconds to departure: the timer, as text. */
-.gate-time {
+.dock-time {
   margin-left: auto;
   font-weight: 700;
   color: var(--warn);
 }
 
-/* The parked plane from above, nose up to the pier: wings behind the fuselage, where the canvas seats its people. */
-.gate-plane {
+/* The parked truck from above, nose up to the pier: wings behind the fuselage, where the canvas parcels its people. */
+.dock-truck {
   position: relative;
   flex: 1;
   display: flex;
-  /* The plane grows with its stand: wider on a wider phone, longer on a taller one (more seat rows). */
+  /* The truck grows with its stand: wider on a wider phone, longer on a taller one (more parcel rows). */
   width: clamp(44px, 58%, 60px);
   min-height: 52px;
   max-height: 150px;
   animation: park 420ms ease-out;
 }
 
-.gate-plane::before {
+.dock-truck::before {
   content: '';
   position: absolute;
   left: -11px;
@@ -565,7 +565,7 @@ p {
   background: #24406c;
 }
 
-.gate-body {
+.dock-body {
   position: relative;
   z-index: 1;
   flex: 1;
@@ -574,22 +574,22 @@ p {
   background: #16294a;
 }
 
-.gate.charter .gate-body {
+.dock.express .dock-body {
   border-color: var(--gold);
 }
 
-/* No plane: the empty stand's markings while the next one turns around. */
-.gate-plane.away .gate-body {
+/* No truck: the empty stand's markings while the next one turns around. */
+.dock-truck.away .dock-body {
   border-style: dashed;
   border-color: var(--line);
   background: transparent;
 }
 
-.gate-plane.away::before {
+.dock-truck.away::before {
   display: none;
 }
 
-.gate-seats {
+.dock-parcels {
   position: absolute;
   left: 3px;
   right: 3px;
@@ -597,7 +597,7 @@ p {
   bottom: 3px;
 }
 
-.gate-count {
+.dock-count {
   font-size: var(--fs-head);
   font-weight: 700;
   line-height: 1.25;
@@ -605,7 +605,7 @@ p {
   white-space: nowrap;
 }
 
-.gate.turning .gate-count {
+.dock.turning .dock-count {
   font-weight: 600;
   color: var(--muted);
 }
@@ -632,7 +632,7 @@ p {
   color: #2a1000;
 }
 
-.gate-next {
+.dock-next {
   justify-content: center;
   gap: 0.3rem;
   border-style: dashed;
@@ -640,19 +640,19 @@ p {
   color: var(--muted);
 }
 
-.gate-next .gate-head {
+.dock-next .dock-head {
   position: absolute;
   top: 3px;
   left: 4px;
 }
 
-.gate-next.ready {
+.dock-next.ready {
   border-color: var(--accent);
   color: var(--accent);
 }
 
-/* Stands to come: an outline only, quieter than the next gate's. */
-.gate-empty {
+/* Stands to come: an outline only, quieter than the next dock's. */
+.dock-empty {
   padding: 3px 5px;
   border-radius: 10px;
   border: 1px dashed rgb(41 64 106 / 55%);
@@ -663,11 +663,11 @@ p {
   pointer-events: none;
 }
 
-.gate-next-label {
+.dock-next-label {
   font-size: var(--fs-small);
 }
 
-.gate-next-cost {
+.dock-next-cost {
   font-size: calc(var(--fs-head) + 0.15rem);
   font-weight: 800;
 }
@@ -697,7 +697,7 @@ p {
   color: #b6ffde;
 }
 
-.pop-charter {
+.pop-express {
   color: var(--gold);
   font-size: 0.95rem;
 }
@@ -718,7 +718,7 @@ p {
 }
 
 /* ---- juice: take-off, flashes, ripples (transform and opacity only) ---- */
-/* The plane leaves its stand nose first, up past the pier. */
+/* The truck leaves its stand nose first, up past the pier. */
 .fly {
   position: absolute;
   left: 50%;
@@ -730,7 +730,7 @@ p {
   animation: take-off 700ms cubic-bezier(0.5, 0, 0.9, 0.4) forwards;
 }
 
-.fly-charter {
+.fly-express {
   color: var(--gold);
 }
 
@@ -753,7 +753,7 @@ p {
   animation: flash 420ms ease-out forwards;
 }
 
-.flash-charter {
+.flash-express {
   background: rgb(255 204 92 / 28%);
 }
 
@@ -1145,7 +1145,7 @@ p {
   font-size: 0.85rem;
 }
 
-/* ---- selling the airport ---- */
+/* ---- selling the warehouse ---- */
 .actions {
   display: flex;
   gap: 0.5rem;
@@ -1178,11 +1178,11 @@ p {
   color: var(--gold);
 }
 
-.bar-slots {
+.bar-stars {
   margin: 0.2rem 0 0.7rem;
 }
 
-.bar-slots > i {
+.bar-stars > i {
   background: linear-gradient(90deg, #c9952a, var(--gold));
 }
 
@@ -1331,7 +1331,7 @@ p {
 
 @media (prefers-reduced-motion: reduce) {
   .boost-ready.helps::after,
-  .gate-plane,
+  .dock-truck,
   .sheet,
   .pop {
     animation: none;

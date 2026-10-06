@@ -1,11 +1,11 @@
 import { useLayoutEffect, useRef, type ReactElement } from 'react';
-import type { AirportView, UpgradeId, UpgradeView } from '@airport/contracts';
+import type { WarehouseView, UpgradeId, UpgradeView } from '@warehouse/contracts';
 import { formatCash, formatEffect } from './format.ts';
 import { Sheet } from './Sheet.tsx';
-import type { AirportStore } from './store.ts';
+import type { WarehouseStore } from './store.ts';
 
 /** One upgrade: what it does now and next, its catch, and the buy button that fills as cash comes in. */
-function UpgradeRow(props: { upgrade: UpgradeView; fixes: boolean; store: AirportStore; onBuy: (id: UpgradeId) => void }): ReactElement {
+function UpgradeRow(props: { upgrade: UpgradeView; fixes: boolean; store: WarehouseStore; onBuy: (id: UpgradeId) => void }): ReactElement {
   const { upgrade: u, fixes, store, onBuy } = props;
   const progress = useRef<HTMLElement>(null);
   const row = useRef<HTMLLIElement>(null);
@@ -52,7 +52,7 @@ function UpgradeRow(props: { upgrade: UpgradeView; fixes: boolean; store: Airpor
 }
 
 /** Every upgrade in a bottom sheet, under the thumb. Stays open while buying. */
-export function UpgradeSheet(props: { view: AirportView; store: AirportStore; onBuy: (id: UpgradeId) => void; onSell: () => void; onClose: () => void }): ReactElement {
+export function UpgradeSheet(props: { view: WarehouseView; store: WarehouseStore; onBuy: (id: UpgradeId) => void; onSell: () => void; onClose: () => void }): ReactElement {
   const { view, store, onBuy, onSell, onClose } = props;
   return (
     <Sheet title="Upgrades" onClose={onClose}>
@@ -63,9 +63,9 @@ export function UpgradeSheet(props: { view: AirportView; store: AirportStore; on
         ))}
       </ul>
       <button type="button" className="btn sell-row" onClick={onSell} data-testid="sell-row">
-        <span>Sell the airport</span>
+        <span>Sell the warehouse</span>
         <span className="muted">
-          {view.slots.claimable === 0 ? `first slot at ${formatCash(view.slots.nextAt)} earned` : `worth ${view.slots.claimable} ${view.slots.claimable === 1 ? 'slot' : 'slots'}`}
+          {view.stars.claimable === 0 ? `first star at ${formatCash(view.stars.nextAt)} earned` : `worth ${view.stars.claimable} ${view.stars.claimable === 1 ? 'star' : 'stars'}`}
         </span>
       </button>
     </Sheet>

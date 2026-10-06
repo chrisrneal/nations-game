@@ -13,9 +13,9 @@ describe('pacing (RULES 11)', () => {
     expect(check.pass, `${check.value} (target ${check.target})`).toBe(true);
   });
 
-  it('the first sale lands in the 30-60 minute window with at least 3 slots', () => {
+  it('the first sale lands in the 30-60 minute window with at least 3 stars', () => {
     expect(report.greedy.firstSale).toBeGreaterThanOrEqual(1800);
     expect(report.greedy.firstSale).toBeLessThanOrEqual(3600);
-    expect(report.greedy.slotsAtFirstSale).toBeGreaterThanOrEqual(3);
+    expect(report.greedy.starsAtFirstSale).toBeGreaterThanOrEqual(3);
   });
 });

@@ -4,7 +4,7 @@
  * Tuning has to stay honest. Every tunable is declared in
  * packages/sim/src/tunables.ts and in the docs/RULES.md table, never inline,
  * so the harness can sweep the band and a reviewer can see every number in one
- * place. Machines with different values would simulate different airports from
+ * place. Machines with different values would simulate different warehouses from
  * the same commands.
  *
  * `min` and `max` are the range the harness may search and a reviewer may edit

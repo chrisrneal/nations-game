@@ -1,9 +1,9 @@
 {
-  "name": "@airport/contracts",
+  "name": "@warehouse/contracts",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Shared airport types only. No runtime code, no dependencies.",
+  "description": "Shared warehouse types only. No runtime code, no dependencies.",
   "exports": {
     ".": "./src/index.ts"
   },

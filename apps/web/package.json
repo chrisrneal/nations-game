@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "The installable mobile PWA idle airport. Talks to the sim only through the Host interface.",
+  "description": "The installable mobile PWA idle warehouse. Talks to the sim only through the Host interface.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -12,8 +12,8 @@
     "e2e": "tsx e2e/phone-check.ts"
   },
   "dependencies": {
-    "@airport/contracts": "*",
-    "@airport/sim": "*",
+    "@warehouse/contracts": "*",
+    "@warehouse/sim": "*",
     "comlink": "^4.4.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

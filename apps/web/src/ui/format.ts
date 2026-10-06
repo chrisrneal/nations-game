@@ -1,4 +1,4 @@
-import type { EffectUnit } from '@airport/contracts';
+import type { EffectUnit } from '@warehouse/contracts';
 
 const UNITS = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi'];
 
@@ -46,10 +46,10 @@ export function formatEffect(unit: EffectUnit, milli: number): string {
   const value = milli / 1000;
   switch (unit) {
     case 'count':
-      return `${value} ${value === 1 ? 'gate' : 'gates'}`;
-    case 'seats':
-      return `${short(value)} seats`;
-    case 'paxPerSec':
+      return `${value} ${value === 1 ? 'dock' : 'docks'}`;
+    case 'parcels':
+      return `${short(value)} parcels`;
+    case 'ordersPerSec':
       return formatRate(milli);
     case 'cents':
       return formatCash(value);

@@ -1,11 +1,11 @@
-import type { AirportView, UpgradeView } from '@airport/contracts';
+import type { WarehouseView, UpgradeView } from '@warehouse/contracts';
 
 /**
  * The next thing worth saving for (RULES 11: something to aim for): the
  * cheapest upgrade that is not affordable yet and not locked, preferring one
  * that fixes the bottleneck when it costs at most twice as much.
  */
-export function nextGoal(view: AirportView): UpgradeView | null {
+export function nextGoal(view: WarehouseView): UpgradeView | null {
   const open = view.upgrades.filter((u) => u.cost !== null && u.locked === null && !u.affordable && u.id !== 'night');
   if (open.length === 0) return null;
   const cheapest = open.reduce((a, b) => ((a.cost ?? 0) <= (b.cost ?? 0) ? a : b));

@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
  * public entry `platform/index.ts` - never the sim, Comlink, a
  * platform internal, or a Worker or storage API directly.
  *
- * ESLint already bans `@airport/sim` here; this test is stricter and cannot be
+ * ESLint already bans `@warehouse/sim` here; this test is stricter and cannot be
  * switched off with an inline comment.
  */
 const SRC = dirname(fileURLToPath(import.meta.url));
@@ -31,7 +31,7 @@ function imports(source: string): string[] {
   return [...source.matchAll(IMPORT)].map((m) => m[1] ?? m[2] ?? m[3] ?? '');
 }
 
-const PACKAGES = new Set(['react', 'react-dom/client', '@airport/contracts']);
+const PACKAGES = new Set(['react', 'react-dom/client', '@warehouse/contracts']);
 const FORBIDDEN_APIS = [/\bnew\s+Worker\b/, /\bindexedDB\b/, /\bpostMessage\b/, /\bnew\s+SharedWorker\b/];
 
 export function violations(file: string, source: string): string[] {
@@ -65,10 +65,10 @@ describe('interface boundary (seam 3)', () => {
 
   it('catches the shortcuts it exists to stop', () => {
     const fake = join(SRC, 'ui', 'Fake.tsx');
-    expect(violations(fake, "import { step } from '@airport/sim';")).toHaveLength(1);
-    expect(violations(fake, "import type { Derived } from '@airport/sim';")).toHaveLength(1);
-    expect(violations(fake, "import { stepAirport } from '@airport/sim';")).toHaveLength(1);
-    expect(violations(fake, "import { AirportEngine } from '../platform/engine.ts';")).toHaveLength(1);
+    expect(violations(fake, "import { step } from '@warehouse/sim';")).toHaveLength(1);
+    expect(violations(fake, "import type { Derived } from '@warehouse/sim';")).toHaveLength(1);
+    expect(violations(fake, "import { stepWarehouse } from '@warehouse/sim';")).toHaveLength(1);
+    expect(violations(fake, "import { WarehouseEngine } from '../platform/engine.ts';")).toHaveLength(1);
     expect(violations(fake, "const m = await import('../platform/engine.ts');")).toHaveLength(1);
     expect(violations(fake, "const w = new Worker('x.js');")).toHaveLength(1);
     expect(violations(fake, "import { createHost } from '../platform/index.ts';")).toEqual([]);

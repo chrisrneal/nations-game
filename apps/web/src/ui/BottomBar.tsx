@@ -1,16 +1,16 @@
 import { useLayoutEffect, useRef, type ReactElement } from 'react';
-import type { AirportView, BoostId } from '@airport/contracts';
+import type { WarehouseView, BoostId } from '@warehouse/contracts';
 import { BoostBar } from './BoostBar.tsx';
 import { formatCash, formatDuration } from './format.ts';
 import { nextGoal, secondsUntil } from './goal.ts';
-import type { AirportStore } from './store.ts';
+import type { WarehouseStore } from './store.ts';
 
 /**
- * The thumb zone: what the airport is waiting for, the next goal with a
+ * The thumb zone: what the warehouse is staged for, the next goal with a
  * countdown, the boosts, and the Upgrades button (primary actions in the
  * bottom third).
  */
-export function BottomBar(props: { view: AirportView; store: AirportStore; onUpgrades: () => void; onSell: () => void; onBoost: (id: BoostId) => void }): ReactElement {
+export function BottomBar(props: { view: WarehouseView; store: WarehouseStore; onUpgrades: () => void; onSell: () => void; onBoost: (id: BoostId) => void }): ReactElement {
   const { view, store, onUpgrades, onSell, onBoost } = props;
   const eta = useRef<HTMLSpanElement>(null);
   const goal = nextGoal(view);
@@ -28,7 +28,7 @@ export function BottomBar(props: { view: AirportView; store: AirportStore; onUpg
     <footer className="bottom">
       <p className="hint" data-testid="bottleneck">
         {view.bottleneck.text}
-        {view.bottleneck.kind === 'security' && <span className="muted"> Tap the line for a lane.</span>}
+        {view.bottleneck.kind === 'picking' && <span className="muted"> Tap the line for a lane.</span>}
       </p>
       {goal !== null && goal.cost !== null && (
         <p className="goal" data-testid="goal">
@@ -45,9 +45,9 @@ export function BottomBar(props: { view: AirportView; store: AirportStore; onUpg
             </span>
           )}
         </button>
-        {view.slots.claimable > 0 && (
+        {view.stars.claimable > 0 && (
           <button type="button" className="btn btn-wide btn-sell" onClick={onSell} data-testid="open-sell">
-            Sell +{view.slots.claimable}
+            Sell +{view.stars.claimable}
           </button>
         )}
       </div>

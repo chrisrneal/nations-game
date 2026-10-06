@@ -5,7 +5,7 @@
  * ESLint and the tsconfig lib/types settings already block these, but lint
  * configs get relaxed and `eslint-disable` comments get pasted in. This test
  * reads the actual source of packages/sim and packages/contracts and fails the
- * build if impurity appears by any route. It is deliberately dumb text
+ * build if impurity appears by any contract. It is deliberately dumb text
  * matching: no config to disable, nothing to opt out of.
  */
 import { readdirSync, readFileSync } from 'node:fs';
@@ -17,7 +17,7 @@ const repoRoot = fileURLToPath(new URL('../../..', import.meta.url));
 const PURE_PACKAGES = ['packages/contracts/src', 'packages/sim/src'] as const;
 
 /** Imports allowed in pure packages. Everything else is a failure. */
-const ALLOWED_IMPORTS = /^(\.{1,2}\/|@airport\/contracts($|\/))/;
+const ALLOWED_IMPORTS = /^(\.{1,2}\/|@warehouse\/contracts($|\/))/;
 /** Extra imports allowed in *.test.ts inside pure packages: the test runner itself. */
 const ALLOWED_TEST_IMPORTS = /^(vitest|fast-check)$/;
 
@@ -82,7 +82,7 @@ describe('pure packages stay pure', () => {
           ALLOWED_IMPORTS.test(specifier) || (isTest && ALLOWED_TEST_IMPORTS.test(specifier));
         expect(
           allowed,
-          `${name} imports "${specifier}". Pure packages may import only @airport/contracts and relative files (CLAUDE.md).`,
+          `${name} imports "${specifier}". Pure packages may import only @warehouse/contracts and relative files (CLAUDE.md).`,
         ).toBe(true);
       }
     },
