@@ -11,6 +11,25 @@ passengers, security). The Nations log is at commit `67d1d92`.
 
 ## Session log
 
+### 2026-10-06 - The floor flows like a warehouse (lanes U, D; owner request)
+**What changed.** The airport-style picking maze is gone. The floor now runs
+top to bottom the way a warehouse does: the **inbound dock** (cartons come off
+the PO, through QC, and are put away), **storage racks** (three runs of
+racking with two aisles; each carton slot is filled from the real stock),
+**picking** (orders wait as tickets on an order board, the real backlog; a
+picker walks the oldest one down an aisle, takes a carton off the rack and
+carries it out), **staging** (one marked lane per dock where cartons wait
+before loading) and the **outbound docks**. No new upgrades and no rule
+changes: the sim is untouched, only what the screen shows.
+**Checks.** `npm test` (341) and `npm run check` pass. Phone check 60/60 at 360
+x 740 (56.4 fps with the CPU slowed 4x); at 412 x 915 60/60 at 55.8 fps and
+59/60 at 53.7 fps in a second run. The unchanged game read 48.5-52.8 fps on
+this machine in the same session, so the machine is noisy; see docs/GAPS.md.
+**How to see it.** Open the app: cartons walk from the PO into the racks,
+blue order tickets queue on the board, pickers carry cartons through the
+aisles to the staging lanes, and from there down to the trucks.
+**What is left.** Play it on a real phone; see docs/GAPS.md (floor entries).
+
 ### 2026-10-06 - The warehouse (architect, all lanes; owner request, W1)
 **What changed.** The game is now Warehouse Idle. Orders come in and wait in
 the backlog (the maze in the middle of the screen); pickers take each one's

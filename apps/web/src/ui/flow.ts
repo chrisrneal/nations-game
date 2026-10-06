@@ -1,24 +1,23 @@
 import type { WarehouseEvent, WarehouseView } from '@warehouse/contracts';
 
 /**
- * Goods moving across the warehouse floor (RULES 14): order dots that come in
- * at the order desk, queue in the picking maze, go through the pickers, wait
- * in packing and walk to their dock, and stock dots that come off the PO at
- * the receiving dock and walk through quality check onto the shelves. Pure
- * bookkeeping on numbers from the View; the Floor component measures the page
- * and draws (P7: a canvas, never React).
+ * Goods moving across the warehouse floor (RULES 14), in the order a real
+ * warehouse moves them: cartons come off the PO at the inbound dock, pass
+ * quality check and are put away into the storage racks; orders come in at
+ * the order desk and wait on the order board; a picker takes the board's
+ * oldest order down an aisle, pulls a carton off the rack and carries it out
+ * to the staging lanes; and a carton walks from its staging lane to the
+ * outbound dock for each order a truck loads. Pure bookkeeping on numbers from
+ * the View; the Floor component measures the page and draws (P7: a canvas,
+ * never React).
  *
- * The dots follow the real flows. Orders join the backlog at the order rate
- * less those cancelled because the backlog is full; the line in the maze is
- * the real backlog (RULES 3), and the pickers let the head of it through as
- * fast as the sim picks, so the maze fills when picking (or stock) falls
- * behind and empties when pickers are hired. The packing crowd is the real
- * staged count; one walks to a dock for each order it loads, down the aisle
- * and in at the bay's door, and the boxes in each truck are its real load.
- * Stock dots leave the receiving dock as fast as the PO is put away (RULES
- * 3a). The order desk, quality check and export stations are scenery. One dot
- * stands for `perDot` orders or units, chosen so a few dots a second move
- * however big the warehouse grows.
+ * Everything shown is the real flow. The tickets on the board are the real
+ * backlog (RULES 3): the head leaves as fast as the sim picks, so the board
+ * fills when picking (or stock) falls behind. The full rack slots are the
+ * real stock, the staged cartons the real staged count, and the cartons in
+ * each truck its real load. The order desk, quality check and export stations
+ * are scenery. One dot stands for `perDot` orders or units, chosen so a few
+ * dots a second move however big the warehouse grows.
  */
 
 export interface Span {
@@ -29,6 +28,18 @@ export interface Span {
 export interface Point {
   readonly x: number;
   readonly y: number;
+}
+
+export interface Rect {
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+}
+
+/** One carton space in the racks, and the aisle (its y) a picker reaches it from. */
+export interface Slot extends Point {
+  readonly aisle: number;
 }
 
 /** A dock's bay: a parked truck seen from above, cab up to the walkway. */
@@ -45,25 +56,26 @@ export interface DockSpot {
 
 /** Where things are on the canvas, in CSS pixels. Measured by the component when the layout changes. */
 export interface FlowGeometry {
-  /** The inbound lane: stock leaves the receiving dock at `start`, passes the stations, and is put away on the shelves. */
-  readonly inbound: { readonly y: number; readonly start: number; readonly booths: readonly Span[]; readonly shelves: Span };
+  /** The inbound dock: cartons leave the PO at `start` and pass the stations along `y`. */
+  readonly inbound: { readonly y: number; readonly start: number; readonly booths: readonly Span[] };
   /** Where new orders come in, and the order desk they pass. */
   readonly door: Point;
   readonly checkin: Span & { readonly y: number };
+  /** The order board: the backlog waits here as tickets, oldest first, top left. */
+  readonly board: Rect;
   /**
-   * The picking maze: rows top to bottom. Orders enter the first row at
-   * `entry` (just past the desk), snake along every row, then into the
-   * pickers at the end of the last.
+   * The storage racks: `mouth` is where pickers enter the aisles (beside the
+   * board), `cross` the cross aisle down their far end, `aisles` each aisle's
+   * y, and `slots` every carton space in the order stock fills them.
    */
-  readonly maze: { readonly left: number; readonly right: number; readonly entry: number; readonly rows: readonly number[] };
-  /** The pickers: where the head of the backlog goes in, and where picked orders come out. */
-  readonly pickers: { readonly enter: Point; readonly exit: Point };
-  /** Stations after picking (export paperwork, customs), in order, on the packing row. */
+  readonly racks: { readonly mouth: number; readonly cross: number; readonly aisles: readonly number[]; readonly slots: readonly Slot[] };
+  /** Stations after picking (export paperwork, customs), in order, on the staging row. */
   readonly after: readonly Span[];
   readonly afterY: number;
-  /** The packing bench, above the docks. */
-  readonly staging: { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number };
-  /** The aisle down the middle of the bays, from packing (`top`) down. */
+  /** The staging area, and in it one lane per dock where its cartons wait. */
+  readonly staging: Rect;
+  readonly lanes: readonly Rect[];
+  /** The aisle down the middle of the bays, from staging (`top`) down. */
   readonly pier: { readonly x: number; readonly top: number };
   /** Each dock's bay, kept inside the visible docks. */
   readonly docks: readonly DockSpot[];
@@ -76,16 +88,18 @@ export interface Load {
   readonly express: boolean;
 }
 
-/** `dep`: a new order on its way to packing; `board`: a packed order walking to its truck; `arr`: stock on its way to the shelves; `away`: a cancelled order. */
+/** `dep`: a new order, then the carton picked for it; `board`: a staged carton on its way to its truck; `arr`: stock on its way to the racks; `away`: a cancelled order. */
 export type DotKind = 'dep' | 'board' | 'arr' | 'away';
-export type Tint = 'out' | 'in' | 'express' | 'away';
+/** `out`: an order ticket; `box`: a carton; `away`: a cancelled order. */
+export type Tint = 'out' | 'box' | 'express' | 'away';
 
-/** Where a new order is on the way to packing. */
-export type DepPhase = 'checkin' | 'maze' | 'scan' | 'after';
+/** Where a new order is: at the order desk, on the board, being picked, carried to staging. */
+export type DepPhase = 'desk' | 'board' | 'pick' | 'carry';
 
 export interface Dot {
   readonly kind: DotKind;
-  readonly tint: Tint;
+  /** A ticket becomes a carton when it is picked. */
+  tint: Tint;
   readonly dock: number;
   /** A little sideways spread so a crowd looks like goods on the move, not beads. */
   readonly jy: number;
@@ -93,13 +107,13 @@ export interface Dot {
   placed: boolean;
   x: number;
   y: number;
-  /** Which station it is walking to (or, past the last, the end of its walk). */
+  /** Which step of its walk it is on. */
   leg: number;
   /** Orders only: where it is. */
   phase: DepPhase;
-  /** In the maze: px walked along it from the entrance. */
-  pos: number;
-  /** Queued at a station: served from `start`, out again at `release` (ms). */
+  /** The rack slot it picks from or puts away to, or (carried) its staging lane; -1 until chosen. */
+  slot: number;
+  /** Queued at a station or reaching into a rack: from `start`, done at `release` (ms). */
   start: number;
   release: number;
   alpha: number;
@@ -107,21 +121,25 @@ export interface Dot {
 }
 
 /** Walking speeds, px a second. */
-const SPEED: Readonly<Record<DotKind, number>> = { dep: 52, board: 150, arr: 64, away: 40 };
-/** Walking the maze: brisk, so an empty maze is crossed in a few seconds. */
-const MAZE_SPEED = 80;
-/** Time inside a checkpoint, ms. Baggage claim is the slow one. */
+const SPEED: Readonly<Record<DotKind, number>> = { dep: 52, board: 150, arr: 70, away: 40 };
+/** Pickers walk the aisles briskly. */
+const PICK_SPEED = 120;
+/** Shuffling up the order board. */
+const BOARD_SPEED = 80;
+/** Time inside a station, ms. */
 const SERVICE_DEP = 150;
 const SERVICE_ARR = 110;
-/** Time at a picker, ms. */
-const SCAN_MS = 220;
-/** Space between orders in a queue, px; a long line squeezes up to the smallest. */
+/** Time reaching into a rack, ms. */
+const PICK_MS = 220;
+/** Space between orders queuing at a station, px. */
 const QUEUE_GAP = 5;
-const QUEUE_GAP_MIN = 2.2;
+/** Ticket and carton spacing on the board, in the racks and in staging, px; a full board squeezes up to the smallest. */
+export const PITCH = 5;
+const PITCH_MIN = 2.5;
 /** Most dots spawned on one update and alive at once: the frame budget on a slow phone. */
 const SPAWN_MAX = 6;
 export const DOTS_MAX = 260;
-/** Most dots standing in the maze: past this a dot stands for more of the line. */
+/** Most tickets on the board: past this a dot stands for more of the backlog. */
 export const MAZE_MAX = 150;
 /** Space between parcels in a parked truck, px, and the aisle down its middle. */
 const PARCEL_GAP = 5;
@@ -150,11 +168,11 @@ export function choosePerDot(perSec: number, current: number): number {
 }
 
 /**
- * The parcels of a truck filling the box (a fuselage seen from above, nose up):
+ * The parcels of a truck filling the box (a trailer seen from above, cab up):
  * rows across with an aisle down the middle, front row first and, within a
  * row, from the aisle out, so a filling truck fills from the front.
  */
-export function parcelSpots(box: { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number }): Point[] {
+export function parcelSpots(box: Rect): Point[] {
   const mid = (box.left + box.right) / 2;
   const side = Math.max(1, Math.floor((box.right - box.left - AISLE) / 2 / PARCEL_GAP));
   const rows = Math.max(1, Math.floor((box.bottom - box.top) / PARCEL_GAP));
@@ -169,73 +187,90 @@ export function parcelSpots(box: { readonly left: number; readonly top: number; 
   return spots;
 }
 
-/** The maze as a walking path: along each row, turning down at alternate ends. */
-export function mazePath(maze: FlowGeometry['maze']): Point[] {
-  const points: Point[] = [];
-  maze.rows.forEach((y, i) => {
-    const [from, to] = i % 2 === 0 ? [i === 0 ? maze.entry : maze.left, maze.right] : [maze.right, maze.left];
-    points.push({ x: from, y }, { x: to, y });
-  });
-  return points;
+/**
+ * Every carton space in the racks, in the order stock fills them: a fixed
+ * shuffle, so a part-full rack looks like a real one (gaps here and there)
+ * and the same slots fill each time the stock is the same. Each slot is
+ * reached from the nearest aisle.
+ */
+export function rackSlots(racks: readonly Rect[], aisles: readonly number[]): Slot[] {
+  const slots: Slot[] = [];
+  for (const r of racks) {
+    const cols = Math.floor((r.right - r.left) / PITCH);
+    const rows = Math.max(1, Math.floor((r.bottom - r.top) / PITCH));
+    const x0 = (r.left + r.right) / 2 - ((cols - 1) * PITCH) / 2;
+    const y0 = (r.top + r.bottom) / 2 - ((rows - 1) * PITCH) / 2;
+    for (let row = 0; row < rows; row++) {
+      const y = y0 + row * PITCH;
+      let aisle = aisles[0] ?? y;
+      for (const a of aisles) if (Math.abs(a - y) < Math.abs(aisle - y)) aisle = a;
+      for (let c = 0; c < cols; c++) slots.push({ x: x0 + c * PITCH, y, aisle });
+    }
+  }
+  let seed = 7;
+  for (let i = slots.length - 1; i > 0; i--) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    const j = seed % (i + 1);
+    [slots[i], slots[j]] = [slots[j] as Slot, slots[i] as Slot];
+  }
+  return slots;
 }
 
-/** A path's length and a way to find the point `pos` px along it. */
-export class Path {
-  readonly length: number;
-  private readonly cum: number[];
-  constructor(private readonly points: readonly Point[]) {
-    this.cum = [0];
-    for (let i = 1; i < points.length; i++) {
-      const a = points[i - 1] as Point;
-      const b = points[i] as Point;
-      this.cum.push((this.cum[i - 1] as number) + Math.hypot(b.x - a.x, b.y - a.y));
-    }
-    this.length = this.cum[this.cum.length - 1] ?? 0;
-  }
+/** Where the `i`th of `n` tickets stands on the board: rows from the top left, squeezed up when they do not fit. */
+export function boardSpot(board: Rect, i: number, n: number): Point {
+  const w = Math.max(1, board.right - board.left);
+  const h = Math.max(1, board.bottom - board.top);
+  const fits = Math.floor(w / PITCH) * Math.floor(h / PITCH);
+  const pitch = n <= fits ? PITCH : Math.max(PITCH_MIN, Math.sqrt((w * h) / n) * 0.97);
+  const cols = Math.max(1, Math.floor(w / pitch));
+  const row = Math.floor(i / cols);
+  return { x: board.left + pitch / 2 + (i % cols) * pitch, y: Math.min(board.bottom - 1, board.top + pitch / 2 + row * pitch) };
+}
 
-  at(pos: number): Point {
-    const p = Math.max(0, Math.min(this.length, pos));
-    for (let i = 1; i < this.points.length; i++) {
-      const end = this.cum[i] as number;
-      if (p <= end || i === this.points.length - 1) {
-        const start = this.cum[i - 1] as number;
-        const a = this.points[i - 1] as Point;
-        const b = this.points[i] as Point;
-        const t = end === start ? 0 : (p - start) / (end - start);
-        return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-      }
-    }
-    return this.points[0] ?? { x: 0, y: 0 };
+/** A staging lane's carton spaces, from the dock end (the bottom) up. */
+export function laneSpots(lane: Rect): Point[] {
+  const cols = Math.max(1, Math.floor((lane.right - lane.left - 2) / PITCH));
+  const rows = Math.max(1, Math.floor((lane.bottom - lane.top - 2) / PITCH));
+  const x0 = (lane.left + lane.right) / 2 - ((cols - 1) * PITCH) / 2;
+  const spots: Point[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) spots.push({ x: x0 + c * PITCH, y: lane.bottom - 1 - PITCH / 2 - r * PITCH });
   }
+  return spots;
+}
+
+/** How many of `filled` staged cartons stand in lane `i` of `lanes`: shared out evenly, the first lanes taking the odd ones. */
+export function laneCount(filled: number, lanes: number, i: number): number {
+  if (lanes <= 0) return 0;
+  return Math.floor(filled / lanes) + (i < filled % lanes ? 1 : 0);
 }
 
 export class FlowModel {
   readonly dots: Dot[] = [];
-  /** The picking line in walking order, head first: each dot from the moment it reaches the maze. */
+  /** The order board in walking order, head first: each ticket from the moment it reaches the board. */
   readonly queue: Dot[] = [];
   perDot = 1;
-  /** The staging: share of its parcels in use, 0-1 (the real staged count). */
+  /** The staging lanes: share of their space in use, 0-1 (the real staged count). */
   staging = 0;
   /** Recently cancelled orders (a full backlog). */
   turningAway = false;
-  /** Dots the real line stands for now. */
+  /** Tickets the real backlog stands for now. */
   lineDots = 0;
-  /** Each dock's parked truck (RULES 2): what its parcels show. */
+  /** Each dock's parked truck: what its parcels show. */
   loads: Load[] = [];
+  /** The racks: share of their space in use, 0-1 (the real stock). */
+  shelves = 0;
   private prev: WarehouseView | null = null;
   private accDep = 0;
   private accAway = 0;
   private accBoard: number[] = [];
-  /** Dots picking has let through that have not yet reached a picker. */
+  /** Tickets picking has taken off the board that have not yet left it. */
   private cleared = 0;
   private accIn = 0;
-  /** The shelves: share of their space in use, 0-1 (the real stock). */
-  shelves = 0;
   private busy = new Map<string, number>();
   private seed = 1;
   private awayUntil = 0;
-  private path: Path | null = null;
-  private pathKey = '';
+  private nextLane = 0;
 
   /** Takes one update from the host. `now` is the animation clock in ms. */
   ingest(view: WarehouseView, events: readonly WarehouseEvent[], now: number): void {
@@ -266,14 +301,14 @@ export class FlowModel {
     this.accAway += away;
     this.accDep = this.spawn(this.accDep, unit, () => this.add('dep', 'out', -1));
     this.accAway = this.spawn(this.accAway, unit, () => this.add('away', 'away', -1));
-    // Picking let through whatever left the line (RULES 3).
+    // Picking took whatever left the backlog (RULES 3).
     this.cleared += Math.max(0, prev.picking.backlog + joined - view.picking.backlog) / unit;
 
     // Stock put away since the last update: the rest of a finished PO, then the new one (RULES 3a).
     const was = prev.receiving.po;
     const po = view.receiving.po;
     const received = po.id === was.id ? Math.max(0, po.received - was.received) : Math.max(0, was.units * 1000 - was.received) + po.received;
-    this.accIn = this.spawn(this.accIn + received, unit, () => this.add('arr', 'in', -1));
+    this.accIn = this.spawn(this.accIn + received, unit, () => this.add('arr', 'box', -1));
 
     const departed = new Map<number, number>();
     for (const e of events) {
@@ -286,19 +321,18 @@ export class FlowModel {
       let loaded: number;
       if (left !== undefined) loaded = Math.max(0, left - before.loaded);
       else loaded = before.truck === g.truck ? Math.max(0, g.loaded - before.loaded) : g.loaded;
-      this.accBoard[i] = this.spawn((this.accBoard[i] ?? 0) + loaded, unit, () => this.add('board', 'out', i));
+      this.accBoard[i] = this.spawn((this.accBoard[i] ?? 0) + loaded, unit, () => this.add('board', 'box', i));
     });
   }
 
   /** Moves everyone `dt` ms on. Call once a frame with the latest geometry. */
   advance(dt: number, now: number, geo: FlowGeometry): void {
-    const path = this.mazeFor(geo);
-    this.fillMaze(path);
-    this.walkMaze(dt, now, path, geo);
+    this.fillBoard(geo);
+    this.walkBoard(dt, geo);
     let kept = 0;
     for (const d of this.dots) {
-      // Standing in a long line is not being lost.
-      if (d.phase !== 'maze') d.age += dt;
+      // Waiting on the board is not being lost.
+      if (d.phase !== 'board') d.age += dt;
       if (d.age < MAX_AGE && this.move(d, dt, now, geo)) this.dots[kept++] = d;
     }
     this.dots.length = kept;
@@ -309,7 +343,7 @@ export class FlowModel {
     }
   }
 
-  /** Forget everyone walking (a new warehouse, or back from a long absence). The real line is filled in again on the next frame. */
+  /** Forget everyone walking (a new warehouse, or back from a long absence). The real backlog is filled in again on the next frame. */
   reset(): void {
     this.dots.length = 0;
     this.queue.length = 0;
@@ -321,40 +355,24 @@ export class FlowModel {
     this.busy.clear();
   }
 
-  /** Space between orders in the maze: they squeeze up when the backlog is longer than the maze. */
-  gap(path: Path): number {
-    return Math.max(QUEUE_GAP_MIN, Math.min(QUEUE_GAP, path.length / Math.max(1, this.queue.length)));
-  }
-
-  private mazeFor(geo: FlowGeometry): Path {
-    const points = mazePath(geo.maze);
-    const key = points.map((p) => `${Math.round(p.x)},${Math.round(p.y)}`).join(' ');
-    if (this.path === null || key !== this.pathKey) {
-      this.path = new Path(points);
-      this.pathKey = key;
-    }
-    return this.path;
-  }
-
   /**
-   * Keeps the maze as long as the real backlog: orders already waiting for a
-   * line the dots have not caught up with (a reload, a quiet catch-up, more
-   * arriving in a tick than a frame spawns) appear at the back; a maze longer
-   * than the line lets its head through.
+   * Keeps the board as long as the real backlog: orders already waiting that
+   * the tickets have not caught up with (a reload, a quiet catch-up, more
+   * arriving in a tick than a frame spawns) appear at the back; a board
+   * longer than the backlog lets its head go.
    */
-  private fillMaze(path: Path): void {
-    const walking = this.dots.filter((d) => d.kind === 'dep' && d.phase === 'checkin').length;
+  private fillBoard(geo: FlowGeometry): void {
+    const walking = this.dots.filter((d) => d.kind === 'dep' && d.phase === 'desk').length;
     const missing = this.lineDots - this.queue.length - walking;
     if (missing > 2) {
       for (let i = 0; i < missing && this.dots.length < DOTS_MAX; i++) {
         this.add('dep', 'out', -1);
         const d = this.dots[this.dots.length - 1] as Dot;
-        d.phase = 'maze';
+        d.phase = 'board';
         d.placed = true;
-        d.pos = Math.max(0, path.length - this.queue.length * this.gap(path));
-        const at = path.at(d.pos);
+        const at = boardSpot(geo.board, this.queue.length, this.lineDots);
         d.x = at.x;
-        d.y = at.y + d.jy;
+        d.y = at.y;
         this.queue.push(d);
       }
     }
@@ -363,29 +381,44 @@ export class FlowModel {
     this.cleared = Math.min(this.cleared, this.queue.length);
   }
 
-  /** The line shuffles forward; the head goes to a picker whenever the sim picks one. */
-  private walkMaze(dt: number, now: number, path: Path, geo: FlowGeometry): void {
-    const gap = this.gap(path);
-    const step = (MAZE_SPEED * dt) / 1000;
+  /** The tickets shuffle up the board; a picker takes the head whenever the sim picks one. */
+  private walkBoard(dt: number, geo: FlowGeometry): void {
+    const n = Math.max(this.queue.length, this.lineDots);
+    const step = (BOARD_SPEED * dt) / 1000;
     this.queue.forEach((d, i) => {
-      const target = Math.max(0, path.length - i * gap);
-      if (d.pos < target) d.pos = Math.min(target, d.pos + step);
-      const at = path.at(d.pos);
-      d.x = at.x;
-      d.y = at.y + d.jy * 0.6;
+      const at = boardSpot(geo.board, i, n);
+      toward(d, at.x, at.y, step);
     });
-    // As many as picking cleared step in at the head, as each reaches it.
+    // As many as picking cleared go, as each reaches the head of the board.
     while (this.cleared > 1 - 1e-6) {
       const head = this.queue[0];
-      if (head === undefined || head.pos < path.length - gap * 1.5) break;
+      if (head === undefined) break;
+      const at = boardSpot(geo.board, 0, n);
+      if (Math.hypot(head.x - at.x, head.y - at.y) > PITCH * 1.5) break;
       this.queue.shift();
       this.cleared -= 1;
-      head.phase = 'scan';
-      head.x = geo.pickers.enter.x;
-      head.y = geo.pickers.enter.y;
-      head.start = now;
-      head.release = now + SCAN_MS;
+      head.phase = 'pick';
+      head.leg = 0;
+      head.slot = this.pickSlot(geo);
+      head.start = 0;
+      head.release = 0;
     }
+  }
+
+  /** A full slot near the edge of the stock: the carton a picker pulls (the rack drawing empties it as the stock drops). */
+  private pickSlot(geo: FlowGeometry): number {
+    const n = geo.racks.slots.length;
+    if (n === 0) return -1;
+    const filled = Math.round(this.shelves * n);
+    return Math.max(0, Math.min(n - 1, filled - 1 - Math.floor((this.jitter() + 1) * 2)));
+  }
+
+  /** An empty slot at the edge of the stock: where a put-away carton goes (the rack drawing fills it as the stock grows). */
+  private putSlot(geo: FlowGeometry): number {
+    const n = geo.racks.slots.length;
+    if (n === 0) return -1;
+    const filled = Math.round(this.shelves * n);
+    return Math.max(0, Math.min(n - 1, filled + Math.floor((this.jitter() + 1) * 2)));
   }
 
   /** Spawns a dot per `unit` in `acc` (at most SPAWN_MAX) and returns the remainder. */
@@ -397,21 +430,21 @@ export class FlowModel {
     return rest;
   }
 
-  private add(kind: DotKind, tint: Tint, dock: number, at?: Point): void {
+  private add(kind: DotKind, tint: Tint, dock: number): void {
     if (this.dots.length >= DOTS_MAX) return;
-    const placed = at !== undefined;
-    this.dots.push({ kind, tint, dock, jy: this.jitter() * 3, placed, x: at?.x ?? 0, y: at?.y ?? 0, leg: 0, phase: 'checkin', pos: 0, start: 0, release: 0, alpha: 1, age: 0 });
+    this.dots.push({ kind, tint, dock, jy: this.jitter() * 3, placed: false, x: 0, y: 0, leg: 0, phase: 'desk', slot: -1, start: 0, release: 0, alpha: 1, age: 0 });
   }
 
   /** Puts a new dot where its walk starts. */
   private place(d: Dot, geo: FlowGeometry): void {
     d.placed = true;
     if (d.kind === 'board') {
-      // Off the bench at the head of the aisle.
-      d.x = Math.min(geo.staging.right - 4, Math.max(geo.staging.left + 4, geo.pier.x + d.jy * 8));
-      d.y = geo.staging.bottom - 2;
+      // Off the front of its dock's staging lane.
+      const lane = geo.lanes[d.dock] ?? geo.lanes[d.dock % Math.max(1, geo.lanes.length)];
+      d.x = lane === undefined ? geo.pier.x : (lane.left + lane.right) / 2 + d.jy;
+      d.y = (lane?.bottom ?? geo.staging.bottom) - 2;
     } else if (d.kind === 'arr') {
-      // Off the PO at the receiving dock.
+      // Off the PO at the inbound dock.
       d.x = geo.inbound.start;
       d.y = geo.inbound.y + d.jy * 0.6;
     } else {
@@ -432,34 +465,33 @@ export class FlowModel {
     const step = (SPEED[d.kind] * dt) / 1000;
     switch (d.kind) {
       case 'dep':
-        return this.depart(d, step, now, geo);
+        return this.depart(d, dt, step, now, geo);
       case 'board': {
-        // Down the pier, along the walkway to the stand's door, then aboard.
+        // Out of the lane to the head of the aisle, down it, along the walkway to the bay's door, then aboard.
         const at = geo.docks[d.dock];
         if (at === undefined) return false;
         const j = d.jy * 0.4;
+        const x = geo.pier.x - 1.5;
         if (d.leg === 0) {
-          if (toward(d, geo.pier.x - 1.5, at.door + j, step)) d.leg = 1;
+          if (toward(d, d.x, geo.pier.top, step)) d.leg = 1;
           return true;
         }
         if (d.leg === 1) {
-          if (toward(d, at.x, at.door + j, step)) d.leg = 2;
+          if (toward(d, x, geo.pier.top, step)) d.leg = 2;
+          return true;
+        }
+        if (d.leg === 2) {
+          if (toward(d, x, at.door + j, step)) d.leg = 3;
+          return true;
+        }
+        if (d.leg === 3) {
+          if (toward(d, at.x, at.door + j, step)) d.leg = 4;
           return true;
         }
         return !toward(d, at.x, at.y, step);
       }
-      case 'arr': {
-        // Through the stations on the lane, then onto the shelves where they are filled to (the real stock).
-        const lane = geo.inbound;
-        const booth = lane.booths[d.leg];
-        if (booth === undefined) {
-          const { left, right } = lane.shelves;
-          const x = Math.min(right - 3, Math.max(left + 3, left + 3 + this.shelves * (right - left - 6)));
-          return !toward(d, x, lane.y + d.jy * 0.6, step);
-        }
-        const back = d.leg === 0 ? lane.start : (lane.booths[d.leg - 1] as Span).right + 2;
-        return this.checkpoint(d, now, `i${d.leg}`, SERVICE_ARR, booth, back, +1, step, lane.y);
-      }
+      case 'arr':
+        return this.putAway(d, step, now, geo);
       case 'away': {
         if (d.leg === 0) {
           if (toward(d, geo.door.x + 16, geo.door.y + d.jy, step)) d.leg = 1;
@@ -472,47 +504,117 @@ export class FlowModel {
     }
   }
 
-  /** A new order: the order desk, the maze (moved by `walkMaze`), the pickers, the stations after them, packing. */
-  private depart(d: Dot, step: number, now: number, geo: FlowGeometry): boolean {
+  /** Stock: through the stations on the inbound dock, down the cross aisle, along an aisle and into its rack slot. */
+  private putAway(d: Dot, step: number, now: number, geo: FlowGeometry): boolean {
+    const lane = geo.inbound;
+    const n = lane.booths.length;
+    if (d.leg < n) {
+      const booth = lane.booths[d.leg] as Span;
+      const back = d.leg === 0 ? lane.start : (lane.booths[d.leg - 1] as Span).right + 2;
+      return this.checkpoint(d, now, `i${d.leg}`, SERVICE_ARR, booth, back, +1, step, lane.y);
+    }
+    if (d.slot < 0) d.slot = this.putSlot(geo);
+    const slot = geo.racks.slots[d.slot];
+    const cross = geo.racks.cross;
+    if (slot === undefined) return !toward(d, cross, lane.y, step);
+    switch (d.leg - n) {
+      case 0:
+        if (toward(d, cross, lane.y + d.jy * 0.6, step)) d.leg += 1;
+        return true;
+      case 1:
+        if (toward(d, cross, slot.aisle, step)) d.leg += 1;
+        return true;
+      case 2:
+        if (toward(d, slot.x, slot.aisle, step)) d.leg += 1;
+        return true;
+      default:
+        return !toward(d, slot.x, slot.y, step * 0.5);
+    }
+  }
+
+  /** A new order: the order desk, the board (moved by `walkBoard`), a picker's trip into the racks, the stations after, a staging lane. */
+  private depart(d: Dot, dt: number, step: number, now: number, geo: FlowGeometry): boolean {
     switch (d.phase) {
-      case 'checkin': {
-        if (d.leg === 0) return this.checkpoint(d, now, 'checkin', SERVICE_DEP, geo.checkin, geo.door.x, +1, step, geo.checkin.y);
-        // Into the maze at its entrance.
-        const enter = geo.maze.rows[0] ?? geo.checkin.y;
-        if (toward(d, geo.maze.entry, enter + d.jy * 0.6, step * 1.4)) {
-          d.phase = 'maze';
-          d.pos = 0;
+      case 'desk': {
+        if (d.leg === 0) return this.checkpoint(d, now, 'desk', SERVICE_DEP, geo.checkin, geo.door.x, +1, step, geo.checkin.y);
+        // Onto the back of the board.
+        const at = boardSpot(geo.board, this.queue.length, Math.max(this.queue.length + 1, this.lineDots));
+        if (toward(d, at.x, at.y, step * 1.4)) {
+          d.phase = 'board';
           this.queue.push(d);
         }
         return true;
       }
-      case 'maze':
+      case 'board':
         return true;
-      case 'scan':
-        if (now >= d.release) {
-          d.phase = 'after';
-          d.leg = 0;
-          d.start = 0;
-          d.release = 0;
-          d.x = geo.pickers.exit.x;
-          d.y = geo.pickers.exit.y + d.jy;
-        }
-        return true;
-      case 'after': {
+      case 'pick':
+        return this.pick(d, (PICK_SPEED * dt) / 1000, now, geo);
+      case 'carry': {
         const booth = geo.after[d.leg];
         if (booth === undefined) {
-          // Onto the packing bench near the pile's edge (the pile is drawn from the real count).
-          const x = Math.min(geo.staging.right - 6, Math.max(geo.staging.left + 6, geo.staging.left + 6 + this.staging * (geo.staging.right - geo.staging.left - 12) + d.jy * 4));
-          return !toward(d, x, (geo.staging.top + geo.staging.bottom) / 2 + d.jy, step * 1.4);
+          // Into a staging lane, on top of its stack (the stacks are drawn from the real count).
+          if (d.slot < 0) d.slot = geo.lanes.length === 0 ? 0 : this.nextLane++ % geo.lanes.length;
+          const lane = geo.lanes[d.slot] ?? geo.staging;
+          const top = lane.bottom - (lane.bottom - lane.top) * this.staging;
+          const y = Math.max(lane.top + 2, Math.min(lane.bottom - 2, top));
+          return !toward(d, (lane.left + lane.right) / 2 + d.jy, y, step * 1.4);
         }
-        const back = d.leg === 0 ? geo.pickers.exit.x : (geo.after[d.leg - 1] as Span).left - 2;
+        const back = d.leg === 0 ? geo.racks.cross : (geo.after[d.leg - 1] as Span).left - 2;
         return this.checkpoint(d, now, `p${d.leg}`, SERVICE_DEP, booth, back, -1, step, geo.afterY);
       }
     }
   }
 
   /**
-   * Walking to a checkpoint (`dir` +1 walks right, -1 left), queuing behind
+   * A picker's trip: into the aisle beside the board, along to the slot,
+   * reaching in for the carton (the ticket becomes a carton), out along the
+   * aisle to the cross aisle and down it to the staging row.
+   */
+  private pick(d: Dot, step: number, now: number, geo: FlowGeometry): boolean {
+    const r = geo.racks;
+    const slot = r.slots[d.slot];
+    const aisle = slot?.aisle ?? r.aisles[0] ?? geo.afterY;
+    const done = (): void => {
+      d.phase = 'carry';
+      d.leg = 0;
+      d.slot = -1;
+      d.start = 0;
+      d.release = 0;
+      d.tint = 'box';
+    };
+    switch (d.leg) {
+      case 0:
+        if (toward(d, r.mouth, aisle, step)) d.leg = slot === undefined ? 4 : 1;
+        return true;
+      case 1:
+        if (toward(d, (slot as Slot).x, aisle, step)) d.leg = 2;
+        return true;
+      case 2:
+        if (toward(d, (slot as Slot).x, (slot as Slot).y, step * 0.5)) {
+          d.leg = 3;
+          d.start = now;
+          d.release = now + PICK_MS;
+          d.tint = 'box';
+        }
+        return true;
+      case 3:
+        if (now >= d.release && toward(d, d.x, aisle, step * 0.5)) {
+          d.leg = 4;
+          d.start = 0;
+          d.release = 0;
+        }
+        return true;
+      case 4:
+        if (toward(d, r.cross, aisle, step)) d.leg = 5;
+        return true;
+      default:
+        if (toward(d, r.cross, geo.afterY + d.jy, step)) done();
+        return true;
+    }
+  }
+
+  /**
+   * Walking to a station (`dir` +1 walks right, -1 left), queuing behind
    * whoever is there, hidden inside it while served, then out the far side.
    * A long queue squeezes up rather than reach back past `back`.
    */
@@ -557,8 +659,8 @@ function toward(d: Dot, x: number, y: number, step: number): boolean {
   return false;
 }
 
-/** Hidden while inside a station or at a picker. */
+/** Hidden while inside a station; a picker reaching into a rack stays in view. */
 export function visible(d: Dot, now: number): boolean {
-  if (d.phase === 'scan' && d.kind === 'dep') return false;
+  if (d.phase === 'pick') return true;
   return !(d.release > 0 && now >= d.start);
 }

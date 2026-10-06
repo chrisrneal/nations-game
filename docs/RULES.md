@@ -396,42 +396,53 @@ backlog, and how full the shelves are. The tile that names the bottleneck
 orange.
 
 The middle of the screen, above the docks, shows goods moving across the
-floor. The **backlog is real** (section 3): the dots waiting in the picking
-maze are the backlog in State, so it fills when picking or stock falls behind,
-empties when pickers are hired, and backs up when packing is full. The packing
-pile is the real packed count, the shelves bar the real stock, and the PO line
-the real PO. The order desk, quality check and the export stations are
-**scenery**: they never hold anything (export paperwork and customs only slow
-picking, section 3).
+floor in the order a real warehouse moves them: inbound dock, storage racks,
+picking, staging, outbound docks. The **backlog is real** (section 3): the
+tickets waiting on the order board are the backlog in State, so the board
+fills when picking or stock falls behind, empties when pickers are hired, and
+backs up when staging is full. The full rack slots are the real stock, the
+cartons in the staging lanes the real packed count, and the PO line the real
+PO. The order desk, quality check and the export stations are **scenery**:
+they never hold anything (export paperwork and customs only slow picking,
+section 3). "Packing" in sections 3-8 is the staging area on screen.
 
-- **Receiving** (the top lane): stock dots leave the PO at the receiving dock
-  as fast as it is put away, pass quality check, and stop on the shelves at
-  their fill line. The lane names the PO ("PO #12 · 30/48"), shows the shelves'
-  units and space, and is a tap target (extra hands, section 6).
-- **Picking** (the maze): new orders come in at the order desk at the order
-  rate less those cancelled (shown fading at the door), snake through the maze
-  along three rows into the pickers, one bar per two pickers levels (up to
-  six), and the extra pickers in green while they work. It shows the backlog
-  and the wait ("34 waiting · 14 s"), "held: packing full" or "held: shelves
-  empty" when those stop it, and is the pickers' tap target.
-- **Packing**: packed orders stacked as boxes, past any export stations, then
-  one carried down the aisle between the docks for each order a truck loads.
-- **Docks**: bays two each side of the aisle; each parked truck is seen from
-  above, cab up, and its trailer fills box by box with its real load (gold on
-  an express, green once full). It leaves cab first.
+- **Inbound** (the top lane): cartons leave the PO at the inbound dock as fast
+  as it is put away, pass quality check, go down the cross aisle at the
+  racks' far end and along an aisle into an empty rack slot. The lane names
+  the PO ("PO #12 · 30/48") and is a tap target (extra hands, section 6).
+- **Storage and picking**: three runs of racking with two aisles; each slot
+  holds a carton while the shelves have stock for it (slots fill in a fixed
+  scattered order, so a part-full rack has gaps here and there), with the
+  units and space above ("Storage 62/120"). New orders come in at the order
+  desk at the order rate less those cancelled (shown fading at the door) and
+  wait on the order board, oldest first. A picker takes the oldest down an
+  aisle, reaches into a full slot (the ticket becomes a carton) and carries it
+  down the cross aisle. Under the board, one picker figure per two pickers
+  levels (up to six), and an extra one in green while extra pickers work. It
+  shows the backlog and the wait ("34 waiting · 14 s"), "held: staging full"
+  or "held: racks empty" when those stop it, and is the pickers' tap target.
+- **Staging**: one lane per dock, marked on the floor, where picked cartons
+  wait for a truck, past any export stations. The packed count is shared out
+  evenly between the lanes and stacked from the dock end; a carton walks from
+  a dock's lane down the aisle between the docks for each order its truck
+  loads.
+- **Docks** (outbound): bays two each side of the aisle; each parked truck is
+  seen from above, cab up, and its trailer fills box by box with its real
+  load (gold on an express, green once full). It leaves cab first.
 - **Stations by contract level** (design data in `catalog.ts`, not tunables):
 
 | From contract level | Orders pass |
 | --- | --- |
-| 0 (Local shops) | Order desk, Picking; stock passes Receiving, Quality check |
+| 0 (Local shops) | Order desk, Picking; stock passes the inbound dock, Quality check |
 | 5 (Cross-border) | Export paperwork (slows picking) |
 | 6 (Overseas) | Customs checks (slows picking) |
 
 - One dot stands for 1, 2, 5, 10, 20, 50... orders or units, picked so a few
   dots a second move however big the warehouse grows; packing shows the scale.
-- Display limits, not balance: at most 260 dots on screen and 150 in the maze
-  (a longer backlog squeezes up), and none move for ticks caught up quietly
-  (an absence or a late timer); the maze is filled in from the real backlog.
+- Display limits, not balance: at most 260 dots on screen and 150 tickets on
+  the order board (a longer backlog squeezes up), and none move for ticks
+  caught up quietly (an absence or a late timer); the board is filled in from
+  the real backlog.
 
 ## 15. Boosts
 

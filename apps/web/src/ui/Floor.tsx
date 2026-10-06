@@ -1,13 +1,13 @@
 import { useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, type ReactElement, type ReactNode } from 'react';
 import type { JourneyView } from '@warehouse/contracts';
-import { FlowModel, parcelSpots, visible, type FlowGeometry, type Load, type Span, type Tint } from './flow.ts';
+import { FlowModel, laneCount, laneSpots, parcelSpots, rackSlots, visible, type FlowGeometry, type Load, type Rect, type Span, type Tint } from './flow.ts';
 import { formatDuration, formatRate, short } from './format.ts';
 import { ripple } from './pop.ts';
 import type { WarehouseStore } from './store.ts';
 
-const TINT: Readonly<Record<Tint, string>> = { out: '#8fd0ff', in: '#d7b4ff', express: '#ffcc5c', away: '#ff9d6c' };
-/** Packed orders: cardboard boxes, on the packing bench and in the trucks. */
+/** Cartons: put away, in the racks, picked, staged and in the trucks. */
 const BOX = '#e0b073';
+const TINT: Readonly<Record<Tint, string>> = { out: '#8fd0ff', box: BOX, express: '#ffcc5c', away: '#ff9d6c' };
 /** A truck's parcel spaces: empty, loaded, and all loaded (it leaves full). */
 const PARCEL_EMPTY = 'rgb(255 255 255 / 14%)';
 const PARCEL_FULL = '#56d3a0';
@@ -17,27 +17,29 @@ export function lanesFor(level: number): number {
 }
 
 /**
- * The warehouse floor (RULES 3, 3a, 14) above the docks, the middle of the
- * screen. Along the top, stock comes off the PO at the receiving dock, through
- * quality check and onto the shelves; tapping that lane sends extra hands.
- * Below, new orders come in at the order desk and snake through the picking
- * maze, whose line is the real backlog, to the pickers, then past any export
- * stations into packing and down the aisle to the docks, where they fill the
- * parked trucks. Tapping the maze sends extra pickers (RULES 6). The stations,
- * shelves and bays are DOM; the goods are dots on one canvas over the whole
- * floor, drawn each animation frame from a FlowModel (P7: nothing here
- * re-renders React per tick).
+ * The warehouse floor (RULES 3, 3a, 14) above the docks, laid out the way
+ * goods move through a warehouse. Along the top, the inbound dock: cartons
+ * come off the PO, through quality check, and are put away in the storage
+ * racks; tapping it sends extra hands. Below, picking: new orders come in at
+ * the order desk and wait on the order board (the real backlog); pickers take
+ * the oldest down an aisle, pull a carton off the rack and carry it, past any
+ * export stations, to the staging lanes, one lane per dock, where it waits to
+ * be loaded onto a truck at the outbound docks. Tapping picking sends extra
+ * pickers (RULES 6). The stations, racks and lanes are DOM; the goods are
+ * drawn on one canvas over the whole floor each animation frame from a
+ * FlowModel (P7: nothing here re-renders React per tick).
  */
 export function Floor(props: {
   journey: JourneyView;
   pickingLevel: number;
+  docks: number;
   tickMs: number;
   store: WarehouseStore;
   onTapPick: () => void;
   onTapReceive: () => void;
   children: ReactNode;
 }): ReactElement {
-  const { journey, pickingLevel, tickMs, store, onTapPick, onTapReceive, children } = props;
+  const { journey, pickingLevel, docks, tickMs, store, onTapPick, onTapReceive, children } = props;
   const floor = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const rate = useRef<HTMLSpanElement>(null);
@@ -51,7 +53,7 @@ export function Floor(props: {
   const inbound = useRef<HTMLButtonElement>(null);
   const poText = useRef<HTMLSpanElement>(null);
   const inTag = useRef<HTMLSpanElement>(null);
-  const shelfFill = useRef<HTMLElement>(null);
+  const racks = useRef<HTMLSpanElement>(null);
   const shelfText = useRef<HTMLSpanElement>(null);
   const inPops = useRef<HTMLSpanElement>(null);
   const model = useRef<FlowModel>(null);
@@ -60,7 +62,7 @@ export function Floor(props: {
   const after = journey.outbound.filter((c) => c.id !== 'desk' && c.id !== 'picking');
   const checks = journey.inbound.filter((c) => c.id !== 'receiving');
   const lanes = lanesFor(pickingLevel);
-  const shape = `${after.map((c) => c.id).join()}|${checks.map((c) => c.id).join()}|${lanes}`;
+  const shape = `${after.map((c) => c.id).join()}|${checks.map((c) => c.id).join()}|${lanes}|${docks}`;
 
   // Numbers from every update, and the goods they set moving.
   useLayoutEffect(
@@ -83,9 +85,9 @@ export function Floor(props: {
             orders === 0
               ? 'No backlog'
               : packed
-                ? `${short(orders)} held: packing full`
+                ? `${short(orders)} held: staging full`
                 : empty
-                  ? `${short(orders)} held: shelves empty`
+                  ? `${short(orders)} held: racks empty`
                   : `${short(orders)} waiting · ${formatDuration(Math.max(1, Math.round((pick.waitTicks * tickMs) / 1000)))}`;
         }
         if (tag.current) tag.current.textContent = pick.rushed ? 'Extra pickers' : orders > 0 && !packed && !empty ? 'Tap: +pickers' : '';
@@ -97,13 +99,13 @@ export function Floor(props: {
           el.classList.toggle('slow', v.bottleneck.kind === 'picking');
         }
         staging.current?.classList.toggle('full', t.staged >= t.cap);
-        // The receiving lane: the PO at the dock and the shelves (RULES 3a).
+        // The inbound dock and the racks (RULES 3a).
         const share = recv.shelfCap === 0 ? 0 : Math.min(1, recv.stock / recv.shelfCap);
         const shelvesFull = recv.stock >= recv.shelfCap;
         if (poText.current) poText.current.textContent = `PO #${recv.po.id} · ${short(recv.po.received / 1000)}/${short(recv.po.units)}`;
-        if (shelfFill.current) shelfFill.current.style.transform = `scaleX(${share})`;
+        racks.current?.classList.toggle('low', share < 0.15);
         if (shelfText.current) shelfText.current.textContent = `${short(recv.stock / 1000)}/${short(recv.shelfCap / 1000)}`;
-        if (inTag.current) inTag.current.textContent = recv.rushed ? 'Extra hands' : shelvesFull ? 'Shelves full' : 'Tap: +hands';
+        if (inTag.current) inTag.current.textContent = recv.rushed ? 'Extra hands' : shelvesFull ? 'Racks full' : 'Tap: +hands';
         const lane = inbound.current;
         if (lane) {
           lane.classList.toggle('rushed', recv.rushed);
@@ -167,7 +169,8 @@ export function Floor(props: {
       ctx.clearRect(0, 0, cv.width, cv.height);
       if (g === null || still?.matches === true) return;
       flow.advance(Math.min(dt, 100), now, g);
-      drawPacked(ctx, g, flow.staging);
+      drawRacks(ctx, g, flow.shelves);
+      drawStaging(ctx, g, flow.staging);
       drawLoads(ctx, g, flow.loads);
       drawDots(ctx, flow, now);
       if (now - counted > 500) {
@@ -209,12 +212,12 @@ export function Floor(props: {
           ref={inbound}
           className="inbound"
           data-testid="receiving"
-          aria-label={`Receiving: the purchase order at the dock, ${checks.map((c) => c.name).join(', ')}, the shelves. Tap to send extra hands.`}
+          aria-label={`Inbound dock: the purchase order being unloaded, ${checks.map((c) => c.name).join(', ')}, then put away in the racks. Tap to send extra hands.`}
           onPointerDown={(event) => tapAt(event, inPops.current, receiveNow)}
           onKeyDown={(event) => keyAt(event, receiveNow)}
         >
           <span className="sec-head">
-            <span className="sec-title">Receiving</span>
+            <span className="sec-title">Inbound</span>
             <span ref={poText} className="sec-line" data-testid="po" />
             <span ref={inTag} className="sec-tag" />
           </span>
@@ -227,11 +230,7 @@ export function Floor(props: {
                 {c.label}
               </span>
             ))}
-            <span className="shelves" data-testid="shelves">
-              <i ref={shelfFill} className="shelf-fill" />
-              <span className="shelf-label">Shelves</span>
-              <span ref={shelfText} className="shelf-count" data-testid="stock" />
-            </span>
+            <span className="lane-to">Put away ↓</span>
           </span>
           <span ref={inPops} className="pops" aria-hidden="true" />
         </button>
@@ -240,7 +239,7 @@ export function Floor(props: {
           ref={picking}
           className="picking"
           data-testid="picking"
-          aria-label={`Orders: the order desk, the backlog, the pickers${after.map((c) => `, ${c.name}`).join('')}, packing. Tap to send extra pickers.`}
+          aria-label={`Storage and picking: orders wait on the order board, pickers take each from the racks${after.map((c) => `, ${c.name}`).join('')}, to staging. Tap to send extra pickers.`}
           onPointerDown={(event) => tapAt(event, pops.current, pickNow)}
           onKeyDown={(event) => keyAt(event, pickNow)}
         >
@@ -250,31 +249,47 @@ export function Floor(props: {
             <span ref={tag} className="sec-tag" />
           </span>
           <span className="sec-body" data-testid="lane-outbound">
-            <span className="sec-maze">
+            <span className="orders">
               <span className="booth booth-checkin" data-booth="desk">
                 Orders
               </span>
-              <i className="rope rope-1" />
-              <i className="rope rope-2" />
+              <span className="board" />
+              <span className="pickers" data-booth="picking" aria-hidden="true">
+                {Array.from({ length: lanes }, (_, i) => (
+                  <i key={i} className="picker" />
+                ))}
+                <i className="picker picker-extra" />
+              </span>
             </span>
-            <span className="sec-scan" data-booth="picking" aria-hidden="true">
-              {Array.from({ length: lanes }, (_, i) => (
-                <i key={i} className="sec-lane" />
-              ))}
-              <i className="sec-lane sec-lane-extra" />
+            <span ref={racks} className="racks" data-testid="racks">
+              <span className="racks-head">
+                <span>Storage</span>
+                <span ref={shelfText} className="rack-count" data-testid="stock" />
+              </span>
+              <i className="rack" />
+              <i className="aisle" />
+              <i className="rack" />
+              <i className="aisle" />
+              <i className="rack" />
             </span>
           </span>
           <span ref={pops} className="pops" aria-hidden="true" />
         </button>
         <div ref={staging} className="staging" data-testid="packing">
           <span className="staging-info">
-            <span className="staging-name">Packed</span>
+            <span className="staging-name">Staging</span>
             <span ref={count} className="staging-count" />
             <span ref={rate} className="flow-rate" />
             <span ref={scale} className="flow-key" />
           </span>
           <span className="staging-row">
-            <span className="staging-parcels" />
+            <span className="staging-lanes">
+              {Array.from({ length: Math.max(1, docks) }, (_, i) => (
+                <i key={i} className="stage-lane">
+                  <b>{i + 1}</b>
+                </i>
+              ))}
+            </span>
             {[...after].reverse().map((c) => (
               <span key={c.id} className="booth booth-after" data-booth={c.id} title={c.name}>
                 {c.label}
@@ -294,24 +309,28 @@ function span(el: Element, box: DOMRect): Span {
   return { left: r.left - box.left, right: r.right - box.left };
 }
 
-/** Reads the stations, maze, shelves, packing bench and bays' positions relative to the floor. */
+function rect(el: Element, box: DOMRect): Rect {
+  const r = el.getBoundingClientRect();
+  return { left: r.left - box.left, top: r.top - box.top, right: r.right - box.left, bottom: r.bottom - box.top };
+}
+
+/** Reads the stations, order board, racks, staging lanes and bays' positions relative to the floor. */
 function measureFloor(root: HTMLElement, box: DOMRect, docks: HTMLElement | null): FlowGeometry | null {
-  const maze = root.querySelector('.sec-maze');
   const checkin = root.querySelector('.booth-checkin');
-  const scan = root.querySelector('.sec-scan');
+  const board = root.querySelector('.board');
+  const racks = root.querySelector('.racks');
   const lane = root.querySelector('.lane-in');
   const po = root.querySelector('.booth-po');
-  const shelves = root.querySelector('.shelves');
-  const bench = root.querySelector('.staging-parcels');
-  if (maze === null || checkin === null || scan === null || lane === null || po === null || shelves === null || bench === null) return null;
+  const row = root.querySelector('.staging-lanes');
+  if (checkin === null || board === null || racks === null || lane === null || po === null || row === null) return null;
   const mid = (el: Element): number => {
     const r = el.getBoundingClientRect();
     return (r.top + r.bottom) / 2 - box.top;
   };
-  const m = maze.getBoundingClientRect();
-  const c = checkin.getBoundingClientRect();
-  const s = scan.getBoundingClientRect();
-  const l = bench.getBoundingClientRect();
+  const c = rect(checkin, box);
+  const k = rect(racks, box);
+  const s = rect(row, box);
+  const aisles = [...racks.querySelectorAll('.aisle')].map((el) => mid(el));
   const view = docks?.getBoundingClientRect();
   const top = view === undefined ? 0 : view.top - box.top + 4;
   const bottom = view === undefined ? box.height : view.bottom - box.top;
@@ -319,24 +338,27 @@ function measureFloor(root: HTMLElement, box: DOMRect, docks: HTMLElement | null
   // The grid is symmetric, so the aisle, its middle column, is its middle.
   const aisle = view === undefined ? box.width / 2 : (view.left + view.right) / 2 - box.left;
   const inView = (y: number): number => Math.min(bottom + 8, Math.max(top, y));
-  // Three rows, centred in thirds of the maze, between the ropes.
-  const rows = [1, 3, 5].map((k) => m.top - box.top + (m.height * k) / 6);
-  const lastRow = rows[rows.length - 1] as number;
   return {
     inbound: {
       y: mid(lane),
       start: po.getBoundingClientRect().right - box.left + 3,
       booths: [...lane.querySelectorAll('.booth-in')].map((el) => span(el, box)),
-      shelves: span(shelves, box),
     },
-    door: { x: m.left - box.left - 4, y: rows[0] as number },
-    checkin: { ...span(checkin, box), y: (c.top + c.bottom) / 2 - box.top },
-    maze: { left: m.left - box.left + 4, right: m.right - box.left - 3, entry: c.right - box.left + 4, rows },
-    pickers: { enter: { x: s.left - box.left + 2, y: lastRow }, exit: { x: s.right - box.left + 2, y: lastRow } },
+    door: { x: c.left - 4, y: (c.top + c.bottom) / 2 },
+    checkin: { left: c.left, right: c.right, y: (c.top + c.bottom) / 2 },
+    board: rect(board, box),
+    racks: {
+      mouth: k.left - 3,
+      // The cross aisle runs down the racks' far end, in the room their padding leaves.
+      cross: k.right - 4,
+      aisles,
+      slots: rackSlots([...racks.querySelectorAll('.rack')].map((el) => rect(el, box)), aisles),
+    },
     after: [...root.querySelectorAll('.booth-after')].reverse().map((el) => span(el, box)),
-    afterY: mid(bench),
-    staging: { left: l.left - box.left, top: l.top - box.top, right: l.right - box.left, bottom: l.bottom - box.top },
-    pier: { x: aisle, top: l.bottom - box.top + 6 },
+    afterY: (s.top + s.bottom) / 2,
+    staging: s,
+    lanes: [...row.querySelectorAll('.stage-lane')].map((el) => rect(el, box)),
+    pier: { x: aisle, top: s.bottom + 6 },
     docks: cards.map((card) => {
       const r = card.getBoundingClientRect();
       const b = parcelBox(card, r, box);
@@ -371,25 +393,36 @@ function parcelBox(card: Element, r: DOMRect, box: DOMRect): { left: number; top
   return { left: x, top: y, right: x + (area?.offsetWidth ?? 0), bottom: y + (area?.offsetHeight ?? 0) };
 }
 
-/** The packing bench: one box per space in use, stacked from the left in three rows, more on a taller bench (the real staged count). */
-function drawPacked(ctx: CanvasRenderingContext2D, g: FlowGeometry, share: number): void {
-  const { left, right, top, bottom } = g.staging;
-  const rows = Math.max(3, Math.min(5, Math.floor((bottom - top - 2) / 4.5)));
-  const cols = Math.max(1, Math.floor((right - left - 4) / 5));
-  const filled = Math.round(share * cols * rows);
+/** The storage racks: a carton in each slot the real stock fills; the empty ones are the bare rack (CSS). */
+function drawRacks(ctx: CanvasRenderingContext2D, g: FlowGeometry, share: number): void {
+  const slots = g.racks.slots;
+  const filled = Math.round(share * slots.length);
   if (filled === 0) return;
-  const mid = (top + bottom) / 2;
-  ctx.globalAlpha = 0.9;
-  ctx.fillStyle = share >= 1 ? TINT.away : BOX;
+  ctx.fillStyle = BOX;
   ctx.beginPath();
   for (let i = 0; i < filled; i++) {
-    const row = i % rows;
-    const x = left + 4 + Math.floor(i / rows) * 5;
-    const y = mid + (row - (rows - 1) / 2) * 4.5;
-    ctx.rect(x - 1.7, y - 1.7, 3.4, 3.4);
+    const p = slots[i] as { x: number; y: number };
+    ctx.rect(p.x - 1.8, p.y - 1.8, 3.6, 3.6);
   }
   ctx.fill();
-  ctx.globalAlpha = 1;
+}
+
+/** The staging lanes: the real staged count shared out between the docks' lanes, stacked from the dock end. */
+function drawStaging(ctx: CanvasRenderingContext2D, g: FlowGeometry, share: number): void {
+  const lanes = g.lanes.map(laneSpots);
+  const room = lanes.reduce((n, l) => n + l.length, 0);
+  const filled = Math.round(share * room);
+  if (filled === 0) return;
+  ctx.fillStyle = share >= 1 ? TINT.away : BOX;
+  ctx.beginPath();
+  lanes.forEach((spots, i) => {
+    const n = Math.min(spots.length, laneCount(filled, lanes.length, i));
+    for (let k = 0; k < n; k++) {
+      const p = spots[k] as { x: number; y: number };
+      ctx.rect(p.x - 1.8, p.y - 1.8, 3.6, 3.6);
+    }
+  });
+  ctx.fill();
 }
 
 /**
@@ -420,26 +453,22 @@ function drawLoads(ctx: CanvasRenderingContext2D, g: FlowGeometry, loads: readon
   }
 }
 
-const ORDER: readonly Tint[] = ['out', 'in', 'express', 'away'];
-
-/** Everything on the move, batched by colour: one path per colour per frame. */
+/** Everything on the move, batched by colour: order tickets as dots, cartons as squares; one path per colour per frame. */
 function drawDots(ctx: CanvasRenderingContext2D, flow: FlowModel, now: number): void {
-  for (const tint of ORDER) {
-    let any = false;
-    ctx.beginPath();
-    for (const d of flow.dots) {
-      if (d.tint !== tint || !visible(d, now)) continue;
-      if (d.alpha < 1) continue;
-      any = true;
-      ctx.moveTo(d.x + 2.3, d.y);
-      ctx.arc(d.x, d.y, 2.3, 0, Math.PI * 2);
-    }
-    if (any) {
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = TINT[tint];
-      ctx.fill();
+  const tickets = new Path2D();
+  const boxes = new Path2D();
+  for (const d of flow.dots) {
+    if (d.alpha < 1 || !visible(d, now)) continue;
+    if (d.tint === 'box') boxes.rect(d.x - 2.2, d.y - 2.2, 4.4, 4.4);
+    else {
+      tickets.moveTo(d.x + 2.3, d.y);
+      tickets.arc(d.x, d.y, 2.3, 0, Math.PI * 2);
     }
   }
+  ctx.fillStyle = TINT.out;
+  ctx.fill(tickets);
+  ctx.fillStyle = BOX;
+  ctx.fill(boxes);
   // Fading ones (cancelled) one by one: there are only ever a few.
   ctx.fillStyle = TINT.away;
   for (const d of flow.dots) {
