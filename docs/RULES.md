@@ -440,20 +440,34 @@ they never hold anything (export paperwork and customs only slow picking,
 section 3). "Packing" in sections 3-8 is the staging area on screen.
 
 - **Inbound** (the top lane): cartons leave the PO at the inbound dock as fast
-  as it is put away, pass quality check, go down the cross aisle at the
-  racks' far end and along an aisle into an empty rack slot. The lane names
-  the PO ("PO #12 · 30/48") and is a tap target (extra hands, section 6).
-- **Storage and picking**: three runs of racking with two aisles; each slot
-  holds a carton while the shelves have stock for it (slots fill in a fixed
-  scattered order, so a part-full rack has gaps here and there), with the
-  units and space above ("Storage 62/120"). New orders come in at the order
-  desk at the order rate less those cancelled (shown fading at the door) and
-  wait on the order board, oldest first. A picker takes the oldest down an
-  aisle, reaches into a full slot (the ticket becomes a carton) and carries it
-  down the cross aisle. Under the board, one picker figure per two pickers
-  levels (up to six), and an extra one in green while extra pickers work. It
-  shows the backlog and the wait ("34 waiting · 14 s"), "held: staging full"
-  or "held: racks empty" when those stop it, and is the pickers' tap target.
+  as it is put away and pass quality check; a forklift takes each down the
+  cross aisle at the racks' far end and along an aisle to a bare reserve
+  location (a bare floor pick location when reserve is full), sets it down
+  and backs out. The lane names the PO ("PO #12 · 30/48") and is a tap target
+  (extra hands, section 6).
+- **Storage and picking**: three runs of racking with two aisles. The front
+  of each run, by the order board, is **floor pick** (the pick locations,
+  marked on the floor; a bare one shows faintly); the rest is **reserve**.
+  The full locations are the real stock, less what is still on a forklift
+  and plus what a picker is on the way to take, so a location fills when its
+  forklift sets it down and empties when its picker reaches it; a short
+  outline flashes round it. The units and room show above ("62/120"). How
+  the stock splits between floor pick and reserve is **for show** (the sim
+  has one stock): a new warehouse opens with floor pick 85% full and the
+  rest in reserve. When floor pick holds less than 60% of its room, counting
+  what is on its way, a **reach truck** (up to two an aisle) drives in from
+  the cross aisle, lifts a pallet (at most 12% of floor pick's room) off a
+  reserve location and sets it down in a bare floor pick location along the
+  same aisle, topping floor pick back up to 85%. New orders come in at the
+  order desk at the order rate less those cancelled (shown fading at the
+  door) and wait on the order board, oldest first. A picker (a pale figure)
+  takes the oldest down an aisle, reaches into a full floor pick location (a
+  reserve one when the floor is bare; the ticket becomes a carton) and
+  carries it down the cross aisle. Under the board, one picker figure per two
+  pickers levels (up to six), and an extra one in green while extra pickers
+  work. It shows the backlog and the wait ("34 waiting · 14 s"), "held:
+  staging full" or "held: racks empty" when those stop it, and is the
+  pickers' tap target.
 - **Staging**: one lane per dock, marked on the floor, where picked cartons
   wait for a truck, past any export stations. The packed count is shared out
   evenly between the lanes and stacked from the dock end; a carton walks from
@@ -472,10 +486,11 @@ section 3). "Packing" in sections 3-8 is the staging area on screen.
 
 - One dot stands for 1, 2, 5, 10, 20, 50... orders or units, picked so a few
   dots a second move however big the warehouse grows; packing shows the scale.
-- Display limits, not balance: at most 260 dots on screen and 150 tickets on
-  the order board (a longer backlog squeezes up), and none move for ticks
-  caught up quietly (an absence or a late timer); the board is filled in from
-  the real backlog.
+- Display limits, not balance: at most 260 dots on screen (forklifts, reach
+  trucks and pickers included) and 150 tickets on the order board (a longer
+  backlog squeezes up), and none move for ticks caught up quietly (an absence
+  or a late timer); the board and the racks are filled in from the real
+  backlog and stock.
 
 ## 15. Boosts
 

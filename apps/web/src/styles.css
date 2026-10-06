@@ -13,6 +13,8 @@
   --accent: #56d3a0;
   --accent-ink: #052016;
   --sky: #6cb6ff;
+  /* Pickers on the floor and under the order board (the canvas uses the same colour). */
+  --picker: #d9e8ff;
   --gold: #ffcc5c;
   --warn: #ff9d6c;
   --tap: 44px;
@@ -230,7 +232,7 @@ p {
   flex-direction: column;
 }
 
-/* The goods: one canvas over the floor and the docks, never in the way of a thumb. */
+/* The goods: two canvases over the floor and the docks (what moves, over what stands still), never in the way of a thumb. */
 .flow-dots {
   position: absolute;
   inset: 0;
@@ -460,7 +462,7 @@ p {
   width: 6px;
   height: 9px;
   border-radius: 3px 3px 1px 1px;
-  background: var(--sky);
+  background: var(--picker);
   opacity: 0.8;
 }
 
@@ -474,7 +476,7 @@ p {
   display: block;
 }
 
-/* The racks: three runs of pallet racking with two aisles between them; the canvas puts the cartons in their slots. Room on the right is the cross aisle. */
+/* The racks: three runs of pallet racking with two aisles between them, floor pick locations at the front (by the board), reserve behind; the canvas puts the cartons in their locations. Room on the right is the cross aisle. */
 .racks {
   position: relative;
   flex: 1;
@@ -487,12 +489,33 @@ p {
 
 .racks-head {
   display: flex;
-  justify-content: space-between;
+  gap: 4px;
   height: 13px;
   font-size: var(--fs-small);
   line-height: 13px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+
+.zone-pick {
+  flex: 0 0 38%;
+  color: #8fb8e6;
+}
+
+.rack-count {
+  margin-left: auto;
+}
+
+/* The floor pick locations: the front of every run, marked on the floor; pickers pick here, reach trucks fill them from reserve. */
+.pick-zone {
+  position: absolute;
+  top: 13px;
+  bottom: 0;
+  left: 0;
+  width: 38%;
+  border-right: 1px dashed #36507f;
+  background: rgb(143 208 255 / 4%);
+  pointer-events: none;
 }
 
 .racks.low .rack-count {
