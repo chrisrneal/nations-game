@@ -2,14 +2,15 @@
  * The pacing pass (RULES 11): two bots play the warehouse and the harness times
  * every milestone against the targets.
  *
- * - The greedy bot plays actively: it taps three times a second (the dock with
- *   the least rush banked, or the picking line while people queue there), looks at its upgrades once a second, buys the best
+ * - The greedy bot plays actively: it taps three times a second (whichever of
+ *   the docks, the pickers and the receiving bay has the least rush banked,
+ *   among those that can use it), looks at its upgrades once a second, buys the best
  *   value (income gained per dollar, looking one purchase ahead so that
  *   upgrades which only pay together still get bought), and sells the warehouse
  *   once the next star is further away than half the time this warehouse has run.
  * - The idle bot never taps. It checks in every 15 minutes, spends what it can
  *   with the same picker, and sells at the first check-in where the sale is
- *   worth at least half again in pays (no staged for the warehouse to slow).
+ *   worth at least half again in pay (no waiting for the warehouse to slow).
  * - Both use every boost that is ready (RULES 15): the greedy bot as soon as
  *   it is, the idle bot as it leaves each check-in, so it runs while away.
  *
@@ -32,6 +33,7 @@ import {
   upgradeCost,
   lockReason,
   maxLevel,
+  shelfCapMilliAt,
 } from '@warehouse/sim';
 
 const TICKS_PER_SEC = 1000 / WAREHOUSE_TUNABLES.tickMs.value;
@@ -50,7 +52,7 @@ function withLevel(state: WarehouseState, id: UpgradeId): WarehouseState {
 /**
  * The upgrade the greedy picker wants next: the best income gained per cent
  * spent, where a purchase may also be valued together with the best one after
- * it (a contract needs a truck; docks need passengers). Null if nothing earns.
+ * it (a contract needs a truck; docks need orders). Null if nothing earns.
  */
 export function bestUpgrade(state: WarehouseState): UpgradeId | null {
   const base = estimate(state).incomePerSec;
@@ -87,7 +89,7 @@ function wantsNight(state: WarehouseState): boolean {
 }
 
 /**
- * Sell once the sale would raise pays by at least half again (the stars it
+ * Sell once the sale would raise pay by at least half again (the stars it
  * adds are at least half the stars owned, and at least `minFirstStars` the
  * first time), and the next star is further away than a quarter of the time
  * this warehouse has run: the warehouse is slowing down.
@@ -219,15 +221,18 @@ export function unboosted(state: WarehouseState): WarehouseState {
 }
 
 /**
- * Taps for this tick: three a second, each to the dock with the least rush
- * banked, or to the picking line when people are queuing there and it has
- * less rush banked than any dock (RULES 6).
+ * Taps for this tick: three a second, each to whichever station has the least
+ * rush banked: the dock with the least, the pickers while orders queue, or the
+ * receiving bay while the shelves are under half full (RULES 6).
  */
 function taps(state: WarehouseState): WarehouseCommand[] {
   if (state.tick % 4 === 0) return [];
   let dock = 0;
   for (let i = 1; i < state.docks.length; i++) if ((state.docks[i]?.rush ?? 0) < (state.docks[dock]?.rush ?? 0)) dock = i;
-  if (state.backlog > 0 && state.pickRush <= (state.docks[dock]?.rush ?? 0)) return [{ tick: state.tick, type: 'tapPick', payload: {} }];
+  const dockRush = state.docks[dock]?.rush ?? 0;
+  const lowShelves = state.stock * 2 < shelfCapMilliAt(state.levels.receiving);
+  if (lowShelves && state.receiveRush <= dockRush && state.receiveRush <= state.pickRush) return [{ tick: state.tick, type: 'tapReceive', payload: {} }];
+  if (state.backlog > 0 && state.pickRush <= dockRush) return [{ tick: state.tick, type: 'tapPick', payload: {} }];
   return [{ tick: state.tick, type: 'tap', payload: { dock } }];
 }
 

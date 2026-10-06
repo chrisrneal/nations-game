@@ -25,27 +25,27 @@ const withLevels = (s: WarehouseState, levels: Partial<Levels>): WarehouseState 
 const quietFloor = (s: WarehouseState): WarehouseState => tweak(s, { backlog: 0, staged: 40_000, docks: s.docks.map((g) => ({ ...g, turn: 100_000, turnMax: 100_000 })) });
 
 describe('purchase orders and the shelves (RULES 3a)', () => {
-  it('a new warehouse has 60 units on 120 units of shelves and PO 1 of 40 units at the dock', () => {
+  it('a new warehouse has 60 units on 120 units of shelves and PO 1 of 48 units at the dock', () => {
     const s = createWarehouse({ seed: 1 });
     expect(s.stock).toBe(60_000);
     expect(shelfCapMilliAt(0)).toBe(120_000);
-    expect(receiveMilliAt(0)).toBe(500);
-    expect(poUnitsFor(500)).toBe(40);
-    expect(s.po).toEqual({ id: 1, units: 40, received: 0 });
+    expect(receiveMilliAt(0)).toBe(600);
+    expect(poUnitsFor(600)).toBe(48);
+    expect(s.po).toEqual({ id: 1, units: 48, received: 0 });
     expect(s.receiveRush).toBe(0);
   });
 
-  it('puts away 2 units a second; a finished PO is counted and the next one arrives at once', () => {
+  it('puts away 2.4 units a second; a finished PO is counted and the next one arrives at once', () => {
     const s = quietFloor(createWarehouse({ seed: 1 }));
     const half = run(s, 40).state;
-    expect(half.stock - s.stock).toBe(40 * 500);
-    expect(half.po).toEqual({ id: 1, units: 40, received: 20_000 });
+    expect(half.stock - s.stock).toBe(40 * 600);
+    expect(half.po).toEqual({ id: 1, units: 48, received: 24_000 });
     const { state, events } = run(half, 40);
-    expect(events.filter((e) => e.type === 'received')).toEqual([{ tick: 79, type: 'received', payload: { po: 1, units: 40 } }]);
-    expect(state.po).toEqual({ id: 2, units: 40, received: 0 });
+    expect(events.filter((e) => e.type === 'received')).toEqual([{ tick: 79, type: 'received', payload: { po: 1, units: 48 } }]);
+    expect(state.po).toEqual({ id: 2, units: 48, received: 0 });
     expect(state.run.pos).toBe(1);
-    expect(state.run.received).toBe(40);
-    expect(state.life.received).toBe(40);
+    expect(state.run.received).toBe(48);
+    expect(state.life.received).toBe(48);
   });
 
   it('full shelves hold the PO at the dock', () => {
@@ -53,54 +53,55 @@ describe('purchase orders and the shelves (RULES 3a)', () => {
     const { state } = run(s, 10);
     expect(state.stock).toBe(120_000);
     expect(state.po.received).toBe(1000);
+    expect(run(s, 1).state.po.received).toBe(600);
   });
 
   it('each order picked takes a unit; empty shelves hold the pickers to what receiving puts away', () => {
     const s0 = createWarehouse({ seed: 1 });
-    const s = tweak(s0, { stock: 300, staged: 0, backlog: 10_000, docks: s0.docks.map((g) => ({ ...g, turn: 100_000, turnMax: 100_000 })) });
-    // 0.3 units on the shelf plus 0.5 put away this tick: the pickers' full 0.6 a tick, a unit each.
+    // Pickers at level 2 pick 1.35 a tick; receiving puts away 0.6.
+    const s = tweak(s0, { stock: 1000, staged: 0, backlog: 10_000, levels: { ...s0.levels, picking: 2 }, docks: s0.docks.map((g) => ({ ...g, turn: 100_000, turnMax: 100_000 })) });
     const one = step(s, []).state;
-    expect(one.staged).toBe(600);
-    expect(one.stock).toBe(200);
-    expect(one.backlog).toBe(10_000 + 400 - 600);
+    expect(one.staged).toBe(1350);
+    expect(one.stock).toBe(1000 + 600 - 1350);
+    expect(one.backlog).toBe(10_000 + 400 - 1350);
     // Then the shelves are empty: the pickers get only what receiving puts away.
-    const three = run(one, 2).state;
+    const two = step(one, []).state;
+    expect(two.stock).toBe(0);
+    expect(two.staged - one.staged).toBe(250 + 600);
+    const three = step(two, []).state;
     expect(three.stock).toBe(0);
-    expect(three.staged).toBe(3 * 600);
-    const four = step(three, []).state;
-    expect(four.stock).toBe(0);
-    expect(four.staged - three.staged).toBe(500);
-    expect(four.backlog).toBe(three.backlog + 400 - 500);
+    expect(three.staged - two.staged).toBe(600);
+    expect(three.backlog).toBe(two.backlog + 400 - 600);
   });
 
   it('a tap sends extra hands: 2.5x put-away for 2.5 s, and All hands does the same', () => {
     const s = quietFloor(createWarehouse({ seed: 1 }));
     const tapped = step(s, [{ tick: 0, type: 'tapReceive', payload: {} }]).state;
-    expect(tapped.stock - s.stock).toBe(1250);
+    expect(tapped.stock - s.stock).toBe(1500);
     expect(tapped.receiveRush).toBe(T.rushTicksPerTap.value - 1);
     expect(tapped.run.taps).toBe(1);
     const hands = quietFloor(tweak(createWarehouse({ seed: 1 }), { boosts: { ...s.boosts, allHands: { left: 10, recharge: 100 } } }));
-    expect(step(hands, []).state.stock - hands.stock).toBe(1250);
+    expect(step(hands, []).state.stock - hands.stock).toBe(1500);
   });
 
   it('Receiving bay costs $20, then x1.8 a level: +50% put-away, shelves and PO size', () => {
     expect(upgradeCost('receiving', 0)).toBe(2000);
     expect(upgradeCost('receiving', 2)).toBe(6480);
-    expect(receiveMilliAt(1)).toBe(750);
+    expect(receiveMilliAt(1)).toBe(900);
     expect(shelfCapMilliAt(1)).toBe(180_000);
-    expect(poUnitsFor(750)).toBe(60);
+    expect(poUnitsFor(900)).toBe(72);
     const view = warehouseView(createWarehouse({ seed: 1 }));
-    expect(view.upgrades.find((u) => u.id === 'receiving')).toMatchObject({ name: 'Receiving bay', level: 0, cost: 2000, unit: 'ordersPerSec', now: 2000, next: 3000 });
+    expect(view.upgrades.find((u) => u.id === 'receiving')).toMatchObject({ name: 'Receiving bay', level: 0, cost: 2000, unit: 'ordersPerSec', now: 2400, next: 3600 });
     const s = tweak(createWarehouse({ seed: 1 }), { cash: 2000 });
     const after = step(s, [{ tick: 0, type: 'buy', payload: { upgrade: 'receiving' } }]);
     expect(after.state.levels.receiving).toBe(1);
     // The PO at the dock keeps its size; the next one is bigger.
-    expect(after.state.po.units).toBe(40);
+    expect(after.state.po.units).toBe(48);
   });
 
   it('the view shows the shelves, the rate and the PO', () => {
     const s = tweak(createWarehouse({ seed: 1 }), { stock: 33_000, receiveRush: 2 });
-    expect(warehouseView(s).receiving).toEqual({ stock: 33_000, shelfCap: 120_000, ratePerTick: 1250, baseRatePerTick: 500, rushed: true, po: { id: 1, units: 40, received: 0 } });
+    expect(warehouseView(s).receiving).toEqual({ stock: 33_000, shelfCap: 120_000, ratePerTick: 1500, baseRatePerTick: 600, rushed: true, po: { id: 1, units: 48, received: 0 } });
   });
 });
 
@@ -110,8 +111,8 @@ describe('the bottleneck names the shelves (RULES 8)', () => {
   it('more orders than receiving can stock: the shelves are running empty, fixed by Receiving bay', () => {
     const est = estimate(starved);
     expect(est.bottleneck).toEqual({ kind: 'stock', text: 'The shelves are running empty.', fix: ['receiving'] });
-    // Throughput is receiving's 2 a second.
-    expect(est.ordersPerSec).toBe(2000);
+    // Throughput is receiving's 2.4 a second.
+    expect(est.ordersPerSec).toBe(2400);
     expect(warehouseView(starved).boosts.find((b) => b.helps)?.id).toBe('allHands');
   });
 

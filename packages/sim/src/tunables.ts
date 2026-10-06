@@ -26,7 +26,7 @@ export const WAREHOUSE_TUNABLES = {
   pickingGrowthBp: { value: 15_000, min: 12_500, max: 16_000, note: 'Picking per pickers level (+50%): ahead of sales\'s +35%, so pickers hired keep up for a while.' },
   backlogWaitTicks: { value: 120, min: 40, max: 240, note: 'The longest wait customers accept (30 s of picking): the backlog holds this many ticks of picking; beyond it new orders are cancelled.' },
   exportCheckBp: { value: 9500, min: 6000, max: 10_000, note: 'Picking speed for each export station (export paperwork, customs): x0.95 each. The catch of the big contracts.' },
-  receiveBaseMilliPerTick: { value: 500, min: 300, max: 1500, note: 'Milli-units put away a tick at receiving level 0 (2 a second): a little ahead of level-0 orders, so the shelves hold at first.' },
+  receiveBaseMilliPerTick: { value: 600, min: 300, max: 1500, note: 'Milli-units put away a tick at receiving level 0 (2.4 a second), level with picking: at 2 a second the first bay came before the second dock (2.5 minutes).' },
   receiveGrowthBp: { value: 15_000, min: 12_500, max: 16_000, note: 'Put-away per receiving level (+50%), like picking: ahead of sales, so a bay bought keeps up for a while.' },
   shelfCapBase: { value: 120, min: 40, max: 400, note: 'Units the shelves hold at receiving level 0 (about a minute of orders): a buffer for flash sales.' },
   shelfCapGrowthBp: { value: 15_000, min: 12_500, max: 16_000, note: 'Shelf space per receiving level; matches put-away so the shelves hold the same seconds of it.' },
