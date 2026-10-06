@@ -17,8 +17,9 @@
  * Star perks (RULES 10a): the stars button opens the perks, marking the two the
  * sale unlocks; the sell sheet names them; Port Calder opens with two docks.
  * The floor: a new warehouse shows the inbound dock, quality check, the
- * storage racks, the order desk, picking and the staging lanes with goods
- * moving through them, and the dashboard;
+ * storage racks (floor pick and reserve), the order desk, picking and the
+ * staging lanes with goods moving through them, and the dashboard; reach
+ * trucks replenish the floor pick locations in the busy warehouse;
  * cross-border contracts add export paperwork, overseas ones customs; the 60
  * fps check runs with the goods moving.
  * The backlog: a new warehouse has none; picking is a big tap target and a
@@ -120,7 +121,7 @@ async function main(): Promise<void> {
     check('cash shows at the top', /\$/.test((await page.getByTestId('cash').textContent()) ?? ''));
     const outbound = (await page.getByTestId('picking').textContent()) ?? '';
     const inbound = (await page.getByTestId('lane-inbound').textContent()) ?? '';
-    check('the floor shows the inbound dock through QC, the racks, picking from the order desk, and a staging lane per dock', /Picking.*Orders.*Storage/.test(outbound) && /PO.*QC/.test(inbound) && (await page.locator('.rack').count()) === 3 && (await page.locator('.stage-lane').count()) === 1 && (await page.locator('[data-booth="export"]').count()) === 0, `${outbound} | ${inbound}`);
+    check('the floor shows the inbound dock through QC, the racks, picking from the order desk, and a staging lane per dock', /Picking.*Orders.*Floor pick.*Reserve/.test(outbound) && /PO.*QC/.test(inbound) && (await page.locator('.rack').count()) === 3 && (await page.locator('.stage-lane').count()) === 1 && (await page.locator('[data-booth="export"]').count()) === 0, `${outbound} | ${inbound}`);
     check('a new warehouse has no backlog', ((await page.getByTestId('backlog').textContent()) ?? '') === 'No backlog', (await page.getByTestId('backlog').textContent()) ?? '');
     check('the first PO is at the inbound dock and the racks are half full', /^PO #1 · /.test((await page.getByTestId('po').textContent()) ?? '') && /^\d+\/120$/.test((await page.getByTestId('stock').textContent()) ?? ''), `${await page.getByTestId('po').textContent()} | ${await page.getByTestId('stock').textContent()}`);
     const tiles = await page.getByTestId('dashboard').locator('dt').allTextContents();
@@ -212,6 +213,9 @@ async function main(): Promise<void> {
     const lineText = (await page.getByTestId('backlog').textContent()) ?? '';
     const queued = Number(await page.getByTestId('flow-dots').getAttribute('data-queued'));
     check('the busy warehouse queues at picking: the real backlog waits on the order board', /waiting/.test(lineText) && queued > 5 && /picking/.test(((await page.getByTestId('bottleneck').textContent()) ?? '').toLowerCase()), `${lineText}, ${queued} tickets on the board`);
+    await page.waitForFunction(() => Number(document.querySelector('[data-testid="flow-dots"]')?.getAttribute('data-replens') ?? 0) > 0, undefined, { timeout: 8000 }).catch(() => undefined);
+    const replens = Number(await page.getByTestId('flow-dots').getAttribute('data-replens'));
+    check('reach trucks replenish the floor pick locations from reserve', replens > 0, `${replens} out`);
     check('pickers show as picker figures, and staging has a lane per dock', (await page.locator('.picker:not(.picker-extra)').count()) === 6 && (await page.locator('.stage-lane').count()) === 8);
     await noHorizontalScroll(page, 'eight docks');
     await touchTargets(page, 'eight docks');

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, type ReactElement, type ReactNode } from 'react';
 import type { JourneyView } from '@warehouse/contracts';
-import { FlowModel, laneCount, laneSpots, parcelSpots, rackSlots, visible, type FlowGeometry, type Load, type Rect, type Span, type Tint } from './flow.ts';
+import { FlowModel, MARK_MS, laneCount, laneSpots, parcelSpots, rackSlots, visible, type FlowGeometry, type Load, type Mark, type Rect, type Span, type Tint } from './flow.ts';
 import { formatDuration, formatRate, short } from './format.ts';
 import { ripple } from './pop.ts';
 import type { WarehouseStore } from './store.ts';
@@ -8,6 +8,12 @@ import type { WarehouseStore } from './store.ts';
 /** Cartons: put away, in the racks, picked, staged and in the trucks. */
 const BOX = '#e0b073';
 const TINT: Readonly<Record<Tint, string>> = { out: '#8fd0ff', box: BOX, express: '#ffcc5c', away: '#ff9d6c' };
+/** Pickers (as the picker figures under the board), forklifts and reach trucks (safety yellow), and a bare floor pick location. */
+const PICKER = '#d9e8ff';
+const FORKLIFT = '#fff06a';
+const PICK_SPOT = 'rgb(143 208 255 / 13%)';
+/** The flash on a location that just filled or emptied: put away, picked, replenished. */
+const MARK: Readonly<Record<Mark['kind'], string>> = { put: '#d7b4ff', pick: '#8fd0ff', rep: FORKLIFT };
 /** A truck's parcel spaces: empty, loaded, and all loaded (it leaves full). */
 const PARCEL_EMPTY = 'rgb(255 255 255 / 14%)';
 const PARCEL_FULL = '#56d3a0';
@@ -19,15 +25,18 @@ export function lanesFor(level: number): number {
 /**
  * The warehouse floor (RULES 3, 3a, 14) above the docks, laid out the way
  * goods move through a warehouse. Along the top, the inbound dock: cartons
- * come off the PO, through quality check, and are put away in the storage
- * racks; tapping it sends extra hands. Below, picking: new orders come in at
- * the order desk and wait on the order board (the real backlog); pickers take
- * the oldest down an aisle, pull a carton off the rack and carry it, past any
- * export stations, to the staging lanes, one lane per dock, where it waits to
- * be loaded onto a truck at the outbound docks. Tapping picking sends extra
- * pickers (RULES 6). The stations, racks and lanes are DOM; the goods are
+ * come off the PO, through quality check, and forklifts put them away in
+ * reserve locations; tapping it sends extra hands. Below, picking: reach
+ * trucks replenish the floor pick locations from reserve; new orders come in
+ * at the order desk and wait on the order board (the real backlog); pickers
+ * take the oldest down an aisle, pick a carton from a floor pick location and
+ * carry it, past any export stations, to the staging lanes, one lane per
+ * dock, where it waits to be loaded onto a truck at the outbound docks.
+ * Tapping picking sends extra pickers (RULES 6). The stations, racks and lanes are DOM; the goods are
  * drawn on one canvas over the whole floor each animation frame from a
- * FlowModel (P7: nothing here re-renders React per tick).
+ * FlowModel, over a second canvas holding what stands still (the racks'
+ * cartons, the staging lanes, the trucks' loads), redrawn only when that
+ * changes (P7: nothing here re-renders React per tick).
  */
 export function Floor(props: {
   journey: JourneyView;
@@ -42,6 +51,7 @@ export function Floor(props: {
   const { journey, pickingLevel, docks, tickMs, store, onTapPick, onTapReceive, children } = props;
   const floor = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const stillCanvas = useRef<HTMLCanvasElement>(null);
   const rate = useRef<HTMLSpanElement>(null);
   const scale = useRef<HTMLSpanElement>(null);
   const count = useRef<HTMLSpanElement>(null);
@@ -120,17 +130,20 @@ export function Floor(props: {
   useLayoutEffect(() => {
     const root = floor.current;
     const cv = canvas.current;
-    if (root === null || cv === null) return;
+    const sv = stillCanvas.current;
+    if (root === null || cv === null || sv === null) return;
     const docks = root.querySelector<HTMLElement>('.docks');
     const measure = (): void => {
       const box = root.getBoundingClientRect();
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const w = Math.round(box.width * dpr);
       const h = Math.round(box.height * dpr);
-      if (cv.width !== w || cv.height !== h) {
-        cv.width = w;
-        cv.height = h;
-        cv.getContext('2d')?.setTransform(dpr, 0, 0, dpr, 0, 0);
+      for (const c of [cv, sv]) {
+        if (c.width !== w || c.height !== h) {
+          c.width = w;
+          c.height = h;
+          c.getContext('2d')?.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
       }
       geo.current = measureFloor(root, box, docks);
     };
@@ -149,15 +162,20 @@ export function Floor(props: {
     };
   }, [shape]);
 
-  // The goods: one canvas, redrawn each animation frame.
+  // The goods: one canvas, redrawn each animation frame; what stands still on another, redrawn when it changes.
   useLayoutEffect(() => {
     const cv = canvas.current;
+    const sv = stillCanvas.current;
     const ctx = cv?.getContext('2d') ?? null;
-    if (cv === null || ctx === null) return;
+    const stx = sv?.getContext('2d') ?? null;
+    if (cv === null || ctx === null || sv === null || stx === null) return;
     const still = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     let frame = 0;
     let last = performance.now();
     let counted = 0;
+    let drawn = -1;
+    let drawnGeo: FlowGeometry | null = null;
+    let drawnSize = '';
     const draw = (now: number): void => {
       frame = requestAnimationFrame(draw);
       const flow = model.current as FlowModel;
@@ -167,16 +185,30 @@ export function Floor(props: {
       // Back from a hidden tab: whatever was moving has long arrived (the backlog is filled in again).
       if (dt > 1000) flow.reset();
       ctx.clearRect(0, 0, cv.width, cv.height);
-      if (g === null || still?.matches === true) return;
+      if (g === null || still?.matches === true) {
+        stx.clearRect(0, 0, sv.width, sv.height);
+        drawn = -1;
+        return;
+      }
       flow.advance(Math.min(dt, 100), now, g);
-      drawRacks(ctx, g, flow.shelves);
-      drawStaging(ctx, g, flow.staging);
-      drawLoads(ctx, g, flow.loads);
-      drawDots(ctx, flow, now);
+      // A resized canvas is blank, so a new size counts as a change too.
+      const size = `${sv.width}x${sv.height}`;
+      if (flow.still !== drawn || g !== drawnGeo || size !== drawnSize) {
+        drawn = flow.still;
+        drawnGeo = g;
+        drawnSize = size;
+        stx.clearRect(0, 0, sv.width, sv.height);
+        drawRacks(stx, g, flow);
+        drawStaging(stx, g, flow.staging);
+        drawLoads(stx, g, flow.loads);
+      }
+      drawMarks(ctx, flow, now);
+      drawDots(ctx, flow, now, g.inbound.booths.length);
       if (now - counted > 500) {
         counted = now;
         cv.dataset.dots = String(flow.dots.length);
         cv.dataset.queued = String(flow.queue.length);
+        cv.dataset.replens = String(flow.replens);
       }
     };
     frame = requestAnimationFrame(draw);
@@ -239,7 +271,7 @@ export function Floor(props: {
           ref={picking}
           className="picking"
           data-testid="picking"
-          aria-label={`Storage and picking: orders wait on the order board, pickers take each from the racks${after.map((c) => `, ${c.name}`).join('')}, to staging. Tap to send extra pickers.`}
+          aria-label={`Storage and picking: reach trucks replenish the floor pick locations from reserve; orders wait on the order board, pickers pick each from the floor${after.map((c) => `, ${c.name}`).join('')}, to staging. Tap to send extra pickers.`}
           onPointerDown={(event) => tapAt(event, pops.current, pickNow)}
           onKeyDown={(event) => keyAt(event, pickNow)}
         >
@@ -263,9 +295,11 @@ export function Floor(props: {
             </span>
             <span ref={racks} className="racks" data-testid="racks">
               <span className="racks-head">
-                <span>Storage</span>
+                <span className="zone-pick">Floor pick</span>
+                <span>Reserve</span>
                 <span ref={shelfText} className="rack-count" data-testid="stock" />
               </span>
+              <i className="pick-zone" />
               <i className="rack" />
               <i className="aisle" />
               <i className="rack" />
@@ -299,6 +333,7 @@ export function Floor(props: {
         </div>
       </section>
       {children}
+      <canvas ref={stillCanvas} className="flow-dots" aria-hidden="true" />
       <canvas ref={canvas} className="flow-dots" aria-hidden="true" data-testid="flow-dots" />
     </div>
   );
@@ -322,7 +357,8 @@ function measureFloor(root: HTMLElement, box: DOMRect, docks: HTMLElement | null
   const lane = root.querySelector('.lane-in');
   const po = root.querySelector('.booth-po');
   const row = root.querySelector('.staging-lanes');
-  if (checkin === null || board === null || racks === null || lane === null || po === null || row === null) return null;
+  const zone = root.querySelector('.pick-zone');
+  if (checkin === null || board === null || racks === null || lane === null || po === null || row === null || zone === null) return null;
   const mid = (el: Element): number => {
     const r = el.getBoundingClientRect();
     return (r.top + r.bottom) / 2 - box.top;
@@ -331,6 +367,7 @@ function measureFloor(root: HTMLElement, box: DOMRect, docks: HTMLElement | null
   const k = rect(racks, box);
   const s = rect(row, box);
   const aisles = [...racks.querySelectorAll('.aisle')].map((el) => mid(el));
+  const lanes = [...row.querySelectorAll('.stage-lane')].map((el) => rect(el, box));
   const view = docks?.getBoundingClientRect();
   const top = view === undefined ? 0 : view.top - box.top + 4;
   const bottom = view === undefined ? box.height : view.bottom - box.top;
@@ -352,12 +389,13 @@ function measureFloor(root: HTMLElement, box: DOMRect, docks: HTMLElement | null
       // The cross aisle runs down the racks' far end, in the room their padding leaves.
       cross: k.right - 4,
       aisles,
-      slots: rackSlots([...racks.querySelectorAll('.rack')].map((el) => rect(el, box)), aisles),
+      ...rackSlots([...racks.querySelectorAll('.rack')].map((el) => rect(el, box)), aisles, rect(zone, box).right),
     },
     after: [...root.querySelectorAll('.booth-after')].reverse().map((el) => span(el, box)),
     afterY: (s.top + s.bottom) / 2,
     staging: s,
-    lanes: [...row.querySelectorAll('.stage-lane')].map((el) => rect(el, box)),
+    lanes,
+    laneSpots: lanes.map(laneSpots),
     pier: { x: aisle, top: s.bottom + 6 },
     docks: cards.map((card) => {
       const r = card.getBoundingClientRect();
@@ -393,23 +431,39 @@ function parcelBox(card: Element, r: DOMRect, box: DOMRect): { left: number; top
   return { left: x, top: y, right: x + (area?.offsetWidth ?? 0), bottom: y + (area?.offsetHeight ?? 0) };
 }
 
-/** The storage racks: a carton in each slot the real stock fills; the empty ones are the bare rack (CSS). */
-function drawRacks(ctx: CanvasRenderingContext2D, g: FlowGeometry, share: number): void {
-  const slots = g.racks.slots;
-  const filled = Math.round(share * slots.length);
-  if (filled === 0) return;
+/**
+ * The storage racks: a carton in each location the model fills from the real
+ * stock (the empty reserve ones are the bare rack, CSS), and the bare floor
+ * pick locations faintly marked.
+ */
+function drawRacks(ctx: CanvasRenderingContext2D, g: FlowGeometry, flow: FlowModel): void {
+  const full = new Path2D();
+  const bare = new Path2D();
+  g.racks.face.forEach((p, i) => (flow.face[i] === 1 ? full : bare).rect(p.x - 1.8, p.y - 1.8, 3.6, 3.6));
+  g.racks.reserve.forEach((p, i) => {
+    if (flow.reserve[i] === 1) full.rect(p.x - 1.8, p.y - 1.8, 3.6, 3.6);
+  });
+  ctx.fillStyle = PICK_SPOT;
+  ctx.fill(bare);
   ctx.fillStyle = BOX;
-  ctx.beginPath();
-  for (let i = 0; i < filled; i++) {
-    const p = slots[i] as { x: number; y: number };
-    ctx.rect(p.x - 1.8, p.y - 1.8, 3.6, 3.6);
+  ctx.fill(full);
+}
+
+/** A fading outline round each rack location that just filled or emptied. */
+function drawMarks(ctx: CanvasRenderingContext2D, flow: FlowModel, now: number): void {
+  if (flow.marks.length === 0) return;
+  ctx.lineWidth = 1;
+  for (const m of flow.marks) {
+    ctx.globalAlpha = Math.max(0, 1 - (now - m.at) / MARK_MS);
+    ctx.strokeStyle = MARK[m.kind];
+    ctx.strokeRect(m.x - 3.5, m.y - 3.5, 7, 7);
   }
-  ctx.fill();
+  ctx.globalAlpha = 1;
 }
 
 /** The staging lanes: the real staged count shared out between the docks' lanes, stacked from the dock end. */
 function drawStaging(ctx: CanvasRenderingContext2D, g: FlowGeometry, share: number): void {
-  const lanes = g.lanes.map(laneSpots);
+  const lanes = g.laneSpots;
   const room = lanes.reduce((n, l) => n + l.length, 0);
   const filled = Math.round(share * room);
   if (filled === 0) return;
@@ -453,12 +507,34 @@ function drawLoads(ctx: CanvasRenderingContext2D, g: FlowGeometry, loads: readon
   }
 }
 
-/** Everything on the move, batched by colour: order tickets as dots, cartons as squares; one path per colour per frame. */
-function drawDots(ctx: CanvasRenderingContext2D, flow: FlowModel, now: number): void {
+/**
+ * Everything on the move, batched by colour, one path each per frame: order
+ * tickets as dots, cartons as squares, pickers as figures behind what they
+ * carry, forklifts and reach trucks as yellow bodies behind their forks
+ * (`booths`: the inbound dock's stations, before which stock is on the dock,
+ * not a forklift).
+ */
+function drawDots(ctx: CanvasRenderingContext2D, flow: FlowModel, now: number, booths: number): void {
   const tickets = new Path2D();
   const boxes = new Path2D();
+  const people = new Path2D();
+  const trucks = new Path2D();
   for (const d of flow.dots) {
     if (d.alpha < 1 || !visible(d, now)) continue;
+    const back = d.x - d.dir * 4;
+    if (d.kind === 'arr' || d.kind === 'rep') {
+      const lift = d.kind === 'rep' || d.leg >= booths;
+      if (lift) trucks.rect(back - 2.6, d.y - 2.1, 5.2, 4.2);
+      // A reach truck carries its pallet only between lifting it and setting it down.
+      if (d.amt > 0 && (d.kind === 'arr' || d.leg >= 2)) boxes.rect(d.x - 2.2, d.y - 2.2, 4.4, 4.4);
+      continue;
+    }
+    if (d.kind === 'dep' && (d.phase === 'pick' || d.phase === 'carry')) {
+      people.moveTo(back + 2.1, d.y);
+      people.arc(back, d.y, 2.1, 0, Math.PI * 2);
+      // Walking to the rack with the order in hand: the picker is enough.
+      if (d.tint !== 'box') continue;
+    }
     if (d.tint === 'box') boxes.rect(d.x - 2.2, d.y - 2.2, 4.4, 4.4);
     else {
       tickets.moveTo(d.x + 2.3, d.y);
@@ -467,6 +543,10 @@ function drawDots(ctx: CanvasRenderingContext2D, flow: FlowModel, now: number): 
   }
   ctx.fillStyle = TINT.out;
   ctx.fill(tickets);
+  ctx.fillStyle = PICKER;
+  ctx.fill(people);
+  ctx.fillStyle = FORKLIFT;
+  ctx.fill(trucks);
   ctx.fillStyle = BOX;
   ctx.fill(boxes);
   // Fading ones (cancelled) one by one: there are only ever a few.

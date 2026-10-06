@@ -12,6 +12,31 @@ passengers, security). The Nations log is at commit `67d1d92`.
 
 ## Session log
 
+### 2026-10-06 - Put-away, replenishment and floor picking on the floor (lanes U, D; owner request)
+**What changed.** The racks are split: **floor pick** locations at the front
+of each run (by the order board, marked on the floor) and **reserve** behind.
+After quality check a yellow **forklift** carries each carton down the cross
+aisle to a reserve location, sets it down (that location fills, with a short
+flash) and backs out. When the floor pick locations run low, **reach trucks**
+drive in, lift a pallet off a reserve location and set it down in a floor
+pick location along the same aisle. **Pickers** now show as pale figures:
+each walks to a floor pick location, takes a carton (that location empties)
+and carries it to staging; when the floor is bare they pick from reserve.
+The racks still hold exactly the real stock; only the floor/reserve split is
+for show (RULES 14). No sim or rule change.
+**Speed.** Nothing was capped or slowed. To pay for the new movement, the
+racks, staging lanes and truck loads moved to a second canvas that redraws
+only when they change (about 1 frame in 14). The floor's drawing now costs
+about 2.4 ms a frame with the CPU slowed 4x, against 2.9 ms before.
+**Checks.** `npm test` (365) and `npm run check` pass. Phone check 65/65 at
+360 x 740 (56.0 and 57.6 fps with the CPU slowed 4x) and at 412 x 915 (55.6,
+57.8 and 56.5 fps; the unchanged game read 54.3-58.2 there in this session).
+New check: reach trucks are out replenishing in the busy warehouse.
+**How to see it.** Open the app and watch the racks: yellow forklifts going
+into reserve on the right, reach trucks carrying pallets left to the floor
+pick area, pale pickers taking cartons from it.
+**What is left.** See docs/GAPS.md (floor entries).
+
 ### 2026-10-06 - The floor flows like a warehouse (lanes U, D; owner request)
 **What changed.** The airport-style picking maze is gone. The floor now runs
 top to bottom the way a warehouse does: the **inbound dock** (cartons come off

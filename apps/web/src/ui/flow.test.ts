@@ -1,6 +1,6 @@
 import type { WarehouseEvent, WarehouseView, DockView, Stats } from '@warehouse/contracts';
 import { describe, expect, it } from 'vitest';
-import { DOTS_MAX, FlowModel, MAZE_MAX, PITCH, boardSpot, choosePerDot, laneCount, laneSpots, parcelSpots, rackSlots, visible, type FlowGeometry, type Rect } from './flow.ts';
+import { DOTS_MAX, FlowModel, MAZE_MAX, PITCH, boardSpot, choosePerDot, laneCount, laneSpots, parcelSpots, rackSlots, visible, type FlowGeometry, type Mark, type Rect } from './flow.ts';
 
 const STATS: Stats = { earned: 0, shipments: 0, fullShipments: 0, orders: 0, missed: 0, expresses: 0, pos: 0, received: 0, taps: 0 };
 
@@ -31,19 +31,24 @@ const RACKS: Rect[] = [
   { left: 100, top: 88, right: 295, bottom: 94 },
 ];
 
+/** Floor pick locations left of this, reserve right of it. */
+const SPLIT = 175;
+const LANES: Rect[] = [
+  { left: 20, top: 100, right: 60, bottom: 118 },
+  { left: 64, top: 100, right: 104, bottom: 118 },
+];
+
 const GEO: FlowGeometry = {
   inbound: { y: 30, start: 40, booths: [{ left: 60, right: 80 }] },
   door: { x: 10, y: 50 },
   checkin: { left: 14, right: 50, y: 50 },
   board: { left: 14, top: 58, right: 90, bottom: 94 },
-  racks: { mouth: 97, cross: 300, aisles: [70, 84], slots: rackSlots(RACKS, [70, 84]) },
+  racks: { mouth: 97, cross: 300, aisles: [70, 84], ...rackSlots(RACKS, [70, 84], SPLIT) },
   after: [{ left: 290, right: 330 }],
   afterY: 110,
   staging: { left: 20, top: 100, right: 285, bottom: 118 },
-  lanes: [
-    { left: 20, top: 100, right: 60, bottom: 118 },
-    { left: 64, top: 100, right: 104, bottom: 118 },
-  ],
+  lanes: LANES,
+  laneSpots: LANES.map(laneSpots),
   pier: { x: 175, top: 124 },
   docks: [
     { x: 120, door: 140, y: 160, parcels: [] },
@@ -104,7 +109,7 @@ describe('goods on the floor (RULES 14)', () => {
     expect(model.dots.filter((d) => d.kind === 'board')).toHaveLength(2);
   });
 
-  it('moves a carton from the PO into a rack slot for each unit put away, through quality check and down the cross aisle', () => {
+  it('puts each unit away by forklift, through quality check and down the cross aisle, into a reserve location that fills as it drops', () => {
     const model = new FlowModel();
     // 2.4 units a second put away for 10 seconds, a new PO half way.
     feed(model, 0, 41, (t) => view(t, { orderPerTick: 0, po: t < 20 ? { id: 1, units: 12, received: t * 600 } : { id: 2, units: 48, received: (t - 20) * 600 } }));
@@ -113,21 +118,86 @@ describe('goods on the floor (RULES 14)', () => {
     expect(stock.every((d) => d.tint === 'box')).toBe(true);
     let now = 41 * 250;
     let hidden = 0;
-    const ends = new Map<object, { x: number; y: number }>();
-    for (let i = 0; i < 2000 && model.dots.length > 0; i++) {
+    const drops = new Set<Mark>();
+    let filledAtDrop = 0;
+    const full = (): number => model.face.reduce((a, b) => a + b, 0) + model.reserve.reduce((a, b) => a + b, 0);
+    model.advance(16, (now += 16), GEO);
+    // The cartons on their way are not in the racks yet: 36 of the 60 units.
+    const before = full();
+    expect(before).toBe(Math.round((36 / 120) * 117));
+    for (let i = 0; i < 3000 && model.dots.length > 0; i++) {
       model.advance(16, (now += 16), GEO);
       hidden = Math.max(hidden, model.dots.filter((d) => !visible(d, now)).length);
       for (const d of model.dots) {
-        ends.set(d, { x: d.x, y: d.y });
         // Along the inbound dock until the cross aisle, then down it and along an aisle: never through the board.
         expect(d.x >= GEO.inbound.start - 1 && d.x <= GEO.racks.cross + 0.5).toBe(true);
-        if (d.y > GEO.inbound.y + 4) expect(d.x).toBeGreaterThan(GEO.racks.mouth);
+        if (d.y > GEO.inbound.y + 4) {
+          expect(d.x).toBeGreaterThan(GEO.racks.mouth);
+          expect(d.y === 70 || d.y === 84 || d.x === GEO.racks.cross).toBe(true);
+        }
+      }
+      for (const m of model.marks) {
+        if (m.kind !== 'put' || drops.has(m)) continue;
+        drops.add(m);
+        const i = GEO.racks.reserve.findIndex((s) => s.x === m.x && s.y === m.y);
+        expect(i).toBeGreaterThanOrEqual(0);
+        if (GEO.racks.reserve.some((s, k) => model.reserve[k] === 1 && Math.hypot(s.x - m.x, s.y - m.y) < PITCH * 1.5)) filledAtDrop += 1;
       }
     }
     expect(hidden).toBeGreaterThan(0);
+    // Every forklift set its carton down in reserve and backed out.
     expect(model.dots).toHaveLength(0);
-    // Each one finished in a rack slot.
-    for (const p of ends.values()) expect(GEO.racks.slots.some((s) => Math.hypot(s.x - p.x, s.y - p.y) < 0.5)).toBe(true);
+    expect(drops.size).toBe(24);
+    expect(filledAtDrop).toBe(24);
+    // And the racks hold the real stock.
+    expect(full()).toBe(Math.round((60 / 120) * 117));
+  });
+
+  it('reach trucks replenish the floor pick locations from reserve when pickers run them low', () => {
+    const model = new FlowModel();
+    // A line of 30 already standing; nobody arrives, picking clears 0.6 a tick from 60 units of stock.
+    let tick = feed(model, 0, 1, (t) => view(t, { orderPerTick: 0, backlog: 30_000 }));
+    let now = tick * 250;
+    for (let i = 0; i < 60; i++) model.advance(16, (now += 16), GEO);
+    const faceFull = (): number => model.face.reduce((a, b) => a + b, 0);
+    // The floor pick locations start most of the way full; the rest of the stock is in reserve.
+    expect(faceFull()).toBe(Math.round(45 * 0.85));
+    const seen = new Set<Mark>();
+    let trucks = 0;
+    for (let k = 0; k < 120; k++) {
+      tick = feed(model, tick, 1, (t) => {
+        const picked = Math.min(30_000, (t - 1) * 600);
+        return view(t, { orderPerTick: 0, backlog: 30_000 - picked, stock: 60_000 - picked });
+      });
+      for (let i = 0; i < 16; i++) {
+        model.advance(16, (now += 16), GEO);
+        trucks = Math.max(trucks, model.replens);
+        for (const d of model.dots) {
+          if (d.kind !== 'rep') continue;
+          // Reach trucks keep to the aisles, between the floor pick locations and the cross aisle.
+          expect(d.y === 70 || d.y === 84).toBe(true);
+          expect(d.x > GEO.racks.mouth && d.x <= GEO.racks.cross).toBe(true);
+        }
+        for (const m of model.marks) seen.add(m);
+      }
+    }
+    for (let i = 0; i < 600; i++) model.advance(16, (now += 16), GEO);
+    const marks = [...seen];
+    const isFace = (m: Mark): boolean => GEO.racks.face.some((s) => s.x === m.x && s.y === m.y);
+    const isReserve = (m: Mark): boolean => GEO.racks.reserve.some((s) => s.x === m.x && s.y === m.y);
+    expect(trucks).toBeGreaterThan(0);
+    expect(trucks).toBeLessThanOrEqual(4);
+    // Pickers pick from the floor; reach trucks lift in reserve and set down on the floor.
+    const picks = marks.filter((m) => m.kind === 'pick');
+    expect(picks.length).toBe(30);
+    expect(picks.every(isFace)).toBe(true);
+    const reps = marks.filter((m) => m.kind === 'rep');
+    expect(reps.filter(isReserve).length).toBeGreaterThan(0);
+    expect(reps.filter(isReserve).length).toBe(reps.filter(isFace).length);
+    // The racks end holding the real stock (30 units), and the floor topped back up from reserve.
+    expect(model.dots).toHaveLength(0);
+    expect(faceFull() + model.reserve.reduce((a, b) => a + b, 0)).toBe(Math.round((30 / 120) * 117));
+    expect(faceFull()).toBeGreaterThan(Math.round(45 * 0.5));
   });
 
   it('carries a staged carton out of its dock\'s lane, down the aisle, along the walkway and in at the bay door', () => {
@@ -172,14 +242,34 @@ describe('goods on the floor (RULES 14)', () => {
     expect(parcels.every((p, i) => i === 0 || p.y >= (parcels[i - 1]?.y ?? 0))).toBe(true);
   });
 
-  it('fills the racks slot by slot in a fixed scattered order, each slot reached from its nearest aisle', () => {
-    const slots = rackSlots(RACKS, [70, 84]);
-    expect(slots).toHaveLength(3 * 39);
-    expect(slots.every((p) => RACKS.some((r) => p.x > r.left && p.x < r.right && p.y > r.top && p.y < r.bottom))).toBe(true);
-    expect(slots.every((p) => [70, 84].every((a) => Math.abs(p.aisle - p.y) <= Math.abs(a - p.y)))).toBe(true);
-    // The same order every time, not left to right.
-    expect(rackSlots(RACKS, [70, 84])).toEqual(slots);
-    expect(slots.slice(0, 10).some((p, i) => i > 0 && p.x < (slots[i - 1]?.x ?? 0))).toBe(true);
+  it('lays the racks out in locations, floor pick at the front of each run and reserve behind, each reached from its nearest aisle', () => {
+    const { face, reserve } = rackSlots(RACKS, [70, 84], SPLIT);
+    expect(face).toHaveLength(3 * 15);
+    expect(reserve).toHaveLength(3 * 24);
+    const all = [...face, ...reserve];
+    expect(all.every((p) => RACKS.some((r) => p.x > r.left && p.x < r.right && p.y > r.top && p.y < r.bottom))).toBe(true);
+    expect(all.every((p) => [70, 84].every((a) => Math.abs(p.aisle - p.y) <= Math.abs(a - p.y)))).toBe(true);
+    expect(face.every((p) => p.x < SPLIT) && reserve.every((p) => p.x >= SPLIT)).toBe(true);
+  });
+
+  it('fills the racks from the real stock, scattered, the same way each time', () => {
+    const fill = (): FlowModel => {
+      const model = new FlowModel();
+      model.ingest(view(0, { orderPerTick: 0, stock: 90_000 }), [], 0);
+      model.advance(16, 16, GEO);
+      return model;
+    };
+    const model = fill();
+    const face = model.face.reduce((a, b) => a + b, 0);
+    expect(face + model.reserve.reduce((a, b) => a + b, 0)).toBe(Math.round((90 / 120) * 117));
+    expect(face).toBe(Math.round(45 * 0.85));
+    // Not filled left to right.
+    expect([...model.reserve.slice(0, 24)].some((v, i, a) => i > 0 && v > (a[i - 1] ?? 0))).toBe(true);
+    expect([...fill().reserve]).toEqual([...model.reserve]);
+    // Nothing moving and no update: what stands still is not redrawn.
+    const drawn = model.still;
+    for (let i = 0; i < 30; i++) model.advance(16, 32 + i * 16, GEO);
+    expect(model.still).toBe(drawn);
   });
 
   it('lays the order board out oldest first from the top left, squeezing up when the backlog outgrows it', () => {
