@@ -29,6 +29,12 @@ export interface BoostState {
 export type Boosts = Readonly<Record<BoostId, BoostState>>;
 
 /**
+ * The star perks (RULES 10a), in the order they unlock. Each is permanent once
+ * the stars owned reach its threshold; stars are never spent on them.
+ */
+export type PerkId = 'headStart' | 'secondDock' | 'quickCharge' | 'express' | 'longShift';
+
+/**
  * One outbound dock. `turn > 0` means the dock is swapping trucks and has none
  * to load; otherwise a truck is loading. A truck keeps the size it arrived with.
  */
@@ -216,6 +222,21 @@ export interface StarsView {
   /** Pay multiplier after selling now. */
   readonly bonusAfterBp: number;
   readonly nextSite: SiteView;
+  /** Every star perk, in unlock order (RULES 10a). */
+  readonly perks: readonly PerkView[];
+}
+
+/** A star perk: a permanent bonus that unlocks at a number of stars owned (RULES 10a). */
+export interface PerkView {
+  readonly id: PerkId;
+  readonly name: string;
+  /** What it does, with its numbers, in one short line ("Boosts recharge 25% faster"). */
+  readonly effect: string;
+  /** Stars owned that unlock it. */
+  readonly stars: number;
+  readonly unlocked: boolean;
+  /** Not unlocked yet, but selling now would unlock it. */
+  readonly unlocksOnSale: boolean;
 }
 
 /**

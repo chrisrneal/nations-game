@@ -1,6 +1,7 @@
 import type { BoostId, UpgradeId, WarehouseState } from '@warehouse/contracts';
 import { CHECKPOINTS, CONTRACTS, nameAt, siteAt, type SiteTwist } from './catalog.ts';
 import { grow, isqrt, mulDiv } from './math.ts';
+import { longShiftMinutes, rechargeFor } from './perks.ts';
 import { WAREHOUSE_TUNABLES as T, type WarehouseTunableId } from './tunables.ts';
 
 /**
@@ -173,9 +174,14 @@ export function offlineMinutesAt(level: number): number {
   return Math.min(T.offlineMaxMinutes.value, grow(T.offlineBaseMinutes.value, T.offlineGrowthBp.value, level));
 }
 
+/** Offline cap in minutes for a night-shift level and stars owned: Long shift lengthens it (RULES 10a). */
+export function offlineMinutesFor(level: number, stars: number): number {
+  return longShiftMinutes(offlineMinutesAt(level), stars);
+}
+
 /** Offline cap in ticks: the most the host may catch up after an absence. */
-export function offlineCapTicks(state: Pick<WarehouseState, 'levels'>): number {
-  return Math.floor((offlineMinutesAt(state.levels.night) * 60_000) / T.tickMs.value);
+export function offlineCapTicks(state: Pick<WarehouseState, 'levels' | 'stars'>): number {
+  return Math.floor((offlineMinutesFor(state.levels.night, state.stars) * 60_000) / T.tickMs.value);
 }
 
 /** Stars a warehouse that has earned this many cents is worth (RULES 10). */
@@ -249,17 +255,18 @@ export function twistText(twist: SiteTwist): string {
   }
 }
 
-/** A boost's length and recharge in ticks (RULES 15). */
-export function boostTicks(id: BoostId): { readonly length: number; readonly recharge: number } {
-  switch (id) {
-    case 'flashSale':
-      return { length: T.flashSaleTicks.value, recharge: T.flashSaleRechargeTicks.value };
-    case 'allHands':
-      return { length: T.allHandsTicks.value, recharge: T.allHandsRechargeTicks.value };
-    case 'surge':
-      return { length: T.surgeTicks.value, recharge: T.surgeRechargeTicks.value };
-  }
+const BOOST_CLOCK: Readonly<Record<BoostId, readonly [WarehouseTunableId, WarehouseTunableId]>> = {
+  flashSale: ['flashSaleTicks', 'flashSaleRechargeTicks'],
+  allHands: ['allHandsTicks', 'allHandsRechargeTicks'],
+  surge: ['surgeTicks', 'surgeRechargeTicks'],
+};
+
+/** A boost's length and recharge in ticks (RULES 15), with Quick charge for the stars owned (RULES 10a). */
+export function boostTicks(id: BoostId, stars = 0): { readonly length: number; readonly recharge: number } {
+  const [length, recharge] = BOOST_CLOCK[id];
+  return { length: T[length].value, recharge: rechargeFor(T[recharge].value, T[length].value, stars) };
 }
+
 
 /** What opens a boost, short enough for its button, or null once it is open. */
 export function boostLock(id: BoostId, state: Pick<WarehouseState, 'levels'>): string | null {
