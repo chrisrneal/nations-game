@@ -12,6 +12,23 @@ passengers, security). The Nations log is at commit `67d1d92`.
 
 ## Session log
 
+### 2026-10-06 - Picked orders leave the racks on the left (lanes U, D; owner request)
+**What changed.** A picker used to carry its carton out of the right end of
+the aisle and down the same cross aisle the inbound forklifts use, so
+receiving and staging looked like one straight line down the right side. Now
+the picker walks back out of the aisle's left end, down past the order board,
+and along a walkway above staging into its lane. Export and customs moved to
+the left end of the staging row, so cartons pass them on that side first. The
+right-hand cross aisle is now used only by put-away and replenishment. No sim
+or rule change.
+**Checks.** `npm test` (365; the picker test now checks that cartons leave by
+the aisle's left end and never use the cross aisle) and `npm run check` pass.
+Phone check 65/65 at 360 x 740 (57.5 fps with the CPU slowed 4x).
+**How to see it.** Open the app and watch a picker: carton in hand, it heads
+left toward the order board, down into staging, and through Export if a
+contract adds it.
+**What is left.** Nothing new.
+
 ### 2026-10-06 - Put-away, replenishment and floor picking on the floor (lanes U, D; owner request)
 **What changed.** The racks are split: **floor pick** locations at the front
 of each run (by the order board, marked on the floor) and **reserve** behind.
