@@ -30,7 +30,8 @@ export function lanesFor(level: number): number {
  * trucks replenish the floor pick locations from reserve; new orders come in
  * at the order desk and wait on the order board (the real backlog); pickers
  * take the oldest down an aisle, pick a carton from a floor pick location and
- * carry it, past any export stations, to the staging lanes, one lane per
+ * carry it back out past the board (left, clear of the forklifts' cross
+ * aisle on the right), through any export stations, to the staging lanes, one lane per
  * dock, where it waits to be loaded onto a truck at the outbound docks.
  * Tapping picking sends extra pickers (RULES 6). The stations, racks and lanes are DOM; the goods are
  * drawn on one canvas over the whole floor each animation frame from a
@@ -317,6 +318,11 @@ export function Floor(props: {
             <span ref={scale} className="flow-key" />
           </span>
           <span className="staging-row">
+            {after.map((c) => (
+              <span key={c.id} className="booth booth-after" data-booth={c.id} title={c.name}>
+                {c.label}
+              </span>
+            ))}
             <span className="staging-lanes">
               {Array.from({ length: Math.max(1, docks) }, (_, i) => (
                 <i key={i} className="stage-lane">
@@ -324,11 +330,6 @@ export function Floor(props: {
                 </i>
               ))}
             </span>
-            {[...after].reverse().map((c) => (
-              <span key={c.id} className="booth booth-after" data-booth={c.id} title={c.name}>
-                {c.label}
-              </span>
-            ))}
           </span>
         </div>
       </section>
@@ -358,7 +359,9 @@ function measureFloor(root: HTMLElement, box: DOMRect, docks: HTMLElement | null
   const po = root.querySelector('.booth-po');
   const row = root.querySelector('.staging-lanes');
   const zone = root.querySelector('.pick-zone');
-  if (checkin === null || board === null || racks === null || lane === null || po === null || row === null || zone === null) return null;
+  const picking = root.querySelector('.picking');
+  const staging = root.querySelector('.staging');
+  if (picking === null || staging === null || checkin === null || board === null || racks === null || lane === null || po === null || row === null || zone === null) return null;
   const mid = (el: Element): number => {
     const r = el.getBoundingClientRect();
     return (r.top + r.bottom) / 2 - box.top;
@@ -391,8 +394,10 @@ function measureFloor(root: HTMLElement, box: DOMRect, docks: HTMLElement | null
       aisles,
       ...rackSlots([...racks.querySelectorAll('.rack')].map((el) => rect(el, box)), aisles, rect(zone, box).right),
     },
-    after: [...root.querySelectorAll('.booth-after')].reverse().map((el) => span(el, box)),
+    after: [...root.querySelectorAll('.booth-after')].map((el) => span(el, box)),
     afterY: (s.top + s.bottom) / 2,
+    // In the gap between the picking and staging panels.
+    walk: (picking.getBoundingClientRect().bottom + staging.getBoundingClientRect().top) / 2 - box.top,
     staging: s,
     lanes,
     laneSpots: lanes.map(laneSpots),

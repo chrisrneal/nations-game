@@ -34,8 +34,8 @@ const RACKS: Rect[] = [
 /** Floor pick locations left of this, reserve right of it. */
 const SPLIT = 175;
 const LANES: Rect[] = [
-  { left: 20, top: 100, right: 60, bottom: 118 },
-  { left: 64, top: 100, right: 104, bottom: 118 },
+  { left: 50, top: 100, right: 90, bottom: 118 },
+  { left: 94, top: 100, right: 134, bottom: 118 },
 ];
 
 const GEO: FlowGeometry = {
@@ -44,8 +44,9 @@ const GEO: FlowGeometry = {
   checkin: { left: 14, right: 50, y: 50 },
   board: { left: 14, top: 58, right: 90, bottom: 94 },
   racks: { mouth: 97, cross: 300, aisles: [70, 84], ...rackSlots(RACKS, [70, 84], SPLIT) },
-  after: [{ left: 290, right: 330 }],
+  after: [{ left: 20, right: 46 }],
   afterY: 110,
+  walk: 97,
   staging: { left: 20, top: 100, right: 285, bottom: 118 },
   lanes: LANES,
   laneSpots: LANES.map(laneSpots),
@@ -213,8 +214,8 @@ describe('goods on the floor (RULES 14)', () => {
     }
     expect(model.dots).toHaveLength(0);
     // It starts in dock 2's staging lane.
-    expect(seen[0]?.x ?? 0).toBeGreaterThan(64);
-    expect(seen[0]?.x ?? 0).toBeLessThan(104);
+    expect(seen[0]?.x ?? 0).toBeGreaterThan(94);
+    expect(seen[0]?.x ?? 0).toBeLessThan(134);
     // Between staging and the walkway it keeps to the aisle; it only leaves it along the walkway, and loads at the bay's middle.
     expect(seen.filter((p) => p.y > GEO.pier.top + 1 && p.y < 138).every((p) => Math.abs(p.x - GEO.pier.x) < 4)).toBe(true);
     expect(seen.filter((p) => p.y > 142).every((p) => Math.abs(p.x - 230) < 0.5)).toBe(true);
@@ -324,6 +325,18 @@ describe('goods on the floor (RULES 14)', () => {
           if (d.y < GEO.afterY - 4 && Math.hypot(d.x - (GEO.board.left + PITCH / 2), d.y - (GEO.board.top + PITCH / 2)) > 8) expect(d.x).toBeGreaterThan(GEO.board.left);
           expect(d.x).toBeLessThanOrEqual(GEO.racks.cross + 0.5);
           if (d.tint === 'box') picked += 1;
+          // Carrying the carton out: back along the aisle to its left end, by the board, never toward the cross aisle.
+          if (d.leg >= 4) {
+            const slot = (d.face ? GEO.racks.face : GEO.racks.reserve)[d.slot];
+            expect(d.x).toBeLessThanOrEqual((slot?.x ?? GEO.racks.mouth) + 0.5);
+          }
+          if (d.leg >= 5) expect(Math.abs(d.x - GEO.racks.mouth)).toBeLessThanOrEqual(2);
+        }
+        // Carried to staging: below the racks, left of the cross aisle.
+        for (const d of model.dots) {
+          if (d.phase !== 'carry') continue;
+          expect(d.y).toBeGreaterThanOrEqual(GEO.walk - 0.5);
+          expect(d.x).toBeLessThan(GEO.racks.cross - 50);
         }
       }
     }
@@ -353,8 +366,8 @@ describe('goods on the floor (RULES 14)', () => {
       hidden = Math.max(hidden, model.dots.filter((d) => !visible(d, now)).length);
     }
     expect(hidden).toBeGreaterThan(0);
-    // Everything stays on the floor: never behind the door, never right of the stations.
-    expect(model.dots.every((d) => d.x >= GEO.door.x - 1 && d.x <= 332)).toBe(true);
+    // Everything stays on the floor: never behind the door, never right of the cross aisle.
+    expect(model.dots.every((d) => d.x >= GEO.door.x - 1 && d.x <= GEO.racks.cross + 0.5)).toBe(true);
   });
 
   it('shows nothing for a quiet catch-up, and starts afresh in a new site', () => {

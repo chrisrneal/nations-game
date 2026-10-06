@@ -7,8 +7,9 @@ import type { WarehouseEvent, WarehouseView } from '@warehouse/contracts';
  * trucks replenish the floor pick locations from reserve as they run low;
  * orders come in at the order desk and wait on the order board; a picker
  * takes the board's oldest order down an aisle, picks a carton from a floor
- * pick location (from reserve when the floor is bare) and carries it out to
- * the staging lanes; and a carton walks from its staging lane to the outbound
+ * pick location (from reserve when the floor is bare) and carries it back
+ * out of the aisle's left end, down past the board to the staging lanes
+ * (the inbound forklifts keep to the cross aisle on the right); and a carton walks from its staging lane to the outbound
  * dock for each order a truck loads. Pure bookkeeping on numbers from the
  * View; the Floor component measures the page and draws (P7: a canvas, never
  * React).
@@ -81,9 +82,11 @@ export interface FlowGeometry {
    * y, `face` the floor pick locations and `reserve` the reserve ones.
    */
   readonly racks: { readonly mouth: number; readonly cross: number; readonly aisles: readonly number[] } & RackSlots;
-  /** Stations after picking (export paperwork, customs), in order, on the staging row. */
+  /** Stations after picking (export paperwork, customs), in order left to right, at the left end of the staging row. */
   readonly after: readonly Span[];
   readonly afterY: number;
+  /** The walkway between picking and staging that carried cartons take from the racks' left end. */
+  readonly walk: number;
   /** The staging area, and in it one lane per dock where its cartons wait. */
   readonly staging: Rect;
   readonly lanes: readonly Rect[];
@@ -838,17 +841,31 @@ export class FlowModel {
       case 'pick':
         return this.pick(d, (PICK_SPEED * dt) / 1000, now, geo);
       case 'carry': {
-        const booth = geo.after[d.leg];
-        if (booth === undefined) {
-          // Into a staging lane, on top of its stack (the stacks are drawn from the real count).
-          if (d.slot < 0) d.slot = geo.lanes.length === 0 ? 0 : this.nextLane++ % geo.lanes.length;
-          const lane = geo.lanes[d.slot] ?? geo.staging;
-          const top = lane.bottom - (lane.bottom - lane.top) * this.staging;
-          const y = Math.max(lane.top + 2, Math.min(lane.bottom - 2, top));
-          return !toward(d, (lane.left + lane.right) / 2 + d.jy, y, step * 1.4);
+        // Its staging lane, on top of the lane's stack (the stacks are drawn from the real count).
+        if (d.slot < 0) d.slot = geo.lanes.length === 0 ? 0 : this.nextLane++ % geo.lanes.length;
+        const lane = geo.lanes[d.slot] ?? geo.staging;
+        const x = (lane.left + lane.right) / 2 + d.jy;
+        const top = lane.bottom - (lane.bottom - lane.top) * this.staging;
+        const y = Math.max(lane.top + 2, Math.min(lane.bottom - 2, top));
+        // No stations: along the walkway to the lane, then down into it.
+        if (geo.after.length === 0) {
+          if (d.leg === 0 && toward(d, x, geo.walk, step)) d.leg = 1;
+          return d.leg === 0 || !toward(d, x, y, step * 1.4);
         }
-        const back = d.leg === 0 ? geo.racks.cross : (geo.after[d.leg - 1] as Span).left - 2;
-        return this.checkpoint(d, now, `p${d.leg}`, SERVICE_DEP, booth, back, -1, step, geo.afterY);
+        // Stations: along the walkway to the staging row's left end, down it, then right through each station.
+        const edge = geo.staging.left - 3;
+        if (d.leg === 0) {
+          if (toward(d, edge, geo.walk, step)) d.leg = 1;
+          return true;
+        }
+        if (d.leg === 1) {
+          if (toward(d, edge, geo.afterY + d.jy, step)) d.leg = 2;
+          return true;
+        }
+        const booth = geo.after[d.leg - 2];
+        if (booth === undefined) return !toward(d, x, y, step * 1.4);
+        const back = d.leg === 2 ? edge : (geo.after[d.leg - 3] as Span).right + 2;
+        return this.checkpoint(d, now, `p${d.leg - 2}`, SERVICE_DEP, booth, back, +1, step, geo.afterY);
       }
     }
   }
@@ -856,8 +873,8 @@ export class FlowModel {
   /**
    * A picker's trip: into the aisle beside the board, along to the location,
    * reaching in for the carton (the ticket becomes a carton, the location
-   * empties), out along the aisle to the cross aisle and down it to the
-   * staging row.
+   * empties), back out along the aisle to its left end and down past the
+   * board to the walkway above staging.
    */
   private pick(d: Dot, step: number, now: number, geo: FlowGeometry): boolean {
     const r = geo.racks;
@@ -897,10 +914,10 @@ export class FlowModel {
         }
         return true;
       case 4:
-        if (toward(d, r.cross, aisle, step)) d.leg = 5;
+        if (toward(d, r.mouth, aisle, step)) d.leg = 5;
         return true;
       default:
-        if (toward(d, r.cross, geo.afterY + d.jy, step)) done();
+        if (toward(d, r.mouth + d.jy * 0.5, geo.walk, step)) done();
         return true;
     }
   }
