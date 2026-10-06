@@ -8,11 +8,11 @@
 | First sale (greedy) | 35.6 min, 3 stars | 30-60 min | PASS |
 | First sale (idle, 15-minute check-ins) | 150.6 min, 3 stars | reported | PASS |
 | First sale without boosts (greedy; idle) | 38.5 min; 180.5 min | reported | PASS |
-| Active over idle income (tapping, at the no-boost greedy levels) | 2.09-2.57x | about 2-3x (1.8-3.2) | PASS |
-| Active over idle income (tapping, at the boosted greedy levels) | 2.49-2.63x | reported | PASS |
+| Active over idle income (tapping, at the no-boost greedy levels) | 2.14-2.57x | about 2-3x (1.8-3.2) | PASS |
+| Active over idle income (tapping, at the boosted greedy levels) | 2.45-2.63x | reported | PASS |
 | Check-ins that buy something (idle, every 15 min) | 100% | >= 90% | PASS |
 | A 5-minute active session reaches a new dock, truck or contract (from each idle check-in) | 10/10 | >= 80% | PASS |
-| Income estimate vs measured idle | +0%, +2%, 0%, -2% | within 20% | PASS |
+| Income estimate vs measured idle | +0%, +2%, 0%, +0% | within 20% | PASS |
 
 ## Greedy bot: what it reached and when
 - 0.5 min: dock 2
@@ -37,50 +37,48 @@
 - 33.4 min: truck 7
 - 35.6 min: sold (3 stars)
 - 35.6 min: sale 1
-- 36.6 min: dock 2
-- 37.1 min: truck 1
-- 37.5 min: contract 1
-- 38.2 min: dock 3
-- 38.4 min: truck 2
-- 38.7 min: contract 2
-- 39.1 min: truck 3
-- 39.4 min: dock 4
-- 40.2 min: contract 3
-- 42.5 min: truck 4
-- 43.6 min: contract 4
-- 44.0 min: dock 5
-- 44.5 min: dock 6
-- 45.0 min: truck 5
-- 45.9 min: contract 5
-- 48.8 min: dock 7
-- 50.3 min: dock 8
-- 56.3 min: sold (4 stars)
-- 56.3 min: sale 2
-- 57.3 min: dock 2
-- 57.6 min: truck 1
-- 58.0 min: contract 1
-- 58.7 min: dock 3
-- 58.9 min: truck 2
-- 59.0 min: contract 2
-- 59.4 min: truck 3
-- 60.3 min: contract 3
-- 62.3 min: dock 4
-- 62.6 min: truck 4
-- 63.5 min: contract 4
-- 63.7 min: dock 5
-- 64.4 min: truck 5
-- 64.5 min: dock 6
-- 67.6 min: contract 5
-- 68.3 min: truck 6
-- 69.6 min: contract 6
-- 70.1 min: dock 7
-- 71.0 min: truck 7
-- 73.1 min: contract 7
-- 73.4 min: truck 8
-- 73.7 min: dock 8
-- 76.1 min: contract 8
-- 79.4 min: truck 9
-- 83.3 min: contract 9
+- 36.3 min: truck 1
+- 36.7 min: contract 1
+- 37.5 min: dock 3
+- 37.6 min: truck 2
+- 38.0 min: contract 2
+- 38.4 min: truck 3
+- 38.7 min: dock 4
+- 39.5 min: contract 3
+- 41.7 min: truck 4
+- 42.9 min: contract 4
+- 43.3 min: dock 5
+- 43.8 min: dock 6
+- 44.3 min: truck 5
+- 45.2 min: contract 5
+- 48.1 min: dock 7
+- 49.6 min: dock 8
+- 55.6 min: sold (4 stars)
+- 55.6 min: sale 2
+- 56.2 min: truck 1
+- 56.6 min: contract 1
+- 57.3 min: dock 3
+- 57.4 min: truck 2
+- 57.6 min: contract 2
+- 57.9 min: truck 3
+- 58.8 min: contract 3
+- 60.8 min: dock 4
+- 61.2 min: truck 4
+- 62.0 min: contract 4
+- 62.2 min: dock 5
+- 62.9 min: truck 5
+- 63.1 min: dock 6
+- 66.1 min: contract 5
+- 66.8 min: truck 6
+- 68.0 min: contract 6
+- 68.3 min: dock 7
+- 68.7 min: truck 7
+- 70.7 min: contract 7
+- 71.2 min: truck 8
+- 71.9 min: dock 8
+- 74.8 min: contract 8
+- 78.1 min: truck 9
+- 81.0 min: contract 9
 
 Ended at Highmoor Crossdock with 7 stars, levels {"docks":7,"truck":9,"loading":25,"sales":21,"picking":15,"receiving":15,"contract":9,"crew":18,"night":4}.
 
@@ -107,12 +105,11 @@ Ended at Highmoor Crossdock with 7 stars, levels {"docks":7,"truck":9,"loading":
 - 135.5 min: truck 7
 - 150.6 min: sold (3 stars)
 - 150.6 min: sale 1
-- 165.6 min: dock 2
 - 165.6 min: truck 1
 - 165.6 min: contract 1
 - 180.6 min: dock 3
 - 180.6 min: truck 2
-- 180.7 min: contract 2
+- 180.6 min: contract 2
 - 180.7 min: truck 3
 - 180.7 min: dock 4
 - 195.7 min: contract 3
@@ -129,6 +126,6 @@ Ended at Highmoor Crossdock with 7 stars, levels {"docks":7,"truck":9,"loading":
 - minute 2: 2.49x, 2.49x
 - minute 10: 2.49x, 2.49x
 - minute 30: 2.57x, 2.63x
-- minute 60: 2.09x, 2.61x
+- minute 60: 2.14x, 2.45x
 
 Overall: PASS
