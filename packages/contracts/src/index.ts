@@ -32,6 +32,8 @@ export type {
   DockView,
   JourneyView,
   Levels,
+  PerkId,
+  PerkView,
   PickingView,
   PoState,
   ReceivingView,

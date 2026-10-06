@@ -1,6 +1,7 @@
-import type { WarehouseState, WarehouseView, BoostId, BoostView, Bottleneck, BottleneckKind, SiteView, EffectUnit, DockView, PickingView, ReceivingView, UpgradeId, UpgradeView } from '@warehouse/contracts';
+import type { WarehouseState, WarehouseView, BoostId, BoostView, Bottleneck, BottleneckKind, SiteView, EffectUnit, DockView, PerkView, PickingView, ReceivingView, UpgradeId, UpgradeView } from '@warehouse/contracts';
 import { BOOST_IDS, BOOST_NAMES, TRUCK_MODELS, CONTRACTS, UPGRADE_IDS, UPGRADE_TEXT, siteAt, journeyAt, nameAt } from './catalog.ts';
 import { mulDiv } from './math.ts';
+import { PERK_IDS, PERK_NAMES, expressChanceBp, hasPerk, perkEffect, perkStars } from './perks.ts';
 import {
   orderBpAt,
   orderMilliAt,
@@ -16,7 +17,7 @@ import {
   lockReason,
   maxLevel,
   meanOrderBp,
-  offlineMinutesAt,
+  offlineMinutesFor,
   parcelsAt,
   pickingMilliAt,
   pickingSlowBpAt,
@@ -140,7 +141,7 @@ export function estimate(state: WarehouseState, boost: BoostEffect = NO_BOOST): 
       fix = ['sales'];
     }
   }
-  const express = 1 + (T.expressChanceBp.value / BP) * (T.expressPayBp.value / BP - 1);
+  const express = 1 + (expressChanceBp(state.stars) / BP) * (T.expressPayBp.value / BP - 1);
   const bonus = full ? 1 + T.fullBonusBp.value / BP : 1;
   const incomePerSec = Math.floor(throughput * d.payCents * bonus * express * (d.payMulBp / BP) * (boost.payBp / BP));
   return {
@@ -178,7 +179,7 @@ function effect(id: UpgradeId, level: number, state: WarehouseState, payMul: num
     case 'crew':
       return { unit: 'seconds', value: turnTicksFor(parcelsAt(state.levels.truck), crewBpAt(level)) * T.tickMs.value, name: null };
     case 'night':
-      return { unit: 'minutes', value: offlineMinutesAt(level) * 1000, name: null };
+      return { unit: 'minutes', value: offlineMinutesFor(level, state.stars) * 1000, name: null };
   }
 }
 
@@ -217,7 +218,7 @@ const BOOST_FIXES: Readonly<Record<BottleneckKind, BoostId>> = {
 
 function boostView(id: BoostId, state: WarehouseState, bottleneck: BottleneckKind): BoostView {
   const clock = state.boosts[id];
-  const ticks = boostTicks(id);
+  const ticks = boostTicks(id, state.stars);
   return {
     id,
     name: BOOST_NAMES[id],
@@ -230,6 +231,18 @@ function boostView(id: BoostId, state: WarehouseState, bottleneck: BottleneckKin
     locked: boostLock(id, state),
     helps: BOOST_FIXES[bottleneck] === id,
   };
+}
+
+/** Every star perk, unlocked or not, and which selling now would unlock (RULES 10a). */
+function perkViews(owned: number, claimable: number): PerkView[] {
+  return PERK_IDS.map((id) => ({
+    id,
+    name: PERK_NAMES[id],
+    effect: perkEffect(id),
+    stars: perkStars(id),
+    unlocked: hasPerk(id, owned),
+    unlocksOnSale: !hasPerk(id, owned) && hasPerk(id, owned + claimable),
+  }));
 }
 
 function siteView(sold: number): SiteView {
@@ -304,8 +317,9 @@ export function warehouseView(state: WarehouseState): WarehouseView {
       bonusBp: BP + state.stars * T.starBonusBp.value,
       bonusAfterBp: BP + (state.stars + claimable) * T.starBonusBp.value,
       nextSite: siteView(state.site + 1),
+      perks: perkViews(state.stars, claimable),
     },
-    offlineCapMinutes: offlineMinutesAt(state.levels.night),
+    offlineCapMinutes: offlineMinutesFor(state.levels.night, state.stars),
     run: state.run,
     life: state.life,
   };

@@ -99,7 +99,8 @@ screen shows (section 14).
 - Its departure timer is `departBase + departPerParcel x parcels` (15 s for 10
   parcels; bigger trucks wait longer).
 - Each arriving truck is an **express** with chance `expressChance` (5%), drawn
-  from the seeded RNG in State. An express pays `expressPay` (2x).
+  from the seeded RNG in State (10% with the Express lane perk, section 10a).
+  An express pays `expressPay` (2x).
 - Truck models (Cargo bike, Courier van, Panel van, ...) and contracts have
   names; the names are design data in the sim, shown by the interface.
 
@@ -210,7 +211,8 @@ The harness checks the estimate against measured idle income (within 20%).
 - Closing the app does not stop the warehouse. When it reopens, the host steps
   every tick the wall clock owes, up to the **offline cap**: `offlineBase x
   offlineGrowth^nightShiftLevel` minutes, at most `offlineMax` (2 h at level 0,
-  24 h at most). Time beyond the cap is lost: the warehouse closed for the night.
+  24 h at most; x1.5 with the Long shift perk, section 10a). Time beyond the
+  cap is lost: the warehouse closed for the night.
 - Catch-up is the same sim stepping the same ticks, only faster; the result is
   exactly what stepping one tick at a time would give (tested).
 - After an absence of at least `recapMinAway` seconds (host setting, 60 s), a
@@ -231,7 +233,8 @@ The harness checks the estimate against measured idle income (within 20%).
 - Selling (one tap, then confirm) adds those stars to the stars you own, and
   opens a new warehouse at the next site: cash, levels, trucks, the backlog,
   packing and the shelves all reset; stars and lifetime statistics stay.
-- Each star owned raises the pay per order by `starBonus` (+25%), forever.
+- Each star owned raises the pay per order by `starBonus` (+25%), forever,
+  and stars unlock perks (section 10a).
 - Sites come in a fixed order, each with one twist, and repeat after the last:
 
 | # | Site | Twist |
@@ -242,6 +245,27 @@ The harness checks the estimate against measured idle income (within 20%).
 | 4 | Sunvale Outlet | Sale season: for `waveTicks` (60 s) of every `wavePeriod` (5 min) orders run at `waveOrder` (3x), and at `offWaveOrder` (0.6x) otherwise. The backlog, packing and full shelves store the rush. |
 
 The first sale is meant for about 30-60 minutes into the game (section 11).
+
+## 10a. Star perks
+
+Stars also unlock **perks**: permanent bonuses that switch on when the stars
+you own reach each threshold. Stars are never spent on them, so every star
+still raises pay by `starBonus`. A perk counts from the tick the stars are
+owned; the two that shape a new warehouse (Head start, Second dock) apply from
+the next warehouse opened. The stars sheet (tap the stars by the site's name)
+lists them all; the sell sheet names the ones a sale would unlock.
+
+| Stars owned | Perk | Effect |
+| --- | --- | --- |
+| `perkHeadStartStars` (1) | Head start | A new warehouse opens with `perkHeadStartCents` ($250) more cash. |
+| `perkSecondDockStars` (3) | Second dock | A new warehouse opens with two docks (docks level 1), each with a truck loading; the next dock costs what a third always does. |
+| `perkQuickChargeStars` (6) | Quick charge | Every boost's recharge x`perkQuickCharge` (0.75), never shorter than the boost runs. A boost already recharging keeps its clock. |
+| `perkExpressStars` (10) | Express lane | An arriving truck is an express with chance `expressChance` x `perkExpress` (10%); the estimate counts it. |
+| `perkLongShiftStars` (15) | Long shift | The offline cap x`perkLongShift` (1.5), still at most `offlineMaxMinutes`; the Night shift row shows it. |
+
+Perks are worked out from the stars in State, so they add nothing to State,
+the hash or saves. The first warehouse has none: the pacing targets of
+section 11 are unchanged.
 
 ## 11. Pacing targets
 
@@ -346,6 +370,15 @@ disagree.
 | `offlineMaxMinutes` | 1440 | 480 | 2880 | Longest offline run (24 h). |
 | `starUnitCents` | 60000000 | 1000000 | 400000000 | Earnings for the first star ($600K); n stars need n squared times this. |
 | `starBonusBp` | 2500 | 1000 | 5000 | Pay per star owned (+25%): three stars at the first sale make the next warehouse 75% richer. |
+| `perkHeadStartStars` | 1 | 1 | 3 | Star perk Head start: stars owned that unlock it. The first sale always reaches it. |
+| `perkHeadStartCents` | 25000 | 5000 | 100000 | Head start: extra cash a new warehouse opens with ($250): a second dock and a few upgrades at once, so a sold warehouse is never slow to start. |
+| `perkSecondDockStars` | 3 | 2 | 6 | Star perk Second dock: stars owned that unlock it. The greedy first sale is worth 3. |
+| `perkQuickChargeStars` | 6 | 4 | 12 | Star perk Quick charge: stars owned that unlock it (about the second sale). |
+| `perkQuickChargeBp` | 7500 | 5000 | 9500 | Quick charge: boost recharge multiplier (x0.75, 25% faster). Never shorter than the boost runs. |
+| `perkExpressStars` | 10 | 6 | 20 | Star perk Express lane: stars owned that unlock it. |
+| `perkExpressBp` | 20000 | 12500 | 30000 | Express lane: express truck chance multiplier (x2, 5% to 10%). |
+| `perkLongShiftStars` | 15 | 8 | 30 | Star perk Long shift: stars owned that unlock it. |
+| `perkLongShiftBp` | 15000 | 12500 | 20000 | Long shift: offline cap multiplier (x1.5, 2 h to 3 h), still at most offlineMaxMinutes. |
 | `narrowYardMaxTruck` | 5 | 3 | 7 | Port Calder's biggest truck level. |
 | `narrowYardPayBp` | 15000 | 11000 | 20000 | Port Calder's pay multiplier (1.5x). |
 | `crossdockBp` | 2000 | 500 | 4000 | Highmoor Crossdock: share of a full truck's parcels that come back as cross-dock orders, already packed. |
@@ -448,7 +481,8 @@ to do and an active player a burst to plan around.
 | Peak rates | every order's pay x`surgePay` (2x), after every other multiplier | `surgeTicks` (60 s) | `surgeRechargeTicks` (15 min) | with contract level `surgeMinContract` (1, Web shop) | any bottleneck |
 
 - The recharge counts from the tick the boost is used, so it includes the
-  minute the boost runs. That tick is the boost's first.
+  minute the boost runs. That tick is the boost's first. The Quick charge
+  perk (section 10a) shortens every recharge by a quarter.
 - A boost cannot be used while it runs, while it recharges, or before it
   opens; the command is rejected and nothing changes.
 - Boost clocks are ticks in State, so a boost keeps running and recharging

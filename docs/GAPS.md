@@ -40,3 +40,6 @@ the new names.
 - W1, counter orders (a rushed dock loading when packing is empty) need no stock and no picking, kept from the airport's walk-ups so a tap always helps. Lanes D, S.
 - W1, airport saves are not converted: the owner's airport is gone from the phone once this ships (W1). Owner.
 - W1, the phone check's 60 fps run read 58.7 and 55.1 fps in two runs on this session's machine (budget 55), the second with one 233 ms frame. Recheck on a real phone. Lane U.
+- W3, perk thresholds (1, 3, 6, 10, 15 stars) are set from the greedy bot's first two sales (3 then 4 stars); the pacing pass runs 90 minutes, so the 10- and 15-star perks are unmeasured. A long-run report (the Pivot 6 gap) would show when they arrive. Lanes D, H.
+- W3, Quick charge, Express lane and Long shift change rules for a player who owns enough stars, so a save with a command log from before W3 would replay differently. The game's saves are compact, so none exist; noted in case history-carrying saves come back. Lane S.
+- W3, a perk a sale unlocks is shown only by the sell sheet beforehand and the welcome sheet after; there is no special "perk unlocked" animation or sound. Lane U.

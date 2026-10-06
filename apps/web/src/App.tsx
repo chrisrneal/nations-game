@@ -9,6 +9,7 @@ import { SiteIntro } from './ui/SiteIntro.tsx';
 import { Floor } from './ui/Floor.tsx';
 import { SellSheet } from './ui/SellSheet.tsx';
 import { SettingsSheet } from './ui/SettingsSheet.tsx';
+import { StarsSheet } from './ui/StarsSheet.tsx';
 import { WarehouseStore } from './ui/store.ts';
 import { TopBar } from './ui/TopBar.tsx';
 import { UpgradeSheet } from './ui/UpgradeSheet.tsx';
@@ -34,7 +35,7 @@ function unlockText(upgrade: UpgradeId, level: number, view: WarehouseView, befo
   }
 }
 
-type SheetName = 'upgrades' | 'settings' | 'sell' | null;
+type SheetName = 'upgrades' | 'settings' | 'sell' | 'stars' | null;
 
 /** The warehouse screen (docs/ROADMAP.md, phone UX): money and the dashboard on top, the floor (receiving, the picking backlog at its heart, packing) and the docks in the middle, actions under the thumb. */
 export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedback?: Feedback }): ReactElement {
@@ -111,7 +112,7 @@ export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedb
 
   return (
     <div className="app">
-      <TopBar view={view} store={store} onSettings={() => setSheet('settings')} />
+      <TopBar view={view} store={store} onSettings={() => setSheet('settings')} onStars={() => setSheet('stars')} />
       <InstallBanner install={install} onToast={setToast} />
       <Floor journey={view.journey} pickingLevel={view.upgrades.find((u) => u.id === 'picking')?.level ?? 0} tickMs={view.tickMs} store={store} onTapPick={tapPick} onTapReceive={tapReceive}>
         <Pier model={view.truckModel}>
@@ -150,6 +151,7 @@ export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedb
           onClose={close}
         />
       )}
+      {sheet === 'stars' && <StarsSheet view={view} onSell={() => setSheet('sell')} onClose={close} />}
       {intro && sheet === null && <SiteIntro view={view} onClose={() => setIntro(false)} />}
       {sheet === 'settings' && <SettingsSheet view={view} host={host} feedback={feedback} onClose={close} onToast={setToast} />}
       {structure !== null && structure.recap !== null && sheet === null && <Recap

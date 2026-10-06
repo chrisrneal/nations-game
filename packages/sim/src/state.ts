@@ -1,4 +1,5 @@
 import type { WarehouseState, Boosts, DockState, Levels, PoState, RngState, Stats } from '@warehouse/contracts';
+import { startingCashFor, startingDockLevelFor } from './perks.ts';
 import { seedRng } from './rng.ts';
 import { derive, type Derived } from './rules.ts';
 import { WAREHOUSE_TUNABLES as T } from './tunables.ts';
@@ -44,7 +45,11 @@ export function createWarehouse(options: CreateWarehouseOptions): WarehouseState
   });
 }
 
-/** The warehouse for a site, keeping the clock, the RNG, stars, lifetime stats, and truck and PO numbering. */
+/**
+ * The warehouse for a site, keeping the clock, the RNG, stars, lifetime stats,
+ * and truck and PO numbering. Head start and Second dock (RULES 10a) open it
+ * with more cash and docks.
+ */
 export function openWarehouse(keep: {
   readonly tick: number;
   readonly rng: RngState;
@@ -54,22 +59,23 @@ export function openWarehouse(keep: {
   readonly nextTruck: number;
   readonly nextPo: number;
 }): WarehouseState {
-  const base = { site: keep.site, stars: keep.stars, levels: ZERO_LEVELS };
-  const d = derive(base);
+  const levels: Levels = { ...ZERO_LEVELS, docks: startingDockLevelFor(keep.stars) };
+  const d = derive({ site: keep.site, stars: keep.stars, levels });
+  const docks = Array.from({ length: d.docks }, (_, i) => arrivingDock(keep.nextTruck + i, d, false));
   return {
     schemaVersion: WAREHOUSE_SCHEMA_VERSION,
     tick: keep.tick,
     rng: keep.rng,
-    cash: T.startingCashCents.value,
+    cash: startingCashFor(keep.stars),
     backlog: 0,
     pickRush: 0,
     staged: T.startingStaged.value * 1000,
     stock: Math.min(T.startingStock.value * 1000, d.shelfCapMilli),
     po: arrivingPo(keep.nextPo, d),
     receiveRush: 0,
-    levels: ZERO_LEVELS,
-    docks: [arrivingDock(keep.nextTruck, d, false)],
-    nextTruck: keep.nextTruck + 1,
+    levels,
+    docks,
+    nextTruck: keep.nextTruck + docks.length,
     site: keep.site,
     stars: keep.stars,
     boosts: READY_BOOSTS,

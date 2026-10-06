@@ -234,7 +234,8 @@ describe('selling the warehouse (RULES 10)', () => {
     expect(events.find((e) => e.type === 'sold')?.payload).toEqual({ stars: 2, site: 1 });
     expect(state.site).toBe(1);
     expect(state.stars).toBe(2);
-    expect(state.cash).toBe(T.startingCashCents.value);
+    // Two stars own Head start, not Second dock (RULES 10a).
+    expect(state.cash).toBe(T.startingCashCents.value + T.perkHeadStartCents.value);
     expect(state.levels.loading).toBe(0);
     expect(state.docks).toHaveLength(1);
     expect(state.run.earned).toBe(0);

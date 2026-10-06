@@ -1,5 +1,5 @@
 import type { WarehouseEvent, WarehouseIntent, WarehouseSaveFile, WarehouseState, WarehouseView, Bottleneck, Stats } from '@warehouse/contracts';
-import { WAREHOUSE_TUNABLES, WarehouseSession, UPGRADE_TEXT, warehouseView, createWarehouse, estimate, hashState, offlineCapTicks, offlineMinutesAt } from '@warehouse/sim';
+import { WAREHOUSE_TUNABLES, WarehouseSession, UPGRADE_TEXT, warehouseView, createWarehouse, estimate, hashState, offlineCapTicks, offlineMinutesFor } from '@warehouse/sim';
 import { LIVE_EVENT_TICKS, RECAP_MIN_AWAY_MS, capped, ticksDue } from './clock.ts';
 
 /**
@@ -63,7 +63,7 @@ export function awayRecap(before: WarehouseState, after: WarehouseState, awayMs:
   return {
     awayMs,
     ranMs,
-    capMinutes: offlineMinutesAt(after.levels.night),
+    capMinutes: offlineMinutesFor(after.levels.night, after.stars),
     skipped,
     earned: d.earned,
     shipments: d.shipments,

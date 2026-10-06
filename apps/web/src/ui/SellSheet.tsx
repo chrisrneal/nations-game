@@ -8,7 +8,8 @@ const pct = (bp: number): string => `+${Math.round((bp - 10_000) / 100)}%`;
 
 /**
  * Selling the warehouse (RULES 10): what it is worth in stars, what stars do,
- * where you go next and its twist, and what resets. One confirm.
+ * the perks the sale unlocks (RULES 10a), where you go next and its twist, and
+ * what resets. One confirm.
  */
 export function SellSheet(props: { view: WarehouseView; store: WarehouseStore; onSell: () => void; onClose: () => void }): ReactElement {
   const { view, store, onSell, onClose } = props;
@@ -25,6 +26,7 @@ export function SellSheet(props: { view: WarehouseView; store: WarehouseStore; o
     [store, stars.nextAt],
   );
   const worth = stars.claimable;
+  const perks = stars.perks.filter((p) => p.unlocksOnSale);
   return (
     <Sheet title="Sell the warehouse" onClose={onClose}>
       <p className="sell-worth" data-testid="sell-worth">
@@ -48,6 +50,11 @@ export function SellSheet(props: { view: WarehouseView; store: WarehouseStore; o
           <dd data-testid="next-site">{stars.nextSite.name}</dd>
         </div>
       </dl>
+      {perks.length > 0 && (
+        <p className="sell-perks" data-testid="sell-perks">
+          New {perks.length === 1 ? 'perk' : 'perks'}: {perks.map((p) => `${p.name} (${p.effect.charAt(0).toLowerCase()}${p.effect.slice(1)})`).join(', ')}
+        </p>
+      )}
       <p className="twist">{stars.nextSite.twist}</p>
       <p className="sheet-note">Cash, upgrades and docks start again. Stars and lifetime numbers stay.</p>
       <button type="button" className="btn btn-primary btn-wide" disabled={worth === 0} onClick={onSell} data-testid="confirm-sell">

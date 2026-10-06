@@ -98,8 +98,30 @@ p {
   text-overflow: ellipsis;
 }
 
-.stars {
+.top-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+/* The stars owned: a tap opens the perks (RULES 10a). */
+.stars-btn {
+  min-width: var(--tap);
+  height: var(--tap);
+  padding: 0 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
   color: var(--gold);
+  font-weight: 800;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.stars-btn.soon {
+  border-color: var(--gold);
+  box-shadow: 0 0 10px rgb(255 204 92 / 35%);
 }
 
 .icon-btn {
@@ -1345,6 +1367,80 @@ p {
   border-left: 3px solid var(--gold);
   background: var(--panel-2);
   font-size: 0.9rem;
+  margin-bottom: 0.6rem;
+}
+
+/* ---- star perks (RULES 10a) ---- */
+.perks {
+  list-style: none;
+  margin: 0 0 0.6rem;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.perk {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: var(--tap);
+  padding: 0.45rem 0.6rem;
+  border-radius: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.perk.unlocked {
+  color: var(--fg);
+  border-color: rgb(255 204 92 / 55%);
+}
+
+.perk.soon {
+  border-color: var(--gold);
+  border-style: dashed;
+}
+
+.perk-stars {
+  flex-shrink: 0;
+  width: 2.6rem;
+  font-weight: 800;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.perk:not(.unlocked) .perk-stars {
+  opacity: 0.6;
+}
+
+.perk-main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+
+.perk-name {
+  font-weight: 700;
+}
+
+.perk-effect {
+  font-size: 0.78rem;
+}
+
+.perk-status {
+  flex-shrink: 0;
+  max-width: 6.5rem;
+  text-align: right;
+  font-size: 0.72rem;
+}
+
+.perk.unlocked .perk-status {
+  color: var(--gold);
+}
+
+.sell-perks {
+  font-size: 0.85rem;
+  color: var(--gold);
   margin-bottom: 0.6rem;
 }
 

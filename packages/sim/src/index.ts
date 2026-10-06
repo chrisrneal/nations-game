@@ -25,6 +25,7 @@ export {
   maxLevel,
   offlineCapTicks,
   offlineMinutesAt,
+  offlineMinutesFor,
   parcelsAt,
   poUnitsFor,
   receiveMilliAt,
@@ -33,6 +34,7 @@ export {
   upgradeCost,
   type Derived,
 } from './rules.ts';
+export { PERK_IDS, PERK_NAMES, expressChanceBp, hasPerk, perkEffect, perkStars } from './perks.ts';
 export { WAREHOUSE_SCHEMA_VERSION, EMPTY_STATS, READY_BOOSTS, createWarehouse, type CreateWarehouseOptions } from './state.ts';
 export { warehouseCommandProblem } from './commands.ts';
 export { advanceMany, step, step as stepWarehouse, type WarehouseStepResult } from './step.ts';
