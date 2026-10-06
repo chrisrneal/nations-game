@@ -1,18 +1,18 @@
 import { useRef, useState, type ReactElement } from 'react';
-import type { AirportView } from '@airport/contracts';
-import type { AirportHost, Feedback } from '../platform/index.ts';
+import type { WarehouseView } from '@warehouse/contracts';
+import type { WarehouseHost, Feedback } from '../platform/index.ts';
 import { formatCash, short } from './format.ts';
 import { Sheet } from './Sheet.tsx';
 
-/** The testing cheat's choices: run the airport this far ahead at once (an away recap sums it up). */
+/** The testing cheat's choices: run the warehouse this far ahead at once (an away recap sums it up). */
 const SKIPS: readonly (readonly [string, number])[] = [
   ['+5 min', 5],
   ['+1 hour', 60],
   ['+8 hours', 480],
 ];
 
-/** Saves to a file and back, starting over, the airport's lifetime numbers, and the testing time skip. */
-export function SettingsSheet(props: { view: AirportView; host: AirportHost; feedback?: Feedback | undefined; onClose: () => void; onToast: (text: string) => void }): ReactElement {
+/** Saves to a file and back, starting over, the warehouse's lifetime numbers, and the testing time skip. */
+export function SettingsSheet(props: { view: WarehouseView; host: WarehouseHost; feedback?: Feedback | undefined; onClose: () => void; onToast: (text: string) => void }): ReactElement {
   const { view, host, feedback, onClose, onToast } = props;
   const file = useRef<HTMLInputElement>(null);
   const [confirming, setConfirming] = useState(false);
@@ -38,7 +38,7 @@ export function SettingsSheet(props: { view: AirportView; host: AirportHost; fee
     if (chosen === undefined) return;
     try {
       await host.importFile(await chosen.text());
-      onToast('Airport loaded.');
+      onToast('Warehouse loaded.');
       onClose();
     } catch (error) {
       onToast(error instanceof Error ? error.message : 'That file could not be loaded.');
@@ -47,21 +47,27 @@ export function SettingsSheet(props: { view: AirportView; host: AirportHost; fee
 
   const life = view.life;
   return (
-    <Sheet title="Airport" onClose={onClose}>
+    <Sheet title="Warehouse" onClose={onClose}>
       <dl className="stats" data-testid="stats">
         <div>
-          <dt>Earned, all airports</dt>
+          <dt>Earned, all warehouses</dt>
           <dd>{formatCash(life.earned)}</dd>
         </div>
         <div>
-          <dt>Flights</dt>
+          <dt>Shipments</dt>
           <dd>
-            {short(life.flights)} ({life.flights === 0 ? 0 : Math.round((life.fullFlights / life.flights) * 100)}% full)
+            {short(life.shipments)} ({life.shipments === 0 ? 0 : Math.round((life.fullShipments / life.shipments) * 100)}% full)
           </dd>
         </div>
         <div>
-          <dt>Passengers</dt>
-          <dd>{short(life.pax)}</dd>
+          <dt>Orders shipped</dt>
+          <dd>{short(life.orders)}</dd>
+        </div>
+        <div>
+          <dt>POs received</dt>
+          <dd>
+            {short(life.pos)} ({short(life.received)} units)
+          </dd>
         </div>
         <div>
           <dt>Offline earnings</dt>
@@ -118,11 +124,11 @@ export function SettingsSheet(props: { view: AirportView; host: AirportHost; fee
               onClose();
             }}
           >
-            Yes, throw this airport away
+            Yes, throw this warehouse away
           </button>
         ) : (
           <button type="button" className="btn btn-quiet" onClick={() => setConfirming(true)}>
-            Start a new airport
+            Start a new warehouse
           </button>
         )}
       </div>

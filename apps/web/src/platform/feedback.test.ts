@@ -16,7 +16,7 @@ describe('feedback preferences (slice 7)', () => {
     const storage = memoryStorage();
     savePrefs({ sound: true, haptics: false }, storage);
     expect(loadPrefs(storage)).toEqual({ sound: true, haptics: false });
-    storage.setItem('airport-prefs', '{nope');
+    storage.setItem('warehouse-prefs', '{nope');
     expect(loadPrefs(storage)).toEqual(DEFAULT_PREFS);
     expect(loadPrefs(undefined)).toEqual(DEFAULT_PREFS);
   });
@@ -24,6 +24,6 @@ describe('feedback preferences (slice 7)', () => {
   it('cues do nothing harmful where there is no vibration or audio (Node)', () => {
     const feedback = createFeedback({ sound: false, haptics: true });
     expect(feedback.canVibrate).toBe(false);
-    expect(() => feedback.cue('charter')).not.toThrow();
+    expect(() => feedback.cue('express')).not.toThrow();
   });
 });

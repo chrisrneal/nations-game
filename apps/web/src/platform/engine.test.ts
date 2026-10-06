@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { AirportSession, advanceMany, createAirport, hashState } from '@airport/sim';
-import { AirportEngine, type AirportUpdate } from './engine.ts';
+import { WarehouseSession, advanceMany, createWarehouse, hashState } from '@warehouse/sim';
+import { WarehouseEngine, type WarehouseUpdate } from './engine.ts';
 import { FakeClock } from './testClock.ts';
 
-function engine(): { clock: FakeClock; engine: AirportEngine; seen: AirportUpdate[] } {
+function engine(): { clock: FakeClock; engine: WarehouseEngine; seen: WarehouseUpdate[] } {
   const clock = new FakeClock();
-  const e = new AirportEngine(clock);
-  const seen: AirportUpdate[] = [];
+  const e = new WarehouseEngine(clock);
+  const seen: WarehouseUpdate[] = [];
   e.subscribe((u) => seen.push(u));
   return { clock, engine: e, seen };
 }
 
-describe('AirportEngine (the host clock, S4)', () => {
-  it('runs a new airport by the wall clock: the first plane leaves after 5 s', () => {
+describe('WarehouseEngine (the host clock, S4)', () => {
+  it('runs a new warehouse by the wall clock: the first truck leaves after 5 s', () => {
     const { clock, engine: e, seen } = engine();
     e.newGame(42);
     expect(seen.at(-1)?.view.tick).toBe(0);
@@ -25,10 +25,10 @@ describe('AirportEngine (the host clock, S4)', () => {
   it('stamps intents for the next tick and applies them', () => {
     const { clock, engine: e, seen } = engine();
     e.newGame(1);
-    e.submit({ type: 'tap', payload: { gate: 0 } });
+    e.submit({ type: 'tap', payload: { dock: 0 } });
     clock.advance(250);
-    expect(seen.at(-1)?.view.gates[0]?.rush).toBeGreaterThan(0);
-    expect(() => e.submit({ type: 'buy', payload: { upgrade: 'spaceport' as 'gates' } })).toThrow();
+    expect(seen.at(-1)?.view.docks[0]?.rush).toBeGreaterThan(0);
+    expect(() => e.submit({ type: 'buy', payload: { upgrade: 'spaceport' as 'docks' } })).toThrow();
   });
 
   it('a late timer catches up exactly, animating only the last few ticks', () => {
@@ -37,7 +37,7 @@ describe('AirportEngine (the host clock, S4)', () => {
     clock.advance(3_600_000);
     const last = seen.at(-1);
     expect(last?.view.tick).toBe(14_400);
-    expect(last?.fingerprint).toBe(hashState(advanceMany(createAirport({ seed: 5 }), 14_400)));
+    expect(last?.fingerprint).toBe(hashState(advanceMany(createWarehouse({ seed: 5 }), 14_400)));
     expect(last?.events.every((ev) => ev.tick >= 14_400 - 8)).toBe(true);
   });
 
@@ -52,20 +52,20 @@ describe('AirportEngine (the host clock, S4)', () => {
     expect(clock.running).toBe(1);
   });
 
-  it('exports and imports the same airport, then owes the time since', () => {
+  it('exports and imports the same warehouse, then owes the time since', () => {
     const { clock, engine: e } = engine();
     e.newGame(8);
-    e.submit({ type: 'tap', payload: { gate: 0 } });
+    e.submit({ type: 'tap', payload: { dock: 0 } });
     clock.advance(10_000);
     const saved = e.exportGame();
     const fingerprint = e.current()?.fingerprint;
-    const other = new AirportEngine(clock);
+    const other = new WarehouseEngine(clock);
     expect(other.importGame(saved).fingerprint).toBe(fingerprint);
     clock.time += 2_500;
     const after = other.pump();
     expect(after?.view.tick).toBe(50);
-    const expected = new AirportSession(createAirport({ seed: 8 }));
-    expected.submit({ tick: 0, type: 'tap', payload: { gate: 0 } });
+    const expected = new WarehouseSession(createWarehouse({ seed: 8 }));
+    expected.submit({ tick: 0, type: 'tap', payload: { dock: 0 } });
     expected.advance(50);
     expect(after?.fingerprint).toBe(hashState(expected.state));
   });
@@ -88,12 +88,12 @@ describe('AirportEngine (the host clock, S4)', () => {
     expect(last?.view.tick).toBe(14_400);
     expect(last?.recap).toMatchObject({ awayMs: 3_600_000, ranMs: 3_600_000, capMinutes: 120 });
     expect(last?.recap?.earned).toBe(last?.view.run.earned);
-    expect(last?.recap?.flights).toBeGreaterThan(100);
+    expect(last?.recap?.shipments).toBeGreaterThan(100);
     expect(last?.recap?.fixName.length).toBeGreaterThan(0);
     expect(e.dismissRecap().recap).toBeNull();
   });
 
-  it('the offline cap stops the airport after 2 hours; the rest of the night is lost', () => {
+  it('the offline cap stops the warehouse after 2 hours; the rest of the night is lost', () => {
     const { clock, engine: e, seen } = engine();
     e.newGame(5);
     e.pause();
@@ -110,13 +110,13 @@ describe('AirportEngine (the host clock, S4)', () => {
   it('a capped catch-up equals stepping the capped ticks (P4)', () => {
     const { clock, engine: e, seen } = engine();
     e.newGame(77);
-    e.submit({ type: 'tap', payload: { gate: 0 } });
+    e.submit({ type: 'tap', payload: { dock: 0 } });
     clock.advance(250);
     e.pause();
     clock.time += 9 * 3_600_000;
     e.resume();
-    const expected = new AirportSession(createAirport({ seed: 77 }));
-    expected.submit({ tick: 0, type: 'tap', payload: { gate: 0 } });
+    const expected = new WarehouseSession(createWarehouse({ seed: 77 }));
+    expected.submit({ tick: 0, type: 'tap', payload: { dock: 0 } });
     expected.advance(1 + 2 * 14_400);
     expect(seen.at(-1)?.fingerprint).toBe(hashState(expected.state));
   });
@@ -127,18 +127,18 @@ describe('AirportEngine (the host clock, S4)', () => {
     clock.advance(1000);
     const saved = e.exportGame();
     clock.time += 24 * 3_600_000;
-    const other = new AirportEngine(clock);
+    const other = new WarehouseEngine(clock);
     const update = other.importGame(saved);
     expect(update.recap?.ranMs).toBe(2 * 3_600_000);
     expect(update.view.tick).toBe(4 + 2 * 14_400);
   });
 
-  it('the testing skip runs the airport ahead exactly as catching up would, with no cap, and owes nothing after', () => {
+  it('the testing skip runs the warehouse ahead exactly as catching up would, with no cap, and owes nothing after', () => {
     const { clock, engine: e, seen } = engine();
     e.newGame(8);
     const skipped = e.skip(5 * 60);
     expect(skipped.view.tick).toBe(5 * 3600 * 4);
-    expect(skipped.fingerprint).toBe(hashState(advanceMany(createAirport({ seed: 8 }), 5 * 3600 * 4)));
+    expect(skipped.fingerprint).toBe(hashState(advanceMany(createWarehouse({ seed: 8 }), 5 * 3600 * 4)));
     expect(skipped.recap?.ranMs).toBe(5 * 3600 * 1000);
     expect(skipped.recap?.earned).toBeGreaterThan(0);
     clock.advance(250);

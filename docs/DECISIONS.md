@@ -5,10 +5,11 @@ would have to happen to reverse it. **Changing one of these needs a new record
 appended here, not an edit to an old one** - later sessions rely on these being
 stable.
 
-**Read P1 first.** On 2026-10-01 the project pivoted from "Nations" to an idle
-airport game. P1 lists which of the records below still bind (the architecture
-ones) and which retired with Nations. `P` records cover the airport game. Older
-prefixes: `D` came from the Nations roadmap, `S` are the nine architecture seams,
+**Read W1 first, then P1.** On 2026-10-06 the airport game became a warehouse
+game (W1); on 2026-10-01 "Nations" had become the airport game (P1). P1 lists
+which of the older records still bind (the architecture ones) and W1 which of
+the `P` records carry over, renamed. `W` records cover the warehouse game, `P`
+records the airport game. Older prefixes: `D` came from the Nations roadmap, `S` are the nine architecture seams,
 `T` the toolchain, `G` gate rulings, `H` the Nations "100x" work.
 
 Status of the D, S and T records: **accepted**, 2026-09-27, prompt 01, unless a
@@ -681,3 +682,66 @@ concourse takes about 70 px more of the screen, so the gates scroll sooner.
 **Reversing it.** Drop the line (arrivals straight into the lounge), the
 command, the upgrade and the State fields with a migration from 3 to 4; the
 maze becomes the old strip again.
+
+## W1 - Pivot: the airport becomes a warehouse
+**Status.** Accepted, 2026-10-06, at the owner's request ("different approach
+same repo, let's make it warehouse themed idle game. POs and Orders come in,
+workers fulfill, you see the dashboard of progress money comes in and you
+improve your warehouse to make it faster").
+**Decision.** The game is now Warehouse Idle (docs/RULES.md): customer orders
+queue in a backlog, pickers pick them into packing, loaders fill trucks at the
+docks, and each truck pays when it leaves. Purchase orders arrive at a
+receiving dock and are put away onto shelves; every order picked takes a unit
+of stock, so empty shelves stop the pickers. That is the one new rule
+(RULES 3a), with a ninth upgrade (Receiving bay), a sixth command
+(`tapReceive`) and a sixth bottleneck ("The shelves are running empty"). Under
+the cash, a dashboard row shows orders shipped, orders a minute, the backlog
+and stock. Everything else is the airport's rules, renamed, with the same
+numbers: gates are docks, planes trucks, passengers orders, security picking,
+the lounge packing, routes contracts, fares pay, slots stars, cities sites,
+Rush hour Flash sale, Fare surge Peak rates. The airport stays reachable at
+its last main commit, **`5f78bce`** ("The airport fills a big phone", #53):
+`git checkout 5f78bce` restores it whole. History is kept; main is never
+force-pushed.
+**What carries over.** P1's architecture list unchanged (D6, S1-S6, S9,
+T1-T6). P3 (units: cents and milli-units, now milli-orders), P4 (offline is
+the same sim stepped fast), P5 (commands carry no player id; the View is the
+whole warehouse), P6 (estimated income, named bottleneck), P7 (animation
+outside React), P9's pacing targets, P11 (boosts with clocks in State) and
+P12 (the queue is real and the centre of the screen: now the backlog) all hold
+under their new names. P8 and P10 are superseded: the workspace scope is now
+`@warehouse/` and the lint rule `warehouse/allowed-imports`.
+**Saves.** The schema starts again at version 1 in a new IndexedDB database
+(`warehouse`), so airport saves are never read. An airport save file is
+refused with a message saying so. Converting airports was not worth the
+migration: the owner is the only player.
+**Tuning.** With every airport number kept, receiving at 2 a second bought the
+first bay before the second dock (2.5 minutes, target 2). At 2.4 a second,
+level with picking, every RULES 11 target holds on seeds 1-5: first dock
+19-29 s, longest wait 4.3-4.4 min, first sale 35.3-35.6 minutes with 3 stars,
+tapping 2.1-2.7x idle, the estimate within 4%.
+**Why.** The owner's call. The airport's engine already fits any "things
+arrive, queue, get processed and leave in batches" idle game, so the switch
+costs renaming, not rebuilding, and keeps its proven determinism, offline
+earnings and pacing. Stock is the smallest addition that makes "POs come in"
+a real part of the game rather than scenery: it adds a second supply line to
+balance against sales, just as the security line did (P12).
+**Cost.** Airport saves are lost. Every document and test was rewritten in
+warehouse words, so later sessions reading old P records must translate the
+names. The floor is one lane taller (receiving), and the dashboard row takes
+about 45 px, so on a 740 px phone with the install banner showing the docks
+are squeezed (docs/GAPS.md).
+**Reversing it.** `git checkout 5f78bce` on a branch.
+
+## W2 - This session is the architect for the warehouse pivot
+**Status.** Accepted, 2026-10-06.
+**Decision.** As in P2, the session that runs the owner's pivot request may
+edit CLAUDE.md, docs/ROADMAP.md and docs/DECISIONS.md, records its design
+calls here rather than asking, and merges only with `npm test` and `npm run
+check` green. It did the pivot as one pull request (the airport stayed
+playable on main until the warehouse was whole) rather than P2's eight slices.
+**Why.** The owner asked for the change directly and is not a programmer; the
+rename is mechanical enough that splitting it would leave main half airport,
+half warehouse.
+**Cost.** One large pull request instead of eight small ones.
+**Reversing it.** The owner takes the architect role back by editing CLAUDE.md.

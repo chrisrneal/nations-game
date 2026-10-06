@@ -59,7 +59,7 @@ async function bundle(outDir: string): Promise<string> {
       lib: {
         entry: join(here, 'browser-entry.ts'),
         formats: ['iife'],
-        name: 'airportHarness',
+        name: 'warehouseHarness',
         fileName: () => 'harness.js',
       },
     },
@@ -73,7 +73,7 @@ function decodeHtml(text: string): string {
 
 export async function runInBrowser(options: BrowserRunOptions, browser = findChromium()): Promise<BrowserRun> {
   if (browser === undefined) throw new Error('No Chromium or Chrome found; set CHROME_PATH');
-  const work = mkdtempSync(join(tmpdir(), 'airport-harness-'));
+  const work = mkdtempSync(join(tmpdir(), 'warehouse-harness-'));
   try {
     const script = await bundle(join(work, 'dist'));
     const html = [

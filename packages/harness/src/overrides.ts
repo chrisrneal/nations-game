@@ -1,7 +1,7 @@
-import { AIRPORT_TUNABLES } from '@airport/sim';
+import { WAREHOUSE_TUNABLES } from '@warehouse/sim';
 
 /**
- * `--set id=value[,id=value]` for tuning sweeps: replaces airport tunables for
+ * `--set id=value[,id=value]` for tuning sweeps: replaces warehouse tunables for
  * one harness run, so several settings can be swept in parallel processes
  * without editing tunables.ts. Every value must be a whole number inside the
  * band tunables.ts declares (the band is the limit of tuning; going outside it
@@ -10,7 +10,7 @@ import { AIRPORT_TUNABLES } from '@airport/sim';
  */
 type Mutable = { value: number; min: number; max: number };
 
-const table = AIRPORT_TUNABLES as unknown as Record<string, Mutable | undefined>;
+const table = WAREHOUSE_TUNABLES as unknown as Record<string, Mutable | undefined>;
 
 /** Parses and validates a `--set` value. Throws an Error with a user-facing message. */
 export function parseOverrides(spec: string): Record<string, number> {

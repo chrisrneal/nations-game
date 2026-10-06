@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { canonicalJson, hashState } from './hash.ts';
-import { createAirport } from './state.ts';
+import { createWarehouse } from './state.ts';
 
-const world = (seed: number) => createAirport({ seed });
+const world = (seed: number) => createWarehouse({ seed });
 
 describe('state hash', () => {
   it('ignores key insertion order', () => {

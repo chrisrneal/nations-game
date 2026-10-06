@@ -1,27 +1,32 @@
-# Airport Idle
+# Warehouse Idle
 
-A game you play on your phone. You run an airport: passengers arrive in the
-terminal, board the planes at your gates, and every plane pays its fares when it
-leaves. Tap a gate to rush it. Spend the cash on more gates, bigger planes,
-faster boarding, a bigger terminal, better routes and a quicker ground crew;
-each upgrade fixes one bottleneck and the screen tells you which one you have.
-Close the app and the airport keeps earning (up to a cap the night shift
-raises); open it again for a three-line recap. When the airport is worth it,
-sell it for **slots** that raise every fare forever and start again in a new
-city with a twist: a short runway, a hub, holiday waves.
+A game you play on your phone. You run a warehouse: customer orders come in,
+your pickers take each item off the shelves, packed orders are loaded onto
+trucks at your docks, and every truck pays when it leaves. Purchase orders
+(POs) arrive at the receiving dock and keep the shelves stocked; if the
+shelves run empty, picking stops. A dashboard at the top shows orders shipped,
+orders a minute, the backlog and how full the shelves are. Spend the cash on
+more docks, bigger trucks, faster loading, more sales, more pickers, a bigger
+receiving bay, better contracts and a quicker yard crew; each upgrade fixes one
+bottleneck and the screen tells you which one you have. Close the app and the
+warehouse keeps earning (up to a cap the night shift raises); open it again
+for a three-line recap. When the warehouse is worth it, sell it for **stars**
+that raise every order's pay forever and start again at a new site with a
+twist: a narrow yard, a crossdock, sale seasons.
 
 It works offline, installs like an app, and needs no account or server.
 
-Until October 2026 this repository held a different game, "Nations". It is
-still there at commit `67d1d92` (`git checkout 67d1d92`); decision record P1 in
-`docs/DECISIONS.md` explains the switch.
+This repository held two other games before: an airport idle game until
+6 October 2026 (`git checkout 5f78bce`, decision record W1 in
+`docs/DECISIONS.md`) and "Nations" until October 2026 (`git checkout 67d1d92`,
+decision record P1).
 
 ## What is in here
 
 | Folder | What it is |
 | --- | --- |
 | `apps/web` | The app you actually see, and the code that makes it installable on a phone. |
-| `packages/sim` | The game rules as code: gates, planes, passengers, upgrades, cities. Deliberately knows nothing about screens, clocks or the internet, so it gives the same result everywhere. |
+| `packages/sim` | The game rules as code: orders, stock, docks, trucks, upgrades, sites. Deliberately knows nothing about screens, clocks or the internet, so it gives the same result everywhere. |
 | `packages/contracts` | The shared vocabulary (what a "command", a "view", a "save file" is). |
 | `packages/harness` | Robots that play the game with no screen, to check the pacing and that it runs the same in every browser. |
 | `docs/` | The plan (`ROADMAP.md`), the reasoning (`DECISIONS.md`), the game rules with every number (`RULES.md`), the running log (`PROGRESS.md`), known shortcuts (`GAPS.md`), and the latest pacing report (`balance/`). |
@@ -63,10 +68,10 @@ secure `https://` address Vercel gives you).
    - **Android:** in **Chrome**, tap ⋮, then *Install app* (or *Add to Home screen*).
 3. Open it once from the new home-screen icon while online, so it can store itself.
 4. Turn on airplane mode, close it from the app switcher, and open it again. It
-   should start as normal, and your airport continues from its autosave, with a
+   should start as normal, and your warehouse continues from its autosave, with a
    recap of what it earned while you were away.
 
-Saves live on the phone. To move an airport to another device, open the gear
+Saves live on the phone. To move a warehouse to another device, open the gear
 (top right), *Save to a file*, and *Load from a file* on the other one.
 
 Preview addresses that Vercel posts on each pull request work for a quick look,
@@ -78,35 +83,41 @@ offline or install from there).
 
 ## How to play
 
-- **Tap a gate** to rush it for a moment: faster boarding, walk-up passengers
-  even when the lounge is empty, a faster turnaround. Tap the security maze to
-  open an extra lane. Playing actively earns
-  about two and a half times what idling does. You never have to.
-- **The passenger flow** (the middle of the screen): each dot is a passenger.
-  Departing ones come in at the left, pass check-in and line up in the
-  **security maze**, go through the scanners (and passport control and
-  preclearance on international routes), sit in the lounge and walk down
-  between the gates to board. The line in the maze is real: when it grows,
-  security is falling behind; buy **Security lanes** (each adds speed, and
-  every second level a scanner), or **tap the maze** to open an extra lane for
-  a moment. Arriving ones step off each landed plane and walk out through
-  baggage claim (and passport control and customs) to the exit. A crowded
-  lounge means the gates are the bottleneck; an empty one means you need more
-  passengers. Orange dots turning back at the door: the line is too long to join.
+- **The dashboard** (under your cash): orders shipped from this warehouse,
+  orders a minute, the backlog, and how full the shelves are. The tile that is
+  holding you back turns orange.
+- **Receiving** (the top lane): the PO at the dock ("PO #12 · 30/48" units put
+  away), purple dots carrying stock through quality check onto the shelves,
+  and the shelves bar. **Tap it** to send extra hands for a moment. Buy a
+  bigger **Receiving bay** when the shelves keep running empty.
+- **Picking** (the maze in the middle): each blue dot is an order. New ones
+  come in at the order desk and wait in the maze: that line is the real
+  backlog. The pickers at its end take orders through as fast as they can pick
+  (each takes one unit off the shelves). A growing maze means picking is
+  falling behind: buy **More pickers**, or **tap the maze** for extra pickers
+  for a moment. Orange dots fading at the door are customers who cancelled
+  because the backlog was too long.
+- **Packing**: picked orders, as boxes, waiting for a truck. A full bench
+  means the docks are the bottleneck; an empty one means you need more orders.
+- **Docks**: each bay has a truck seen from above, filling box by box. **Tap a
+  dock** to rush it: faster loading, counter orders even when packing is
+  empty, a quicker truck swap. Playing actively earns about two and a half
+  times what idling does. You never have to.
+- **A full truck** earns a 25% bonus. A truck too big for your orders leaves
+  on its timer without it. Gold trucks are express: double pay.
 - **Boosts** (the three buttons above Upgrades): free, a minute long, then they
-  recharge. Rush hour brings 3x passengers (ready from the start), All hands
-  rushes every gate for you (opens at 3 gates), Fare surge doubles fares (opens
-  with the Regional route). The one that fixes your bottleneck glows. They keep
-  running while the app is closed, so use one on your way out.
+  recharge. Flash sale brings 3x orders (ready from the start), All hands
+  rushes every dock, picking and receiving for you (opens at 3 docks), Peak
+  rates doubles pay (opens with the Web shop contract). The one that fixes your
+  bottleneck glows. They keep running while the app is closed, so use one on
+  your way out.
 - **Upgrades** (the big button at the bottom): the line above it names the
   bottleneck, and the sheet marks the upgrades that fix it.
-- **A full plane** earns a 25% bonus. A plane too big for your passengers leaves
-  on its timer without it.
-- **Sell** appears once the airport is worth a slot (about half an hour of
+- **Sell** appears once the warehouse is worth a star (about half an hour of
   active play for the first sale worth making).
-- **Settings** (the gear): sound (off at first), vibration, save files, start
-  over, and a testing time skip (+5 min, +1 hour, +8 hours) that runs the
-  airport ahead at once.
+- **Settings** (the gear): lifetime numbers, sound (off at first), vibration,
+  save files, start over, and a testing time skip (+5 min, +1 hour, +8 hours)
+  that runs the warehouse ahead at once.
 
 ## A few words you will see
 

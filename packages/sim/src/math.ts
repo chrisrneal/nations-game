@@ -1,5 +1,5 @@
 /**
- * Integer helpers for the airport (P3). Every result is a safe integer, and
+ * Integer helpers for the warehouse (P3). Every result is a safe integer, and
  * the same on every JavaScript engine: no floats, no transcendental functions.
  */
 

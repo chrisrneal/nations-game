@@ -1,7 +1,7 @@
-import type { AirportState, BoostId, UpgradeId } from '@airport/contracts';
-import { CHECKPOINTS, ROUTES, cityAt, nameAt, type CityTwist } from './catalog.ts';
+import type { BoostId, UpgradeId, WarehouseState } from '@warehouse/contracts';
+import { CHECKPOINTS, CONTRACTS, nameAt, siteAt, type SiteTwist } from './catalog.ts';
 import { grow, isqrt, mulDiv } from './math.ts';
-import { AIRPORT_TUNABLES as T, type AirportTunableId } from './tunables.ts';
+import { WAREHOUSE_TUNABLES as T, type WarehouseTunableId } from './tunables.ts';
 
 /**
  * The formulas of docs/RULES.md sections 3-10, as pure functions of the state's
@@ -14,95 +14,116 @@ export function cashCap(): number {
   return T.cashCapCents.value;
 }
 
-/** Seats on a plane of this level (RULES 4). */
-export function seatsAt(level: number): number {
-  return grow(T.planeSeatsBase.value, T.planeSeatsGrowthBp.value, level);
+/** Parcels a truck of this level holds (RULES 4). */
+export function parcelsAt(level: number): number {
+  return grow(T.truckParcelsBase.value, T.truckParcelsGrowthBp.value, level);
 }
 
-/** Departure timer, in ticks, for a plane with this many seats. */
-export function departTicksFor(seats: number): number {
-  return T.departBaseTicks.value + T.departTicksPerSeat.value * seats;
+/** Departure timer, in ticks, for a truck of this many parcels. */
+export function departTicksFor(parcels: number): number {
+  return T.departBaseTicks.value + T.departTicksPerParcel.value * parcels;
 }
 
-/** Turnaround multiplier for this crew level, in basis points. */
+/** Swap-time multiplier for this yard crew level, in basis points. */
 export function crewBpAt(level: number): number {
   return grow(BP, T.crewTurnBp.value, level);
 }
 
-/** Turnaround, in ticks, after a plane with this many seats leaves (RULES 5.5). */
-export function turnTicksFor(seats: number, crewBp: number): number {
-  const raw = T.turnBaseTicks.value + Math.floor(seats / T.turnSeatsPerTick.value);
+/** Truck swap, in ticks, after a truck of this many parcels leaves (RULES 5.5). */
+export function turnTicksFor(parcels: number, crewBp: number): number {
+  const raw = T.turnBaseTicks.value + Math.floor(parcels / T.turnParcelsPerTick.value);
   return Math.max(T.turnMinTicks.value, mulDiv(raw, crewBp, BP));
 }
 
-export function boardMilliAt(level: number): number {
-  return grow(T.boardBaseMilliPerTick.value, T.boardGrowthBp.value, level);
+export function loadMilliAt(level: number): number {
+  return grow(T.loadBaseMilliPerTick.value, T.loadGrowthBp.value, level);
 }
 
-export function arrivalMilliAt(level: number): number {
-  return grow(T.arrivalBaseMilliPerTick.value, T.arrivalGrowthBp.value, level);
+export function orderMilliAt(level: number): number {
+  return grow(T.orderBaseMilliPerTick.value, T.orderGrowthBp.value, level);
 }
 
-/** Waiting room, in milli-passengers. */
-export function waitCapMilliAt(level: number): number {
-  return grow(T.terminalCapBase.value, T.terminalCapGrowthBp.value, level) * 1000;
+/** Staging space, in milli-orders. */
+export function stageCapMilliAt(level: number): number {
+  return grow(T.stagingCapBase.value, T.stagingCapGrowthBp.value, level) * 1000;
 }
 
-export function fareCentsAt(level: number): number {
-  return grow(T.fareBaseCents.value, T.fareGrowthBp.value, level);
+/** Milli-units put away a tick at this receiving level (RULES 3a), before extra hands. */
+export function receiveMilliAt(level: number): number {
+  return grow(T.receiveBaseMilliPerTick.value, T.receiveGrowthBp.value, level);
 }
 
-export function twistOf(state: Pick<AirportState, 'city'>): CityTwist {
-  return cityAt(state.city).twist;
+/** Shelf space, in milli-units. */
+export function shelfCapMilliAt(level: number): number {
+  return grow(T.shelfCapBase.value, T.shelfCapGrowthBp.value, level) * 1000;
 }
 
-/** Fare multiplier from the city and owned slots, in basis points (RULES 5.4, 10). */
-export function fareMulBp(state: Pick<AirportState, 'city' | 'slots'>): number {
-  const city = twistOf(state) === 'shortRunway' ? T.shortRunwayFareBp.value : BP;
-  return mulDiv(city, BP + state.slots * T.slotBonusBp.value, BP);
+/** Units on a PO: `poTicks` of put-away at this rate, rounded up to a whole unit. */
+export function poUnitsFor(receiveMilli: number): number {
+  return Math.max(1, Math.ceil((receiveMilli * T.poTicks.value) / 1000));
 }
 
-/** Sunvale's wave multiplier at this tick, basis points; 10000 elsewhere. */
-export function arrivalBpAt(twist: CityTwist, tick: number): number {
+export function payCentsAt(level: number): number {
+  return grow(T.payBaseCents.value, T.payGrowthBp.value, level);
+}
+
+export function twistOf(state: Pick<WarehouseState, 'site'>): SiteTwist {
+  return siteAt(state.site).twist;
+}
+
+/** Pay multiplier from the site and owned stars, in basis points (RULES 5.4, 10). */
+export function payMulBp(state: Pick<WarehouseState, 'site' | 'stars'>): number {
+  const site = twistOf(state) === 'narrowYard' ? T.narrowYardPayBp.value : BP;
+  return mulDiv(site, BP + state.stars * T.starBonusBp.value, BP);
+}
+
+/** Sunvale's sale-season multiplier at this tick, basis points; 10000 elsewhere. */
+export function orderBpAt(twist: SiteTwist, tick: number): number {
   if (twist !== 'waves') return BP;
-  return tick % T.wavePeriodTicks.value < T.waveTicks.value ? T.waveArrivalBp.value : T.offWaveArrivalBp.value;
+  return tick % T.wavePeriodTicks.value < T.waveTicks.value ? T.waveOrderBp.value : T.offWaveOrderBp.value;
 }
 
-/** The average of `arrivalBpAt` over a wave cycle (for the estimate). */
-export function meanArrivalBp(twist: CityTwist): number {
+/** The average of `orderBpAt` over a cycle (for the estimate). */
+export function meanOrderBp(twist: SiteTwist): number {
   if (twist !== 'waves') return BP;
   const period = T.wavePeriodTicks.value;
   const wave = T.waveTicks.value;
-  return Math.floor((T.waveArrivalBp.value * wave + T.offWaveArrivalBp.value * (period - wave)) / period);
+  return Math.floor((T.waveOrderBp.value * wave + T.offWaveOrderBp.value * (period - wave)) / period);
 }
 
-/** International departure checkpoints open at this route level (passport control, preclearance): each slows security (RULES 3). */
-export function slowCheckpointsAt(route: number): number {
-  return CHECKPOINTS.filter((c) => c.way === 'departures' && c.slowsSecurity && route >= c.fromRoute).length;
+/** Export stations open at this contract level (export paperwork, customs): each slows picking (RULES 3). */
+export function slowCheckpointsAt(contract: number): number {
+  return CHECKPOINTS.filter((c) => c.way === 'outbound' && c.slowsPicking && contract >= c.fromContract).length;
 }
 
-/** Security's speed multiplier at this route level, basis points: x`intlCheckBp` per international checkpoint. */
-export function securitySlowBpAt(route: number): number {
-  return grow(BP, T.intlCheckBp.value, slowCheckpointsAt(route));
+/** Picking's speed multiplier at this contract level, basis points: x`exportCheckBp` per export station. */
+export function pickingSlowBpAt(contract: number): number {
+  return grow(BP, T.exportCheckBp.value, slowCheckpointsAt(contract));
 }
 
-/** Milli-passengers security clears a tick (RULES 3), before any extra lane. */
-export function securityMilliAt(level: number, route: number): number {
-  return mulDiv(grow(T.securityBaseMilliPerTick.value, T.securityGrowthBp.value, level), securitySlowBpAt(route), BP);
+/** Milli-orders picked a tick (RULES 3), before any extra pickers. */
+export function pickingMilliAt(level: number, contract: number): number {
+  return mulDiv(grow(T.pickingBaseMilliPerTick.value, T.pickingGrowthBp.value, level), pickingSlowBpAt(contract), BP);
 }
 
-/** The longest line people will join, milli-passengers: `lineWaitTicks` of clearing. */
-export function lineCapMilliFor(securityMilli: number): number {
-  return securityMilli * T.lineWaitTicks.value;
+/** The longest backlog customers accept, milli-orders: `backlogWaitTicks` of picking. */
+export function backlogCapMilliFor(pickingMilli: number): number {
+  return pickingMilli * T.backlogWaitTicks.value;
 }
 
-const COST: Readonly<Record<UpgradeId, readonly [AirportTunableId, AirportTunableId]>> = {
-  gates: ['gatesCostBase', 'gatesCostGrowthBp'],
-  plane: ['planeCostBase', 'planeCostGrowthBp'],
-  boarding: ['boardCostBase', 'boardCostGrowthBp'],
-  terminal: ['terminalCostBase', 'terminalCostGrowthBp'],
-  security: ['securityCostBase', 'securityCostGrowthBp'],
-  route: ['routeCostBase', 'routeCostGrowthBp'],
+/** A rushed station's rate (RULES 6). */
+export function rushed(milli: number): number {
+  return mulDiv(milli, T.rushLoadBp.value, BP);
+}
+
+const COST: Readonly<Record<UpgradeId, readonly [WarehouseTunableId, WarehouseTunableId]>> = {
+  docks: ['docksCostBase', 'docksCostGrowthBp'],
+  truck: ['truckCostBase', 'truckCostGrowthBp'],
+  loading: ['loadCostBase', 'loadCostGrowthBp'],
+  sales: ['salesCostBase', 'salesCostGrowthBp'],
+  picking: ['pickingCostBase', 'pickingCostGrowthBp'],
+  receiving: ['receivingCostBase', 'receivingCostGrowthBp'],
+  contract: ['contractCostBase', 'contractCostGrowthBp'],
   crew: ['crewCostBase', 'crewCostGrowthBp'],
   night: ['nightCostBase', 'nightCostGrowthBp'],
 };
@@ -113,21 +134,23 @@ export function upgradeCost(id: UpgradeId, level: number): number {
   return grow(T[base].value, T[growth].value, level, cashCap());
 }
 
-/** Highest level this upgrade can reach in this city. */
-export function maxLevel(id: UpgradeId, state: Pick<AirportState, 'city'>): number {
-  const planeMax = twistOf(state) === 'shortRunway' ? Math.min(T.maxPlaneLevel.value, T.shortRunwayMaxPlane.value) : T.maxPlaneLevel.value;
+/** Highest level this upgrade can reach at this site. */
+export function maxLevel(id: UpgradeId, state: Pick<WarehouseState, 'site'>): number {
+  const truckMax = twistOf(state) === 'narrowYard' ? Math.min(T.maxTruckLevel.value, T.narrowYardMaxTruck.value) : T.maxTruckLevel.value;
   switch (id) {
-    case 'gates':
-      return T.maxGates.value - 1;
-    case 'plane':
-    case 'route':
-      return planeMax;
-    case 'boarding':
-      return T.maxBoardLevel.value;
-    case 'terminal':
-      return T.maxTerminalLevel.value;
-    case 'security':
-      return T.maxSecurityLevel.value;
+    case 'docks':
+      return T.maxDocks.value - 1;
+    case 'truck':
+    case 'contract':
+      return truckMax;
+    case 'loading':
+      return T.maxLoadLevel.value;
+    case 'sales':
+      return T.maxSalesLevel.value;
+    case 'picking':
+      return T.maxPickingLevel.value;
+    case 'receiving':
+      return T.maxReceivingLevel.value;
     case 'crew':
       return T.maxCrewLevel.value;
     case 'night':
@@ -136,12 +159,12 @@ export function maxLevel(id: UpgradeId, state: Pick<AirportState, 'city'>): numb
 }
 
 /** Why the next level cannot be bought, cash aside; null if it can. */
-export function lockReason(id: UpgradeId, state: Pick<AirportState, 'city' | 'levels'>): string | null {
+export function lockReason(id: UpgradeId, state: Pick<WarehouseState, 'site' | 'levels'>): string | null {
   if (state.levels[id] >= maxLevel(id, state)) {
-    const runway = (id === 'plane' || id === 'route') && twistOf(state) === 'shortRunway' && state.levels[id] < T.maxPlaneLevel.value;
-    return runway ? 'Short runway' : 'Maxed out';
+    const yard = (id === 'truck' || id === 'contract') && twistOf(state) === 'narrowYard' && state.levels[id] < T.maxTruckLevel.value;
+    return yard ? 'Narrow yard' : 'Maxed out';
   }
-  if (id === 'route' && state.levels.route >= state.levels.plane) return 'Needs bigger planes first';
+  if (id === 'contract' && state.levels.contract >= state.levels.truck) return 'Needs bigger trucks first';
   return null;
 }
 
@@ -151,70 +174,77 @@ export function offlineMinutesAt(level: number): number {
 }
 
 /** Offline cap in ticks: the most the host may catch up after an absence. */
-export function offlineCapTicks(state: Pick<AirportState, 'levels'>): number {
+export function offlineCapTicks(state: Pick<WarehouseState, 'levels'>): number {
   return Math.floor((offlineMinutesAt(state.levels.night) * 60_000) / T.tickMs.value);
 }
 
-/** Slots an airport that has earned this many cents is worth (RULES 10). */
-export function slotsFor(earned: number): number {
-  return isqrt(Math.floor(earned / T.slotUnitCents.value));
+/** Stars a warehouse that has earned this many cents is worth (RULES 10). */
+export function starsFor(earned: number): number {
+  return isqrt(Math.floor(earned / T.starUnitCents.value));
 }
 
-/** Cents earned at which an airport is worth `n` slots. */
-export function earnedForSlots(n: number): number {
-  return n * n * T.slotUnitCents.value;
+/** Cents earned at which a warehouse is worth `n` stars. */
+export function earnedForStars(n: number): number {
+  return n * n * T.starUnitCents.value;
 }
 
 /** The numbers a tick needs, computed once per level change (P4: catch-up stays cheap). */
 export interface Derived {
-  readonly gates: number;
-  readonly seats: number;
+  readonly docks: number;
+  readonly parcels: number;
   readonly departTicks: number;
-  readonly boardMilli: number;
-  readonly arrivalMilli: number;
-  readonly waitCapMilli: number;
-  /** Security per tick, international checkpoints included, extra lane not. */
-  readonly securityMilli: number;
-  readonly lineCapMilli: number;
-  readonly fareCents: number;
+  readonly loadMilli: number;
+  readonly orderMilli: number;
+  readonly stageCapMilli: number;
+  /** Picking per tick, export stations included, extra pickers not. */
+  readonly pickingMilli: number;
+  readonly backlogCapMilli: number;
+  readonly receiveMilli: number;
+  readonly shelfCapMilli: number;
+  readonly poUnits: number;
+  readonly payCents: number;
   readonly crewBp: number;
-  readonly fareMulBp: number;
-  readonly twist: CityTwist;
+  readonly payMulBp: number;
+  readonly twist: SiteTwist;
 }
 
-export function derive(state: Pick<AirportState, 'levels' | 'city' | 'slots'>): Derived {
+export function derive(state: Pick<WarehouseState, 'levels' | 'site' | 'stars'>): Derived {
   const { levels } = state;
-  const seats = seatsAt(levels.plane);
-  const securityMilli = securityMilliAt(levels.security, levels.route);
+  const parcels = parcelsAt(levels.truck);
+  const pickingMilli = pickingMilliAt(levels.picking, levels.contract);
+  const receiveMilli = receiveMilliAt(levels.receiving);
   return {
-    gates: 1 + levels.gates,
-    seats,
-    departTicks: departTicksFor(seats),
-    boardMilli: boardMilliAt(levels.boarding),
-    arrivalMilli: arrivalMilliAt(levels.terminal),
-    waitCapMilli: waitCapMilliAt(levels.terminal),
-    securityMilli,
-    lineCapMilli: lineCapMilliFor(securityMilli),
-    fareCents: fareCentsAt(levels.route),
+    docks: 1 + levels.docks,
+    parcels,
+    departTicks: departTicksFor(parcels),
+    loadMilli: loadMilliAt(levels.loading),
+    orderMilli: orderMilliAt(levels.sales),
+    stageCapMilli: stageCapMilliAt(levels.sales),
+    pickingMilli,
+    backlogCapMilli: backlogCapMilliFor(pickingMilli),
+    receiveMilli,
+    shelfCapMilli: shelfCapMilliAt(levels.receiving),
+    poUnits: poUnitsFor(receiveMilli),
+    payCents: payCentsAt(levels.contract),
     crewBp: crewBpAt(levels.crew),
-    fareMulBp: fareMulBp(state),
+    payMulBp: payMulBp(state),
     twist: twistOf(state),
   };
 }
 
-/** City twist in one line, numbers from the tunables. */
-export function twistText(twist: CityTwist): string {
+/** Site twist in one line, numbers from the tunables. */
+export function twistText(twist: SiteTwist): string {
   const pct = (bp: number): number => Math.round(Math.abs(bp - BP) / 100);
   switch (twist) {
     case 'none':
-      return 'A quiet regional field. No twist.';
-    case 'shortRunway':
-      return `Short runway: planes stop at size ${T.shortRunwayMaxPlane.value + 1}, but every fare is +${pct(T.shortRunwayFareBp.value)}%.`;
-    case 'hub':
-      return `Hub: every full flight sends ${Math.round(T.hubTransferBp.value / 100)}% of its seats back as connecting passengers.`;
+      return 'A small depot to learn the ropes. No twist.';
+    case 'narrowYard':
+      return `Narrow yard: trucks stop at size ${T.narrowYardMaxTruck.value + 1}, but every order pays +${pct(T.narrowYardPayBp.value)}%.`;
+    case 'crossdock':
+      return `Crossdock: every full truck brings back ${Math.round(T.crossdockBp.value / 100)}% of its load as cross-dock orders, already packed.`;
     case 'waves': {
       const secs = (ticks: number): number => Math.round((ticks * T.tickMs.value) / 1000);
-      return `Holiday waves: ${secs(T.waveTicks.value)} s of ${T.waveArrivalBp.value / BP}x arrivals every ${Math.round(secs(T.wavePeriodTicks.value) / 60)} minutes, quieter between.`;
+      return `Sale season: ${secs(T.waveTicks.value)} s of ${T.waveOrderBp.value / BP}x orders every ${Math.round(secs(T.wavePeriodTicks.value) / 60)} minutes, quieter between.`;
     }
   }
 }
@@ -222,8 +252,8 @@ export function twistText(twist: CityTwist): string {
 /** A boost's length and recharge in ticks (RULES 15). */
 export function boostTicks(id: BoostId): { readonly length: number; readonly recharge: number } {
   switch (id) {
-    case 'rushHour':
-      return { length: T.rushHourTicks.value, recharge: T.rushHourRechargeTicks.value };
+    case 'flashSale':
+      return { length: T.flashSaleTicks.value, recharge: T.flashSaleRechargeTicks.value };
     case 'allHands':
       return { length: T.allHandsTicks.value, recharge: T.allHandsRechargeTicks.value };
     case 'surge':
@@ -232,14 +262,14 @@ export function boostTicks(id: BoostId): { readonly length: number; readonly rec
 }
 
 /** What opens a boost, short enough for its button, or null once it is open. */
-export function boostLock(id: BoostId, state: Pick<AirportState, 'levels'>): string | null {
-  if (id === 'allHands' && 1 + state.levels.gates < T.allHandsMinGates.value) return `Needs ${T.allHandsMinGates.value} gates`;
-  if (id === 'surge' && state.levels.route < T.surgeMinRoute.value) return `Needs ${nameAt(ROUTES, T.surgeMinRoute.value)}`;
+export function boostLock(id: BoostId, state: Pick<WarehouseState, 'levels'>): string | null {
+  if (id === 'allHands' && 1 + state.levels.docks < T.allHandsMinDocks.value) return `Needs ${T.allHandsMinDocks.value} docks`;
+  if (id === 'surge' && state.levels.contract < T.surgeMinContract.value) return `Needs ${nameAt(CONTRACTS, T.surgeMinContract.value)}`;
   return null;
 }
 
 /** Why a boost cannot be used now, or null if a tap would use it. */
-export function boostProblem(id: BoostId, state: Pick<AirportState, 'levels' | 'boosts'>): string | null {
+export function boostProblem(id: BoostId, state: Pick<WarehouseState, 'levels' | 'boosts'>): string | null {
   const locked = boostLock(id, state);
   if (locked !== null) return locked;
   const clock = state.boosts[id];
@@ -252,11 +282,11 @@ export function boostProblem(id: BoostId, state: Pick<AirportState, 'levels' | '
 export function boostEffect(id: BoostId): string {
   const secs = Math.round((boostTicks(id).length * T.tickMs.value) / 1000);
   switch (id) {
-    case 'rushHour':
-      return `${T.rushHourArrivalBp.value / BP}x passengers for ${secs} s`;
+    case 'flashSale':
+      return `${T.flashSaleOrderBp.value / BP}x orders for ${secs} s`;
     case 'allHands':
-      return `Every gate rushed for ${secs} s`;
+      return `Everyone rushed for ${secs} s`;
     case 'surge':
-      return `${T.surgeFareBp.value / BP}x fares for ${secs} s`;
+      return `${T.surgePayBp.value / BP}x pay for ${secs} s`;
   }
 }

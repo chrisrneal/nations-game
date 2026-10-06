@@ -12,13 +12,13 @@ that the interface imports only `platform/index.ts` from here.
 Files:
 - `index.ts` - the only file the interface may import: `createHost()`, the
   install prompt and types.
-- `engine.ts` - `AirportEngine`: the sim session and the wall clock. Every tick
+- `engine.ts` - `WarehouseEngine`: the sim session and the wall clock. Every tick
   (250 ms) it steps whatever ticks the clock owes, so a throttled timer or a
   sleeping phone catches up exactly (P4). No Worker code, so it is tested in
   Node with `testClock.ts`.
 - `clock.ts` - ticks owed since an anchor.
-- `worker.ts` - exposes one `AirportEngine` over Comlink.
-- `localHost.ts` - `LocalHost`, the `AirportHost` the interface uses: start or
+- `worker.ts` - exposes one `WarehouseEngine` over Comlink.
+- `localHost.ts` - `LocalHost`, the `WarehouseHost` the interface uses: start or
   continue, intents, export and import files, autosave every 10 s and on hide.
-- `saves.ts` - save slots in IndexedDB (database `airport`; memory store for tests).
+- `saves.ts` - save stars in IndexedDB (database `warehouse`; memory store for tests).
 - `install.ts` - the install prompt (`beforeinstallprompt`, iOS instructions).

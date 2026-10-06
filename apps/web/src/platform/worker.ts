@@ -1,5 +1,5 @@
 import { expose } from 'comlink';
-import { AirportEngine } from './engine.ts';
+import { WarehouseEngine } from './engine.ts';
 
 /** The Web Worker: the sim and the clock run here, off the interface thread. */
-expose(new AirportEngine());
+expose(new WarehouseEngine());

@@ -1,25 +1,25 @@
 /**
  * The platform's public surface: the only module under platform/ the
  * interface may import (checked by apps/web/src/boundary.test.ts). The
- * interface gets an AirportHost, the install prompt and types; it never sees
+ * interface gets an WarehouseHost, the install prompt and types; it never sees
  * the sim, the Worker or storage.
  */
 import { proxy, wrap } from 'comlink';
-import type { AirportEngine } from './engine.ts';
+import type { WarehouseEngine } from './engine.ts';
 import { createInstallPrompt, type InstallPrompt } from './install.ts';
-import { LocalHost, type AirportHost } from './localHost.ts';
+import { LocalHost, type WarehouseHost } from './localHost.ts';
 import { IndexedDbSaveStore } from './saves.ts';
 
-export type { AirportUpdate, AwayRecap } from './engine.ts';
+export type { WarehouseUpdate, AwayRecap } from './engine.ts';
 export type { InstallPrompt, InstallState } from './install.ts';
 export { createFeedback, type Cue, type Feedback, type Prefs } from './feedback.ts';
-export { AUTOSAVE_SLOT, FILE_FORMAT, type AirportHost } from './localHost.ts';
+export { AUTOSAVE_SLOT, FILE_FORMAT, type WarehouseHost } from './localHost.ts';
 
 /** Starts the sim in a Web Worker and returns the Host for the interface. */
-export function createHost(): AirportHost {
+export function createHost(): WarehouseHost {
   const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
   const host = new LocalHost({
-    engine: wrap<AirportEngine>(worker),
+    engine: wrap<WarehouseEngine>(worker),
     store: new IndexedDbSaveStore(),
     wrapListener: (listener) => proxy(listener),
   });

@@ -1,6 +1,6 @@
 /**
  * Haptics and sound (slice 7). Device APIs live here, in the platform, so the
- * interface only says what happened ("a full flight left") and never touches
+ * interface only says what happened ("a full shipment left") and never touches
  * `navigator.vibrate` or an AudioContext itself.
  *
  * - Haptics are on by default where the device supports them (Android
@@ -15,7 +15,7 @@ export interface Prefs {
 }
 
 export const DEFAULT_PREFS: Prefs = { sound: false, haptics: true };
-const KEY = 'airport-prefs';
+const KEY = 'warehouse-prefs';
 
 export function loadPrefs(storage: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage): Prefs {
   try {
@@ -36,7 +36,7 @@ export function savePrefs(prefs: Prefs, storage: Pick<Storage, 'setItem'> | unde
   }
 }
 
-export type Cue = 'tap' | 'depart' | 'full' | 'charter' | 'buy' | 'unlock' | 'collect' | 'boost';
+export type Cue = 'tap' | 'depart' | 'full' | 'express' | 'buy' | 'unlock' | 'collect' | 'boost';
 
 export interface Feedback {
   readonly prefs: Prefs;
@@ -49,7 +49,7 @@ export interface Feedback {
 const VIBRATE: Readonly<Partial<Record<Cue, number | number[]>>> = {
   tap: 8,
   buy: 15,
-  charter: [15, 40, 15],
+  express: [15, 40, 15],
   unlock: [20, 50, 30],
   collect: [10, 30, 10, 30, 25],
   boost: [30, 30, 60],
@@ -63,7 +63,7 @@ const NOTES: Readonly<Partial<Record<Cue, readonly (readonly [number, number, nu
     [660, 0, 0.07],
     [990, 0.06, 0.1],
   ],
-  charter: [
+  express: [
     [784, 0, 0.07],
     [988, 0.07, 0.07],
     [1319, 0.14, 0.14],
@@ -88,7 +88,7 @@ const NOTES: Readonly<Partial<Record<Cue, readonly (readonly [number, number, nu
   ],
 };
 
-/** Departures can come several a second with eight gates; at most this many sounds a second. */
+/** Departures can come several a second with eight docks; at most this many sounds a second. */
 const MAX_SOUNDS_PER_SEC = 5;
 
 export function createFeedback(initial: Prefs = loadPrefs()): Feedback {

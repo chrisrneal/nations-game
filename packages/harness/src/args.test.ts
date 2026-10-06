@@ -7,10 +7,10 @@ describe('harness command line', () => {
   });
 
   it('reads the command and its flags', () => {
-    const parsed = parseArgs(['pacing', '--seed', '4', '--minutes', '60', '--out', 'x', '--set', 'rushBoardBp=30000']);
+    const parsed = parseArgs(['pacing', '--seed', '4', '--minutes', '60', '--out', 'x', '--set', 'rushLoadBp=30000']);
     expect(parsed.command).toBe('pacing');
     expect(parsed.numbers).toEqual({ seed: 4, minutes: 60 });
-    expect(parsed.strings).toEqual({ out: 'x', set: 'rushBoardBp=30000' });
+    expect(parsed.strings).toEqual({ out: 'x', set: 'rushLoadBp=30000' });
   });
 
   it('accepts --suite as another way to name the command', () => {
@@ -19,8 +19,8 @@ describe('harness command line', () => {
 
   it('rejects an unknown flag, command, suite or stray word with a clear message', () => {
     expect(() => parseArgs(['pacing', '--sed', '1'])).toThrow(/Unknown flag --sed for "pacing".*--seed/);
-    expect(() => parseArgs(['gate1'])).toThrow(/Unknown harness command "gate1"/);
-    expect(() => parseArgs(['--suite', 'gate1'])).toThrow(/Unknown suite "gate1"/);
+    expect(() => parseArgs(['dock1'])).toThrow(/Unknown harness command "dock1"/);
+    expect(() => parseArgs(['--suite', 'dock1'])).toThrow(/Unknown suite "dock1"/);
     expect(() => parseArgs(['pacing', '200'])).toThrow(/Unexpected argument "200"/);
     expect(() => parseArgs(['bench', '--suite', 'pacing'])).toThrow(/both "bench" and --suite pacing/);
   });

@@ -1,22 +1,41 @@
 # Progress
-Current state: **the pivot is complete** (decision records P1-P10). The app is
-the idle airport game: all eight slices are merged. Since then: the passenger
-flow, boosts (P11), the security line as a real queue at the centre of the
-screen (P12), and the gates as a panel of stands whose seats fill with people.
-The Nations progress log, gate checklists and verdicts are at commit `67d1d92`
-(docs/PROGRESS.md there).
+Current state: **Warehouse Idle** (decision records W1, W2). On 2026-10-06 the
+airport game became a warehouse game: its engine and rules renamed, plus
+stock, purchase orders and a dashboard. The airport is at commit `5f78bce`;
+the entries below that date describe it in airport words (gates, planes,
+passengers, security). The Nations log is at commit `67d1d92`.
 
-## Slices (docs/ROADMAP.md)
-- [x] 1. Pivot docs
-- [x] 2. Airport sim
-- [x] 3. Airport screen and upgrade sheet; Nations interface deleted
-- [x] 4. Offline earnings and the away recap
-- [x] 5. Prestige and the second city
-- [x] 6. Pacing pass
-- [x] 7. Juice and polish
-- [x] 8. Remove the remaining Nations code; README
+## Slices
+- [x] Airport pivot slices 1-8 (docs/ROADMAP.md, History)
+- [x] Warehouse pivot (W1), one pull request (W2)
 
 ## Session log
+
+### 2026-10-06 - The warehouse (architect, all lanes; owner request, W1)
+**What changed.** The game is now Warehouse Idle. Orders come in and wait in
+the backlog (the maze in the middle of the screen); pickers take each one's
+unit off the shelves into packing; trucks at the docks fill box by box and pay
+when they leave. New: purchase orders arrive at the receiving dock along the
+top of the screen and are put away onto a live shelves bar, and empty shelves
+stop the pickers (RULES 3a), with a ninth upgrade (Receiving bay, $20), a tap
+on receiving for extra hands, and a new bottleneck, "The shelves are running
+empty". Under the cash, a dashboard row: shipped, orders a minute, backlog,
+stock; the one holding you back turns orange. Everything else is the airport
+renamed with the same numbers (docks, trucks, pickers, packing, contracts,
+stars, sites: Millbrook Depot, Port Calder Docks, Highmoor Crossdock, Sunvale
+Outlet; boosts Flash sale, All hands, Peak rates). Packages are
+`@warehouse/*`; saves start again at version 1 in a new database, and an
+airport save file is refused with a message. docs/RULES.md is rewritten; W1
+and W2 record the switch.
+**Tuning.** Receiving at 2.4 a second (level with picking): every RULES 11
+target holds on seeds 1-5, first sale at 35.3-35.6 minutes with 3 stars,
+tapping 2.1-2.7x idle. Report: docs/balance/warehouse-pacing.md.
+**Checks.** `npm test` and `npm run check` pass. Phone check 60/60 at 360 x
+740 (55.1-58.7 fps with the CPU slowed 4x across two runs).
+**How to see it.** Open the app: a new warehouse opens at Millbrook Depot with
+PO #1 at the receiving dock and the shelves half full. Tap the receiving lane,
+the picking maze or a dock to rush it.
+**What is left.** Play it on a real phone; see docs/GAPS.md (W1 entries).
 
 ### 2026-10-03 - The airport fills a big phone (lane U; owner request)
 **What changed.** On a Pixel 10 Pro XL (412 x 915) the airport sat in the top

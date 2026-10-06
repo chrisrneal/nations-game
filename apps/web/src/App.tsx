@@ -1,33 +1,33 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from 'react';
-import type { AirportView, BoostId, UpgradeId } from '@airport/contracts';
-import type { AirportHost, Feedback, InstallPrompt } from './platform/index.ts';
+import type { WarehouseView, BoostId, UpgradeId } from '@warehouse/contracts';
+import type { WarehouseHost, Feedback, InstallPrompt } from './platform/index.ts';
 import { BottomBar } from './ui/BottomBar.tsx';
-import { EmptyStand, GateCard, NextGateCard, Pier, STANDS_PER_ROW } from './ui/GateCard.tsx';
+import { EmptyStand, DockCard, NextDockCard, Pier, STANDS_PER_ROW } from './ui/DockCard.tsx';
 import { InstallBanner } from './ui/Install.tsx';
 import { Recap } from './ui/Recap.tsx';
-import { CityIntro } from './ui/CityIntro.tsx';
-import { Concourse } from './ui/Concourse.tsx';
+import { SiteIntro } from './ui/SiteIntro.tsx';
+import { Floor } from './ui/Floor.tsx';
 import { SellSheet } from './ui/SellSheet.tsx';
 import { SettingsSheet } from './ui/SettingsSheet.tsx';
-import { AirportStore } from './ui/store.ts';
+import { WarehouseStore } from './ui/store.ts';
 import { TopBar } from './ui/TopBar.tsx';
 import { UpgradeSheet } from './ui/UpgradeSheet.tsx';
 
-/** Names of the checkpoints on the passenger journey (RULES 14). */
-function checkpointNames(view: AirportView): Set<string> {
-  return new Set([...view.journey.departures, ...view.journey.arrivals].map((c) => c.name));
+/** Names of the stations on the floor (RULES 14). */
+function checkpointNames(view: WarehouseView): Set<string> {
+  return new Set([...view.journey.outbound, ...view.journey.inbound].map((c) => c.name));
 }
 
-/** A toast for the purchases that open something new: a gate, a plane, a route (and any checkpoint it adds). */
-function unlockText(upgrade: UpgradeId, level: number, view: AirportView, before: ReadonlySet<string>): string | null {
+/** A toast for the purchases that open something new: a dock, a truck, a contract (and any station it adds). */
+function unlockText(upgrade: UpgradeId, level: number, view: WarehouseView, before: ReadonlySet<string>): string | null {
   switch (upgrade) {
-    case 'gates':
-      return `Gate ${level + 1} is open`;
-    case 'plane':
-      return `New plane: ${view.planeModel}`;
-    case 'route': {
+    case 'docks':
+      return `Dock ${level + 1} is open`;
+    case 'truck':
+      return `New truck: ${view.truckModel}`;
+    case 'contract': {
       const opened = [...checkpointNames(view)].filter((name) => !before.has(name));
-      return opened.length === 0 ? `New route: ${view.route}` : `New route: ${view.route}. ${opened.join(' and ')} open.`;
+      return opened.length === 0 ? `New contract: ${view.contract}` : `New contract: ${view.contract}. ${opened.join(' and ')} needed.`;
     }
     default:
       return null;
@@ -36,10 +36,10 @@ function unlockText(upgrade: UpgradeId, level: number, view: AirportView, before
 
 type SheetName = 'upgrades' | 'settings' | 'sell' | null;
 
-/** The airport screen (docs/ROADMAP.md, phone UX): money on top, the passenger flow (the security line at its heart) and the gates in the middle, actions under the thumb. */
-export function App(props: { host: AirportHost; install?: InstallPrompt; feedback?: Feedback }): ReactElement {
+/** The warehouse screen (docs/ROADMAP.md, phone UX): money and the dashboard on top, the floor (receiving, the picking backlog at its heart, packing) and the docks in the middle, actions under the thumb. */
+export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedback?: Feedback }): ReactElement {
   const { host, install, feedback } = props;
-  const store = useMemo(() => new AirportStore(), []);
+  const store = useMemo(() => new WarehouseStore(), []);
   const [sheet, setSheet] = useState<SheetName>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [intro, setIntro] = useState(false);
@@ -54,7 +54,7 @@ export function App(props: { host: AirportHost; install?: InstallPrompt; feedbac
             setIntro(true);
             feedback?.cue('unlock');
           } else if (e.type === 'departed') {
-            feedback?.cue(e.payload.charter ? 'charter' : e.payload.full ? 'full' : 'depart');
+            feedback?.cue(e.payload.express ? 'express' : e.payload.full ? 'full' : 'depart');
           } else if (e.type === 'boosted') {
             const b = update.view.boosts.find((x) => x.id === e.payload.boost);
             feedback?.cue('boost');
@@ -81,26 +81,30 @@ export function App(props: { host: AirportHost; install?: InstallPrompt; feedbac
   const structure = useSyncExternalStore(store.subscribeStructure, store.getStructure);
   const view = structure?.view ?? null;
   const tap = useCallback(
-    (gate: number) => {
+    (dock: number) => {
       feedback?.cue('tap');
-      void host.tap(gate);
+      void host.tap(dock);
     },
     [host, feedback],
   );
-  const tapSecurity = useCallback(() => {
+  const tapPick = useCallback(() => {
     feedback?.cue('tap');
-    void host.submit({ type: 'tapSecurity', payload: {} });
+    void host.submit({ type: 'tapPick', payload: {} });
+  }, [host, feedback]);
+  const tapReceive = useCallback(() => {
+    feedback?.cue('tap');
+    void host.submit({ type: 'tapReceive', payload: {} });
   }, [host, feedback]);
   const buy = useCallback((upgrade: UpgradeId) => void host.buy(upgrade), [host]);
   const boost = useCallback((id: BoostId) => void host.boost(id), [host]);
   const close = useCallback(() => setSheet(null), []);
 
-  const nextGate = view?.upgrades.find((u) => u.id === 'gates');
+  const nextDock = view?.upgrades.find((u) => u.id === 'docks');
 
   if (view === null) {
     return (
       <div className="app loading" aria-busy="true">
-        <p>Opening the airport…</p>
+        <p>Opening the warehouse…</p>
       </div>
     );
   }
@@ -109,30 +113,30 @@ export function App(props: { host: AirportHost; install?: InstallPrompt; feedbac
     <div className="app">
       <TopBar view={view} store={store} onSettings={() => setSheet('settings')} />
       <InstallBanner install={install} onToast={setToast} />
-      <Concourse journey={view.journey} securityLevel={view.upgrades.find((u) => u.id === 'security')?.level ?? 0} tickMs={view.tickMs} store={store} onTapSecurity={tapSecurity}>
-        <Pier model={view.planeModel}>
-          {view.gates.map((g) => (
-            <GateCard
+      <Floor journey={view.journey} pickingLevel={view.upgrades.find((u) => u.id === 'picking')?.level ?? 0} tickMs={view.tickMs} store={store} onTapPick={tapPick} onTapReceive={tapReceive}>
+        <Pier model={view.truckModel}>
+          {view.docks.map((g) => (
+            <DockCard
               key={g.index}
               index={g.index}
-              plane={g.plane}
+              truck={g.truck}
               turning={g.turn > 0}
-              charter={g.charter}
-              seats={g.seats}
+              express={g.express}
+              parcels={g.parcels}
               model={g.model}
               tickMs={view.tickMs}
               store={store}
               onTap={tap}
             />
           ))}
-          {nextGate !== undefined && nextGate.cost !== null && (
-            <NextGateCard number={view.gates.length + 1} cost={nextGate.cost} affordable={nextGate.affordable} onOpen={() => setSheet('upgrades')} />
+          {nextDock !== undefined && nextDock.cost !== null && (
+            <NextDockCard number={view.docks.length + 1} cost={nextDock.cost} affordable={nextDock.affordable} onOpen={() => setSheet('upgrades')} />
           )}
-          {nextGate !== undefined &&
-            nextGate.cost !== null &&
-            Array.from({ length: Math.max(0, 2 * STANDS_PER_ROW - view.gates.length - 1) }, (_, i) => <EmptyStand key={i} number={view.gates.length + 2 + i} />)}
+          {nextDock !== undefined &&
+            nextDock.cost !== null &&
+            Array.from({ length: Math.max(0, 2 * STANDS_PER_ROW - view.docks.length - 1) }, (_, i) => <EmptyStand key={i} number={view.docks.length + 2 + i} />)}
         </Pier>
-      </Concourse>
+      </Floor>
       <BottomBar view={view} store={store} onUpgrades={() => setSheet('upgrades')} onSell={() => setSheet('sell')} onBoost={boost} />
       {sheet === 'upgrades' && <UpgradeSheet view={view} store={store} onBuy={buy} onSell={() => setSheet('sell')} onClose={close} />}
       {sheet === 'sell' && (
@@ -146,7 +150,7 @@ export function App(props: { host: AirportHost; install?: InstallPrompt; feedbac
           onClose={close}
         />
       )}
-      {intro && sheet === null && <CityIntro view={view} onClose={() => setIntro(false)} />}
+      {intro && sheet === null && <SiteIntro view={view} onClose={() => setIntro(false)} />}
       {sheet === 'settings' && <SettingsSheet view={view} host={host} feedback={feedback} onClose={close} onToast={setToast} />}
       {structure !== null && structure.recap !== null && sheet === null && <Recap
           recap={structure.recap}
