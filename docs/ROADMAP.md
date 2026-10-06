@@ -1,35 +1,40 @@
 # Roadmap
 
 ## The game
-Mobile-first installable PWA idle game. You run an airport: passengers arrive in
-the terminal, board planes at your gates, and each plane pays its fares when it
-leaves full or on its timer. Passengers queue at security on the way in, and
-that line is the centre of the screen. Cash buys upgrades, each a trade-off that moves the
-bottleneck. The airport keeps running while the app is closed, up to a cap. Sell
-the airport for slots that permanently boost the next one, in a new city with a
-twist. Single player, offline-first, no backend. Rules: docs/RULES.md. Why it
-replaced Nations: decision record P1.
+Mobile-first installable PWA idle game. You run a warehouse: customer orders
+come in and queue in a backlog, pickers take each one's unit off the shelves,
+packed orders are loaded onto trucks at your docks, and each truck pays when
+it leaves full or on its timer. Purchase orders arrive at the receiving dock
+and keep the shelves stocked. The backlog is the centre of the screen, and a
+dashboard row shows shipped, orders a minute, backlog and stock. Cash buys
+upgrades, each a trade-off that moves the bottleneck. The warehouse keeps
+running while the app is closed, up to a cap. Sell the warehouse for stars
+that permanently boost the next one, at a new site with a twist. Single
+player, offline-first, no backend. Rules: docs/RULES.md. Why it replaced the
+airport game: decision record W1 (and P1 for Nations before that).
 
 ## Design pillars
-1. **Idle is complete, active is faster.** Tapping a gate rushes it; active play
-   earns about 2-3x idling and is never required.
+1. **Idle is complete, active is faster.** Tapping a dock, picking or
+   receiving rushes it; active play earns about 2-3x idling and is never
+   required.
 2. **Every upgrade is a trade-off.** Each fixes one bottleneck and moves the
    pressure; the screen names the bottleneck so the choice is legible.
 3. **Every session is worth it.** A 30-second check-in collects and buys
    something; a 5-minute session plans the next unlock.
 4. **Steady novelty.** Something new to aim for at least every 5 minutes; the
-   first sale at 30-60 minutes; each city changes the best strategy.
-5. **Exact and offline.** Same seed and commands give the same airport; catching
-   up offline equals stepping through it.
+   first sale at 30-60 minutes; each site changes the best strategy.
+5. **Exact and offline.** Same seed and commands give the same warehouse;
+   catching up offline equals stepping through it.
 
-## Architecture (kept from Nations, decision record P1)
+## Architecture (kept from Nations and the airport, decision records P1 and W1)
 1. Pure sim core: `step(state, commands) -> state + events` (S1, D6).
-2. Commands are the only mutation: `tap`, `buy`, `sell` (S2, P5).
+2. Commands are the only mutation: `tap`, `tapPick`, `tapReceive`, `buy`,
+   `boost`, `sell` (S2, P5).
 3. Host interface: the UI submits and subscribes; LocalHost runs the sim in a Web
    Worker (S3).
 4. The host owns the clock; catch-up and offline earnings are "run N ticks fast"
    (S4, P4).
-5. Determinism: seeded RNG in State, integer maths (cents, milli-passengers),
+5. Determinism: seeded RNG in State, integer maths (cents, milli-units),
    state-hash test in Node and Chromium on every build (S5, P3).
 6. The UI reads a View (S6, P5).
 7. Saves are snapshot plus command log, versioned with migrations, in IndexedDB,
@@ -40,44 +45,34 @@ vite-plugin-pwa, Vitest + fast-check, playwright-core for the phone check.
 ## Phone UX budget (checked by apps/web/e2e/phone-check.ts)
 Portrait and one-handed; primary actions in the bottom third; touch targets at
 least 44 px; no horizontal scroll at 360 px; safe areas respected. The main
-screen is the airport: gates with planes and live fill bars, cash and income per
-second at the top, upgrades in a bottom sheet. 60 fps with the CPU slowed 4x:
-animation by CSS and direct DOM writes, not React re-renders (P7). Number
-formatting for big values. Satisfying feedback: fill bars, departures, cash pops.
+screen is the warehouse: cash, income per second and the dashboard at the top,
+the floor (receiving, the picking backlog, packing) and the docks with trucks
+filling in the middle, boosts and upgrades in the thumb zone. 60 fps with the
+CPU slowed 4x: animation by canvas, CSS and direct DOM writes, not React
+re-renders (P7). Number formatting for big values. Satisfying feedback: loads
+filling, departures, cash pops.
 
 ## Balance harness
 `npm run harness -- pacing` runs a greedy bot (taps, buys the best value) and an
 idle bot (never taps, checks in every 15 minutes) and reports the time to each
-milestone against the targets in RULES 11. Invariants every build: cash and
-passengers never negative, determinism across engines, catch-up equals
+milestone against the targets in RULES 11. Invariants every build: cash,
+orders and stock never negative, determinism across engines, catch-up equals
 stepping, save-reload-continue.
 
-## Slices (one pull request each, game playable after every merge)
-Status: all eight merged on 2026-10-01 (PRs #41-#48); see docs/PROGRESS.md.
-1. **Pivot docs.** Decision records, RULES.md with formulas and tunables, this
-   roadmap, CLAUDE.md.
-2. **Airport sim.** Gates, planes, passengers, boarding, departures, cash,
-   upgrades, tests first with property tests (cash never negative, determinism,
-   catch-up equals stepping). Built beside the Nations sim (P8).
-3. **Airport screen.** The airport and the upgrade sheet on the phone; the Nations
-   interface deleted.
-4. **Offline earnings** with the cap and the three-line away recap.
-5. **Prestige.** Selling for slots, and the cities with their twists.
-6. **Pacing pass.** Greedy and idle harness bots; tune to RULES 11.
-7. **Juice.** Animations, haptics where supported, sound off by default.
-8. **Cleanup.** Remove the remaining Nations code and data, rename the packages,
-   update the README.
+## History
+- **Nations** (to 2026-09-30): commit `67d1d92`.
+- **Airport Idle** (2026-10-01 to 2026-10-05): eight pivot slices (PRs
+  #41-#48), then boosts (P11), the security line (P12) and the gates as stands.
+  Commit `5f78bce`.
+- **Warehouse Idle** (2026-10-06): the airport's engine and rules renamed, plus
+  stock and purchase orders and the dashboard (W1), in one pull request (W2).
 
-## Done when
-All eight slices are merged with CI green; the phone check passes at 360 px; the
-pacing report meets RULES 11; the app installs and plays offline.
-
-## After the pivot
-- **Boosts** (P11, owner request, 2026-10-02): three free, timed boosts on
-  recharge clocks (RULES 15).
-- **The security line** (P12, owner request, 2026-10-02): a real queue with
-  its own upgrade and tap, shown as the centre of the screen (RULES 3, 14);
-  a testing time skip in Settings.
+## Next (not planned until the owner picks)
+- Play it on a real phone and say what feels slow or confusing (docs/GAPS.md
+  lists what only a person can check).
+- Ideas that fit the warehouse: worker characters you hire by name, order
+  types that need different stock, a weekly sales event. Each needs a decision
+  record.
 
 ## Later (not planned)
-Achievements, more cities, cloud save. Any of these needs a decision record.
+Achievements, more sites, cloud save. Any of these needs a decision record.

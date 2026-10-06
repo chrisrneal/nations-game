@@ -1,7 +1,10 @@
 # Gaps
 Each entry: slice or prompt, what is missing or was shortcut, owning lane.
 Nations-era gaps retired with the pivot (decision record P1); they are at commit
-`67d1d92` in docs/GAPS.md.
+`67d1d92` in docs/GAPS.md. Entries before W1 were written for the airport game
+(2026-10-06: gates are now docks, planes trucks, passengers orders, security
+picking, the lounge packing); those still open apply to the warehouse under
+the new names.
 
 - Pivot 1, ~~Nations docs still in the tree until slice 8~~ Closed by slice 8. Lane D.
 - Pivot 2, ~~the airport sim lives in packages/sim/src/airport beside the Nations sim~~ Closed by slice 8 (P10). Lane S.
@@ -31,3 +34,9 @@ Nations-era gaps retired with the pivot (decision record P1); they are at commit
 - Gates as stands, the plane's model shows once in the panel header (the newest plane); a gate still flying an older, smaller plane shows its own model only in its screen-reader label. Lane U.
 - Big-phone layout, on a tall phone a parked plane's fuselage grows with its stand but its seats stay one 3 px square each, so a small or midsize plane fills only the front of it. Scaling the seats to the stand would make sizes comparable only within one phone. Lane U.
 - Big-phone layout, the stands past the next gate show as faint outlines up to eight (two rows); past eight gates the third row appears only as gates open. Lane U.
+- W1, the dashboard row (about 45 px) and the taller floor (the receiving lane) squeeze the docks on a 740 px phone while the install banner shows: only the top of the first row of bays is visible until the banner is closed or the app installed. Without the banner both rows fit. Lane U.
+- W1, a PO is 20 s of put-away, so late in a warehouse a single PO holds thousands of units ("PO #6 · 301/2.7K"). Fine for the numbers; a player may expect POs to come more often. Lanes D, S.
+- W1, receiving and picking start level (2.4 a second each), so the first time sales outgrow them the screen says "The shelves are running empty" before it says picking: the tie goes to stock. Lane S.
+- W1, counter orders (a rushed dock loading when packing is empty) need no stock and no picking, kept from the airport's walk-ups so a tap always helps. Lanes D, S.
+- W1, airport saves are not converted: the owner's airport is gone from the phone once this ships (W1). Owner.
+- W1, the phone check's 60 fps run read 58.7 and 55.1 fps in two runs on this session's machine (budget 55), the second with one 233 ms frame. Recheck on a real phone. Lane U.
