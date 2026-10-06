@@ -11,8 +11,8 @@ receiving bay, better contracts and a quicker yard crew; each upgrade fixes one
 bottleneck and the screen tells you which one you have. Close the app and the
 warehouse keeps earning (up to a cap the night shift raises); open it again
 for a three-line recap. When the warehouse is worth it, sell it for **stars**
-that raise every order's pay forever and start again at a new site with a
-twist: a narrow yard, a crossdock, sale seasons.
+that raise every order's pay forever and unlock permanent perks, and start
+again at a new site with a twist: a narrow yard, a crossdock, sale seasons.
 
 It works offline, installs like an app, and needs no account or server.
 
@@ -115,6 +115,10 @@ offline or install from there).
   bottleneck, and the sheet marks the upgrades that fix it.
 - **Sell** appears once the warehouse is worth a star (about half an hour of
   active play for the first sale worth making).
+- **Stars** (the ★ button by the site's name): how many you own and the five
+  perks they unlock, never spent: Head start (1 star, open with $250), Second
+  dock (3), Quick charge (6, boosts recharge faster), Express lane (10, twice
+  the express trucks) and Long shift (15, a longer offline cap).
 - **Settings** (the gear): lifetime numbers, sound (off at first), vibration,
   save files, start over, and a testing time skip (+5 min, +1 hour, +8 hours)
   that runs the warehouse ahead at once.

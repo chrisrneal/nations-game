@@ -1,7 +1,7 @@
 /**
  * Screenshots for layout work: a Pixel 10 Pro XL (412 x 915 CSS px, DPR 3.25)
- * and the 360 x 740 budget phone, each with a new warehouse and a busy 8-dock
- * warehouse. Run `npm run build` first, then `npx tsx e2e/shots.ts [outDir]`.
+ * and the 360 x 740 budget phone, each with a new warehouse, a busy 8-dock
+ * warehouse, and its stars sheet (RULES 10a). Run `npm run build` first, then `npx tsx e2e/shots.ts [outDir]`.
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -59,6 +59,9 @@ async function main(): Promise<void> {
       await page.screenshot({ path: join(out, `${phone.name}-busy.png`) });
       const scroll = await page.evaluate(() => [document.documentElement.scrollHeight, window.innerHeight]);
       console.log(phone.name, 'busy scrollHeight/innerHeight', scroll.join('/'));
+      await page.getByTestId('open-stars').tap();
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: join(out, `${phone.name}-stars.png`) });
       await context.close();
       rmSync(profile, { recursive: true, force: true });
     }

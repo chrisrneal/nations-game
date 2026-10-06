@@ -13,7 +13,9 @@
  * a CPU slowed 4x inside the 2 s budget, runs only the 2-hour offline cap, and
  * shows a three-line recap that one tap collects.
  * Slice 5: a warehouse worth stars sells from the bottom bar in two taps and
- * opens Port Calder with its twist, the stars and one dock.
+ * opens Port Calder with its twist and the stars.
+ * Star perks (RULES 10a): the stars button opens the perks, marking the two the
+ * sale unlocks; the sell sheet names them; Port Calder opens with two docks.
  * The floor: a new warehouse shows the inbound dock, quality check, the
  * storage racks, the order desk, picking and the staging lanes with goods
  * moving through them, and the dashboard;
@@ -328,16 +330,24 @@ async function main(): Promise<void> {
     check('the bottom bar offers the sale', ((await back.getByTestId('open-sell').textContent()) ?? '').includes('+3'), (await back.getByTestId('open-sell').textContent()) ?? '');
     await touchTargets(back, 'bottom bar with sell');
     await noHorizontalScroll(back, 'bottom bar with sell');
-    await back.getByTestId('open-sell').tap();
+    await back.getByTestId('open-stars').tap();
+    await back.getByTestId('perks').waitFor();
+    await noHorizontalScroll(back, 'stars sheet');
+    await touchTargets(back, 'stars sheet');
+    const soon = await back.locator('.perk.soon').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
+    check('the stars sheet lists five perks and marks the two the sale unlocks', (await back.locator('.perk').count()) === 5 && soon.join(',') === 'perk-headStart,perk-secondDock', soon.join(','));
+    await back.getByTestId('stars-sell').tap();
     await back.getByTestId('sell-worth').waitFor();
     await noHorizontalScroll(back, 'sell sheet');
     await touchTargets(back, 'sell sheet');
     check('the sell sheet names the next site', ((await back.getByTestId('next-site').textContent()) ?? '') === 'Port Calder Docks');
+    check('the sell sheet names the perks it unlocks', /Head start.*Second dock/.test((await back.getByTestId('sell-perks').textContent()) ?? ''), (await back.getByTestId('sell-perks').textContent()) ?? '');
     await back.getByTestId('confirm-sell').tap();
     await back.getByTestId('site-twist').waitFor({ timeout: 3000 });
     check('Port Calder opens with its twist', /Narrow yard/.test((await back.getByTestId('site-twist').textContent()) ?? ''));
     await back.getByTestId('open-site').tap();
-    check('the new warehouse has the stars and one dock', /Port Calder Docks · 3 stars/.test((await back.getByTestId('site').textContent()) ?? '') && (await back.locator('.dock:not(.dock-next)').count()) === 1, (await back.getByTestId('site').textContent()) ?? '');
+    const owned = (await back.getByTestId('open-stars').textContent()) ?? '';
+    check('the new warehouse has the stars, two docks (Second dock) and cash (Head start)', /Port Calder Docks/.test((await back.getByTestId('site').textContent()) ?? '') && owned.trim() === '★ 3' && (await back.locator('.dock:not(.dock-next)').count()) === 2 && (await cashCents(back)) >= WAREHOUSE_TUNABLES.perkHeadStartCents.value, owned);
 
     await context.close();
   } finally {

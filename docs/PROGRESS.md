@@ -8,6 +8,7 @@ passengers, security). The Nations log is at commit `67d1d92`.
 ## Slices
 - [x] Airport pivot slices 1-8 (docs/ROADMAP.md, History)
 - [x] Warehouse pivot (W1), one pull request (W2)
+- [x] Star perks (W3)
 
 ## Session log
 
@@ -21,14 +22,34 @@ picker walks the oldest one down an aisle, takes a carton off the rack and
 carries it out), **staging** (one marked lane per dock where cartons wait
 before loading) and the **outbound docks**. No new upgrades and no rule
 changes: the sim is untouched, only what the screen shows.
-**Checks.** `npm test` (341) and `npm run check` pass. Phone check 60/60 at 360
-x 740 (56.4 fps with the CPU slowed 4x); at 412 x 915 60/60 at 55.8 fps and
+**Checks.** `npm test` (363, after merging star perks) and `npm run check` pass. Phone check 64/64 at 360
+x 740 (56.2 fps with the CPU slowed 4x); at 412 x 915 60/60 at 55.8 fps and
 59/60 at 53.7 fps in a second run. The unchanged game read 48.5-52.8 fps on
 this machine in the same session, so the machine is noisy; see docs/GAPS.md.
 **How to see it.** Open the app: cartons walk from the PO into the racks,
 blue order tickets queue on the board, pickers carry cartons through the
 aisles to the staging lanes, and from there down to the trucks.
 **What is left.** Play it on a real phone; see docs/GAPS.md (floor entries).
+### 2026-10-06 - Star perks (architect, all lanes; owner request, W3)
+**What changed.** Stars now unlock five permanent perks as you own more of
+them, never spent: Head start (1 star: a new warehouse opens with $250),
+Second dock (3: it opens with two docks), Quick charge (6: boosts recharge 25%
+faster), Express lane (10: express trucks twice as often), Long shift (15:
+offline cap x1.5). A ★ button by the site's name opens the stars sheet with
+every perk and how many stars it needs; the sell sheet names the perks the
+sale unlocks; the welcome sheet lists those owned. RULES 10a; nine tunables.
+No State, command or save change: perks are worked out from the stars owned.
+**Tuning.** Every RULES 11 target unchanged (the first warehouse has no
+perks); the greedy bot's second sale is about 40 s sooner. Report:
+docs/balance/warehouse-pacing.md.
+**Checks.** `npm test` and `npm run check` pass. Phone check 64/64 at 360 x
+740 (58.4 fps with the CPU slowed 4x), including the stars sheet and a sale
+that opens Port Calder with two docks and Head start's cash.
+**How to see it.** Tap ★ 0 at the top right, beside the gear. Sell a warehouse
+worth 3 stars and the next one opens with two docks and $250.
+**What is left.** Whether the thresholds feel right needs real play: the
+greedy bot owns 7 stars after 90 minutes, so Express lane and Long shift are
+a few sales away; see docs/GAPS.md.
 
 ### 2026-10-06 - The warehouse (architect, all lanes; owner request, W1)
 **What changed.** The game is now Warehouse Idle. Orders come in and wait in

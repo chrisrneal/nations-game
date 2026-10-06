@@ -3,6 +3,7 @@ import { randomInt } from './rng.ts';
 import { BOOST_IDS, UPGRADE_IDS } from './catalog.ts';
 import { warehouseCommandProblem } from './commands.ts';
 import { mulDiv } from './math.ts';
+import { expressChanceBp } from './perks.ts';
 import { boostProblem, boostTicks, cashCap, derive, lockReason, orderBpAt, rushed, starsFor, turnTicksFor, upgradeCost, type Derived } from './rules.ts';
 import { arrivingDock, arrivingPo, openWarehouse } from './state.ts';
 import { WAREHOUSE_TUNABLES as T } from './tunables.ts';
@@ -122,7 +123,7 @@ function addStaged(m: MState, milli: number, d: Derived): void {
 function rollExpress(m: MState): boolean {
   const draw = randomInt(m.rng, 0, BP - 1);
   m.rng = draw.rng;
-  return draw.value < T.expressChanceBp.value;
+  return draw.value < expressChanceBp(m.stars);
 }
 
 function arrive(m: MState, index: number, d: Derived, events: Sink): void {
@@ -219,7 +220,7 @@ function useBoost(m: MState, id: BoostId, events: Sink): void {
     reject(m, events, 'boost', problem);
     return;
   }
-  const { length, recharge } = boostTicks(id);
+  const { length, recharge } = boostTicks(id, m.stars);
   m.boosts[id] = { left: length, recharge };
   emit(events, { tick: m.tick, type: 'boosted', payload: { boost: id, ticks: length } });
 }

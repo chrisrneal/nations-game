@@ -745,3 +745,40 @@ rename is mechanical enough that splitting it would leave main half airport,
 half warehouse.
 **Cost.** One large pull request instead of eight small ones.
 **Reversing it.** The owner takes the architect role back by editing CLAUDE.md.
+
+## W3 - Star perks: permanent bonuses unlocked by stars owned, never spent
+**Status.** Accepted, 2026-10-06, at the owner's request ("Create a feature
+that has stars"). The owner asked for the feature directly, so this session
+wrote the record (the architect role of P2 and W2, for this change only, as
+for P11). The request was open; this session read it as "give stars more to
+do", the reading closest to docs/ROADMAP.md ("sell the warehouse for stars
+that permanently boost the next one"), rather than a second, unrelated kind
+of star (ratings, achievements) that would blur the one the game already has.
+**Decision.** Five perks (RULES 10a) unlock as the stars owned reach 1, 3, 6,
+10 and 15: Head start (a new warehouse opens with $250), Second dock (it opens
+with two docks), Quick charge (boosts recharge 25% faster), Express lane
+(express trucks twice as often) and Long shift (offline cap x1.5). Stars are
+never spent, so the +25% pay per star (RULES 10) is unchanged and there is no
+shop to balance. Each perk is a pure function of `stars`, which State already
+holds: no new State field, no new command, no hash or save change, and the
+first warehouse is exactly as before. Nine tunables with bands. On screen, a
+★ button by the site's name opens the stars sheet (every perk, its threshold
+and what is left to reach it); the sell sheet names the perks a sale unlocks,
+and the welcome sheet lists the perks owned.
+**Why.** Stars were one number (+25% pay); after the first sale nothing new
+came from them. A ladder of perks gives each sale something to aim for besides
+a bigger multiplier (pillar 4, steady novelty), and the 0-star sheet shows a
+new player why selling matters. Two perks shape the opening of a warehouse
+(the slow first minutes after a sale), two help the idle player (boosts,
+offline cap: docs/GAPS.md says twice-a-day players are held back by the cap),
+and one rewards long play.
+**Measured** (`npm run harness -- pacing`, seeds 1-5): every RULES 11 target
+is unchanged (they end at the first sale, before any perk); the greedy bot's
+second sale comes about 40 s sooner (55.2-55.6 min, was 56.3).
+**Cost.** Rules now depend on the stars owned in three places (boost recharge,
+express odds, offline cap): a save with a command log from before this change
+and 6 or more stars would replay differently. The game's own saves are compact
+(no history), so none exist. The top row gains a 44 px button.
+**Reversing it.** Remove perks.ts and its calls (openWarehouse, boostTicks,
+rollExpress, offlineCapTicks), the tunables and the stars sheet; State is
+untouched, so no migration.

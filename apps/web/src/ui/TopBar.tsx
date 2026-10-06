@@ -17,11 +17,11 @@ const WARN: Partial<Record<WarehouseView['bottleneck']['kind'], (typeof TILES)[n
 /**
  * Cash and income per second at the top, and under them the dashboard: orders
  * shipped from this warehouse, orders a minute at today's levels, the backlog
- * and how full the shelves are (all written every tick, P7); the site, and
- * settings.
+ * and how full the shelves are (all written every tick, P7); the site, the
+ * stars owned (a tap opens the stars sheet, RULES 10a), and settings.
  */
-export function TopBar(props: { view: WarehouseView; store: WarehouseStore; onSettings: () => void }): ReactElement {
-  const { view, store, onSettings } = props;
+export function TopBar(props: { view: WarehouseView; store: WarehouseStore; onSettings: () => void; onStars: () => void }): ReactElement {
+  const { view, store, onSettings, onStars } = props;
   const cash = useRef<HTMLSpanElement>(null);
   const tiles = useRef<HTMLDListElement>(null);
   useLayoutEffect(
@@ -50,11 +50,21 @@ export function TopBar(props: { view: WarehouseView; store: WarehouseStore; onSe
       <div className="top-row">
         <span className="site" data-testid="site">
           {view.site.name}
-          {view.stars.owned > 0 && <span className="stars"> · {view.stars.owned} stars</span>}
         </span>
-        <button type="button" className="icon-btn" aria-label="Settings" onClick={onSettings} data-testid="settings">
-          ⚙
-        </button>
+        <span className="top-buttons">
+          <button
+            type="button"
+            className={`stars-btn${view.stars.perks.some((p) => p.unlocksOnSale) ? ' soon' : ''}`}
+            aria-label={`${view.stars.owned} ${view.stars.owned === 1 ? 'star' : 'stars'}: perks`}
+            onClick={onStars}
+            data-testid="open-stars"
+          >
+            ★ {view.stars.owned}
+          </button>
+          <button type="button" className="icon-btn" aria-label="Settings" onClick={onSettings} data-testid="settings">
+            ⚙
+          </button>
+        </span>
       </div>
       <div className="money">
         <span ref={cash} className="cash" data-testid="cash" />
