@@ -3,7 +3,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { hashState } from './hash.ts';
 import { BOOST_IDS, UPGRADE_IDS } from './catalog.ts';
-import { backlogCapMilliFor, maxLevel, pickingMilliAt, stageCapMilliAt } from './rules.ts';
+import { backlogCapMilliFor, maxLevel, pickingMilliAt, shelfCapMilliAt, stageCapMilliAt } from './rules.ts';
 import { WAREHOUSE_TUNABLES } from './tunables.ts';
 import { WarehouseSession } from './session.ts';
 import { createWarehouse } from './state.ts';
@@ -11,11 +11,12 @@ import { advanceMany, step } from './step.ts';
 
 /**
  * The invariants of RULES 13, as properties over random play: random taps (at
- * docks and at picking), purchases, boosts and sales at random ticks, from random seeds and starting cash.
+ * docks, at picking and at receiving), purchases, boosts and sales at random ticks, from random seeds and starting cash.
  */
 type Move =
   | { at: number; kind: 'tap'; dock: number }
   | { at: number; kind: 'tapPick' }
+  | { at: number; kind: 'tapReceive' }
   | { at: number; kind: 'buy'; upgrade: UpgradeId }
   | { at: number; kind: 'boost'; boost: BoostId }
   | { at: number; kind: 'sell' };
@@ -23,6 +24,7 @@ type Move =
 const move: fc.Arbitrary<Move> = fc.oneof(
   fc.record({ at: fc.nat(400), kind: fc.constant('tap' as const), dock: fc.nat(8) }),
   fc.record({ at: fc.nat(400), kind: fc.constant('tapPick' as const) }),
+  fc.record({ at: fc.nat(400), kind: fc.constant('tapReceive' as const) }),
   fc.record({ at: fc.nat(400), kind: fc.constant('buy' as const), upgrade: fc.constantFrom(...UPGRADE_IDS) }),
   fc.record({ at: fc.nat(400), kind: fc.constant('boost' as const), boost: fc.constantFrom(...BOOST_IDS) }),
   fc.record({ at: fc.nat(400), kind: fc.constant('sell' as const) }),
@@ -47,6 +49,7 @@ const game: fc.Arbitrary<Game> = fc.record({
 function commandFor(m: Move, tick: number): WarehouseCommand {
   if (m.kind === 'tap') return { tick, type: 'tap', payload: { dock: m.dock } };
   if (m.kind === 'tapPick') return { tick, type: 'tapPick', payload: {} };
+  if (m.kind === 'tapReceive') return { tick, type: 'tapReceive', payload: {} };
   if (m.kind === 'buy') return { tick, type: 'buy', payload: { upgrade: m.upgrade } };
   if (m.kind === 'boost') return { tick, type: 'boost', payload: { boost: m.boost } };
   return { tick, type: 'sell', payload: {} };
@@ -82,6 +85,13 @@ function invariants(s: WarehouseState): void {
   expect(s.backlog).toBeGreaterThanOrEqual(0);
   expect(s.backlog).toBeLessThanOrEqual(backlogCapMilliFor(pickingMilliAt(s.levels.picking, 0)));
   expect(s.pickRush).toBeGreaterThanOrEqual(0);
+  // The shelves and the PO (RULES 3a): stock never negative or over the shelves; a PO never over-received.
+  expect(s.stock).toBeGreaterThanOrEqual(0);
+  expect(s.stock).toBeLessThanOrEqual(shelfCapMilliAt(s.levels.receiving));
+  expect(s.po.received).toBeGreaterThanOrEqual(0);
+  expect(s.po.received).toBeLessThan(s.po.units * 1000);
+  expect(s.receiveRush).toBeGreaterThanOrEqual(0);
+  expect(s.receiveRush).toBeLessThanOrEqual(WAREHOUSE_TUNABLES.rushMaxTicks.value);
   expect(s.pickRush).toBeLessThanOrEqual(WAREHOUSE_TUNABLES.rushMaxTicks.value);
   expect(s.docks.length).toBe(1 + s.levels.docks);
   for (const g of s.docks) {
@@ -100,7 +110,7 @@ function invariants(s: WarehouseState): void {
 }
 
 describe('warehouse invariants under random play (RULES 13)', () => {
-  it('cash, passengers and loads are never negative and never over their limits', () => {
+  it('cash, orders, stock and loads are never negative and never over their limits', () => {
     fc.assert(fc.property(game, (g) => void play(g, 420, invariants)), { numRuns: 60 });
   }, 20_000);
 

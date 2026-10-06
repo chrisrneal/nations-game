@@ -1,21 +1,26 @@
-import type { WarehouseState, Boosts, DockState, Levels, RngState, Stats } from '@warehouse/contracts';
+import type { WarehouseState, Boosts, DockState, Levels, PoState, RngState, Stats } from '@warehouse/contracts';
 import { seedRng } from './rng.ts';
 import { derive, type Derived } from './rules.ts';
 import { WAREHOUSE_TUNABLES as T } from './tunables.ts';
 
 /** Current warehouse save schema. Bump it with a migration in save.ts. */
-export const WAREHOUSE_SCHEMA_VERSION = 3;
+export const WAREHOUSE_SCHEMA_VERSION = 1;
 
-export const EMPTY_STATS: Stats = { earned: 0, shipments: 0, fullShipments: 0, orders: 0, missed: 0, expresses: 0, taps: 0 };
+export const EMPTY_STATS: Stats = { earned: 0, shipments: 0, fullShipments: 0, orders: 0, missed: 0, expresses: 0, pos: 0, received: 0, taps: 0 };
 
-export const ZERO_LEVELS: Levels = { docks: 0, truck: 0, loading: 0, sales: 0, picking: 0, contract: 0, crew: 0, night: 0 };
+export const ZERO_LEVELS: Levels = { docks: 0, truck: 0, loading: 0, sales: 0, picking: 0, receiving: 0, contract: 0, crew: 0, night: 0 };
 
 /** Every boost recharged and not running (RULES 15). */
 export const READY_BOOSTS: Boosts = { flashSale: { left: 0, recharge: 0 }, allHands: { left: 0, recharge: 0 }, surge: { left: 0, recharge: 0 } };
 
-/** A truck arriving at a dock (RULES 4). The express roll is the caller's. */
+/** A truck backing into a dock (RULES 4). The express roll is the caller's. */
 export function arrivingDock(truck: number, d: Derived, express: boolean, rush = 0): DockState {
   return { truck, parcels: d.parcels, loaded: 0, timer: d.departTicks, timerMax: d.departTicks, turn: 0, turnMax: 0, rush, express };
+}
+
+/** A new PO at the receiving dock (RULES 3a). */
+export function arrivingPo(id: number, d: Derived): PoState {
+  return { id, units: d.poUnits, received: 0 };
 }
 
 export interface CreateWarehouseOptions {
@@ -26,7 +31,7 @@ export interface CreateWarehouseOptions {
   readonly life?: Stats;
 }
 
-/** A brand-new warehouse: one dock with a truck loading, passengers already staged. */
+/** A brand-new warehouse: one dock with a truck loading, orders already packed, shelves half full. */
 export function createWarehouse(options: CreateWarehouseOptions): WarehouseState {
   return openWarehouse({
     tick: 0,
@@ -35,10 +40,11 @@ export function createWarehouse(options: CreateWarehouseOptions): WarehouseState
     stars: options.stars ?? 0,
     life: options.life ?? EMPTY_STATS,
     nextTruck: 1,
+    nextPo: 1,
   });
 }
 
-/** The warehouse for a site, keeping the clock, the RNG, stars, lifetime stats and truck numbering. */
+/** The warehouse for a site, keeping the clock, the RNG, stars, lifetime stats, and truck and PO numbering. */
 export function openWarehouse(keep: {
   readonly tick: number;
   readonly rng: RngState;
@@ -46,6 +52,7 @@ export function openWarehouse(keep: {
   readonly stars: number;
   readonly life: Stats;
   readonly nextTruck: number;
+  readonly nextPo: number;
 }): WarehouseState {
   const base = { site: keep.site, stars: keep.stars, levels: ZERO_LEVELS };
   const d = derive(base);
@@ -57,6 +64,9 @@ export function openWarehouse(keep: {
     backlog: 0,
     pickRush: 0,
     staged: T.startingStaged.value * 1000,
+    stock: Math.min(T.startingStock.value * 1000, d.shelfCapMilli),
+    po: arrivingPo(keep.nextPo, d),
+    receiveRush: 0,
     levels: ZERO_LEVELS,
     docks: [arrivingDock(keep.nextTruck, d, false)],
     nextTruck: keep.nextTruck + 1,

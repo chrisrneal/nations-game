@@ -1,15 +1,17 @@
 import type { RngState } from './state.ts';
 
 /**
- * The warehouse game's shared vocabulary (docs/RULES.md, decision records P1-P5).
+ * The warehouse game's shared vocabulary (docs/RULES.md, decision records W1
+ * and P3-P7).
  *
- * Units (P3): money is integer cents, passengers are integer milli-passengers
- * (1 passenger = 1000), time is ticks of `tickMs` wall-clock milliseconds.
- * Nothing here is a float; State is hashed and must match on every machine.
+ * Units (P3): money is integer cents; orders and stock are integer
+ * milli-units (1 order = 1 unit of stock = 1000), time is ticks of `tickMs`
+ * wall-clock milliseconds. Nothing here is a float; State is hashed and must
+ * match on every machine.
  */
 
-/** The eight upgrades, in the order the upgrade sheet lists them. */
-export type UpgradeId = 'docks' | 'truck' | 'loading' | 'sales' | 'picking' | 'contract' | 'crew' | 'night';
+/** The nine upgrades, in the order the upgrade sheet lists them. */
+export type UpgradeId = 'docks' | 'truck' | 'loading' | 'sales' | 'picking' | 'receiving' | 'contract' | 'crew' | 'night';
 
 export type Levels = Readonly<Record<UpgradeId, number>>;
 
@@ -27,16 +29,17 @@ export interface BoostState {
 export type Boosts = Readonly<Record<BoostId, BoostState>>;
 
 /**
- * One dock. `turn > 0` means the dock is in turnaround and has no truck;
- * otherwise a truck is loading. A truck keeps the parcels it arrived with.
+ * One outbound dock. `turn > 0` means the dock is swapping trucks and has none
+ * to load; otherwise a truck is loading. A truck keeps the size it arrived with.
  */
 export interface DockState {
-  /** Id of the truck at (or next arriving at) this dock; new for every arrival. */
+  /** Id of the truck at (or next backing into) this dock; new for every arrival. */
   readonly truck: number;
+  /** Parcels the truck holds: one parcel is one order. */
   readonly parcels: number;
-  /** Milli-passengers on board. */
+  /** Milli-orders loaded. */
   readonly loaded: number;
-  /** Ticks left on the departure timer (0: leaves with its first passenger). */
+  /** Ticks left on the departure timer (0: leaves with its first order). */
   readonly timer: number;
   readonly timerMax: number;
   /** Ticks of turnaround left; 0 while a truck is loading. */
@@ -44,17 +47,34 @@ export interface DockState {
   readonly turnMax: number;
   /** Ticks of rush banked by taps (RULES 6). */
   readonly rush: number;
+  /** An express truck pays double (RULES 4). */
   readonly express: boolean;
 }
 
-/** Counters for the recap and the harness. `earned` is in cents. */
+/** The purchase order being unloaded at the receiving dock (RULES 3a). */
+export interface PoState {
+  /** PO number; new for every PO. */
+  readonly id: number;
+  /** Units on the PO. */
+  readonly units: number;
+  /** Milli-units put away on the shelves so far. */
+  readonly received: number;
+}
+
+/** Counters for the recap and the harness. `earned` is in cents; the rest are whole things. */
 export interface Stats {
   readonly earned: number;
+  /** Trucks dispatched, and those that left full. */
   readonly shipments: number;
   readonly fullShipments: number;
+  /** Orders shipped. */
   readonly orders: number;
+  /** Milli-orders cancelled: customers who would not join a backlog that long. */
   readonly missed: number;
   readonly expresses: number;
+  /** Purchase orders fully received, and their units. */
+  readonly pos: number;
+  readonly received: number;
   readonly taps: number;
 }
 
@@ -65,12 +85,18 @@ export interface WarehouseState {
   readonly rng: RngState;
   /** Cents. Never negative. */
   readonly cash: number;
-  /** Milli-passengers in the picking line, not yet in the staging (RULES 3). */
+  /** Milli-orders in the backlog, waiting to be picked (RULES 3). */
   readonly backlog: number;
-  /** Ticks of rush banked at picking by taps (an extra lane open, RULES 6). */
+  /** Ticks of rush banked at picking by taps (extra pickers, RULES 6). */
   readonly pickRush: number;
-  /** Milli-passengers staged in the staging, past picking. */
+  /** Milli-orders picked and packed, staged for the docks. */
   readonly staged: number;
+  /** Milli-units on the shelves (RULES 3a). */
+  readonly stock: number;
+  /** The PO at the receiving dock. */
+  readonly po: PoState;
+  /** Ticks of rush banked at receiving by taps. */
+  readonly receiveRush: number;
   readonly levels: Levels;
   readonly docks: readonly DockState[];
   readonly nextTruck: number;
@@ -95,27 +121,31 @@ export interface BoostPayload {
   readonly boost: BoostId;
 }
 
-/** Intent from the player (S2, P5). `tick` is the tick it applies to. `tapPick` opens an extra lane at picking for a moment. */
+type NoPayload = Record<string, never>;
+
+/**
+ * Intent from the player (S2, P5). `tick` is the tick it applies to. `tap`
+ * rushes a dock, `tapPick` sends extra pickers for a moment, `tapReceive`
+ * extra hands to the receiving dock.
+ */
 export type WarehouseCommand =
   | { readonly tick: number; readonly type: 'tap'; readonly payload: TapPayload }
-  | { readonly tick: number; readonly type: 'tapPick'; readonly payload: Record<string, never> }
+  | { readonly tick: number; readonly type: 'tapPick'; readonly payload: NoPayload }
+  | { readonly tick: number; readonly type: 'tapReceive'; readonly payload: NoPayload }
   | { readonly tick: number; readonly type: 'buy'; readonly payload: BuyPayload }
   | { readonly tick: number; readonly type: 'boost'; readonly payload: BoostPayload }
-  | { readonly tick: number; readonly type: 'sell'; readonly payload: Record<string, never> };
+  | { readonly tick: number; readonly type: 'sell'; readonly payload: NoPayload };
 
 export type WarehouseCommandType = WarehouseCommand['type'];
 
 /** A command before the host stamps it with the tick it applies to: what the interface sends. */
-export type WarehouseIntent =
-  | { readonly type: 'tap'; readonly payload: TapPayload }
-  | { readonly type: 'tapPick'; readonly payload: Record<string, never> }
-  | { readonly type: 'buy'; readonly payload: BuyPayload }
-  | { readonly type: 'boost'; readonly payload: BoostPayload }
-  | { readonly type: 'sell'; readonly payload: Record<string, never> };
+export type WarehouseIntent = WarehouseCommand extends infer C ? (C extends unknown ? Omit<C, 'tick'> : never) : never;
 
 export interface WarehouseEventPayloads {
   readonly departed: { dock: number; truck: number; orders: number; parcels: number; cents: number; full: boolean; express: boolean };
   readonly arrived: { dock: number; truck: number; parcels: number; express: boolean };
+  /** A PO was fully put away; the next one is at the dock. */
+  readonly received: { po: number; units: number };
   readonly bought: { upgrade: UpgradeId; level: number; cents: number };
   readonly boosted: { boost: BoostId; ticks: number };
   readonly sold: { stars: number; site: number };
@@ -154,13 +184,13 @@ export interface UpgradeView {
 export interface DockView extends DockState {
   readonly index: number;
   readonly model: string;
-  /** Boarding rate at this dock now, milli-passengers per tick (rush included). */
+  /** Loading rate at this dock now, milli-orders per tick (rush included). */
   readonly rate: number;
   /** Rushed now, by taps or by the All hands boost. */
   readonly rushed: boolean;
 }
 
-export type BottleneckKind = 'passengers' | 'picking' | 'loading' | 'turnaround' | 'timer';
+export type BottleneckKind = 'orders' | 'picking' | 'stock' | 'loading' | 'turnaround' | 'timer';
 
 export interface Bottleneck {
   readonly kind: BottleneckKind;
@@ -188,8 +218,12 @@ export interface StarsView {
   readonly nextSite: SiteView;
 }
 
-/** A checkpoint passengers walk through (RULES 14). Picking is a real queue (RULES 3); the others are scenery, though passport control and preclearance slow picking down. */
-export type CheckpointId = 'checkin' | 'picking' | 'passport' | 'preclearance' | 'baggage' | 'customs';
+/**
+ * A station on the floor (RULES 14). Picking is the real queue (RULES 3) and
+ * receiving the real inbound dock (RULES 3a); export paperwork and customs
+ * slow picking; the order desk and quality check are scenery.
+ */
+export type CheckpointId = 'desk' | 'picking' | 'export' | 'customs' | 'receiving' | 'qc';
 
 export interface CheckpointView {
   readonly id: CheckpointId;
@@ -198,18 +232,18 @@ export interface CheckpointView {
   readonly label: string;
 }
 
-/** The passenger journey for the current contract, in walking order (RULES 14). */
+/** The stations for the current contract, in the order goods move through them (RULES 14). */
 export interface JourneyView {
-  /** From the door to the staging; then the docks. */
-  readonly departures: readonly CheckpointView[];
-  /** From the docks to the exit. */
-  readonly arrivals: readonly CheckpointView[];
+  /** An order's way from the desk to packing; then the docks. */
+  readonly outbound: readonly CheckpointView[];
+  /** Stock's way from the receiving dock to the shelves. */
+  readonly inbound: readonly CheckpointView[];
 }
 
 export interface BoostView {
   readonly id: BoostId;
   readonly name: string;
-  /** What it does, with its numbers, in one short line ("3x passengers for 60 s"). */
+  /** What it does, with its numbers, in one short line ("3x orders for 60 s"). */
   readonly effect: string;
   /** Ticks of effect left (0: not running) and the full length. */
   readonly left: number;
@@ -225,22 +259,35 @@ export interface BoostView {
   readonly helps: boolean;
 }
 
-/** The picking line (RULES 3): the queue between the door and the staging. */
+/** The backlog and the pickers (RULES 3): orders waiting to be picked. */
 export interface PickingView {
-  /** Milli-passengers in line. */
+  /** Milli-orders waiting. */
   readonly backlog: number;
-  /** The longest line people will join, milli-passengers; beyond it they turn back at the door. */
+  /** The longest backlog customers will wait behind, milli-orders; beyond it they cancel. */
   readonly cap: number;
-  /** Milli-passengers picking clears a tick now, extra lane included. */
+  /** Milli-orders picked a tick now, extra pickers included. */
   readonly ratePerTick: number;
-  /** The same without the extra lane: what the upgrade sets. */
+  /** The same without extra pickers: what the upgrade sets. */
   readonly baseRatePerTick: number;
-  /** An extra lane is open (a tap, or All hands). */
+  /** Extra pickers are on the floor (a tap, or All hands). */
   readonly rushed: boolean;
-  /** Ticks a person joining the line now would wait, at today's rate. */
+  /** Ticks an order placed now would wait, at today's rate. */
   readonly waitTicks: number;
-  /** Departure checkpoints that slow it (passport control, preclearance), as a multiplier in basis points. */
+  /** Stations that slow picking (export paperwork, customs), as a multiplier in basis points. */
   readonly slowBp: number;
+}
+
+/** The receiving dock and the shelves (RULES 3a). */
+export interface ReceivingView {
+  /** Milli-units on the shelves, and the most they hold. */
+  readonly stock: number;
+  readonly shelfCap: number;
+  /** Milli-units put away a tick now, extra hands included, and without them. */
+  readonly ratePerTick: number;
+  readonly baseRatePerTick: number;
+  readonly rushed: boolean;
+  /** The PO being unloaded. */
+  readonly po: PoState;
 }
 
 /** What the interface reads (S6, P5): the warehouse plus derived numbers and names. */
@@ -252,11 +299,16 @@ export interface WarehouseView {
   readonly incomePerSec: number;
   /** The same estimate with the running boosts applied; equal to incomePerSec when none runs. */
   readonly boostedIncomePerSec: number;
+  /** Steady-state orders shipped a second, milli-orders. */
+  readonly ordersPerSec: number;
+  /** Pay per order, cents, stars and site included. */
   readonly pay: number;
   readonly contract: string;
   readonly truckModel: string;
+  /** Packed orders waiting for a truck, the most that fit, and orders coming in a tick now. */
   readonly staging: { readonly staged: number; readonly cap: number; readonly orderPerTick: number };
   readonly picking: PickingView;
+  readonly receiving: ReceivingView;
   readonly journey: JourneyView;
   readonly docks: readonly DockView[];
   readonly upgrades: readonly UpgradeView[];
@@ -264,7 +316,7 @@ export interface WarehouseView {
   readonly boosts: readonly BoostView[];
   readonly site: SiteView;
   readonly stars: StarsView;
-  readonly offbacklogCapMinutes: number;
+  readonly offlineCapMinutes: number;
   readonly run: Stats;
   readonly life: Stats;
 }

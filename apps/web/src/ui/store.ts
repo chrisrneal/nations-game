@@ -63,7 +63,7 @@ export function structuralKey(view: WarehouseView): string {
     view.pay,
     view.incomePerSec,
     view.boostedIncomePerSec,
-    view.offbacklogCapMinutes,
+    view.offlineCapMinutes,
     view.bottleneck.kind,
     view.docks.map((g) => `${g.truck}${g.turn > 0 ? 't' : 'b'}${g.express ? 'c' : ''}`).join(','),
     view.upgrades.map((u) => `${u.level}${u.affordable ? 'a' : ''}${u.locked === null ? '' : 'l'}`).join(','),

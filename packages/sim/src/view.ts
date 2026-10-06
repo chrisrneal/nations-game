@@ -1,4 +1,4 @@
-import type { WarehouseState, WarehouseView, BoostId, BoostView, Bottleneck, BottleneckKind, SiteView, EffectUnit, DockView, PickingView, UpgradeId, UpgradeView } from '@warehouse/contracts';
+import type { WarehouseState, WarehouseView, BoostId, BoostView, Bottleneck, BottleneckKind, SiteView, EffectUnit, DockView, PickingView, ReceivingView, UpgradeId, UpgradeView } from '@warehouse/contracts';
 import { BOOST_IDS, BOOST_NAMES, TRUCK_MODELS, CONTRACTS, UPGRADE_IDS, UPGRADE_TEXT, siteAt, journeyAt, nameAt } from './catalog.ts';
 import { mulDiv } from './math.ts';
 import {
@@ -20,6 +20,8 @@ import {
   parcelsAt,
   pickingMilliAt,
   pickingSlowBpAt,
+  receiveMilliAt,
+  rushed,
   starsFor,
   turnTicksFor,
   twistText,
@@ -32,25 +34,26 @@ const BP = 10_000;
 export interface Estimate {
   /** Cents a second at steady state, idle (no taps). */
   readonly incomePerSec: number;
-  /** Passengers a second carried at steady state, in milli-passengers. */
+  /** Orders a second shipped at steady state, in milli-orders. */
   readonly ordersPerSec: number;
   readonly full: boolean;
   readonly bottleneck: Bottleneck;
 }
 
 const BOTTLENECK_TEXT: Readonly<Record<BottleneckKind, string>> = {
-  passengers: 'Trucks are staged for passengers.',
-  picking: 'Long lines at picking.',
-  loading: 'Passengers are queuing at the docks.',
-  turnaround: 'Docks are busy turning trucks around.',
+  orders: 'Trucks are waiting for orders.',
+  picking: 'Orders are piling up at picking.',
+  stock: 'The shelves are running empty.',
+  loading: 'Packed orders are queuing at the docks.',
+  turnaround: 'Docks are busy swapping trucks.',
   timer: 'Trucks leave before they fill.',
 };
 
 /**
- * Passengers a second the docks can actually take when arrivals average
- * `mean`, with `capacity` the slower of picking and the docks. Sunvale's
- * waves arrive faster than that for a minute, then slower: the line and the
- * staging store what they can of the wave for the quiet spell.
+ * Orders a second the floor can actually take when orders average `mean`,
+ * with `capacity` the slowest of picking, receiving and the docks. Sunvale's
+ * sales bring orders faster than that for a minute, then slower: the backlog
+ * and staging store what they can of the sale for the quiet spell.
  */
 function supplyThroughput(twist: ReturnType<typeof derive>['twist'], mean: number, capacity: number, room: number): number {
   if (twist !== 'waves') return mean;
@@ -66,9 +69,9 @@ function supplyThroughput(twist: ReturnType<typeof derive>['twist'], mean: numbe
 
 /** What the running boosts change, for the estimate (RULES 15). */
 export interface BoostEffect {
-  /** Arrivals multiplier, basis points. */
+  /** Orders multiplier, basis points. */
   readonly orderBp: number;
-  /** Every dock rushed, with walk-ups (RULES 6). */
+  /** Every station rushed, counter orders included (RULES 6). */
   readonly rushed: boolean;
   /** Pay multiplier, basis points. */
   readonly payBp: number;
@@ -95,23 +98,26 @@ export function estimate(state: WarehouseState, boost: BoostEffect = NO_BOOST): 
   const d = derive(state);
   const tickSec = T.tickMs.value / 1000;
   const parcels = d.parcels;
-  const arrivals = ((d.orderMilli / 1000) * (meanOrderBp(d.twist) / BP) * (boost.orderBp / BP)) / tickSec;
-  const board = (boost.rushed ? mulDiv(d.loadMilli, T.rushLoadBp.value, BP) : d.loadMilli) / 1000 / tickSec;
+  const perSecond = (milli: number): number => (boost.rushed ? rushed(milli) : milli) / 1000 / tickSec;
+  const orders = ((d.orderMilli / 1000) * (meanOrderBp(d.twist) / BP) * (boost.orderBp / BP)) / tickSec;
+  const load = perSecond(d.loadMilli);
   const timer = d.departTicks * tickSec;
   const turnTicks = turnTicksFor(parcels, d.crewBp);
   const turn = (boost.rushed ? Math.ceil(turnTicks / T.rushTurnSpeed.value) : turnTicks) * tickSec;
-  const fill = parcels / board;
+  const fill = parcels / load;
   const cycle = Math.min(fill, timer) + turn;
-  const capacity = (d.docks * Math.min(parcels, board * timer)) / cycle;
-  // Picking clears the line into the staging (RULES 3); All hands opens an extra lane.
-  const picking = (boost.rushed ? mulDiv(d.pickingMilli, T.rushLoadBp.value, BP) : d.pickingMilli) / 1000 / tickSec;
+  const capacity = (d.docks * Math.min(parcels, load * timer)) / cycle;
+  // Picking takes orders from the backlog, a unit of stock each; receiving refills the shelves (RULES 3, 3a).
+  const picking = perSecond(d.pickingMilli);
+  const receiving = perSecond(d.receiveMilli);
+  const floor = Math.min(picking, receiving);
 
   let throughput: number;
   let full: boolean;
   let kind: BottleneckKind;
   let fix: UpgradeId[];
-  const supply = Math.min(picking, supplyThroughput(d.twist, arrivals, Math.min(capacity, picking), (d.stageCapMilli + d.backlogCapMilli) / 1000));
-  // Rushed docks board walk-ups when the staging is empty (RULES 6): the docks are the limit.
+  const supply = Math.min(floor, supplyThroughput(d.twist, orders, Math.min(capacity, floor), (d.stageCapMilli + d.backlogCapMilli) / 1000));
+  // Rushed docks load counter orders when staging is empty (RULES 6): the docks are the limit.
   if (boost.rushed || supply >= capacity * 0.999) {
     throughput = capacity;
     full = fill <= timer;
@@ -119,12 +125,20 @@ export function estimate(state: WarehouseState, boost: BoostEffect = NO_BOOST): 
     fix = kind === 'turnaround' ? ['crew', 'truck'] : ['loading', 'docks'];
   } else {
     full = (parcels * d.docks) / supply - turn <= timer;
-    // Highmoor Hub: full shipments send a share of their parcels back to the staging, past picking.
+    // Highmoor Crossdock: full trucks bring back a share of their load, already packed.
     const fed = full && d.twist === 'crossdock' ? supply / (1 - T.crossdockBp.value / BP) : supply;
     throughput = Math.min(capacity, fed);
-    const queued = supply >= picking * 0.999;
-    kind = queued ? 'picking' : full ? 'passengers' : 'timer';
-    fix = queued ? ['picking'] : ['sales'];
+    const held = supply >= floor * 0.999;
+    if (held && receiving <= picking) {
+      kind = 'stock';
+      fix = ['receiving'];
+    } else if (held) {
+      kind = 'picking';
+      fix = ['picking'];
+    } else {
+      kind = full ? 'orders' : 'timer';
+      fix = ['sales'];
+    }
   }
   const express = 1 + (T.expressChanceBp.value / BP) * (T.expressPayBp.value / BP - 1);
   const bonus = full ? 1 + T.fullBonusBp.value / BP : 1;
@@ -137,7 +151,7 @@ export function estimate(state: WarehouseState, boost: BoostEffect = NO_BOOST): 
   };
 }
 
-/** Truck level of a truck with this many parcels (a truck keeps its size after an upgrade). */
+/** Model name of a truck of this size (a truck keeps its size after an upgrade). */
 function modelFor(parcels: number): string {
   for (let level = 0; level <= T.maxTruckLevel.value; level++) if (parcelsAt(level) === parcels) return nameAt(TRUCK_MODELS, level);
   return nameAt(TRUCK_MODELS, 0);
@@ -157,6 +171,8 @@ function effect(id: UpgradeId, level: number, state: WarehouseState, payMul: num
       return { unit: 'ordersPerSec', value: perSec(orderMilliAt(level)), name: null };
     case 'picking':
       return { unit: 'ordersPerSec', value: perSec(pickingMilliAt(level, state.levels.contract)), name: null };
+    case 'receiving':
+      return { unit: 'ordersPerSec', value: perSec(receiveMilliAt(level)), name: null };
     case 'contract':
       return { unit: 'cents', value: mulDiv(payCentsAt(level), payMul, BP) * 1000, name: nameAt(CONTRACTS, level) };
     case 'crew':
@@ -189,10 +205,11 @@ function upgradeView(id: UpgradeId, state: WarehouseState, payMul: number): Upgr
   };
 }
 
-/** Which boost fixes each bottleneck (RULES 8, 15). Pay surge pays whatever the bottleneck. */
+/** Which boost fixes each bottleneck (RULES 8, 15). Peak surcharge pays whatever the bottleneck. */
 const BOOST_FIXES: Readonly<Record<BottleneckKind, BoostId>> = {
-  passengers: 'flashSale',
+  orders: 'flashSale',
   picking: 'allHands',
+  stock: 'allHands',
   timer: 'flashSale',
   loading: 'allHands',
   turnaround: 'allHands',
@@ -220,18 +237,31 @@ function siteView(sold: number): SiteView {
   return { index: sold, name: site.label, twist: twistText(site.twist) };
 }
 
-/** The picking line now (RULES 3). */
+/** The backlog and the pickers now (RULES 3). */
 function pickingView(state: WarehouseState, d: ReturnType<typeof derive>, boost: BoostEffect): PickingView {
-  const rushed = state.pickRush > 0 || boost.rushed;
-  const rate = rushed ? mulDiv(d.pickingMilli, T.rushLoadBp.value, BP) : d.pickingMilli;
+  const fast = state.pickRush > 0 || boost.rushed;
+  const rate = fast ? rushed(d.pickingMilli) : d.pickingMilli;
   return {
     backlog: state.backlog,
     cap: d.backlogCapMilli,
     ratePerTick: rate,
     baseRatePerTick: d.pickingMilli,
-    rushed,
+    rushed: fast,
     waitTicks: rate === 0 ? 0 : Math.ceil(state.backlog / rate),
     slowBp: pickingSlowBpAt(state.levels.contract),
+  };
+}
+
+/** The receiving dock and the shelves now (RULES 3a). */
+function receivingView(state: WarehouseState, d: ReturnType<typeof derive>, boost: BoostEffect): ReceivingView {
+  const fast = state.receiveRush > 0 || boost.rushed;
+  return {
+    stock: state.stock,
+    shelfCap: d.shelfCapMilli,
+    ratePerTick: fast ? rushed(d.receiveMilli) : d.receiveMilli,
+    baseRatePerTick: d.receiveMilli,
+    rushed: fast,
+    po: state.po,
   };
 }
 
@@ -242,10 +272,10 @@ export function warehouseView(state: WarehouseState): WarehouseView {
   const boost = runningBoosts(state);
   const anyBoost = boost.orderBp !== BP || boost.rushed || boost.payBp !== BP;
   const boosted = anyBoost ? estimate(state, boost).incomePerSec : est.incomePerSec;
-  const rushRate = mulDiv(d.loadMilli, T.rushLoadBp.value, BP);
+  const rushRate = rushed(d.loadMilli);
   const docks: DockView[] = state.docks.map((g, index) => {
-    const rushed = g.rush > 0 || boost.rushed;
-    return { ...g, index, model: modelFor(g.parcels), rate: rushed ? rushRate : d.loadMilli, rushed };
+    const fast = g.rush > 0 || boost.rushed;
+    return { ...g, index, model: modelFor(g.parcels), rate: fast ? rushRate : d.loadMilli, rushed: fast };
   });
   const claimable = starsFor(state.run.earned);
   return {
@@ -254,11 +284,13 @@ export function warehouseView(state: WarehouseState): WarehouseView {
     cash: state.cash,
     incomePerSec: est.incomePerSec,
     boostedIncomePerSec: Math.max(est.incomePerSec, boosted),
+    ordersPerSec: est.ordersPerSec,
     pay: mulDiv(d.payCents, d.payMulBp, BP),
     contract: nameAt(CONTRACTS, state.levels.contract),
     truckModel: nameAt(TRUCK_MODELS, state.levels.truck),
     staging: { staged: state.staged, cap: d.stageCapMilli, orderPerTick: mulDiv(mulDiv(d.orderMilli, orderBpAt(d.twist, state.tick), BP), boost.orderBp, BP) },
     picking: pickingView(state, d, boost),
+    receiving: receivingView(state, d, boost),
     journey: journeyAt(state.levels.contract),
     docks,
     upgrades: UPGRADE_IDS.map((id) => upgradeView(id, state, d.payMulBp)),
@@ -273,7 +305,7 @@ export function warehouseView(state: WarehouseState): WarehouseView {
       bonusAfterBp: BP + (state.stars + claimable) * T.starBonusBp.value,
       nextSite: siteView(state.site + 1),
     },
-    offbacklogCapMinutes: offlineMinutesAt(state.levels.night),
+    offlineCapMinutes: offlineMinutesAt(state.levels.night),
     run: state.run,
     life: state.life,
   };

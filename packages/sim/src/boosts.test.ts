@@ -65,10 +65,10 @@ describe('boosts (RULES 15)', () => {
     expect(again.events).toContainEqual(expect.objectContaining({ type: 'rejected', payload: { command: 'boost', reason: 'Already running' } }));
   });
 
-  it('All hands opens at 3 docks and Pay surge with the first new contract', () => {
+  it('All hands opens at 3 docks and Peak surcharge with the first new contract', () => {
     const s = createWarehouse({ seed: 1 });
     expect(use(s, 'allHands').events).toContainEqual(expect.objectContaining({ type: 'rejected', payload: { command: 'boost', reason: `Needs ${T.allHandsMinDocks.value} docks` } }));
-    expect(use(s, 'surge').events).toContainEqual(expect.objectContaining({ type: 'rejected', payload: { command: 'boost', reason: 'Needs Regional' } }));
+    expect(use(s, 'surge').events).toContainEqual(expect.objectContaining({ type: 'rejected', payload: { command: 'boost', reason: 'Needs Online boutique' } }));
     const u = unlocked();
     expect(use(u, 'allHands').state.boosts.allHands.left).toBe(T.allHandsTicks.value - 1);
     expect(use(u, 'surge').state.boosts.surge.left).toBe(T.surgeTicks.value - 1);
@@ -130,15 +130,15 @@ describe('boosts in the view (RULES 15)', () => {
     const view = warehouseView(createWarehouse({ seed: 1 }));
     expect(view.boosts.map((b) => b.id)).toEqual(['flashSale', 'allHands', 'surge']);
     const [rush, hands, surge] = view.boosts;
-    expect(rush).toMatchObject({ name: 'Rush hour', effect: '3x passengers for 60 s', ready: true, locked: null, left: 0, length: T.flashSaleTicks.value });
-    expect(hands).toMatchObject({ name: 'All hands', effect: 'Every dock rushed for 60 s', ready: false, locked: 'Needs 3 docks' });
-    expect(surge).toMatchObject({ name: 'Pay surge', effect: '2x pays for 60 s', ready: false, locked: 'Needs Regional' });
+    expect(rush).toMatchObject({ name: 'Flash sale', effect: '3x orders for 60 s', ready: true, locked: null, left: 0, length: T.flashSaleTicks.value });
+    expect(hands).toMatchObject({ name: 'All hands', effect: 'Everyone rushed for 60 s', ready: false, locked: 'Needs 3 docks' });
+    expect(surge).toMatchObject({ name: 'Peak surcharge', effect: '2x pay for 60 s', ready: false, locked: 'Needs Online boutique' });
   });
 
   it('points at the boost that fixes the bottleneck', () => {
     const view = warehouseView(unlocked());
     const helps = view.boosts.filter((b) => b.helps).map((b) => b.id);
-    if (view.bottleneck.kind === 'passengers' || view.bottleneck.kind === 'timer') expect(helps).toContain('flashSale');
+    if (view.bottleneck.kind === 'orders' || view.bottleneck.kind === 'timer') expect(helps).toContain('flashSale');
     else expect(helps).toContain('allHands');
   });
 

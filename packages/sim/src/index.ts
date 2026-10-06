@@ -4,7 +4,7 @@
  * Contract enforced by tsconfig, ESLint and a test in packages/harness: no DOM,
  * no network, no clock, no Math.random, no imports except @warehouse/contracts.
  * Randomness comes from the seeded RNG inside State; all game maths uses
- * integers (cents, milli-passengers, ticks, basis points).
+ * integers (cents, milli-orders, ticks, basis points).
  *
  * Surface (S1): `step(state, commands) -> { state, events }`, `advanceMany` for
  * catch-up (P4), and `WarehouseSession` for a host. The interface reads only
@@ -23,9 +23,12 @@ export {
   earnedForStars,
   lockReason,
   maxLevel,
-  offbacklogCapTicks,
+  offlineCapTicks,
   offlineMinutesAt,
   parcelsAt,
+  poUnitsFor,
+  receiveMilliAt,
+  shelfCapMilliAt,
   starsFor,
   upgradeCost,
   type Derived,

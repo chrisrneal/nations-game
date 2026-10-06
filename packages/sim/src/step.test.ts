@@ -259,11 +259,11 @@ describe('site twists (RULES 10)', () => {
     expect(d?.payload).toMatchObject({ cents: 1875 });
   });
 
-  it('says the short runway is why trucks stop growing in Port Calder', () => {
+  it('says the narrow yard is why trucks stop growing in Port Calder', () => {
     const s = createWarehouse({ seed: 1, site: 1 });
     const capped = tweak(s, { levels: { ...s.levels, truck: T.narrowYardMaxTruck.value, contract: T.narrowYardMaxTruck.value } });
-    expect(lockReason('truck', capped)).toBe('Short runway');
-    expect(lockReason('contract', capped)).toBe('Short runway');
+    expect(lockReason('truck', capped)).toBe('Narrow yard');
+    expect(lockReason('contract', capped)).toBe('Narrow yard');
   });
 
   it('cycles through the sites as warehouses are sold', () => {
@@ -276,8 +276,8 @@ describe('site twists (RULES 10)', () => {
     }
     expect(visited).toEqual([1, 2, 3, 4, 5]);
     expect(s.stars).toBe(5);
-    expect(siteAt(4).label).toBe('Millbrook II');
-    expect(siteAt(6).label).toBe('Highmoor Hub II');
+    expect(siteAt(4).label).toBe('Millbrook Depot II');
+    expect(siteAt(6).label).toBe('Highmoor Crossdock II');
   });
 
   it('Highmoor Hub sends connecting passengers back after a full shipment', () => {

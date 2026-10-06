@@ -65,7 +65,7 @@ export function SettingsSheet(props: { view: WarehouseView; host: WarehouseHost;
         </div>
         <div>
           <dt>Offline earnings</dt>
-          <dd>up to {view.offbacklogCapMinutes >= 60 ? `${view.offbacklogCapMinutes / 60} h` : `${view.offbacklogCapMinutes} min`}</dd>
+          <dd>up to {view.offlineCapMinutes >= 60 ? `${view.offlineCapMinutes / 60} h` : `${view.offlineCapMinutes} min`}</dd>
         </div>
       </dl>
       {feedback !== undefined && (

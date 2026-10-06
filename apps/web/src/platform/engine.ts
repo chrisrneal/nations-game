@@ -1,5 +1,5 @@
 import type { WarehouseEvent, WarehouseIntent, WarehouseSaveFile, WarehouseState, WarehouseView, Bottleneck, Stats } from '@warehouse/contracts';
-import { WAREHOUSE_TUNABLES, WarehouseSession, UPGRADE_TEXT, warehouseView, createWarehouse, estimate, hashState, offbacklogCapTicks, offlineMinutesAt } from '@warehouse/sim';
+import { WAREHOUSE_TUNABLES, WarehouseSession, UPGRADE_TEXT, warehouseView, createWarehouse, estimate, hashState, offlineCapTicks, offlineMinutesAt } from '@warehouse/sim';
 import { LIVE_EVENT_TICKS, RECAP_MIN_AWAY_MS, capped, ticksDue } from './clock.ts';
 
 /**
@@ -145,7 +145,7 @@ export class WarehouseEngine {
     if (due.ticks * tickMs >= RECAP_MIN_AWAY_MS) {
       const before = session.state;
       const awayMs = now - this.anchor;
-      const { run, lost } = capped(due.ticks, offbacklogCapTicks(before));
+      const { run, lost } = capped(due.ticks, offlineCapTicks(before));
       session.advance(run, { events: false });
       // Time beyond the cap is lost: the warehouse closed for the night.
       this.anchor = lost > 0 ? now : due.anchor;

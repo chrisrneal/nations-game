@@ -6,7 +6,7 @@ import { orderMilliAt, derive, backlogCapMilliFor, pickingMilliAt, upgradeCost, 
 import { warehouseView, estimate } from './view.ts';
 import { WAREHOUSE_TUNABLES as T } from './tunables.ts';
 
-/** The picking line (RULES 3): arrivals queue at picking, which clears them into the staging at its own rate. */
+/** The backlog (RULES 3): new orders queue for the pickers, who pick them into staging at their own rate, a unit of stock each. */
 
 function run(state: WarehouseState, ticks: number, commands: (s: WarehouseState) => WarehouseCommand[] = () => []): { state: WarehouseState; events: WarehouseEvent[] } {
   const events: WarehouseEvent[] = [];
@@ -98,19 +98,19 @@ describe('the picking line (RULES 3)', () => {
     expect(state.staged).toBe(1500);
   });
 
-  it('passport control (Continental) and preclearance (Transatlantic) each slow picking to 95%', () => {
+  it('export paperwork (Cross-border) and customs (Overseas) each slow picking to 95%', () => {
     expect(pickingMilliAt(0, 4)).toBe(600);
     expect(pickingMilliAt(0, 5)).toBe(570);
     expect(pickingMilliAt(0, 6)).toBe(541); // 600 x 0.95 x 0.95, floored at each step
     expect(pickingMilliAt(3, 0)).toBe(2025); // 600 x 1.5^3
   });
 
-  it('Picking lanes costs $25, then x1.8 a level, and shows its speed now and next', () => {
+  it('More pickers costs $25, then x1.8 a level, and shows its speed now and next', () => {
     expect(upgradeCost('picking', 0)).toBe(2500);
     expect(upgradeCost('picking', 3)).toBe(14_580);
     const view = warehouseView(createWarehouse({ seed: 1 }));
     const lanes = view.upgrades.find((u) => u.id === 'picking');
-    expect(lanes).toMatchObject({ name: 'Picking lanes', level: 0, cost: 2500, unit: 'ordersPerSec', now: 2400, next: 3600 });
+    expect(lanes).toMatchObject({ name: 'More pickers', level: 0, cost: 2500, unit: 'ordersPerSec', now: 2400, next: 3600 });
   });
 
   it('buying Picking lanes lengthens the line people will join', () => {
@@ -120,7 +120,7 @@ describe('the picking line (RULES 3)', () => {
     expect(derive(after).backlogCapMilli).toBe(900 * 120);
   });
 
-  it('connecting passengers at a hub go straight to the staging: they are already past picking', () => {
+  it('cross-dock orders go straight to staging: they skip picking and the shelves', () => {
     const s0 = createWarehouse({ seed: 1, site: 2 });
     const g = s0.docks[0];
     if (g === undefined) throw new Error('no dock');
@@ -139,23 +139,23 @@ describe('the picking line (RULES 3)', () => {
 });
 
 describe('the bottleneck names the picking line (RULES 8)', () => {
-  it('arrivals beyond what picking clears: long lines at picking, fixed by Picking lanes', () => {
-    const s = withLevels(createWarehouse({ seed: 1 }), { sales: 6, docks: 4, loading: 10, truck: 1 });
+  it('orders beyond what picking clears: orders pile up at picking, fixed by More pickers', () => {
+    const s = withLevels(createWarehouse({ seed: 1 }), { sales: 6, receiving: 6, docks: 4, loading: 10, truck: 1 });
     const est = estimate(s);
-    expect(est.bottleneck).toEqual({ kind: 'picking', text: 'Long lines at picking.', fix: ['picking'] });
+    expect(est.bottleneck).toEqual({ kind: 'picking', text: 'Orders are piling up at picking.', fix: ['picking'] });
     // Throughput is picking's 2.4 a second.
     expect(est.ordersPerSec).toBe(2400);
     const boosts = warehouseView(s).boosts;
     expect(boosts.find((b) => b.helps)?.id).toBe('allHands');
   });
 
-  it('enough lanes and the line is no longer the bottleneck', () => {
-    const s = withLevels(createWarehouse({ seed: 1 }), { sales: 6, picking: 6, docks: 4, loading: 10, truck: 1 });
+  it('enough pickers and the backlog is no longer the bottleneck', () => {
+    const s = withLevels(createWarehouse({ seed: 1 }), { sales: 6, picking: 6, receiving: 6, docks: 4, loading: 10, truck: 1 });
     expect(estimate(s).bottleneck.kind).not.toBe('picking');
   });
 
   it('the estimate matches a measured warehouse held back by picking within 5%', () => {
-    const s = built(3, { sales: 6, docks: 2, loading: 10, truck: 1, picking: 1 });
+    const s = built(3, { sales: 6, docks: 2, loading: 10, truck: 1, picking: 1, receiving: 4 });
     expect(s.docks).toHaveLength(3);
     expect(estimate(s).bottleneck.kind).toBe('picking');
     const warm = run(s, 2400).state;

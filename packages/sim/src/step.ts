@@ -1,10 +1,10 @@
-import type { WarehouseCommand, WarehouseEvent, WarehouseState, BoostId, BoostState, DockState, Levels, RngState, Stats, UpgradeId } from '@warehouse/contracts';
+import type { WarehouseCommand, WarehouseEvent, WarehouseState, BoostId, BoostState, DockState, Levels, PoState, RngState, Stats, UpgradeId } from '@warehouse/contracts';
 import { randomInt } from './rng.ts';
 import { BOOST_IDS, UPGRADE_IDS } from './catalog.ts';
 import { warehouseCommandProblem } from './commands.ts';
 import { mulDiv } from './math.ts';
-import { orderBpAt, boostProblem, boostTicks, cashCap, derive, lockReason, starsFor, turnTicksFor, upgradeCost, type Derived } from './rules.ts';
-import { arrivingDock, openWarehouse } from './state.ts';
+import { boostProblem, boostTicks, cashCap, derive, lockReason, orderBpAt, rushed, starsFor, turnTicksFor, upgradeCost, type Derived } from './rules.ts';
+import { arrivingDock, arrivingPo, openWarehouse } from './state.ts';
 import { WAREHOUSE_TUNABLES as T } from './tunables.ts';
 
 const BP = 10_000;
@@ -21,6 +21,9 @@ interface MState {
   backlog: number;
   pickRush: number;
   staged: number;
+  stock: number;
+  po: Mutable<PoState>;
+  receiveRush: number;
   levels: Mutable<Levels>;
   docks: MDock[];
   nextTruck: number;
@@ -40,6 +43,9 @@ function clone(s: WarehouseState): MState {
     backlog: s.backlog,
     pickRush: s.pickRush,
     staged: s.staged,
+    stock: s.stock,
+    po: { ...s.po },
+    receiveRush: s.receiveRush,
     levels: { ...s.levels },
     docks: s.docks.map((g) => ({ ...g })),
     nextTruck: s.nextTruck,
@@ -62,7 +68,7 @@ function bump(m: MState, key: keyof Stats, by: number): void {
   m.life[key] = Math.min(cashCap(), m.life[key] + by);
 }
 
-/** Arrivals join the picking line up to the longest line people will join; the rest are missed (RULES 3). */
+/** New orders join the backlog up to the longest backlog customers accept; the rest cancel (RULES 3). */
 function joinBacklog(m: MState, milli: number, d: Derived): void {
   const room = Math.max(0, d.backlogCapMilli - m.backlog);
   const added = Math.min(milli, room);
@@ -70,18 +76,43 @@ function joinBacklog(m: MState, milli: number, d: Derived): void {
   if (milli > added) bump(m, 'missed', milli - added);
 }
 
-/** Picking clears the head of the line into the staging; a full staging holds the line (RULES 3, 6). */
-function pickingTick(m: MState, d: Derived): void {
-  const rushed = m.pickRush > 0 || m.boosts.allHands.left > 0;
-  if (m.pickRush > 0) m.pickRush -= 1;
-  const rate = rushed ? mulDiv(d.pickingMilli, T.rushLoadBp.value, BP) : d.pickingMilli;
-  const cleared = Math.min(rate, m.backlog, Math.max(0, d.stageCapMilli - m.staged));
-  m.backlog -= cleared;
-  m.staged += cleared;
+/**
+ * The receiving dock puts the PO away onto the shelves; full shelves hold it.
+ * A finished PO is replaced at once by the next, which takes the rest of the
+ * tick's put-away (RULES 3a, 6).
+ */
+function receivingTick(m: MState, d: Derived, events: Sink): void {
+  const fast = m.receiveRush > 0 || m.boosts.allHands.left > 0;
+  if (m.receiveRush > 0) m.receiveRush -= 1;
+  let budget = fast ? rushed(d.receiveMilli) : d.receiveMilli;
+  while (budget > 0) {
+    const put = Math.min(budget, m.po.units * 1000 - m.po.received, Math.max(0, d.shelfCapMilli - m.stock));
+    if (put <= 0) break;
+    m.stock += put;
+    m.po.received += put;
+    budget -= put;
+    if (m.po.received >= m.po.units * 1000) {
+      bump(m, 'pos', 1);
+      bump(m, 'received', m.po.units);
+      emit(events, { tick: m.tick, type: 'received', payload: { po: m.po.id, units: m.po.units } });
+      m.po = arrivingPo(m.po.id + 1, d);
+    }
+  }
 }
 
-/** Adds passengers straight to the staging (connecting passengers stay airside) up to its parcels; the rest are missed (RULES 10). */
-function addWaiting(m: MState, milli: number, d: Derived): void {
+/** Pickers take orders from the head of the backlog, a unit of stock each, into staging; empty shelves or full staging hold them (RULES 3, 6). */
+function pickingTick(m: MState, d: Derived): void {
+  const fast = m.pickRush > 0 || m.boosts.allHands.left > 0;
+  if (m.pickRush > 0) m.pickRush -= 1;
+  const rate = fast ? rushed(d.pickingMilli) : d.pickingMilli;
+  const picked = Math.min(rate, m.backlog, m.stock, Math.max(0, d.stageCapMilli - m.staged));
+  m.backlog -= picked;
+  m.stock -= picked;
+  m.staged += picked;
+}
+
+/** Adds orders straight to staging (cross-dock orders skip picking and stock) up to its space; the rest are cancelled (RULES 10). */
+function addStaged(m: MState, milli: number, d: Derived): void {
   const room = Math.max(0, d.stageCapMilli - m.staged);
   const added = Math.min(milli, room);
   m.staged += added;
@@ -118,7 +149,7 @@ function depart(m: MState, index: number, d: Derived, events: Sink): void {
   bump(m, 'orders', orders);
   if (full) bump(m, 'fullShipments', 1);
   emit(events, { tick: m.tick, type: 'departed', payload: { dock: index, truck: dock.truck, orders, parcels: dock.parcels, cents, full, express: dock.express } });
-  if (full && d.twist === 'crossdock') addWaiting(m, mulDiv(dock.parcels * 1000, T.crossdockBp.value, BP), d);
+  if (full && d.twist === 'crossdock') addStaged(m, mulDiv(dock.parcels * 1000, T.crossdockBp.value, BP), d);
   dock.turn = turnTicksFor(dock.parcels, d.crewBp);
   dock.turnMax = dock.turn;
   dock.loaded = 0;
@@ -129,19 +160,20 @@ function depart(m: MState, index: number, d: Derived, events: Sink): void {
 /** One dock's tick (RULES 5 and 6). */
 function dockTick(m: MState, index: number, d: Derived, events: Sink): void {
   const dock = m.docks[index] as MDock;
-  const rushed = dock.rush > 0 || m.boosts.allHands.left > 0;
+  const fast = dock.rush > 0 || m.boosts.allHands.left > 0;
   if (dock.rush > 0) dock.rush -= 1;
   if (dock.turn > 0) {
-    dock.turn = Math.max(0, dock.turn - (rushed ? T.rushTurnSpeed.value : 1));
+    dock.turn = Math.max(0, dock.turn - (fast ? T.rushTurnSpeed.value : 1));
     if (dock.turn === 0) arrive(m, index, d, events);
     return;
   }
-  const rate = rushed ? mulDiv(d.loadMilli, T.rushLoadBp.value, BP) : d.loadMilli;
+  const rate = fast ? rushed(d.loadMilli) : d.loadMilli;
   const need = dock.parcels * 1000 - dock.loaded;
   const take = Math.min(rate, need, m.staged);
   m.staged -= take;
   dock.loaded += take;
-  if (rushed) dock.loaded += Math.min(rate - take, need - take);
+  // A rushed dock also loads counter orders: trade customers collecting at the dock (RULES 6).
+  if (fast) dock.loaded += Math.min(rate - take, need - take);
   if (dock.timer > 0) dock.timer -= 1;
   const full = dock.loaded >= dock.parcels * 1000;
   if (full || (dock.timer === 0 && dock.loaded >= 1000)) depart(m, index, d, events);
@@ -207,10 +239,14 @@ function sell(m: MState, events: Sink): boolean {
     reject(m, events, 'sell', 'Not worth a star yet');
     return false;
   }
-  const next = openWarehouse({ tick: m.tick, rng: m.rng, site: m.site + 1, stars: m.stars + stars, life: m.life, nextTruck: m.nextTruck });
+  const next = openWarehouse({ tick: m.tick, rng: m.rng, site: m.site + 1, stars: m.stars + stars, life: m.life, nextTruck: m.nextTruck, nextPo: m.po.id + 1 });
   Object.assign(m, clone(next));
   emit(events, { tick: m.tick, type: 'sold', payload: { stars, site: m.site } });
   return true;
+}
+
+function bank(rush: number): number {
+  return Math.min(T.rushMaxTicks.value, rush + T.rushTicksPerTap.value);
 }
 
 /** Applies one command; true if it changed the levels or the warehouse (so derived numbers must be recomputed). */
@@ -227,12 +263,16 @@ function apply(m: MState, command: WarehouseCommand, events: Sink): boolean {
         reject(m, events, 'tap', 'no such dock');
         return false;
       }
-      dock.rush = Math.min(T.rushMaxTicks.value, dock.rush + T.rushTicksPerTap.value);
+      dock.rush = bank(dock.rush);
       bump(m, 'taps', 1);
       return false;
     }
     case 'tapPick':
-      m.pickRush = Math.min(T.rushMaxTicks.value, m.pickRush + T.rushTicksPerTap.value);
+      m.pickRush = bank(m.pickRush);
+      bump(m, 'taps', 1);
+      return false;
+    case 'tapReceive':
+      m.receiveRush = bank(m.receiveRush);
       bump(m, 'taps', 1);
       return false;
     case 'buy':
@@ -245,14 +285,19 @@ function apply(m: MState, command: WarehouseCommand, events: Sink): boolean {
   }
 }
 
-/** One tick, in place: commands, arrivals into the line, picking into the staging, then every dock in rotating order (RULES 3, 5). */
+/**
+ * One tick, in place (RULES 5): commands, new orders into the backlog,
+ * receiving onto the shelves, picking into staging, then every dock in
+ * rotating order.
+ */
 function tickInPlace(m: MState, commands: readonly WarehouseCommand[], d: Derived, events: Sink): Derived {
   let current = d;
   for (const command of commands.slice(0, T.maxCommandsPerTick.value)) {
     if (apply(m, command, events)) current = derive(m);
   }
-  const arrivals = mulDiv(current.orderMilli, orderBpAt(current.twist, m.tick), BP);
-  joinBacklog(m, m.boosts.flashSale.left > 0 ? mulDiv(arrivals, T.flashSaleOrderBp.value, BP) : arrivals, current);
+  const orders = mulDiv(current.orderMilli, orderBpAt(current.twist, m.tick), BP);
+  joinBacklog(m, m.boosts.flashSale.left > 0 ? mulDiv(orders, T.flashSaleOrderBp.value, BP) : orders, current);
+  receivingTick(m, current, events);
   pickingTick(m, current);
   const n = m.docks.length;
   const start = m.tick % n;

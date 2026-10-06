@@ -33,6 +33,8 @@ export type {
   JourneyView,
   Levels,
   PickingView,
+  PoState,
+  ReceivingView,
   StarsView,
   Stats,
   TapPayload,
