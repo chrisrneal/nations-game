@@ -35,7 +35,7 @@ export function formatDuration(seconds: number): string {
   return `${h}h ${Math.floor((s % 3600) / 60)}m`;
 }
 
-/** Milli-passengers a second as "2.0/s", "1.2K/s". */
+/** Milli-orders a second as "2.0/s", "1.2K/s". */
 export function formatRate(milliPerSec: number): string {
   const perSec = milliPerSec / 1000;
   return perSec < 100 ? `${(Math.floor(perSec * 10) / 10).toFixed(1)}/s` : `${short(perSec)}/s`;

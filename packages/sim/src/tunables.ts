@@ -94,10 +94,10 @@ export const WAREHOUSE_TUNABLES = {
   allHandsTicks: { value: 240, min: 80, max: 480, note: 'Boost: how long All hands rushes every station (60 s).' },
   allHandsRechargeTicks: { value: 1200, min: 480, max: 4800, note: 'Boost: All hands recharge (5 min): a minute of tapping for a one-handed or idle player.' },
   allHandsMinDocks: { value: 3, min: 1, max: 4, note: 'Boost: docks before All hands opens (about minute 2), so the boost bar fills in one at a time.' },
-  surgeTicks: { value: 240, min: 80, max: 480, note: 'Boost: how long Peak surcharge runs (60 s).' },
-  surgeRechargeTicks: { value: 3600, min: 1200, max: 7200, note: 'Boost: Peak surcharge recharge (15 min): one per idle check-in.' },
-  surgePayBp: { value: 20_000, min: 15_000, max: 30_000, note: 'Boost: pay multiplier during Peak surcharge (2x).' },
-  surgeMinContract: { value: 1, min: 0, max: 3, note: 'Boost: contract level before Peak surcharge opens (the first new contract, about minute 4).' },
+  surgeTicks: { value: 240, min: 80, max: 480, note: 'Boost: how long Peak rates runs (60 s).' },
+  surgeRechargeTicks: { value: 3600, min: 1200, max: 7200, note: 'Boost: Peak rates recharge (15 min): one per idle check-in.' },
+  surgePayBp: { value: 20_000, min: 15_000, max: 30_000, note: 'Boost: pay multiplier during Peak rates (2x).' },
+  surgeMinContract: { value: 1, min: 0, max: 3, note: 'Boost: contract level before Peak rates opens (the first new contract, about minute 4).' },
 } as const satisfies Readonly<Record<string, Tunable>>;
 
 export type WarehouseTunableId = keyof typeof WAREHOUSE_TUNABLES;

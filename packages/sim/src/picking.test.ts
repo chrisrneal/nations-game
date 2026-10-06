@@ -31,7 +31,7 @@ function built(seed: number, buys: Partial<Levels>): WarehouseState {
   return s;
 }
 /** No docks loading: one dock stuck in a long turnaround, so only the line and the staging move. */
-const noBoarding = (s: WarehouseState): WarehouseState => tweak(s, { docks: s.docks.map((g) => ({ ...g, turn: 100_000, turnMax: 100_000 })) });
+const noLoading = (s: WarehouseState): WarehouseState => tweak(s, { docks: s.docks.map((g) => ({ ...g, turn: 100_000, turnMax: 100_000 })) });
 
 describe('the picking line (RULES 3)', () => {
   it('a new warehouse has an empty line, Picking lanes at level 0 and no extra lane open', () => {
@@ -43,7 +43,7 @@ describe('the picking line (RULES 3)', () => {
 
   it('picking clears 2.4 a second at level 0, ahead of the 1.6 arriving: no line forms while the staging has room', () => {
     expect(pickingMilliAt(0, 0)).toBe(600);
-    const s = noBoarding(tweak(createWarehouse({ seed: 1 }), { staged: 0 }));
+    const s = noLoading(tweak(createWarehouse({ seed: 1 }), { staged: 0 }));
     const { state } = run(s, 40);
     expect(state.backlog).toBe(0);
     expect(state.staged).toBe(40 * 400);
@@ -51,7 +51,7 @@ describe('the picking line (RULES 3)', () => {
 
   it('when arrivals outrun picking the line grows by the difference and the staging fills at picking speed', () => {
     // Sales level 5: 1.6 x 1.35^5 = 7.17 a second arrive; picking clears 2.4.
-    const s = noBoarding(tweak(withLevels(createWarehouse({ seed: 1 }), { sales: 5 }), { staged: 0 }));
+    const s = noLoading(tweak(withLevels(createWarehouse({ seed: 1 }), { sales: 5 }), { staged: 0 }));
     const arrive = orderMilliAt(5);
     expect(arrive).toBe(1792);
     const { state } = run(s, 10);
@@ -59,10 +59,10 @@ describe('the picking line (RULES 3)', () => {
     expect(state.backlog).toBe(10 * (arrive - 600));
   });
 
-  it('people will not join a line longer than 30 s of clearing: the rest turn back and are missed', () => {
+  it('customers will not wait behind a backlog longer than 30 s of picking: the rest cancel', () => {
     const cap = backlogCapMilliFor(pickingMilliAt(0, 0));
-    expect(cap).toBe(72_000); // 2.4 a second x 30 s = 72 people
-    const s = noBoarding(tweak(withLevels(createWarehouse({ seed: 1 }), { sales: 5 }), { staged: 0, backlog: cap - 500 }));
+    expect(cap).toBe(72_000); // 2.4 a second x 30 s = 72 orders
+    const s = noLoading(tweak(withLevels(createWarehouse({ seed: 1 }), { sales: 5 }), { staged: 0, backlog: cap - 500 }));
     const { state } = run(s, 1);
     // 1.792 arrive, 0.5 fit, then picking clears 0.6 from the head.
     expect(state.backlog).toBe(cap - 600);
@@ -72,7 +72,7 @@ describe('the picking line (RULES 3)', () => {
   it('a full staging holds the backlog: picking stops and the line backs up', () => {
     const s0 = createWarehouse({ seed: 1 });
     const full = stageCapMilliAt(0);
-    const s = noBoarding(tweak(s0, { staged: full, backlog: 0 }));
+    const s = noLoading(tweak(s0, { staged: full, backlog: 0 }));
     const { state } = run(s, 10);
     expect(state.staged).toBe(full);
     expect(state.backlog).toBe(10 * 400);
@@ -80,7 +80,7 @@ describe('the picking line (RULES 3)', () => {
   });
 
   it('a tap opens an extra lane: 2.5 s of rush, 5 s at most, clearing 2.5x', () => {
-    const s = noBoarding(tweak(withLevels(createWarehouse({ seed: 1 }), { sales: 5 }), { staged: 0, backlog: 50_000 }));
+    const s = noLoading(tweak(withLevels(createWarehouse({ seed: 1 }), { sales: 5 }), { staged: 0, backlog: 50_000 }));
     const tapped = step(s, [{ tick: s.tick, type: 'tapPick', payload: {} }]).state;
     expect(tapped.pickRush).toBe(T.rushTicksPerTap.value - 1);
     expect(tapped.staged).toBe(1500); // 600 x 2.5
@@ -93,7 +93,7 @@ describe('the picking line (RULES 3)', () => {
   });
 
   it('All hands opens the extra lane too', () => {
-    const s = noBoarding(tweak(withLevels(createWarehouse({ seed: 1 }), { sales: 5, docks: 2 }), { staged: 0, backlog: 50_000 }));
+    const s = noLoading(tweak(withLevels(createWarehouse({ seed: 1 }), { sales: 5, docks: 2 }), { staged: 0, backlog: 50_000 }));
     const { state } = run(s, 1, (cur) => [{ tick: cur.tick, type: 'boost', payload: { boost: 'allHands' } }]);
     expect(state.staged).toBe(1500);
   });
@@ -113,7 +113,7 @@ describe('the picking line (RULES 3)', () => {
     expect(lanes).toMatchObject({ name: 'More pickers', level: 0, cost: 2500, unit: 'ordersPerSec', now: 2400, next: 3600 });
   });
 
-  it('buying Picking lanes lengthens the line people will join', () => {
+  it('hiring pickers lengthens the backlog customers will wait behind', () => {
     const s = tweak(createWarehouse({ seed: 1 }), { cash: 100_000 });
     const after = step(s, [{ tick: 0, type: 'buy', payload: { upgrade: 'picking' } }]).state;
     expect(after.levels.picking).toBe(1);

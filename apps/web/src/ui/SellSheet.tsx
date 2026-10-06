@@ -38,7 +38,7 @@ export function SellSheet(props: { view: WarehouseView; store: WarehouseStore; o
       </span>
       <dl className="sell-facts">
         <div>
-          <dt>Every pay, forever</dt>
+          <dt>Pay per order, forever</dt>
           <dd>
             {pct(stars.bonusBp)} → <strong>{pct(stars.bonusAfterBp)}</strong>
           </dd>
@@ -51,7 +51,7 @@ export function SellSheet(props: { view: WarehouseView; store: WarehouseStore; o
       <p className="twist">{stars.nextSite.twist}</p>
       <p className="sheet-note">Cash, upgrades and docks start again. Stars and lifetime numbers stay.</p>
       <button type="button" className="btn btn-primary btn-wide" disabled={worth === 0} onClick={onSell} data-testid="confirm-sell">
-        {worth === 0 ? 'Keep building' : `Sell and fly to ${stars.nextSite.name}`}
+        {worth === 0 ? 'Keep building' : `Sell and move to ${stars.nextSite.name}`}
       </button>
     </Sheet>
   );

@@ -48,7 +48,7 @@ export class MemorySaveStore implements SaveStore {
   }
 }
 
-/** A fresh database name, so the retired Nations saves (database "nations") are never read as warehouses. */
+/** A fresh database name, so the retired Nations and airport saves (databases "nations" and "airport") are never read as warehouses. */
 export const DB_NAME = 'warehouse';
 const STORE = 'slots';
 

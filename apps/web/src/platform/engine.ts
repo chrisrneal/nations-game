@@ -18,10 +18,13 @@ export interface AwayRecap {
   readonly earned: number;
   readonly shipments: number;
   readonly fullShipments: number;
-  /** Whole passengers carried and turned away by a full sales. */
+  /** Whole orders shipped, and cancelled because the backlog was too long. */
   readonly orders: number;
   readonly missed: number;
   readonly expresses: number;
+  /** Purchase orders received, and their units. */
+  readonly pos: number;
+  readonly received: number;
   readonly bottleneck: Bottleneck;
   /** Name of the upgrade that fixes the bottleneck. */
   readonly fixName: string;
@@ -46,6 +49,8 @@ function diff(after: Stats, before: Stats): Stats {
     orders: after.orders - before.orders,
     missed: after.missed - before.missed,
     expresses: after.expresses - before.expresses,
+    pos: after.pos - before.pos,
+    received: after.received - before.received,
     taps: after.taps - before.taps,
   };
 }
@@ -66,6 +71,8 @@ export function awayRecap(before: WarehouseState, after: WarehouseState, awayMs:
     orders: d.orders,
     missed: Math.floor(d.missed / 1000),
     expresses: d.expresses,
+    pos: d.pos,
+    received: d.received,
     bottleneck,
     fixName: fix === undefined ? '' : UPGRADE_TEXT[fix].name,
   };

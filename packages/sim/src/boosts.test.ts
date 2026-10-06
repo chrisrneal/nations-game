@@ -65,10 +65,10 @@ describe('boosts (RULES 15)', () => {
     expect(again.events).toContainEqual(expect.objectContaining({ type: 'rejected', payload: { command: 'boost', reason: 'Already running' } }));
   });
 
-  it('All hands opens at 3 docks and Peak surcharge with the first new contract', () => {
+  it('All hands opens at 3 docks and Peak rates with the first new contract', () => {
     const s = createWarehouse({ seed: 1 });
     expect(use(s, 'allHands').events).toContainEqual(expect.objectContaining({ type: 'rejected', payload: { command: 'boost', reason: `Needs ${T.allHandsMinDocks.value} docks` } }));
-    expect(use(s, 'surge').events).toContainEqual(expect.objectContaining({ type: 'rejected', payload: { command: 'boost', reason: 'Needs Online boutique' } }));
+    expect(use(s, 'surge').events).toContainEqual(expect.objectContaining({ type: 'rejected', payload: { command: 'boost', reason: 'Needs Web shop' } }));
     const u = unlocked();
     expect(use(u, 'allHands').state.boosts.allHands.left).toBe(T.allHandsTicks.value - 1);
     expect(use(u, 'surge').state.boosts.surge.left).toBe(T.surgeTicks.value - 1);
@@ -132,7 +132,7 @@ describe('boosts in the view (RULES 15)', () => {
     const [rush, hands, surge] = view.boosts;
     expect(rush).toMatchObject({ name: 'Flash sale', effect: '3x orders for 60 s', ready: true, locked: null, left: 0, length: T.flashSaleTicks.value });
     expect(hands).toMatchObject({ name: 'All hands', effect: 'Everyone rushed for 60 s', ready: false, locked: 'Needs 3 docks' });
-    expect(surge).toMatchObject({ name: 'Peak surcharge', effect: '2x pay for 60 s', ready: false, locked: 'Needs Online boutique' });
+    expect(surge).toMatchObject({ name: 'Peak rates', effect: '2x pay for 60 s', ready: false, locked: 'Needs Web shop' });
   });
 
   it('points at the boost that fixes the bottleneck', () => {
@@ -153,7 +153,7 @@ describe('boosts in the view (RULES 15)', () => {
     expect(hands.boostedIncomePerSec).toBeGreaterThan(hands.incomePerSec);
   });
 
-  it('shows Rush hour in the arrivals the passenger flow draws', () => {
+  it('shows Flash sale in the orders the floor draws', () => {
     const s = createWarehouse({ seed: 1 });
     const view = warehouseView(use(s, 'flashSale').state);
     expect(view.staging.orderPerTick).toBe((T.orderBaseMilliPerTick.value * T.flashSaleOrderBp.value) / 10_000);

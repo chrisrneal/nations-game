@@ -26,7 +26,7 @@ const tweak = (s: WarehouseState, patch: Partial<WarehouseState>): WarehouseStat
 describe('a new warehouse (RULES 3-4)', () => {
   const s = createWarehouse({ seed: 1 });
 
-  it('opens with one dock loading a 10-parcel truck and passengers staged', () => {
+  it('opens with one dock loading a 10-parcel truck and orders packed', () => {
     expect(s.tick).toBe(0);
     expect(s.cash).toBe(T.startingCashCents.value);
     expect(s.docks).toHaveLength(1);
@@ -79,17 +79,17 @@ describe('loading and departures (RULES 5)', () => {
     expect(d?.payload).toMatchObject({ orders: 2, full: false, cents: 200 });
   });
 
-  it('waits at a zero timer for its first passenger', () => {
+  it('waits at a zero timer for its first order', () => {
     const s = tweak(createWarehouse({ seed: 1 }), { staged: 0, docks: [{ ...dock(createWarehouse({ seed: 1 })), timer: 0 }] });
     const one = step(s, []);
-    // 400 milli arrived and loaded: not a whole passenger yet.
+    // 400 milli arrived and loaded: not a whole order yet.
     expect(one.events.some((e) => e.type === 'departed')).toBe(false);
     expect(dock(one.state).timer).toBe(0);
     const three = run(one.state, 2);
     expect(three.events.find((e) => e.type === 'departed')?.payload).toMatchObject({ orders: 1 });
   });
 
-  it('counts passengers turned away when the staging is full and the picking line too (RULES 3)', () => {
+  it('counts orders cancelled when packing is full and the backlog too (RULES 3)', () => {
     const s = createWarehouse({ seed: 1 });
     const full = tweak(s, { staged: 40_000, backlog: 72_000, docks: [{ ...dock(s), turn: 50, turnMax: 50 }] });
     const after = step(full, []).state;
@@ -98,7 +98,7 @@ describe('loading and departures (RULES 5)', () => {
     expect(after.run.missed).toBe(400);
   });
 
-  it('shares scarce passengers between docks in rotating order', () => {
+  it('shares scarce orders between docks in rotating order', () => {
     const s = createWarehouse({ seed: 1 });
     const two = tweak(s, { staged: 0, levels: { ...s.levels, docks: 1 }, docks: [dock(s), { ...dock(s), truck: 2 }] });
     const after = run(two, 10).state;
@@ -280,11 +280,11 @@ describe('site twists (RULES 10)', () => {
     expect(siteAt(6).label).toBe('Highmoor Crossdock II');
   });
 
-  it('Highmoor Hub sends connecting passengers back after a full shipment', () => {
+  it('Highmoor Crossdock brings cross-dock orders back after a full truck', () => {
     const s = tweak(createWarehouse({ seed: 1, site: 2 }), { staged: 10_000 });
     const before = run(s, 19).state;
     const after = step(before, []).state;
-    // 0.4 arrive, 0.5 board and fill the truck, and 2 connecting passengers come back.
+    // 0.4 arrive, 0.5 board and fill the truck, and 2 cross-dock orders come back.
     expect(after.staged - before.staged).toBe(400 - 500 + 2000);
   });
 

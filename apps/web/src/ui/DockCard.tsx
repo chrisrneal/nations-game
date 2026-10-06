@@ -13,8 +13,8 @@ export function standColumn(index: number): number {
 }
 
 /**
- * The docks, drawn like the picking scanners: a panel of narrow stands, two
- * each side of a pier that the people walk down. Its header names the truck
+ * The docks, drawn like the picker stations: a panel of narrow bays, two
+ * each side of the aisle packed orders are carried down. Its header names the truck
  * the docks are getting now.
  */
 export function Pier(props: { model: string; children: ReactNode }): ReactElement {
@@ -46,7 +46,7 @@ interface DockCardProps {
 
 /**
  * One dock's stand: the parked truck seen from above, nose up to the pier,
- * whose parcels the canvas fills with the people aboard (Floor); its load
+ * whose parcels the canvas fills with the orders loaded (Floor); its load
  * and the seconds to departure as text, or the turnaround countdown while the
  * stand is empty. Tapping anywhere on it rushes the dock (RULES 6). React
  * renders it when the truck or phase changes; the text moves by direct DOM
@@ -75,7 +75,7 @@ export const DockCard = memo(function DockCard(props: DockCardProps): ReactEleme
         // A truck just left or arrived: React is about to swap the stand; leave it alone.
         if (g.truck !== truck || g.turn > 0 !== turning) return;
         if (g.turn > 0) {
-          if (label.current) label.current.textContent = `Back ${formatDuration((g.turn * tickMs) / 1000)}`;
+          if (label.current) label.current.textContent = `Next ${formatDuration((g.turn * tickMs) / 1000)}`;
           if (timer.current) timer.current.textContent = '';
         } else {
           if (label.current) label.current.textContent = `${Math.floor(g.loaded / 1000)}/${g.parcels}`;
@@ -98,7 +98,7 @@ export const DockCard = memo(function DockCard(props: DockCardProps): ReactEleme
       className={`dock${turning ? ' turning' : ''}${express ? ' express' : ''}`}
       style={{ gridColumn: standColumn(index) }}
       data-testid={`dock-${index}`}
-      aria-label={`Dock ${index + 1}, ${turning ? 'turning around' : model}. Tap to rush.`}
+      aria-label={`Dock ${index + 1}, ${turning ? 'swapping trucks' : model}. Tap to rush.`}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
         const box = event.currentTarget.getBoundingClientRect();

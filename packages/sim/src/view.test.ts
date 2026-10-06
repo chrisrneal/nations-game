@@ -69,7 +69,7 @@ describe('the view (S6, P5)', () => {
   it('locks contracts behind truck size and shows the next truck and contract names', () => {
     const v = warehouseView({ ...createWarehouse({ seed: 1 }), cash: 10 ** 9 });
     const contract = v.upgrades.find((u) => u.id === 'contract');
-    expect(contract).toMatchObject({ locked: 'Needs bigger trucks first', affordable: false, nextName: 'Online boutique' });
+    expect(contract).toMatchObject({ locked: 'Needs bigger trucks first', affordable: false, nextName: 'Web shop' });
     expect(v.upgrades.find((u) => u.id === 'truck')?.nextName).toBe('Courier van');
   });
 

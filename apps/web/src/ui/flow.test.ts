@@ -2,38 +2,38 @@ import type { WarehouseEvent, WarehouseView, DockView, Stats } from '@warehouse/
 import { describe, expect, it } from 'vitest';
 import { DOTS_MAX, FlowModel, MAZE_MAX, Path, choosePerDot, mazePath, parcelSpots, visible, type FlowGeometry } from './flow.ts';
 
-const STATS: Stats = { earned: 0, shipments: 0, fullShipments: 0, orders: 0, missed: 0, expresses: 0, taps: 0 };
+const STATS: Stats = { earned: 0, shipments: 0, fullShipments: 0, orders: 0, missed: 0, expresses: 0, pos: 0, received: 0, taps: 0 };
 
 function dock(index: number, over: Partial<DockView> = {}): DockView {
-  return { index, truck: index + 1, parcels: 10, loaded: 0, timer: 60, timerMax: 60, turn: 0, turnMax: 0, rush: 0, express: false, model: 'Puddle Jumper', rate: 500, rushed: false, ...over };
+  return { index, truck: index + 1, parcels: 10, loaded: 0, timer: 60, timerMax: 60, turn: 0, turnMax: 0, rush: 0, express: false, model: 'Cargo bike', rate: 500, rushed: false, ...over };
 }
 
 /** The parts of a View the flow reads; the rest is never touched. */
-function view(tick: number, over: { staged?: number; orderPerTick?: number; missed?: number; docks?: DockView[]; site?: number; backlog?: number } = {}): WarehouseView {
+function view(
+  tick: number,
+  over: { staged?: number; orderPerTick?: number; missed?: number; docks?: DockView[]; site?: number; backlog?: number; po?: { id: number; units: number; received: number }; stock?: number } = {},
+): WarehouseView {
   return {
     tick,
     tickMs: 250,
     staging: { staged: over.staged ?? 10_000, cap: 40_000, orderPerTick: over.orderPerTick ?? 400 },
     picking: { backlog: over.backlog ?? 0, cap: 72_000, ratePerTick: 600, baseRatePerTick: 600, rushed: false, waitTicks: 0, slowBp: 10_000 },
+    receiving: { stock: over.stock ?? 60_000, shelfCap: 120_000, ratePerTick: 600, baseRatePerTick: 600, rushed: false, po: over.po ?? { id: 1, units: 48, received: 0 } },
     docks: over.docks ?? [dock(0)],
-    site: { index: over.site ?? 0, name: 'Millbrook', twist: '' },
+    site: { index: over.site ?? 0, name: 'Millbrook Depot', twist: '' },
     run: { ...STATS, missed: over.missed ?? 0 },
   } as unknown as WarehouseView;
 }
 
 const GEO: FlowGeometry = {
-  arrY: 30,
+  inbound: { y: 30, start: 40, booths: [{ left: 60, right: 80 }], shelves: { left: 90, right: 330 } },
   door: { x: 10, y: 55 },
   checkin: { left: 14, right: 60, y: 55 },
   maze: { left: 14, right: 280, entry: 64, rows: [55, 70, 85] },
-  scanner: { enter: { x: 284, y: 85 }, exit: { x: 310, y: 85 } },
+  pickers: { enter: { x: 284, y: 85 }, exit: { x: 310, y: 85 } },
   after: [{ left: 290, right: 330 }],
   afterY: 110,
   staging: { left: 20, top: 104, right: 285, bottom: 116 },
-  arrStart: 330,
-  side: 336,
-  arr: [{ left: 150, right: 200, id: 'baggage' }],
-  exit: { left: 10, right: 30 },
   pier: { x: 175, top: 122 },
   docks: [
     { x: 120, door: 140, y: 160, parcels: [] },
@@ -47,8 +47,8 @@ function feed(model: FlowModel, from: number, n: number, make: (tick: number) =>
   return from + n;
 }
 
-describe('people per dot', () => {
-  it('shows one dot a person at the start, and fewer dots per person as the warehouse grows', () => {
+describe('orders per dot', () => {
+  it('shows one dot an order at the start, and fewer dots per order as the warehouse grows', () => {
     expect(choosePerDot(1.6, 1)).toBe(1);
     expect(choosePerDot(30, 1)).toBe(10);
     expect(choosePerDot(640, 1)).toBe(200);
@@ -61,15 +61,15 @@ describe('people per dot', () => {
   });
 });
 
-describe('the passenger flow (RULES 14)', () => {
-  it('sends one dot through the door per person joining the picking line', () => {
+describe('goods on the floor (RULES 14)', () => {
+  it('sends one dot in at the order desk per order joining the backlog', () => {
     const model = new FlowModel();
-    // 1.6 people a second for 10 seconds.
+    // 1.6 orders a second for 10 seconds.
     feed(model, 0, 41, (t) => view(t));
     expect(model.dots.filter((d) => d.kind === 'dep')).toHaveLength(16);
   });
 
-  it('turns people away at the door when the line is full', () => {
+  it('cancels orders at the door when the backlog is full', () => {
     const model = new FlowModel();
     feed(model, 0, 41, (t) => view(t, { staged: 40_000, backlog: 72_000, missed: t * 400 }));
     expect(model.dots.filter((d) => d.kind === 'dep')).toHaveLength(0);
@@ -78,7 +78,7 @@ describe('the passenger flow (RULES 14)', () => {
     expect(model.staging).toBe(1);
   });
 
-  it('walks a dot from the staging to its dock for each passenger loading', () => {
+  it('carries a dot from packing to its dock for each order loaded', () => {
     const model = new FlowModel();
     feed(model, 0, 21, (t) => view(t, { orderPerTick: 0, docks: [dock(0), dock(1, { loaded: t * 500 })] }));
     const loading = model.dots.filter((d) => d.kind === 'board');
@@ -86,7 +86,7 @@ describe('the passenger flow (RULES 14)', () => {
     expect(loading.every((d) => d.dock === 1)).toBe(true);
   });
 
-  it('counts the passengers on a truck that left between two updates', () => {
+  it('counts the orders on a truck that left between two updates', () => {
     const model = new FlowModel();
     model.ingest(view(0, { orderPerTick: 0, docks: [dock(0, { loaded: 8000 })] }), [], 0);
     const left: WarehouseEvent = { tick: 0, type: 'departed', payload: { dock: 0, truck: 1, orders: 10, parcels: 10, cents: 1250, full: true, express: false } };
@@ -94,30 +94,26 @@ describe('the passenger flow (RULES 14)', () => {
     expect(model.dots.filter((d) => d.kind === 'board')).toHaveLength(2);
   });
 
-  it('lets the people off a landed truck, one after another, and walks them out through the exit', () => {
+  it('moves a dot from the PO to the shelves for each unit put away, through quality check', () => {
     const model = new FlowModel();
-    model.ingest(view(0, { orderPerTick: 0 }), [], 0);
-    const landed: WarehouseEvent = { tick: 1, type: 'arrived', payload: { dock: 0, truck: 7, parcels: 10, express: true } };
-    model.ingest(view(1, { orderPerTick: 0 }), [landed], 250);
-    model.advance(16, 250, GEO);
-    expect(model.dots).toHaveLength(1);
-    expect(model.dots[0]).toMatchObject({ kind: 'arr', tint: 'express' });
-    expect(Math.hypot((model.dots[0]?.x ?? 0) - 120, (model.dots[0]?.y ?? 0) - 160)).toBeLessThan(5);
-    let now = 250;
-    for (let i = 0; i < 120; i++) model.advance(16, (now += 16), GEO);
-    expect(model.dots.length).toBe(10);
-    // They walk round the picking maze, never through it.
-    const inMaze = (x: number, y: number): boolean => x > GEO.maze.left && x < GEO.scanner.exit.x && y > 50 && y < 90;
-    let crossed = false;
-    for (let i = 0; i < 1500 && model.dots.length > 0; i++) {
+    // 2.4 units a second put away for 10 seconds, a new PO half way.
+    feed(model, 0, 41, (t) => view(t, { orderPerTick: 0, po: t < 20 ? { id: 1, units: 12, received: t * 600 } : { id: 2, units: 48, received: (t - 20) * 600 } }));
+    const stock = model.dots.filter((d) => d.kind === 'arr');
+    expect(stock).toHaveLength(24);
+    expect(stock.every((d) => d.tint === 'in')).toBe(true);
+    let now = 41 * 250;
+    let hidden = 0;
+    for (let i = 0; i < 2000 && model.dots.length > 0; i++) {
       model.advance(16, (now += 16), GEO);
-      crossed ||= model.dots.some((d) => inMaze(d.x, d.y));
+      hidden = Math.max(hidden, model.dots.filter((d) => !visible(d, now)).length);
+      // Along the lane, never into the maze.
+      expect(model.dots.every((d) => Math.abs(d.y - GEO.inbound.y) < 4 && d.x >= GEO.inbound.start - 1)).toBe(true);
     }
-    expect(crossed).toBe(false);
+    expect(hidden).toBeGreaterThan(0);
     expect(model.dots).toHaveLength(0);
   });
 
-  it('walks a loading passenger down the pier, along the walkway and in at the stand door', () => {
+  it('carries a packed order down the aisle, along the walkway and in at the bay door', () => {
     const model = new FlowModel();
     model.ingest(view(0, { orderPerTick: 0, docks: [dock(0), dock(1)] }), [], 0);
     model.ingest(view(1, { orderPerTick: 0, docks: [dock(0), dock(1, { loaded: 1000 })] }), [], 250);
@@ -129,7 +125,7 @@ describe('the passenger flow (RULES 14)', () => {
       if (d !== undefined) seen.push({ x: d.x, y: d.y });
     }
     expect(model.dots).toHaveLength(0);
-    // Above the walkway it keeps to the pier; it only leaves it along the walkway, and boards at the stand's middle.
+    // Above the walkway it keeps to the aisle; it only leaves it along the walkway, and loads at the bay's middle.
     expect(seen.filter((p) => p.y < 138).every((p) => Math.abs(p.x - GEO.pier.x) < 4)).toBe(true);
     expect(seen.filter((p) => p.y > 142).every((p) => Math.abs(p.x - 230) < 0.5)).toBe(true);
     const last = seen[seen.length - 1];
@@ -145,7 +141,7 @@ describe('the passenger flow (RULES 14)', () => {
     ]);
   });
 
-  it('parcels a truck front row first, from the aisle out, inside its fuselage', () => {
+  it('loads a truck front row first, from the middle out, inside its trailer', () => {
     const box = { left: 0, top: 0, right: 44, bottom: 30 };
     const parcels = parcelSpots(box);
     expect(parcels).toHaveLength(4 * 2 * 6);
@@ -156,7 +152,7 @@ describe('the passenger flow (RULES 14)', () => {
     expect(parcels.every((p, i) => i === 0 || p.y >= (parcels[i - 1]?.y ?? 0))).toBe(true);
   });
 
-  it('walks the maze as a snake: along each row, turning at alternate ends, into the scanners', () => {
+  it('walks the maze as a snake: along each row, turning at alternate ends, into the pickers', () => {
     const path = new Path(mazePath(GEO.maze));
     expect(path.length).toBe(216 + 15 + 266 + 15 + 266);
     expect(path.at(0)).toEqual({ x: 64, y: 55 });
@@ -164,7 +160,7 @@ describe('the passenger flow (RULES 14)', () => {
     expect(path.at(path.length)).toEqual({ x: 280, y: 85 });
   });
 
-  it('the line in the maze is the real backlog: people stand in it while picking holds them', () => {
+  it('the line in the maze is the real backlog: orders wait in it while picking holds them', () => {
     const model = new FlowModel();
     // 1.6 a second join; picking lets nobody through (a full staging): the line grows by 0.4 a tick.
     let tick = feed(model, 0, 1, (t) => view(t, { backlog: 0 }));
@@ -174,13 +170,13 @@ describe('the passenger flow (RULES 14)', () => {
     expect(model.lineDots).toBe(32);
     expect(model.queue.length).toBeGreaterThanOrEqual(30);
     expect(model.queue.length).toBeLessThanOrEqual(34);
-    // They stand head to tail, the head at the scanners, in the order they came.
+    // They wait head to tail, the head at the pickers, in the order they came.
     const path = new Path(mazePath(GEO.maze));
     expect(model.queue[0]?.pos).toBeCloseTo(path.length, 0);
     for (let i = 1; i < model.queue.length; i++) expect(model.queue[i]?.pos ?? 0).toBeLessThan(model.queue[i - 1]?.pos ?? 0);
   });
 
-  it('picking lets the head through as fast as the sim clears the line, and they walk on to the staging', () => {
+  it('picking lets the head through as fast as the sim picks, and they move on to packing', () => {
     const model = new FlowModel();
     // A line of 20 already standing; nobody arrives, picking clears 0.6 a tick.
     let tick = feed(model, 0, 1, (t) => view(t, { orderPerTick: 0, backlog: 20_000 }));
@@ -213,7 +209,7 @@ describe('the passenger flow (RULES 14)', () => {
     expect(model.gap(path) * MAZE_MAX).toBeLessThanOrEqual(path.length + 1);
   });
 
-  it('check-in and the checkpoints after picking queue people for show and hide each one inside while served', () => {
+  it('the order desk and the stations after picking queue orders for show and hide each one inside while served', () => {
     const model = new FlowModel();
     feed(model, 0, 41, (t) => view(t, { orderPerTick: 4000 }));
     let now = 41 * 250;
@@ -223,7 +219,7 @@ describe('the passenger flow (RULES 14)', () => {
       hidden = Math.max(hidden, model.dots.filter((d) => !visible(d, now)).length);
     }
     expect(hidden).toBeGreaterThan(0);
-    // Everyone stays on the floor: never behind the door, never right of the checkpoints.
+    // Everything stays on the floor: never behind the door, never right of the stations.
     expect(model.dots.every((d) => d.x >= GEO.door.x - 1 && d.x <= 332)).toBe(true);
   });
 
@@ -245,8 +241,7 @@ describe('the passenger flow (RULES 14)', () => {
       model,
       0,
       400,
-      (t) => view(t, { orderPerTick: 2400, docks: eight.map((i) => dock(i, { loaded: (t * 3000) % 10_000 })) }),
-      (t) => eight.map((i) => ({ tick: t, type: 'arrived', payload: { dock: i, truck: t * 8 + i, parcels: 10, express: false } })),
+      (t) => view(t, { orderPerTick: 2400, po: { id: 1, units: 1_000_000, received: t * 2400 }, docks: eight.map((i) => dock(i, { loaded: (t * 3000) % 10_000 })) }),
     );
     for (let i = 0; i < 100; i++) model.advance(16, 100_000 + i * 16, GEO);
     expect(model.dots.length).toBeLessThanOrEqual(DOTS_MAX);

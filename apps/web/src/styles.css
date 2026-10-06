@@ -7,7 +7,7 @@
   --bg: #0b1424;
   --panel: #13213a;
   --panel-2: #1a2c4b;
-  --backlog: #29406a;
+  --line: #29406a;
   --fg: #eef3fb;
   --muted: #98aac6;
   --accent: #56d3a0;
@@ -135,6 +135,51 @@ p {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---- the dashboard: four live numbers under the cash ---- */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0.3rem 0 0;
+}
+
+.kpi {
+  min-width: 0;
+  padding: 2px 6px 3px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  transition: border-color 200ms;
+}
+
+.kpi dt {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+}
+
+.kpi dd {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kpi.warn {
+  border-color: var(--warn);
+}
+
+.kpi.warn dd {
+  color: var(--warn);
+}
+
 /* ---- bars: one tick of linear interpolation between sim updates ---- */
 .bar {
   display: block;
@@ -154,7 +199,7 @@ p {
   will-change: transform;
 }
 
-/* ---- the floor: the passenger flow over the docks (RULES 14) ---- */
+/* ---- the floor: goods moving over the docks (RULES 14) ---- */
 .floor {
   position: relative;
   flex: 1;
@@ -163,7 +208,7 @@ p {
   flex-direction: column;
 }
 
-/* The people: one canvas over the concourse and the docks, never in the way of a thumb. */
+/* The goods: one canvas over the floor and the docks, never in the way of a thumb. */
 .flow-dots {
   position: absolute;
   inset: 0;
@@ -174,9 +219,9 @@ p {
 }
 
 .concourse {
-  /* The floor's spare height goes a third to the picking line, two thirds to the docks. */
+  /* The floor's spare height goes a third to receiving and picking, two thirds to the docks. */
   flex: 1 0 auto;
-  max-height: 22rem;
+  max-height: 24rem;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
@@ -198,7 +243,7 @@ p {
   list-style: none;
 }
 
-/* The corridor people walk along. */
+/* The aisle goods move along. */
 .lane::before {
   content: '';
   position: absolute;
@@ -208,9 +253,96 @@ p {
   border-top: 1px dashed var(--line);
 }
 
-/* Arrivals come up from the docks at the right and leave at the left. */
-.lane-arr {
-  padding: 0 1.4rem 0 0;
+/* ---- receiving (RULES 3a): the PO at the dock, quality check, the shelves; one tap sends extra hands ---- */
+.inbound {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 4px 7px 5px;
+  border-radius: 10px;
+  border: 1px solid #4b3f73;
+  background: rgb(215 180 255 / 4%);
+  text-align: left;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 90ms ease-out, border-color 200ms;
+}
+
+.inbound:active {
+  transform: scale(0.985);
+}
+
+.inbound.low .sec-line,
+.inbound.slow .sec-line {
+  color: var(--warn);
+}
+
+.inbound.slow {
+  border-color: var(--warn);
+}
+
+.inbound.rushed {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+.lane-in {
+  gap: 6px;
+}
+
+.lane-in .booth {
+  border-color: #4b3f73;
+}
+
+.booth-po {
+  color: #d7b4ff;
+}
+
+/* The shelves: how full they are, as a bar behind the count. */
+.shelves {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid #4b3f73;
+  background: var(--panel-2);
+  font-size: var(--fs-booth);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.shelf-fill {
+  position: absolute;
+  inset: 0;
+  background: rgb(215 180 255 / 22%);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform var(--tick) linear;
+  will-change: transform;
+}
+
+.inbound.low .shelf-fill {
+  background: rgb(255 157 108 / 28%);
+}
+
+.shelf-label,
+.shelf-count {
+  position: relative;
+}
+
+.shelf-count {
+  margin-left: auto;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .booth {
@@ -225,15 +357,7 @@ p {
   white-space: nowrap;
 }
 
-.lane-arr .booth {
-  border-color: #4b3f73;
-}
-
-.booth-exit {
-  color: var(--muted);
-}
-
-/* ---- the picking line (RULES 3): a maze the real line snakes through, scanners at its end; one tap opens a lane ---- */
+/* ---- picking (RULES 3): a maze the real backlog snakes through, pickers at its end; one tap sends extra pickers ---- */
 .picking {
   position: relative;
   display: flex;
@@ -346,7 +470,7 @@ p {
   transform: translateY(-50%);
 }
 
-/* The scanners: one bar per lane; a tap lights an extra one. */
+/* The pickers: one bar per station; a tap lights an extra one. */
 .sec-scan {
   display: flex;
   align-items: stretch;
@@ -374,7 +498,7 @@ p {
   display: block;
 }
 
-/* ---- the staging: the real staged crowd, past the international checkpoints ---- */
+/* ---- packing: the real packed orders, past the export stations ---- */
 .staging {
   display: flex;
   flex-direction: column;
@@ -421,7 +545,7 @@ p {
   height: clamp(18px, 6vw, 26px);
 }
 
-/* The bench: the canvas parcels the staged crowd here. */
+/* The bench: the canvas stacks the packed orders here. */
 .staging-parcels {
   flex: 1;
   align-self: stretch;
@@ -434,7 +558,7 @@ p {
   font-size: var(--fs-small);
 }
 
-/* ---- docks: a panel of stands like the scanners, two each side of the pier people walk down ---- */
+/* ---- docks: a panel of bays, two each side of the aisle orders are carried down ---- */
 .pier {
   flex: 2 1 auto;
   min-height: 0;
@@ -474,7 +598,7 @@ p {
   color: var(--accent);
 }
 
-/* The middle column is the pier; the gaps above each row are the walkways to the stands' doors. */
+/* The middle column is the aisle; the gaps above each row are the walkways to the bays. */
 .docks {
   flex: 1 1 auto;
   min-height: 0;
@@ -542,7 +666,7 @@ p {
   color: var(--warn);
 }
 
-/* The parked truck from above, nose up to the pier: wings behind the fuselage, where the canvas parcels its people. */
+/* The parked truck from above, cab up to the walkway: the canvas stacks its load in the trailer. */
 .dock-truck {
   position: relative;
   flex: 1;
@@ -554,23 +678,29 @@ p {
   animation: park 420ms ease-out;
 }
 
+.dock-truck {
+  flex-direction: column;
+}
+
+/* The cab. */
 .dock-truck::before {
   content: '';
-  position: absolute;
-  left: -11px;
-  right: -11px;
-  top: 42%;
-  height: 9px;
-  border-radius: 4px;
+  flex-shrink: 0;
+  align-self: center;
+  width: 64%;
+  height: 10px;
+  margin-bottom: 2px;
+  border-radius: 5px 5px 2px 2px;
   background: #24406c;
 }
 
+/* The trailer. */
 .dock-body {
   position: relative;
   z-index: 1;
   flex: 1;
   border: 1px solid #3b5a8e;
-  border-radius: 30px 30px 7px 7px;
+  border-radius: 4px;
   background: #16294a;
 }
 
@@ -593,7 +723,7 @@ p {
   position: absolute;
   left: 3px;
   right: 3px;
-  top: 12px;
+  top: 3px;
   bottom: 3px;
 }
 
@@ -717,8 +847,8 @@ p {
   }
 }
 
-/* ---- juice: take-off, flashes, ripples (transform and opacity only) ---- */
-/* The truck leaves its stand nose first, up past the pier. */
+/* ---- juice: departures, flashes, ripples (transform and opacity only) ---- */
+/* The truck leaves its bay cab first, up past the walkway. */
 .fly {
   position: absolute;
   left: 50%;
@@ -727,20 +857,20 @@ p {
   height: 30px;
   margin-left: -15px;
   color: var(--sky);
-  animation: take-off 700ms cubic-bezier(0.5, 0, 0.9, 0.4) forwards;
+  animation: drive-off 700ms cubic-bezier(0.5, 0, 0.9, 0.4) forwards;
 }
 
 .fly-express {
   color: var(--gold);
 }
 
-@keyframes take-off {
+@keyframes drive-off {
   from {
-    transform: translateY(0) rotate(-90deg) scale(1);
+    transform: translateY(0) scale(1);
     opacity: 1;
   }
   to {
-    transform: translateY(-70px) rotate(-90deg) scale(0.7);
+    transform: translateY(-70px) scale(0.7);
     opacity: 0;
   }
 }
@@ -1303,7 +1433,7 @@ p {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  /* Below the cash, over the passenger flow: news, never over the money or a sheet's buttons. */
+  /* Below the cash, over the warehouse floor: news, never over the money or a sheet's buttons. */
   top: calc(env(safe-area-inset-top) + 6.2rem);
   width: min(92vw, 30rem);
   background: var(--fg);

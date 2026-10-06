@@ -14,17 +14,19 @@
  * shows a three-line recap that one tap collects.
  * Slice 5: a warehouse worth stars sells from the bottom bar in two taps and
  * opens Port Calder with its twist, the stars and one dock.
- * Passenger flow: a new warehouse shows check-in, picking and baggage claim
- * with people walking through them; international contracts add passport
- * control and customs; the 60 fps check runs with the people walking.
- * The picking backlog: a new warehouse has none; the maze is a big tap target and
- * a tap opens an extra lane; the busy warehouse's real line stands in the maze,
- * its six lanes shown, and the bottleneck names it. The testing time skip runs
+ * The floor: a new warehouse shows the order desk, picking, receiving, quality
+ * check and the shelves with goods moving through them, and the dashboard;
+ * cross-border contracts add export paperwork, overseas ones customs; the 60
+ * fps check runs with the goods moving.
+ * The backlog: a new warehouse has none; the maze is a big tap target and a
+ * tap sends extra pickers; the busy warehouse's real backlog waits in the
+ * maze, its six pickers shown, and the bottleneck names it. The receiving lane
+ * is a tap target too and a tap sends extra hands. The testing time skip runs
  * an hour at once and recaps it.
- * Boosts: a new warehouse has Rush hour ready and the other two locked, in the
- * bottom third; a tap starts Rush hour with a countdown; the eight-dock warehouse
- * runs All hands (every dock glows) and Pay surge (boosted income in gold)
- * during the 60 fps check.
+ * Boosts: a new warehouse has Flash sale ready and the other two locked, in
+ * the bottom third; a tap starts Flash sale with a countdown; the eight-dock
+ * warehouse runs All hands (every dock glows) and Peak rates (boosted
+ * income in gold) during the 60 fps check.
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -113,13 +115,16 @@ async function main(): Promise<void> {
     check('a new warehouse opens with one dock', (await page.locator('.dock:not(.dock-next)').count()) === 1);
     check('the next dock shows as something to aim for', (await page.getByTestId('next-dock').count()) === 1);
     check('cash shows at the top', /\$/.test((await page.getByTestId('cash').textContent()) ?? ''));
-    const departures = (await page.getByTestId('picking').textContent()) ?? '';
-    const arrivals = (await page.getByTestId('lane-arrivals').textContent()) ?? '';
-    check('the passenger flow shows picking, check-in, baggage claim and the exit', /Picking.*Check-in/.test(departures) && /Exit.*Baggage/.test(arrivals) && (await page.locator('[data-booth="passport"]').count()) === 0, `${departures} | ${arrivals}`);
-    check('a new warehouse has no line at picking', ((await page.getByTestId('picking-line').textContent()) ?? '') === 'No line', (await page.getByTestId('picking-line').textContent()) ?? '');
+    const outbound = (await page.getByTestId('picking').textContent()) ?? '';
+    const inbound = (await page.getByTestId('lane-inbound').textContent()) ?? '';
+    check('the floor shows picking and the order desk, and receiving through QC to the shelves', /Picking.*Orders/.test(outbound) && /PO.*QC.*Shelves/.test(inbound) && (await page.locator('[data-booth="export"]').count()) === 0, `${outbound} | ${inbound}`);
+    check('a new warehouse has no backlog', ((await page.getByTestId('backlog').textContent()) ?? '') === 'No backlog', (await page.getByTestId('backlog').textContent()) ?? '');
+    check('the first PO is at the receiving dock and the shelves are half full', /^PO #1 · /.test((await page.getByTestId('po').textContent()) ?? '') && /^\d+\/120$/.test((await page.getByTestId('stock').textContent()) ?? ''), `${await page.getByTestId('po').textContent()} | ${await page.getByTestId('stock').textContent()}`);
+    const tiles = await page.getByTestId('dashboard').locator('dt').allTextContents();
+    check('the dashboard shows shipped, per minute, backlog and stock', tiles.join(',') === 'Shipped,Per min,Backlog,Stock' && /%$/.test((await page.getByTestId('kpi-stock').locator('dd').textContent()) ?? ''), tiles.join(','));
     await page.waitForFunction(() => Number(document.querySelector('[data-testid="flow-dots"]')?.getAttribute('data-dots') ?? 0) > 0, undefined, { timeout: 5000 }).catch(() => undefined);
     const walking = Number(await page.getByTestId('flow-dots').getAttribute('data-dots'));
-    check('people walk through the warehouse', walking > 0, `${walking} walking`);
+    check('goods move across the floor', walking > 0, `${walking} moving`);
     await noHorizontalScroll(page, 'warehouse');
     await touchTargets(page, 'warehouse');
     const upgradesBox = await page.getByTestId('open-upgrades').boundingBox();
@@ -152,23 +157,30 @@ async function main(): Promise<void> {
     }
     check('shipments pay as the trucks leave', (await cashCents(page)) > cashBefore, `${cashBefore} -> ${await cashCents(page)} cents`);
 
-    // The picking line (RULES 3, 6): a big tap target in the middle of the screen; a tap opens an extra lane.
+    // The backlog (RULES 3, 6): a big tap target in the middle of the screen; a tap sends extra pickers.
     const secBox = await page.getByTestId('picking').boundingBox();
     check('the picking maze is a big tap target', secBox !== null && secBox.height >= 60 && secBox.width >= 300, `${Math.round(secBox?.width ?? 0)}x${Math.round(secBox?.height ?? 0)}`);
     await page.getByTestId('picking').tap();
     await page.waitForTimeout(350);
-    check('a tap on picking opens an extra lane', ((await page.getByTestId('picking').getAttribute('class')) ?? '').includes('rushed') && (await page.locator('.sec-lane-extra').isVisible()));
+    check('a tap on picking sends extra pickers', ((await page.getByTestId('picking').getAttribute('class')) ?? '').includes('rushed') && (await page.locator('.sec-lane-extra').isVisible()));
 
-    // Boosts (RULES 15): Rush hour ready from the start, the others locked; one tap starts it.
+    // Receiving (RULES 3a, 6): a tap target across the screen; a tap sends extra hands.
+    const inBox = await page.getByTestId('receiving').boundingBox();
+    check('the receiving lane is a tap target', inBox !== null && inBox.height >= 44 && inBox.width >= 300, `${Math.round(inBox?.width ?? 0)}x${Math.round(inBox?.height ?? 0)}`);
+    await page.getByTestId('receiving').tap();
+    await page.waitForTimeout(350);
+    check('a tap on receiving sends extra hands', ((await page.getByTestId('receiving').getAttribute('class')) ?? '').includes('rushed'));
+
+    // Boosts (RULES 15): Flash sale ready from the start, the others locked; one tap starts it.
     const boostClass = async (id: string): Promise<string> => (await page.getByTestId(`boost-${id}`).getAttribute('class')) ?? '';
-    check('Rush hour is ready, All hands and Pay surge are locked', (await boostClass('flashSale')).includes('boost-ready') && (await boostClass('allHands')).includes('boost-locked') && (await boostClass('surge')).includes('boost-locked'));
+    check('Flash sale is ready, All hands and Peak rates are locked', (await boostClass('flashSale')).includes('boost-ready') && (await boostClass('allHands')).includes('boost-locked') && (await boostClass('surge')).includes('boost-locked'));
     const boostBox = await page.getByTestId('boost-flashSale').boundingBox();
     check('boosts in the bottom third', boostBox !== null && boostBox.y >= HEIGHT / 2 && boostBox.y + boostBox.height / 2 >= (HEIGHT * 2) / 3, `centre at ${Math.round((boostBox?.y ?? 0) + (boostBox?.height ?? 0) / 2)}`);
     await page.getByTestId('boost-flashSale').tap();
     await page.waitForTimeout(600);
     const rushStatus = (await page.getByTestId('boost-flashSale').locator('.boost-status').textContent()) ?? '';
-    check('a tap starts Rush hour, counting down from a minute', (await boostClass('flashSale')).includes('boost-running') && /^(1m 0s|5\ds)$/.test(rushStatus), rushStatus);
-    check('starting a boost says what it does', /Rush hour! 3x passengers/.test((await page.locator('.toast').textContent()) ?? ''));
+    check('a tap starts Flash sale, counting down from a minute', (await boostClass('flashSale')).includes('boost-running') && /^(1m 0s|5\ds)$/.test(rushStatus), rushStatus);
+    check('starting a boost says what it does', /Flash sale! 3x orders/.test((await page.locator('.toast').textContent()) ?? ''));
 
     // Settings: export, clear site data, import a busy warehouse file.
     await page.getByTestId('settings').tap();
@@ -192,12 +204,12 @@ async function main(): Promise<void> {
     await page.getByTestId('import-file').setInputFiles(busy.path);
     await page.getByTestId('dock-7').waitFor({ timeout: 5000 });
     check('import resumes the exported warehouse (8 docks)', (await page.locator('.dock:not(.dock-next)').count()) === 8);
-    check('an international contract adds passport control and customs', (await page.locator('.staging [data-booth="passport"]').count()) === 1 && /Customs/.test((await page.getByTestId('lane-arrivals').textContent()) ?? ''));
+    check('a cross-border contract adds export paperwork', (await page.locator('.staging [data-booth="export"]').count()) === 1 && (await page.locator('[data-booth="customs"]').count()) === 0);
     await page.waitForFunction(() => Number(document.querySelector('[data-testid="flow-dots"]')?.getAttribute('data-queued') ?? 0) > 5, undefined, { timeout: 5000 }).catch(() => undefined);
-    const lineText = (await page.getByTestId('picking-line').textContent()) ?? '';
+    const lineText = (await page.getByTestId('backlog').textContent()) ?? '';
     const queued = Number(await page.getByTestId('flow-dots').getAttribute('data-queued'));
-    check('the busy warehouse queues at picking: the real line stands in the maze', /in line/.test(lineText) && queued > 5 && /picking/.test(((await page.getByTestId('bottleneck').textContent()) ?? '').toLowerCase()), `${lineText}, ${queued} dots in the maze`);
-    check('Picking lanes show as scanner lanes', (await page.locator('.sec-lane:not(.sec-lane-extra)').count()) === 6);
+    check('the busy warehouse queues at picking: the real backlog waits in the maze', /waiting/.test(lineText) && queued > 5 && /picking/.test(((await page.getByTestId('bottleneck').textContent()) ?? '').toLowerCase()), `${lineText}, ${queued} dots in the maze`);
+    check('pickers show as picker stations', (await page.locator('.sec-lane:not(.sec-lane-extra)').count()) === 6);
     await noHorizontalScroll(page, 'eight docks');
     await touchTargets(page, 'eight docks');
     await page.getByTestId('boost-allHands').tap();
@@ -206,9 +218,9 @@ async function main(): Promise<void> {
     const glowing = await page.locator('.dock.rushing').count();
     check('All hands rushes every dock with no taps', glowing === 8, `${glowing} of 8 docks rushing`);
     const income = page.getByTestId('income');
-    check('Pay surge shows the boosted income in gold', ((await income.getAttribute('class')) ?? '').includes('income-boosted') && /⚡/.test((await income.textContent()) ?? ''), (await income.textContent()) ?? '');
+    check('Peak rates shows the boosted income in gold', ((await income.getAttribute('class')) ?? '').includes('income-boosted') && /⚡/.test((await income.textContent()) ?? ''), (await income.textContent()) ?? '');
 
-    // 60 fps with eight docks animating, take-offs, pops and a thumb tapping, the CPU slowed 4x.
+    // 60 fps with eight docks animating, departures, pops and a thumb tapping, the CPU slowed 4x.
     await page.waitForTimeout(500);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
     const tapping = (async () => {
@@ -233,7 +245,7 @@ async function main(): Promise<void> {
     await tapping;
     const crowd = Number(await page.getByTestId('flow-dots').getAttribute('data-dots'));
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
-    check('60 fps with eight docks, people walking, two boosts running, tapping (CPU slowed 4x)', fps.frames >= 55 && crowd > 0, `${fps.frames.toFixed(1)} fps, worst frame ${fps.worst.toFixed(0)} ms, ${crowd} people walking`);
+    check('60 fps with eight docks, goods moving, two boosts running, tapping (CPU slowed 4x)', fps.frames >= 55 && crowd > 0, `${fps.frames.toFixed(1)} fps, worst frame ${fps.worst.toFixed(0)} ms, ${crowd} dots moving`);
 
     // Offline: the installed app reopens and continues from the autosave.
     await page.waitForTimeout(1000);
@@ -247,7 +259,7 @@ async function main(): Promise<void> {
     const ticksBefore = Number(await page.evaluate(`new Promise((resolve) => {
       const req = indexedDB.open('warehouse', 1);
       req.onsuccess = () => {
-        const get = req.result.transaction('stars', 'readonly').objectStore('stars').get('autosave');
+        const get = req.result.transaction('slots', 'readonly').objectStore('slots').get('autosave');
         get.onsuccess = () => resolve(get.result.tick);
       };
     })`));
@@ -258,7 +270,7 @@ async function main(): Promise<void> {
     const shifted = Number(await side.evaluate(`new Promise((resolve) => {
       const req = indexedDB.open('warehouse', 1);
       req.onsuccess = () => {
-        const store = req.result.transaction('stars', 'readwrite').objectStore('stars');
+        const store = req.result.transaction('slots', 'readwrite').objectStore('slots');
         const get = store.get('autosave');
         get.onsuccess = () => {
           const record = get.result;
@@ -291,7 +303,7 @@ async function main(): Promise<void> {
     const tickAt = async (): Promise<number> => Number(await back.evaluate(`new Promise((resolve) => {
       const req = indexedDB.open('warehouse', 1);
       req.onsuccess = () => {
-        const get = req.result.transaction('stars', 'readonly').objectStore('stars').get('autosave');
+        const get = req.result.transaction('slots', 'readonly').objectStore('slots').get('autosave');
         get.onsuccess = () => resolve(get.result.tick);
       };
     })`));
@@ -319,12 +331,12 @@ async function main(): Promise<void> {
     await back.getByTestId('sell-worth').waitFor();
     await noHorizontalScroll(back, 'sell sheet');
     await touchTargets(back, 'sell sheet');
-    check('the sell sheet names the next site', ((await back.getByTestId('next-site').textContent()) ?? '') === 'Port Calder');
+    check('the sell sheet names the next site', ((await back.getByTestId('next-site').textContent()) ?? '') === 'Port Calder Docks');
     await back.getByTestId('confirm-sell').tap();
     await back.getByTestId('site-twist').waitFor({ timeout: 3000 });
-    check('Port Calder opens with its twist', /Short runway/.test((await back.getByTestId('site-twist').textContent()) ?? ''));
+    check('Port Calder opens with its twist', /Narrow yard/.test((await back.getByTestId('site-twist').textContent()) ?? ''));
     await back.getByTestId('open-site').tap();
-    check('the new warehouse has the stars and one dock', /Port Calder · 3 stars/.test((await back.getByTestId('site').textContent()) ?? '') && (await back.locator('.dock:not(.dock-next)').count()) === 1, (await back.getByTestId('site').textContent()) ?? '');
+    check('the new warehouse has the stars and one dock', /Port Calder Docks · 3 stars/.test((await back.getByTestId('site').textContent()) ?? '') && (await back.locator('.dock:not(.dock-next)').count()) === 1, (await back.getByTestId('site').textContent()) ?? '');
 
     await context.close();
   } finally {

@@ -13,12 +13,12 @@ import { WarehouseStore } from './ui/store.ts';
 import { TopBar } from './ui/TopBar.tsx';
 import { UpgradeSheet } from './ui/UpgradeSheet.tsx';
 
-/** Names of the checkpoints on the passenger journey (RULES 14). */
+/** Names of the stations on the floor (RULES 14). */
 function checkpointNames(view: WarehouseView): Set<string> {
-  return new Set([...view.journey.departures, ...view.journey.arrivals].map((c) => c.name));
+  return new Set([...view.journey.outbound, ...view.journey.inbound].map((c) => c.name));
 }
 
-/** A toast for the purchases that open something new: a dock, a truck, a contract (and any checkpoint it adds). */
+/** A toast for the purchases that open something new: a dock, a truck, a contract (and any station it adds). */
 function unlockText(upgrade: UpgradeId, level: number, view: WarehouseView, before: ReadonlySet<string>): string | null {
   switch (upgrade) {
     case 'docks':
@@ -27,7 +27,7 @@ function unlockText(upgrade: UpgradeId, level: number, view: WarehouseView, befo
       return `New truck: ${view.truckModel}`;
     case 'contract': {
       const opened = [...checkpointNames(view)].filter((name) => !before.has(name));
-      return opened.length === 0 ? `New contract: ${view.contract}` : `New contract: ${view.contract}. ${opened.join(' and ')} open.`;
+      return opened.length === 0 ? `New contract: ${view.contract}` : `New contract: ${view.contract}. ${opened.join(' and ')} needed.`;
     }
     default:
       return null;
@@ -36,7 +36,7 @@ function unlockText(upgrade: UpgradeId, level: number, view: WarehouseView, befo
 
 type SheetName = 'upgrades' | 'settings' | 'sell' | null;
 
-/** The warehouse screen (docs/ROADMAP.md, phone UX): money on top, the passenger flow (the picking line at its heart) and the docks in the middle, actions under the thumb. */
+/** The warehouse screen (docs/ROADMAP.md, phone UX): money and the dashboard on top, the floor (receiving, the picking backlog at its heart, packing) and the docks in the middle, actions under the thumb. */
 export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedback?: Feedback }): ReactElement {
   const { host, install, feedback } = props;
   const store = useMemo(() => new WarehouseStore(), []);
@@ -91,6 +91,10 @@ export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedb
     feedback?.cue('tap');
     void host.submit({ type: 'tapPick', payload: {} });
   }, [host, feedback]);
+  const tapReceive = useCallback(() => {
+    feedback?.cue('tap');
+    void host.submit({ type: 'tapReceive', payload: {} });
+  }, [host, feedback]);
   const buy = useCallback((upgrade: UpgradeId) => void host.buy(upgrade), [host]);
   const boost = useCallback((id: BoostId) => void host.boost(id), [host]);
   const close = useCallback(() => setSheet(null), []);
@@ -109,7 +113,7 @@ export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedb
     <div className="app">
       <TopBar view={view} store={store} onSettings={() => setSheet('settings')} />
       <InstallBanner install={install} onToast={setToast} />
-      <Floor journey={view.journey} pickingLevel={view.upgrades.find((u) => u.id === 'picking')?.level ?? 0} tickMs={view.tickMs} store={store} onTapPicking={tapPick}>
+      <Floor journey={view.journey} pickingLevel={view.upgrades.find((u) => u.id === 'picking')?.level ?? 0} tickMs={view.tickMs} store={store} onTapPick={tapPick} onTapReceive={tapReceive}>
         <Pier model={view.truckModel}>
           {view.docks.map((g) => (
             <DockCard

@@ -26,7 +26,7 @@ export const BOOST_IDS: readonly BoostId[] = ['flashSale', 'allHands', 'surge'];
 export const BOOST_NAMES: Readonly<Record<BoostId, string>> = {
   flashSale: 'Flash sale',
   allHands: 'All hands',
-  surge: 'Peak surcharge',
+  surge: 'Peak rates',
 };
 
 /** Truck models by truck level. */
@@ -49,7 +49,7 @@ export const TRUCK_MODELS: readonly string[] = [
 /** Customer contracts by contract level. */
 export const CONTRACTS: readonly string[] = [
   'Local shops',
-  'Online boutique',
+  'Web shop',
   'Regional chain',
   'Supermarket group',
   'National retailer',

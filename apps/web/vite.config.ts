@@ -19,7 +19,7 @@ export default defineConfig({
         id: '/',
         name: 'Warehouse Idle',
         short_name: 'Warehouse Idle',
-        description: 'Run a warehouse: fill trucks with passengers, upgrade, and earn while you are away.',
+        description: 'Run a warehouse: orders and POs come in, your workers pick, pack and ship, and you upgrade to go faster, even while you are away.',
         start_url: '/',
         scope: '/',
         display: 'standalone',

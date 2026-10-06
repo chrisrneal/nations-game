@@ -28,7 +28,8 @@ export function BottomBar(props: { view: WarehouseView; store: WarehouseStore; o
     <footer className="bottom">
       <p className="hint" data-testid="bottleneck">
         {view.bottleneck.text}
-        {view.bottleneck.kind === 'picking' && <span className="muted"> Tap the line for a lane.</span>}
+        {view.bottleneck.kind === 'picking' && <span className="muted"> Tap picking for more pickers.</span>}
+        {view.bottleneck.kind === 'stock' && <span className="muted"> Tap receiving for extra hands.</span>}
       </p>
       {goal !== null && goal.cost !== null && (
         <p className="goal" data-testid="goal">

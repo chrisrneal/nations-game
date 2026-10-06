@@ -60,8 +60,14 @@ export function SettingsSheet(props: { view: WarehouseView; host: WarehouseHost;
           </dd>
         </div>
         <div>
-          <dt>Passengers</dt>
+          <dt>Orders shipped</dt>
           <dd>{short(life.orders)}</dd>
+        </div>
+        <div>
+          <dt>POs received</dt>
+          <dd>
+            {short(life.pos)} ({short(life.received)} units)
+          </dd>
         </div>
         <div>
           <dt>Offline earnings</dt>

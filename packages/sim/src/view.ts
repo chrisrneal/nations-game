@@ -205,7 +205,7 @@ function upgradeView(id: UpgradeId, state: WarehouseState, payMul: number): Upgr
   };
 }
 
-/** Which boost fixes each bottleneck (RULES 8, 15). Peak surcharge pays whatever the bottleneck. */
+/** Which boost fixes each bottleneck (RULES 8, 15). Peak rates pays whatever the bottleneck. */
 const BOOST_FIXES: Readonly<Record<BottleneckKind, BoostId>> = {
   orders: 'flashSale',
   picking: 'allHands',

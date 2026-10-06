@@ -13,9 +13,10 @@ export function pop(container: HTMLElement | null, text: string, kind: 'cash' | 
   setTimeout(() => el.remove(), 1500);
 }
 
-const TRUCK_PATH = 'M30 16 24 14h-5L13 4h-3l4 10H6L3 11H1l2 5-2 5h2l3-3h8l-4 10h3l6-10h5z';
+/** A truck seen from above, cab up: it drives off the dock nose first. */
+const TRUCK_PATH = 'M11 1h10a2 2 0 0 1 2 2v5H9V3a2 2 0 0 1 2-2zM8 9h16v22H8z';
 
-/** A truck taking off from the dock: flies up and away, then removes itself. */
+/** A truck leaving the dock: drives up and away, then removes itself. */
 export function flyOff(container: HTMLElement | null, express: boolean): void {
   if (container === null) return;
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
