@@ -37,7 +37,7 @@ function unlockText(upgrade: UpgradeId, level: number, view: WarehouseView, befo
 
 type SheetName = 'upgrades' | 'settings' | 'sell' | 'stars' | null;
 
-/** The warehouse screen (docs/ROADMAP.md, phone UX): money and the dashboard on top, the floor (receiving, the picking backlog at its heart, packing) and the docks in the middle, actions under the thumb. */
+/** The warehouse screen (docs/ROADMAP.md, phone UX): money and the dashboard on top, the floor (inbound dock, racks, the picking backlog at its heart, staging) and the outbound docks in the middle, actions under the thumb. */
 export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedback?: Feedback }): ReactElement {
   const { host, install, feedback } = props;
   const store = useMemo(() => new WarehouseStore(), []);
@@ -114,7 +114,7 @@ export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedb
     <div className="app">
       <TopBar view={view} store={store} onSettings={() => setSheet('settings')} onStars={() => setSheet('stars')} />
       <InstallBanner install={install} onToast={setToast} />
-      <Floor journey={view.journey} pickingLevel={view.upgrades.find((u) => u.id === 'picking')?.level ?? 0} tickMs={view.tickMs} store={store} onTapPick={tapPick} onTapReceive={tapReceive}>
+      <Floor journey={view.journey} pickingLevel={view.upgrades.find((u) => u.id === 'picking')?.level ?? 0} docks={view.docks.length} tickMs={view.tickMs} store={store} onTapPick={tapPick} onTapReceive={tapReceive}>
         <Pier model={view.truckModel}>
           {view.docks.map((g) => (
             <DockCard

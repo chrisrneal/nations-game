@@ -275,7 +275,7 @@ p {
   border-top: 1px dashed var(--line);
 }
 
-/* ---- receiving (RULES 3a): the PO at the dock, quality check, the shelves; one tap sends extra hands ---- */
+/* ---- inbound dock (RULES 3a): the PO being unloaded, quality check, then down to the racks; one tap sends extra hands ---- */
 .inbound {
   position: relative;
   display: flex;
@@ -323,48 +323,15 @@ p {
   color: #d7b4ff;
 }
 
-/* The shelves: how full they are, as a bar behind the count. */
-.shelves {
+/* Where put-away cartons leave the dock for the racks below. */
+.lane-to {
   position: relative;
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  min-width: 0;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 6px;
-  border: 1px solid #4b3f73;
-  background: var(--panel-2);
-  font-size: var(--fs-booth);
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-.shelf-fill {
-  position: absolute;
-  inset: 0;
-  background: rgb(215 180 255 / 22%);
-  transform: scaleX(0);
-  transform-origin: left center;
-  transition: transform var(--tick) linear;
-  will-change: transform;
-}
-
-.inbound.low .shelf-fill {
-  background: rgb(255 157 108 / 28%);
-}
-
-.shelf-label,
-.shelf-count {
-  position: relative;
-}
-
-.shelf-count {
   margin-left: auto;
+  padding-left: 4px;
+  background: transparent;
   color: var(--muted);
-  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-small);
+  white-space: nowrap;
 }
 
 .booth {
@@ -379,7 +346,7 @@ p {
   white-space: nowrap;
 }
 
-/* ---- picking (RULES 3): a maze the real backlog snakes through, pickers at its end; one tap sends extra pickers ---- */
+/* ---- storage and picking (RULES 3): the order board (the real backlog), the racks and their aisles; one tap sends extra pickers ---- */
 .picking {
   position: relative;
   display: flex;
@@ -460,67 +427,95 @@ p {
   min-height: 60px;
 }
 
-/* The maze: three rows between two ropes, open at alternate ends. */
-.sec-maze {
-  position: relative;
-  flex: 1;
+/* The order board: the order desk, the tickets waiting (drawn on the canvas), the pickers. */
+.orders {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 0 0 29%;
   min-width: 0;
 }
 
-.rope {
-  position: absolute;
-  height: 0;
-  border-top: 1px dashed #36507f;
-}
-
-.rope-1 {
-  top: 33.3%;
-  left: 0;
-  right: 12px;
-}
-
-.rope-2 {
-  top: 66.6%;
-  left: 12px;
-  right: 0;
-}
-
 .booth-checkin {
-  position: absolute;
-  left: 0;
-  top: 16.6%;
-  transform: translateY(-50%);
+  align-self: flex-start;
 }
 
-/* The pickers: one bar per station; a tap lights an extra one. */
-.sec-scan {
+.board {
+  flex: 1;
+  min-height: 24px;
+  border-radius: 5px;
+  background: rgb(143 208 255 / 5%);
+  border: 1px dashed #36507f;
+}
+
+/* One picker per station; a tap adds an extra one in green. */
+.pickers {
   display: flex;
-  align-items: stretch;
-  gap: 2px;
-  padding: 3px;
-  border-radius: 6px;
-  border: 1px solid var(--line);
-  background: var(--panel-2);
+  gap: 3px;
+  height: 9px;
+  padding-left: 2px;
 }
 
-.sec-lane {
-  width: 5px;
-  border-radius: 2px;
+.picker {
+  width: 6px;
+  height: 9px;
+  border-radius: 3px 3px 1px 1px;
   background: var(--sky);
-  opacity: 0.75;
+  opacity: 0.8;
 }
 
-.sec-lane-extra {
+.picker-extra {
   display: none;
   background: var(--accent);
   opacity: 1;
 }
 
-.picking.rushed .sec-lane-extra {
+.picking.rushed .picker-extra {
   display: block;
 }
 
-/* ---- packing: the real packed orders, past the export stations ---- */
+/* The racks: three runs of pallet racking with two aisles between them; the canvas puts the cartons in their slots. Room on the right is the cross aisle. */
+.racks {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding-right: 9px;
+  border-right: 1px dashed #36507f;
+}
+
+.racks-head {
+  display: flex;
+  justify-content: space-between;
+  height: 13px;
+  font-size: var(--fs-small);
+  line-height: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.racks.low .rack-count {
+  color: var(--warn);
+}
+
+.rack {
+  flex: 1 1 0;
+  min-height: 9px;
+  max-height: 17px;
+  border-top: 1px solid #4a5f86;
+  border-bottom: 1px solid #4a5f86;
+  /* Uprights every bay. */
+  background: repeating-linear-gradient(90deg, #4a5f86 0 1px, transparent 1px 30px), rgb(0 0 0 / 18%);
+}
+
+.aisle {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 7px;
+}
+
+/* ---- staging: the real staged orders in one lane per dock, past the export stations ---- */
 .staging {
   display: flex;
   flex-direction: column;
@@ -564,14 +559,35 @@ p {
   display: flex;
   align-items: center;
   gap: 4px;
-  height: clamp(18px, 6vw, 26px);
+  height: clamp(26px, 8.5vw, 36px);
 }
 
-/* The bench: the canvas stacks the packed orders here. */
-.staging-parcels {
+/* The staging lanes, one per dock: floor markings the canvas stacks cartons in, dock end down. */
+.staging-lanes {
   flex: 1;
   align-self: stretch;
   min-width: 0;
+  display: flex;
+  gap: 3px;
+}
+
+.stage-lane {
+  position: relative;
+  flex: 0 1 48px;
+  min-width: 0;
+  border: 1px dashed #4a5f86;
+  border-top: 0;
+  border-radius: 0 0 4px 4px;
+}
+
+.stage-lane b {
+  position: absolute;
+  right: 2px;
+  top: 0;
+  font-size: 0.55rem;
+  font-weight: 600;
+  line-height: 1;
+  color: rgb(255 255 255 / 28%);
 }
 
 .flow-key {

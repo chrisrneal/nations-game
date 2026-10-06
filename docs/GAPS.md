@@ -40,6 +40,10 @@ the new names.
 - W1, counter orders (a rushed dock loading when packing is empty) need no stock and no picking, kept from the airport's walk-ups so a tap always helps. Lanes D, S.
 - W1, airport saves are not converted: the owner's airport is gone from the phone once this ships (W1). Owner.
 - W1, the phone check's 60 fps run read 58.7 and 55.1 fps in two runs on this session's machine (budget 55), the second with one 233 ms frame. Recheck on a real phone. Lane U.
+- Warehouse floor, the staging lanes share the packed count out evenly; the sim has one shared staging area, so a lane does not hold that dock's own orders. Lane U (and lane S if per-dock staging is ever wanted, which needs a decision record).
+- Warehouse floor, a picker trip (board, aisle, rack, cross aisle) is longer than the old maze walk, so about twice as many goods are on the move in a busy warehouse (100-120 against 50). The 60 fps check at 412 x 915 read 53.7-55.8 fps (budget 55) on a machine whose unchanged build read 48.5-52.8; recheck on a real phone, and if it stutters, cap the picker trips in flight. Lane U.
+- Warehouse floor, the bottleneck line still says "Packed orders are queuing at the docks" and RULES 3-8 say "packing"; on screen the area is "Staging". Wording only. Lanes D, S.
+- Warehouse floor, put-away cartons and pickers go to a slot near the edge of the stock, not the exact slot the drawing fills or empties that tick. Lane U.
 - W3, perk thresholds (1, 3, 6, 10, 15 stars) are set from the greedy bot's first two sales (3 then 4 stars); the pacing pass runs 90 minutes, so the 10- and 15-star perks are unmeasured. A long-run report (the Pivot 6 gap) would show when they arrive. Lanes D, H.
 - W3, Quick charge, Express lane and Long shift change rules for a player who owns enough stars, so a save with a command log from before W3 would replay differently. The game's saves are compact, so none exist; noted in case history-carrying saves come back. Lane S.
 - W3, a perk a sale unlocks is shown only by the sell sheet beforehand and the welcome sheet after; there is no special "perk unlocked" animation or sound. Lane U.

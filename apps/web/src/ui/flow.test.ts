@@ -1,6 +1,6 @@
 import type { WarehouseEvent, WarehouseView, DockView, Stats } from '@warehouse/contracts';
 import { describe, expect, it } from 'vitest';
-import { DOTS_MAX, FlowModel, MAZE_MAX, Path, choosePerDot, mazePath, parcelSpots, visible, type FlowGeometry } from './flow.ts';
+import { DOTS_MAX, FlowModel, MAZE_MAX, PITCH, boardSpot, choosePerDot, laneCount, laneSpots, parcelSpots, rackSlots, visible, type FlowGeometry, type Rect } from './flow.ts';
 
 const STATS: Stats = { earned: 0, shipments: 0, fullShipments: 0, orders: 0, missed: 0, expresses: 0, pos: 0, received: 0, taps: 0 };
 
@@ -25,16 +25,26 @@ function view(
   } as unknown as WarehouseView;
 }
 
+const RACKS: Rect[] = [
+  { left: 100, top: 60, right: 295, bottom: 66 },
+  { left: 100, top: 74, right: 295, bottom: 80 },
+  { left: 100, top: 88, right: 295, bottom: 94 },
+];
+
 const GEO: FlowGeometry = {
-  inbound: { y: 30, start: 40, booths: [{ left: 60, right: 80 }], shelves: { left: 90, right: 330 } },
-  door: { x: 10, y: 55 },
-  checkin: { left: 14, right: 60, y: 55 },
-  maze: { left: 14, right: 280, entry: 64, rows: [55, 70, 85] },
-  pickers: { enter: { x: 284, y: 85 }, exit: { x: 310, y: 85 } },
+  inbound: { y: 30, start: 40, booths: [{ left: 60, right: 80 }] },
+  door: { x: 10, y: 50 },
+  checkin: { left: 14, right: 50, y: 50 },
+  board: { left: 14, top: 58, right: 90, bottom: 94 },
+  racks: { mouth: 97, cross: 300, aisles: [70, 84], slots: rackSlots(RACKS, [70, 84]) },
   after: [{ left: 290, right: 330 }],
   afterY: 110,
-  staging: { left: 20, top: 104, right: 285, bottom: 116 },
-  pier: { x: 175, top: 122 },
+  staging: { left: 20, top: 100, right: 285, bottom: 118 },
+  lanes: [
+    { left: 20, top: 100, right: 60, bottom: 118 },
+    { left: 64, top: 100, right: 104, bottom: 118 },
+  ],
+  pier: { x: 175, top: 124 },
   docks: [
     { x: 120, door: 140, y: 160, parcels: [] },
     { x: 230, door: 140, y: 160, parcels: [] },
@@ -78,7 +88,7 @@ describe('goods on the floor (RULES 14)', () => {
     expect(model.staging).toBe(1);
   });
 
-  it('carries a dot from packing to its dock for each order loaded', () => {
+  it('carries a carton from staging to its dock for each order loaded', () => {
     const model = new FlowModel();
     feed(model, 0, 21, (t) => view(t, { orderPerTick: 0, docks: [dock(0), dock(1, { loaded: t * 500 })] }));
     const loading = model.dots.filter((d) => d.kind === 'board');
@@ -94,26 +104,33 @@ describe('goods on the floor (RULES 14)', () => {
     expect(model.dots.filter((d) => d.kind === 'board')).toHaveLength(2);
   });
 
-  it('moves a dot from the PO to the shelves for each unit put away, through quality check', () => {
+  it('moves a carton from the PO into a rack slot for each unit put away, through quality check and down the cross aisle', () => {
     const model = new FlowModel();
     // 2.4 units a second put away for 10 seconds, a new PO half way.
     feed(model, 0, 41, (t) => view(t, { orderPerTick: 0, po: t < 20 ? { id: 1, units: 12, received: t * 600 } : { id: 2, units: 48, received: (t - 20) * 600 } }));
     const stock = model.dots.filter((d) => d.kind === 'arr');
     expect(stock).toHaveLength(24);
-    expect(stock.every((d) => d.tint === 'in')).toBe(true);
+    expect(stock.every((d) => d.tint === 'box')).toBe(true);
     let now = 41 * 250;
     let hidden = 0;
+    const ends = new Map<object, { x: number; y: number }>();
     for (let i = 0; i < 2000 && model.dots.length > 0; i++) {
       model.advance(16, (now += 16), GEO);
       hidden = Math.max(hidden, model.dots.filter((d) => !visible(d, now)).length);
-      // Along the lane, never into the maze.
-      expect(model.dots.every((d) => Math.abs(d.y - GEO.inbound.y) < 4 && d.x >= GEO.inbound.start - 1)).toBe(true);
+      for (const d of model.dots) {
+        ends.set(d, { x: d.x, y: d.y });
+        // Along the inbound dock until the cross aisle, then down it and along an aisle: never through the board.
+        expect(d.x >= GEO.inbound.start - 1 && d.x <= GEO.racks.cross + 0.5).toBe(true);
+        if (d.y > GEO.inbound.y + 4) expect(d.x).toBeGreaterThan(GEO.racks.mouth);
+      }
     }
     expect(hidden).toBeGreaterThan(0);
     expect(model.dots).toHaveLength(0);
+    // Each one finished in a rack slot.
+    for (const p of ends.values()) expect(GEO.racks.slots.some((s) => Math.hypot(s.x - p.x, s.y - p.y) < 0.5)).toBe(true);
   });
 
-  it('carries a packed order down the aisle, along the walkway and in at the bay door', () => {
+  it('carries a staged carton out of its dock\'s lane, down the aisle, along the walkway and in at the bay door', () => {
     const model = new FlowModel();
     model.ingest(view(0, { orderPerTick: 0, docks: [dock(0), dock(1)] }), [], 0);
     model.ingest(view(1, { orderPerTick: 0, docks: [dock(0), dock(1, { loaded: 1000 })] }), [], 250);
@@ -125,8 +142,11 @@ describe('goods on the floor (RULES 14)', () => {
       if (d !== undefined) seen.push({ x: d.x, y: d.y });
     }
     expect(model.dots).toHaveLength(0);
-    // Above the walkway it keeps to the aisle; it only leaves it along the walkway, and loads at the bay's middle.
-    expect(seen.filter((p) => p.y < 138).every((p) => Math.abs(p.x - GEO.pier.x) < 4)).toBe(true);
+    // It starts in dock 2's staging lane.
+    expect(seen[0]?.x ?? 0).toBeGreaterThan(64);
+    expect(seen[0]?.x ?? 0).toBeLessThan(104);
+    // Between staging and the walkway it keeps to the aisle; it only leaves it along the walkway, and loads at the bay's middle.
+    expect(seen.filter((p) => p.y > GEO.pier.top + 1 && p.y < 138).every((p) => Math.abs(p.x - GEO.pier.x) < 4)).toBe(true);
     expect(seen.filter((p) => p.y > 142).every((p) => Math.abs(p.x - 230) < 0.5)).toBe(true);
     const last = seen[seen.length - 1];
     expect(Math.hypot((last?.x ?? 0) - 230, (last?.y ?? 0) - 160)).toBeLessThan(3);
@@ -152,15 +172,33 @@ describe('goods on the floor (RULES 14)', () => {
     expect(parcels.every((p, i) => i === 0 || p.y >= (parcels[i - 1]?.y ?? 0))).toBe(true);
   });
 
-  it('walks the maze as a snake: along each row, turning at alternate ends, into the pickers', () => {
-    const path = new Path(mazePath(GEO.maze));
-    expect(path.length).toBe(216 + 15 + 266 + 15 + 266);
-    expect(path.at(0)).toEqual({ x: 64, y: 55 });
-    expect(path.at(216 + 15 + 266)).toEqual({ x: 14, y: 70 });
-    expect(path.at(path.length)).toEqual({ x: 280, y: 85 });
+  it('fills the racks slot by slot in a fixed scattered order, each slot reached from its nearest aisle', () => {
+    const slots = rackSlots(RACKS, [70, 84]);
+    expect(slots).toHaveLength(3 * 39);
+    expect(slots.every((p) => RACKS.some((r) => p.x > r.left && p.x < r.right && p.y > r.top && p.y < r.bottom))).toBe(true);
+    expect(slots.every((p) => [70, 84].every((a) => Math.abs(p.aisle - p.y) <= Math.abs(a - p.y)))).toBe(true);
+    // The same order every time, not left to right.
+    expect(rackSlots(RACKS, [70, 84])).toEqual(slots);
+    expect(slots.slice(0, 10).some((p, i) => i > 0 && p.x < (slots[i - 1]?.x ?? 0))).toBe(true);
   });
 
-  it('the line in the maze is the real backlog: orders wait in it while picking holds them', () => {
+  it('lays the order board out oldest first from the top left, squeezing up when the backlog outgrows it', () => {
+    expect(boardSpot(GEO.board, 0, 10)).toEqual({ x: 14 + PITCH / 2, y: 58 + PITCH / 2 });
+    expect(boardSpot(GEO.board, 1, 10).x).toBe(14 + PITCH * 1.5);
+    for (let i = 0; i < MAZE_MAX; i++) {
+      const p = boardSpot(GEO.board, i, MAZE_MAX);
+      expect(p.x > 14 && p.x < 90 && p.y > 58 && p.y < 94).toBe(true);
+    }
+  });
+
+  it('stacks staged cartons from the dock end of each lane, shared out evenly', () => {
+    const spots = laneSpots(GEO.lanes[0] as Rect);
+    expect(spots.length).toBeGreaterThan(8);
+    expect(spots[0]?.y ?? 0).toBeGreaterThan(spots[spots.length - 1]?.y ?? 0);
+    expect([0, 1, 2].map((i) => laneCount(7, 3, i))).toEqual([3, 2, 2]);
+  });
+
+  it('the order board is the real backlog: orders wait on it while picking holds them', () => {
     const model = new FlowModel();
     // 1.6 a second join; picking lets nobody through (a full staging): the line grows by 0.4 a tick.
     let tick = feed(model, 0, 1, (t) => view(t, { backlog: 0 }));
@@ -170,46 +208,52 @@ describe('goods on the floor (RULES 14)', () => {
     expect(model.lineDots).toBe(32);
     expect(model.queue.length).toBeGreaterThanOrEqual(30);
     expect(model.queue.length).toBeLessThanOrEqual(34);
-    // They wait head to tail, the head at the pickers, in the order they came.
-    const path = new Path(mazePath(GEO.maze));
-    expect(model.queue[0]?.pos).toBeCloseTo(path.length, 0);
-    for (let i = 1; i < model.queue.length; i++) expect(model.queue[i]?.pos ?? 0).toBeLessThan(model.queue[i - 1]?.pos ?? 0);
+    // They wait in the order they came, oldest at the top left of the board.
+    model.queue.forEach((d, i) => {
+      const at = boardSpot(GEO.board, i, model.queue.length);
+      expect(Math.hypot(d.x - at.x, d.y - at.y)).toBeLessThan(1);
+    });
   });
 
-  it('picking lets the head through as fast as the sim picks, and they move on to packing', () => {
+  it('pickers take the head of the board as fast as the sim picks, fetch a carton from the racks and carry it to staging', () => {
     const model = new FlowModel();
     // A line of 20 already standing; nobody arrives, picking clears 0.6 a tick.
     let tick = feed(model, 0, 1, (t) => view(t, { orderPerTick: 0, backlog: 20_000 }));
     let now = tick * 250;
     for (let i = 0; i < 60; i++) model.advance(16, (now += 16), GEO);
     expect(model.queue.length).toBe(20);
-    let scanned = 0;
+    let picked = 0;
     // 34 ticks clear it all.
     for (let k = 0; k < 40; k++) {
       tick = feed(model, tick, 1, (t) => view(t, { orderPerTick: 0, backlog: Math.max(0, 20_000 - t * 600) }));
       for (let i = 0; i < 16; i++) {
         model.advance(16, (now += 16), GEO);
-        scanned = Math.max(scanned, model.dots.filter((d) => d.phase === 'scan' && !visible(d, now)).length);
+        for (const d of model.dots) {
+          if (d.phase !== 'pick') continue;
+          // In the racks: right of the board, never past the cross aisle.
+          if (d.y < GEO.afterY - 4 && Math.hypot(d.x - (GEO.board.left + PITCH / 2), d.y - (GEO.board.top + PITCH / 2)) > 8) expect(d.x).toBeGreaterThan(GEO.board.left);
+          expect(d.x).toBeLessThanOrEqual(GEO.racks.cross + 0.5);
+          if (d.tint === 'box') picked += 1;
+        }
       }
     }
-    expect(scanned).toBeGreaterThan(0);
+    expect(picked).toBeGreaterThan(0);
     expect(model.queue.length).toBeLessThanOrEqual(2);
     for (let i = 0; i < 600; i++) model.advance(16, (now += 16), GEO);
     expect(model.dots.filter((d) => d.kind === 'dep')).toHaveLength(0);
   });
 
-  it('a line longer than the maze holds squeezes up, and dots stand for more of it', () => {
+  it('a backlog longer than the board holds squeezes up, and dots stand for more of it', () => {
     const model = new FlowModel();
     feed(model, 0, 1, (t) => view(t, { orderPerTick: 0, backlog: 900_000 }));
     let now = 250;
     for (let i = 0; i < 10; i++) model.advance(16, (now += 16), GEO);
     expect(model.lineDots).toBe(MAZE_MAX);
     expect(model.queue.length).toBe(MAZE_MAX);
-    const path = new Path(mazePath(GEO.maze));
-    expect(model.gap(path) * MAZE_MAX).toBeLessThanOrEqual(path.length + 1);
+    expect(model.queue.every((d) => d.x > GEO.board.left && d.x < GEO.board.right && d.y > GEO.board.top && d.y < GEO.board.bottom)).toBe(true);
   });
 
-  it('the order desk and the stations after picking queue orders for show and hide each one inside while served', () => {
+  it('the order desk and the stations after picking queue goods for show and hide each one inside while served', () => {
     const model = new FlowModel();
     feed(model, 0, 41, (t) => view(t, { orderPerTick: 4000 }));
     let now = 41 * 250;
