@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, type ReactElement, type ReactNode, type RefObject } from 'react';
+import { useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, type ReactElement, type ReactNode } from 'react';
 import type { JourneyView } from '@warehouse/contracts';
 import { FlowModel, parcelSpots, visible, type FlowGeometry, type Load, type Span, type Tint } from './flow.ts';
 import { formatDuration, formatRate, short } from './format.ts';
@@ -189,20 +189,18 @@ export function Floor(props: {
     onTapReceive();
   };
   // A tap anywhere on a panel: a ripple where the thumb landed, then the command.
-  const press = (target: RefObject<HTMLElement | null>, act: () => void) => ({
-    onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
-      if (event.button !== 0) return;
-      const box = event.currentTarget.getBoundingClientRect();
-      ripple(target.current, event.clientX - box.left, event.clientY - box.top);
+  const tapAt = (event: PointerEvent<HTMLButtonElement>, target: HTMLElement | null, act: () => void): void => {
+    if (event.button !== 0) return;
+    const box = event.currentTarget.getBoundingClientRect();
+    ripple(target, event.clientX - box.left, event.clientY - box.top);
+    act();
+  };
+  const keyAt = (event: KeyboardEvent<HTMLButtonElement>, act: () => void): void => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
       act();
-    },
-    onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        act();
-      }
-    },
-  });
+    }
+  };
   return (
     <div className="floor" ref={floor}>
       <section className="concourse" aria-label="Warehouse floor" data-testid="concourse">
@@ -212,7 +210,8 @@ export function Floor(props: {
           className="inbound"
           data-testid="receiving"
           aria-label={`Receiving: the purchase order at the dock, ${checks.map((c) => c.name).join(', ')}, the shelves. Tap to send extra hands.`}
-          {...press(inPops, receiveNow)}
+          onPointerDown={(event) => tapAt(event, inPops.current, receiveNow)}
+          onKeyDown={(event) => keyAt(event, receiveNow)}
         >
           <span className="sec-head">
             <span className="sec-title">Receiving</span>
@@ -242,7 +241,8 @@ export function Floor(props: {
           className="picking"
           data-testid="picking"
           aria-label={`Orders: the order desk, the backlog, the pickers${after.map((c) => `, ${c.name}`).join('')}, packing. Tap to send extra pickers.`}
-          {...press(pops, pickNow)}
+          onPointerDown={(event) => tapAt(event, pops.current, pickNow)}
+          onKeyDown={(event) => keyAt(event, pickNow)}
         >
           <span className="sec-head">
             <span className="sec-title">Picking</span>
