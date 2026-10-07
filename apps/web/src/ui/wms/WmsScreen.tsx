@@ -13,6 +13,15 @@ import { OrderGrid, type GridScroll } from './OrderGrid.tsx';
 import { useWms } from './useWms.ts';
 import './wms.css';
 
+/** What an empty grid says, by filter (slice 9). */
+const EMPTY: Readonly<Record<WmsFilter, string>> = {
+  all: 'No orders yet. The first arrive within half a minute.',
+  open: 'Nothing open: every order has shipped.',
+  picking: 'No order is being picked right now.',
+  exceptions: 'No exceptions. Everything is flowing.',
+  shipped: 'Nothing shipped yet.',
+};
+
 const DONE: Readonly<Record<WmsActionName, string>> = {
   release: 'Wave released',
   priority: 'Priority changed',
@@ -80,14 +89,14 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; o
         setLine(null);
         return;
       }
-      if (orders?.find((o) => o.no === no)?.status !== 'NEW') return;
+      // Only NEW orders count: `marked` keeps the chosen ones that are still NEW, so the handler needs no orders and rows keep their memo.
       setChosen((c) => {
         const next = new Set(c);
         if (!next.delete(no)) next.add(no);
         return next;
       });
     },
-    [choosing, orders],
+    [choosing],
   );
   const openFromFeed = useCallback((no: number) => {
     setPage('orders');
@@ -180,7 +189,7 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; o
                   </button>
                 ))}
               </div>
-              <OrderGrid orders={shown} tickMs={live.tickMs} sort={sort} selected={marked} scroll={scroll} onSort={onSort} onOpen={onOpen} />
+              <OrderGrid orders={shown} tickMs={live.tickMs} sort={sort} selected={marked} scroll={scroll} onSort={onSort} onOpen={onOpen} empty={EMPTY[filter]} />
               {choosing && (
                 <ReleaseBar
                   chosen={marked.size}

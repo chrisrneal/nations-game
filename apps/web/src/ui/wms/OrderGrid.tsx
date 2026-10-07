@@ -1,6 +1,6 @@
-import { memo, useLayoutEffect, useRef, type ReactElement } from 'react';
+import { memo, useCallback, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
 import type { WmsOrderView } from '@warehouse/contracts';
-import { clock, rowSignature, statusTone, type Sort, type SortKey } from './grid.ts';
+import { ROW_H, clock, rowSignature, rowWindow, statusTone, type Sort, type SortKey } from './grid.ts';
 
 /** Where the grid was scrolled, kept by the screen so going back to it lands in the same place. */
 export interface GridScroll {
@@ -8,18 +8,20 @@ export interface GridScroll {
   left: number;
 }
 
-const COLUMNS: readonly { readonly key: SortKey; readonly label: string; readonly className: string }[] = [
-  { key: 'no', label: 'Order #', className: 'c-no' },
-  { key: 'dest', label: 'Dest', className: 'c-dest' },
-  { key: 'status', label: 'Status', className: 'c-status' },
-  { key: 'lines', label: 'Lines', className: 'c-lines num' },
-  { key: 'pct', label: '%', className: 'c-pct num' },
-  { key: 'priority', label: 'Pri', className: 'c-pri' },
-  { key: 'wave', label: 'Wave', className: 'c-wave num' },
-  { key: 'units', label: 'Units', className: 'c-units num' },
-  { key: 'shipBy', label: 'Ship-by', className: 'c-time num' },
-  { key: 'created', label: 'Created', className: 'c-time num' },
+/** Columns, with fixed widths in px (slice 9): a fixed table layout never re-measures columns when rows come and go. The first five fit a 360 px phone. */
+const COLUMNS: readonly { readonly key: SortKey; readonly label: string; readonly className: string; readonly width: number }[] = [
+  { key: 'no', label: 'Order #', className: 'c-no', width: 76 },
+  { key: 'dest', label: 'Dest', className: 'c-dest', width: 66 },
+  { key: 'status', label: 'Status', className: 'c-status', width: 96 },
+  { key: 'lines', label: 'Lines', className: 'c-lines num', width: 52 },
+  { key: 'pct', label: '%', className: 'c-pct num', width: 50 },
+  { key: 'priority', label: 'Pri', className: 'c-pri', width: 40 },
+  { key: 'wave', label: 'Wave', className: 'c-wave num', width: 66 },
+  { key: 'units', label: 'Units', className: 'c-units num', width: 76 },
+  { key: 'shipBy', label: 'Ship-by', className: 'c-time num', width: 70 },
+  { key: 'created', label: 'Created', className: 'c-time num', width: 70 },
 ];
+const TABLE_WIDTH = COLUMNS.reduce((n, c) => n + c.width, 0);
 
 export function StatusChip(props: { status: WmsOrderView['status'] }): ReactElement {
   return <span className={`chip chip-${statusTone(props.status)}`}>{props.status}</span>;
@@ -63,6 +65,8 @@ const Row = memo(
  * The order grid (docs/wms-plan.md slice 3): dense rows, a sticky header and
  * Order # column, more columns by scrolling sideways inside the grid only.
  * Rows are keyed by order number, so a live update never moves the scroll.
+ * Only the rows near the screen are rendered (slice 9: 300 orders scroll at
+ * full speed on a slow phone); spacer rows keep the scroll height true.
  */
 export function OrderGrid(props: {
   orders: readonly WmsOrderView[];
@@ -72,9 +76,44 @@ export function OrderGrid(props: {
   scroll: GridScroll;
   onSort: (key: SortKey) => void;
   onOpen: (no: number) => void;
+  /** What to say when no order matches the filter. */
+  empty: string;
 }): ReactElement {
-  const { scroll } = props;
+  const { scroll, orders } = props;
   const box = useRef<HTMLDivElement>(null);
+  const [win, setWin] = useState(() => rowWindow(scroll.top, 740, orders.length));
+  // The grid's height, kept by a ResizeObserver: reading clientHeight on every scroll forces a layout each time.
+  const height = useRef(740);
+  const measure = useCallback(() => {
+    const el = box.current;
+    if (el === null) return;
+    const next = rowWindow(el.scrollTop, height.current, orders.length);
+    setWin((w) => (w.start === next.start && w.end === next.end ? w : next));
+  }, [orders.length]);
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (el === null) return;
+    height.current = el.clientHeight;
+    measure();
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry === undefined) return;
+      height.current = entry.contentRect.height;
+      measure();
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [measure]);
+  // Scroll events can come several a frame; measure once, at the start of the next frame.
+  const pending = useRef(0);
+  const onScroll = useCallback(() => {
+    if (pending.current !== 0) return;
+    pending.current = requestAnimationFrame(() => {
+      pending.current = 0;
+      measure();
+    });
+  }, [measure]);
+  useLayoutEffect(() => () => cancelAnimationFrame(pending.current), []);
   useLayoutEffect(() => {
     const el = box.current;
     if (el === null) return;
@@ -86,8 +125,13 @@ export function OrderGrid(props: {
     };
   }, [scroll]);
   return (
-    <div className="wms-grid" ref={box} data-testid="wms-grid">
-      <table>
+    <div className="wms-grid" ref={box} onScroll={onScroll} data-testid="wms-grid">
+      <table style={{ width: TABLE_WIDTH }}>
+        <colgroup>
+          {COLUMNS.map((c) => (
+            <col key={c.key} style={{ width: c.width }} />
+          ))}
+        </colgroup>
         <thead>
           <tr>
             {COLUMNS.map((c) => {
@@ -104,12 +148,22 @@ export function OrderGrid(props: {
           </tr>
         </thead>
         <tbody>
-          {props.orders.map((o) => (
+          {win.start > 0 && (
+            <tr className="spacer" aria-hidden="true">
+              <td colSpan={COLUMNS.length} style={{ height: win.start * ROW_H }} />
+            </tr>
+          )}
+          {orders.slice(win.start, win.end).map((o) => (
             <Row key={o.no} order={o} tickMs={props.tickMs} selected={props.selected.has(o.no)} onOpen={props.onOpen} />
           ))}
+          {win.end < orders.length && (
+            <tr className="spacer" aria-hidden="true">
+              <td colSpan={COLUMNS.length} style={{ height: (orders.length - win.end) * ROW_H }} />
+            </tr>
+          )}
         </tbody>
       </table>
-      {props.orders.length === 0 && <p className="wms-empty">No orders here.</p>}
+      {orders.length === 0 && <p className="wms-empty">{props.empty}</p>}
     </div>
   );
 }

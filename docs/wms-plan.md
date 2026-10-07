@@ -149,4 +149,14 @@ WMS catalog, so State stays compact and hashable.
    cutoff. Pacing unchanged (first sale 36.2 min).
 9. **Polish.** Tap targets, dark mode, reduced motion, empty states, 300
    orders / 2,000 lines scrolling smoothly (virtualise by hand if needed).
-   STATUS: TODO
+   STATUS: DONE. The grid renders only the rows near the screen
+   (`rowWindow` in `grid.ts`: chunks of 4, a margin of 8, spacer rows), with
+   fixed column widths, the height from a ResizeObserver and scroll read
+   once a frame; the floor stops rendering while the WMS is open; the row
+   handler is stable so unchanged rows skip the once-a-second update.
+   Filters, tabs and the sort header are 40 px; empty grids say why; bars
+   do not animate with reduced motion; the WMS is dark (`color-scheme`).
+   Load: `wmsUnderLoad()` in packages/harness (a sim-side test keeps a
+   tick plus its View under 4 ms) and `apps/web/e2e/wms-perf.ts`: opening
+   the WMS 1.7 s -> 0.35-0.45 s, a fast fling through all 300 orders
+   37-41 -> 52-58 fps (budget 55; the floor alone 58-59 on this machine).

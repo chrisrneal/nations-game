@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WmsOrderView } from '@warehouse/contracts';
-import { clock, countdown, filterCounts, matches, nextSort, rowSignature, sortOrders, statusTone } from './grid.ts';
+import { HEAD_H, ROW_H, clock, countdown, filterCounts, matches, nextSort, rowSignature, rowWindow, sortOrders, statusTone } from './grid.ts';
 
 function row(no: number, extra: Partial<WmsOrderView> = {}): WmsOrderView {
   return {
@@ -71,5 +71,19 @@ describe('WMS order grid helpers (slice 3)', () => {
   it('a row changes signature only when what it shows changes', () => {
     expect(rowSignature(row(1))).toBe(rowSignature(row(1, { lines: [] })));
     expect(rowSignature(row(1, { pct: 10 }))).not.toBe(rowSignature(row(1)));
+  });
+});
+
+describe('grid windowing (slice 9)', () => {
+  it('renders the rows on screen plus a margin, in chunks, never past the ends', () => {
+    expect(rowWindow(0, 600, 300)).toEqual({ start: 0, end: Math.ceil(600 / ROW_H) + 2 * 8 + 4 });
+    const mid = rowWindow(HEAD_H + 100 * ROW_H, 600, 300);
+    expect(mid.start).toBeLessThanOrEqual(100 - 8);
+    expect(mid.start % 4).toBe(0);
+    expect(mid.end).toBeGreaterThan(100 + Math.ceil(600 / ROW_H));
+    expect(rowWindow(HEAD_H + 101 * ROW_H, 600, 300)).toEqual(mid);
+    expect(rowWindow(1e6, 600, 300).end).toBe(300);
+    expect(rowWindow(0, 600, 10)).toEqual({ start: 0, end: 10 });
+    expect(rowWindow(0, 600, 0)).toEqual({ start: 0, end: 0 });
   });
 });

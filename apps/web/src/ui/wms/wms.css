@@ -90,7 +90,7 @@
 
 .wms-filter {
   flex: none;
-  min-height: 36px;
+  min-height: 40px;
   padding: 0 0.65rem;
   border-radius: 999px;
   border: 1px solid var(--wms-rule);
@@ -130,11 +130,12 @@
   border-collapse: separate;
   border-spacing: 0;
   font-size: 0.78rem;
-  min-width: 100%;
+  table-layout: fixed;
 }
 
 .wms-grid th,
 .wms-grid td {
+  box-sizing: border-box;
   height: var(--row-h);
   padding: 0 0.4rem;
   white-space: nowrap;
@@ -147,7 +148,7 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  height: 32px;
+  height: 40px;
   padding: 0;
   background: var(--wms-head);
   color: var(--muted);
@@ -862,7 +863,8 @@
 .wms-note-toast {
   position: absolute;
   left: 50%;
-  bottom: calc(env(safe-area-inset-bottom) + 3.6rem);
+  /* Under the KPI strip, over the filters: never over the action buttons at the bottom. */
+  top: calc(env(safe-area-inset-top) + 5.9rem);
   transform: translateX(-50%);
   z-index: 5;
   max-width: 90%;
@@ -997,4 +999,30 @@
 
 .gw-bar i.high {
   background: var(--wms-green);
+}
+
+/* ---- slice 9: windowed rows, tap targets, reduced motion, dark controls ---- */
+.wms {
+  color-scheme: dark;
+}
+
+.wms-grid tbody tr.spacer {
+  background: none;
+  cursor: default;
+}
+
+.wms-grid tbody tr.spacer td {
+  padding: 0;
+  border: none;
+}
+
+.wms-tabs button {
+  min-height: 40px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-bar,
+  .wms-progress i {
+    transition: none;
+  }
 }

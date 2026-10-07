@@ -120,6 +120,9 @@ export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedb
 
   return (
     <div className="app">
+      {/* The WMS covers the whole screen: the floor and its animation stop while it is open (slice 9). */}
+      {sheet !== 'wms' && (
+        <>
       <TopBar view={view} store={store} onSettings={() => setSheet('settings')} onStars={() => setSheet('stars')} />
       <InstallBanner install={install} onToast={setToast} />
       <Floor journey={view.journey} pickingLevel={view.upgrades.find((u) => u.id === 'picking')?.level ?? 0} docks={view.docks.length} tickMs={view.tickMs} store={store} onTapPick={tapPick} onTapReceive={tapReceive}>
@@ -147,6 +150,8 @@ export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedb
         </Pier>
       </Floor>
       <BottomBar view={view} store={store} onUpgrades={() => setSheet('upgrades')} onSell={() => setSheet('sell')} onBoost={boost} onWms={() => setSheet('wms')} />
+        </>
+      )}
       {sheet === 'wms' && <WmsScreen store={store} host={host} onClose={close} />}
       {sheet === 'upgrades' && <UpgradeSheet view={view} store={store} onBuy={buy} onSell={() => setSheet('sell')} onClose={close} />}
       {sheet === 'sell' && (
