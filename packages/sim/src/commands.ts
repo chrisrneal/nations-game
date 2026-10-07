@@ -22,7 +22,7 @@ function wmsProblem(p: Record<string, unknown>): string | null {
     case 'hire':
       return p.role === 'pick' || p.role === 'receive' ? null : 'bad role';
     case 'door':
-      return null;
+      return p.side === undefined || p.side === 'in' || p.side === 'out' ? null : 'bad side';
     case 'role':
       return typeof p.worker === 'number' && Number.isSafeInteger(p.worker) && p.worker >= 0 && (p.role === 'pick' || p.role === 'receive') ? null : 'bad move';
     case 'policy': {

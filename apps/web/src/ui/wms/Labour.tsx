@@ -5,8 +5,8 @@ import { countdown } from './grid.ts';
 
 /** Each side's name, and who moves to it from the other side. */
 const SIDE: Readonly<Record<WmsRole, { readonly name: string; readonly other: string }>> = {
-  pick: { name: 'Picking', other: 'a receiver' },
-  receive: { name: 'Receiving', other: 'a picker' },
+  pick: { name: 'Picking', other: 'a dock hand' },
+  receive: { name: 'Dock', other: 'a picker' },
 };
 
 /** Tasks waiting a head, to one decimal: display only, the sim decides with whole numbers. */
@@ -31,7 +31,7 @@ function NeedRow(props: { role: WmsRole; need: WmsNeed; short: boolean; canMove:
         className={`wms-btn${short ? ' wms-btn-primary' : ''}`}
         disabled={!props.canMove}
         onClick={() => props.submit({ action: 'role', worker: 0, role })}
-        aria-label={`Move ${side.other} to ${side.name.toLowerCase()}`}
+        aria-label={`Move ${side.other} to ${role === 'pick' ? 'picking' : 'the dock'}`}
         data-testid={`need-move-${role}`}
       >
         + 1 here

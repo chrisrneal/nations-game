@@ -72,7 +72,9 @@ export type WmsEventCode =
   | 'HIRE'
   | 'DOOR'
   // Labour (W9): `picker` moved to `line`'s role (1 pick, 2 receive), `qty` tasks waiting there, `of` 1 when the WMS's balance moved them.
-  | 'MOVE';
+  | 'MOVE'
+  // Outbound doors (W10): a trailer left outbound door `line` with `of` orders and `qty` units.
+  | 'DEPART';
 
 /**
  * How the WMS orders the pick tasks it hands out (W7): best priority then
@@ -148,6 +150,8 @@ export interface WmsOrder {
   readonly closed: number;
   /** The player paid to expedite it; an order is expedited at most once. */
   readonly expedited: boolean;
+  /** The outbound door it is staged at and leaves from (W10, 1-based); 0 before it is staged. */
+  readonly door: number;
 }
 
 /** One SKU in one bin. Available = onHand - allocated. */
@@ -216,14 +220,15 @@ export interface WmsInboundStats {
   readonly countsAccurate: number;
 }
 
-/** What a worker does (W8): pick orders, or receive trucks and put their stock away. */
+/** What a worker does (W8): pick orders, or work the dock: receive trucks, put their stock away and load outbound trailers (W10). */
 export type WmsRole = 'pick' | 'receive';
 
 /**
  * A task the WMS creates (W8): pick one order line from its bin, count one
- * PO line in at the dock, or take one received PO line to its bin.
+ * PO line in at the dock, take one received PO line to its bin, or load one
+ * staged order onto its outbound door's trailer (W10).
  */
-export type WmsTaskKind = 'PICK' | 'RECEIVE' | 'PUTAWAY';
+export type WmsTaskKind = 'PICK' | 'RECEIVE' | 'PUTAWAY' | 'LOAD';
 
 /** OPEN waiting for a worker, QUEUED in a worker's plan, ACTIVE being worked, then DONE or CANCELLED. */
 export type WmsTaskStatus = 'OPEN' | 'QUEUED' | 'ACTIVE' | 'DONE' | 'CANCELLED';
@@ -232,13 +237,14 @@ export interface WmsTask {
   /** Sequential task number (shown T-00042). */
   readonly no: number;
   readonly kind: WmsTaskKind;
-  /** The order (PICK) or PO (RECEIVE, PUTAWAY) number, and its line. */
+  /** The order (PICK, LOAD) or PO (RECEIVE, PUTAWAY) number, and its line (0 for a LOAD). */
   readonly ref: number;
   readonly line: number;
+  /** The SKU; -1 for a LOAD (a whole order). */
   readonly sku: number;
-  /** Where the work is: the line's bin; -1 for the dock (RECEIVE). */
+  /** Where the work is: the line's bin; -1 for the inbound dock (RECEIVE); -10 - d for outbound door d (LOAD, W10). */
   readonly bin: number;
-  /** Units to pick, count in or put away. */
+  /** Units to pick, count in, put away or load. */
   readonly qty: number;
   /** Units done so far (picked, counted in, put away). */
   readonly done: number;
@@ -271,7 +277,7 @@ export interface WmsWorker {
   readonly queue: readonly number[];
   /** Progress on the active task: milli-units picked or counted, or ticks spent putting away. */
   readonly progress: number;
-  /** The bin it stands at or walks to; -1 at the dock and pick-and-drop point by the conveyor (W7). */
+  /** The bin it stands at or walks to; -1 at the inbound dock and pick-and-drop point by the conveyor (W7); -10 - d at outbound door d (W10). */
   readonly at: number;
   /** Ticks of walking left before it reaches `at` and starts work (W7). */
   readonly walk: number;
@@ -309,6 +315,8 @@ export interface WmsStats {
   /** Cents shipments have paid, and cents spent (expedites, hires, doors) (W8). */
   readonly earned: number;
   readonly spent: number;
+  /** Trailers that have left the outbound doors with orders on them (W10). */
+  readonly trailers: number;
 }
 
 /** One warehouse day's totals (W8): the day number (1 = the opening day) and what it did. */
@@ -330,6 +338,19 @@ export interface WmsDestStats {
   readonly goodwill: number;
 }
 
+/**
+ * An outbound dock door and the trailer at it (W10): the trailer leaves at
+ * `departs` with every order loaded on it, and the next one backs in.
+ */
+export interface WmsShipDoor {
+  /** 1-based (shown S1). */
+  readonly door: number;
+  /** The trailer at the door now (shown TR-0042). */
+  readonly trailer: number;
+  /** The tick it leaves. */
+  readonly departs: number;
+}
+
 /** The WMS inside State: hashed, saved and replayed like everything else (S5, S9). */
 export interface WmsState {
   /** Its seeded stream: every draw the warehouse makes. */
@@ -344,10 +365,12 @@ export interface WmsState {
   readonly inventory: readonly WmsStock[];
   /** The crew (W8): pickers and receivers, in id order. */
   readonly workers: readonly WmsWorker[];
-  /** Open, queued and active tasks, then the latest done and cancelled (W8). */
+  /** Open, queued and active tasks, in number order (W8). */
   readonly tasks: readonly WmsTask[];
+  /** The latest done and cancelled tasks, oldest first: at least the latest `wmsTasksKept`, cut back in batches (W10: kept apart, so the plan reads only live work). */
+  readonly history: readonly WmsTask[];
   readonly nextTaskNo: number;
-  /** The latest events, oldest first, at most `wmsEventsKept`. */
+  /** The latest events, oldest first: at least the latest `wmsEventsKept`, cut back in batches (W10). */
   readonly events: readonly WmsEvent[];
   readonly stats: WmsStats;
   /** Today's totals, and yesterday's once a day has ended (W8). */
@@ -361,6 +384,9 @@ export interface WmsState {
   readonly pos: readonly WmsPo[];
   /** Dock doors trucks are received at (W8: more can be bought). */
   readonly doors: number;
+  /** Outbound doors and their trailers, in door order (W10: more can be bought). */
+  readonly shipDoors: readonly WmsShipDoor[];
+  readonly nextTrailerNo: number;
   /** Inventory (W6): the next cycle count's tick and the SKU it counts. */
   readonly nextCountAt: number;
   readonly countCursor: number;
@@ -390,7 +416,8 @@ export type WmsAction =
   /** Move a worker to a role (W9); worker 0 lets the WMS choose who: the one with least in hand. */
   | { readonly action: 'role'; readonly worker: number; readonly role: WmsRole }
   | { readonly action: 'hire'; readonly role: WmsRole }
-  | { readonly action: 'door' };
+  /** Open one more dock door: inbound (the default, as before W10) or outbound. */
+  | { readonly action: 'door'; readonly side?: 'in' | 'out' };
 
 export type WmsActionName = WmsAction['action'];
 
@@ -449,6 +476,8 @@ export interface WmsOrderView {
   /** Not shipped or cancelled. */
   readonly open: boolean;
   readonly expedited: boolean;
+  /** The outbound door it is staged at or left from (W10); 0 before. */
+  readonly door: number;
   readonly lines: readonly WmsLineView[];
 }
 
@@ -495,13 +524,13 @@ export interface WmsTaskView {
   readonly code: string;
   readonly kind: WmsTaskKind;
   readonly status: WmsTaskStatus;
-  /** The order (PICK) or PO (RECEIVE, PUTAWAY) it belongs to: its number to open and its code with the line (O-10234/L2). */
+  /** The order (PICK, LOAD) or PO (RECEIVE, PUTAWAY) it belongs to: its number to open and its code with the line (O-10234/L2; just the order for a LOAD). */
   readonly order: number;
   readonly po: number;
   readonly ref: string;
   readonly sku: string;
   readonly desc: string;
-  /** Where: a bin code, or "Dock D2" for a receive task. */
+  /** Where: a bin code, "Dock D2" for a receive task, or "Door S3" for a load (W10). */
   readonly where: string;
   readonly qty: number;
   readonly done: number;
@@ -537,6 +566,8 @@ export interface WmsWorkerView {
   readonly walk: number;
   /** The dock door of its receive task; 0 otherwise. */
   readonly door: number;
+  /** The outbound door it stands at or walks to (W10); 0 otherwise. */
+  readonly shipDoor: number;
   /** Share of the active task done, 0-100. */
   readonly pct: number;
   readonly stats: WmsWorkerStats;
@@ -703,6 +734,33 @@ export interface WmsGrowthView {
   /** Cents the next dock door costs; null at the most doors. */
   readonly doorCost: number | null;
   readonly maxDoors: number;
+  /** Cents the next outbound door costs; null at the most (W10). */
+  readonly shipDoorCost: number | null;
+  readonly maxShipDoors: number;
+}
+
+/** An outbound door, its trailer and the orders at it (W10). */
+export interface WmsShipDoorView {
+  readonly door: number;
+  /** e.g. S2. */
+  readonly code: string;
+  /** e.g. TR-0042. */
+  readonly trailer: string;
+  /** The tick the trailer leaves, and ticks until then. */
+  readonly departs: number;
+  readonly departsIn: number;
+  /** Units a trailer holds. */
+  readonly capacity: number;
+  /** Orders loaded on the trailer, and their units. */
+  readonly loaded: readonly number[];
+  readonly loadedUnits: number;
+  /** Orders staged at the door waiting to be loaded, and their units. */
+  readonly staged: readonly number[];
+  readonly stagedUnits: number;
+  /** Units loaded as a whole % of what the trailer holds. */
+  readonly pct: number;
+  /** Workers loading at it now. */
+  readonly loaders: number;
 }
 
 /** Everything the WMS screens read. */
@@ -736,8 +794,10 @@ export interface WmsView {
   /** The wave intervals the Plan offers, in ticks: shortest, the default, longest (W9). */
   readonly waveChoices: readonly number[];
   readonly growth: WmsGrowthView;
-  /** The floor's shape (W7): aisles, bays down each, bays of walking from one aisle to the next, dock doors. */
-  readonly layout: { readonly aisles: number; readonly bays: number; readonly aisleGap: number; readonly doors: number };
+  /** The outbound doors and their trailers (W10), in door order. */
+  readonly shipDoors: readonly WmsShipDoorView[];
+  /** The floor's shape (W7): aisles, bays down each, bays of walking from one aisle to the next, dock doors, outbound doors (W10). */
+  readonly layout: { readonly aisles: number; readonly bays: number; readonly aisleGap: number; readonly doors: number; readonly shipDoors: number };
   readonly stats: WmsStats;
   readonly today: WmsDayStats;
   readonly yesterday: WmsDayStats | null;

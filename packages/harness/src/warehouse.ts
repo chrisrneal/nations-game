@@ -4,7 +4,7 @@
  * touch Node APIs.
  */
 import type { WarehouseState, WmsAction, WmsLaborMode, WmsPickRule, WmsReleaseMode } from '@warehouse/contracts';
-import { WarehouseSession, advanceMany, createWarehouse, hashState, hireCost, doorCost, stepWarehouse } from '@warehouse/sim';
+import { WarehouseSession, advanceMany, createWarehouse, hashState, hireCost, doorCost, shipDoorCost, stepWarehouse } from '@warehouse/sim';
 
 const RULES: readonly WmsPickRule[] = ['priority', 'cutoff', 'nearest'];
 const RELEASES: readonly WmsReleaseMode[] = ['waves', 'continuous', 'manual'];
@@ -20,7 +20,7 @@ function scriptedAction(s: WarehouseState): WmsAction | null {
   const t = s.tick;
   if (t % 480 === 240) {
     const k = Math.floor(t / 480);
-    return { action: 'policy', policy: { pick: RULES[k % 3] ?? 'priority', release: RELEASES[(k >> 1) % 3] ?? 'waves', pickers: 4 + (k % 4), waveTicks: WAVES[(k >> 2) % 3] ?? 240, labor: LABOR[k % 2] ?? 'fixed' } };
+    return { action: 'policy', policy: { pick: RULES[k % 3] ?? 'priority', release: RELEASES[(k >> 1) % 3] ?? 'waves', pickers: 8 + (k % 8), waveTicks: WAVES[(k >> 2) % 3] ?? 240, labor: LABOR[k % 2] ?? 'fixed' } };
   }
   if (t % 160 === 80) {
     const k = Math.floor(t / 160);
@@ -28,6 +28,7 @@ function scriptedAction(s: WarehouseState): WmsAction | null {
   }
   if (t % 240 === 120 && (hireCost(w.workers.length) ?? Number.POSITIVE_INFINITY) <= s.cash) return { action: 'hire', role: t % 480 === 120 ? 'pick' : 'receive' };
   if (t % 960 === 600 && (doorCost(w.doors) ?? Number.POSITIVE_INFINITY) <= s.cash) return { action: 'door' };
+  if (t % 960 === 840 && (shipDoorCost(w.shipDoors.length) ?? Number.POSITIVE_INFINITY) <= s.cash) return { action: 'door', side: 'out' };
   if (t % 200 === 100) return { action: 'release', orders: open.filter((o) => o.status === 'NEW').map((o) => o.no).slice(0, 5) };
   if (t % 40 === 20) {
     const o = pick(Math.floor(t / 40));
@@ -57,8 +58,8 @@ function scriptedAction(s: WarehouseState): WmsAction | null {
  * A scripted player that uses every WMS action: changes the plan every two
  * minutes, hires and opens doors when it can afford them, releases orders,
  * changes priorities, holds and releases, assigns pickers, expedites and
- * cancels lines, moves workers between picking and receiving and switches
- * the balance plan and the wave interval (W9). Some are refused (a plan with no change, nothing to release,
+ * cancels lines, moves workers between picking and the dock and switches
+ * the balance plan and the wave interval (W9), and opens outbound doors (W10). Some are refused (a plan with no change, nothing to release,
  * not enough cash), which is part of the test.
  */
 export function scriptedWarehouse(seed: number, ticks: number): WarehouseState {
@@ -93,11 +94,14 @@ export function benchWarehouseCatchUp(ticks: number, runs: number, now: () => nu
   return times;
 }
 
-/** A busy warehouse reached by ordinary commands: the most workers, the most doors, an hour in. The benchmark's starting point. */
+/** A busy warehouse reached by ordinary commands: the most workers, inbound doors and outbound doors (W10), an hour in. The benchmark's starting point. */
 export function busyWarehouse(): WarehouseState {
   let s: WarehouseState = { ...createWarehouse({ seed: 11 }), cash: 10 ** 12 };
-  for (let i = 0; i < 20; i++) {
-    const payload: WmsAction = hireCost(s.wms.workers.length) !== null ? { action: 'hire', role: i % 3 === 2 ? 'receive' : 'pick' } : { action: 'door' };
+  for (let i = 0; i < 40; i++) {
+    const w = s.wms;
+    const payload: WmsAction | null =
+      hireCost(w.workers.length) !== null ? { action: 'hire', role: i % 3 === 2 ? 'receive' : 'pick' } : doorCost(w.doors) !== null ? { action: 'door' } : shipDoorCost(w.shipDoors.length) !== null ? { action: 'door', side: 'out' } : null;
+    if (payload === null) break;
     s = stepWarehouse(s, [{ tick: s.tick, type: 'wms', payload }]).state;
   }
   return advanceMany(s, 3600 * 4);

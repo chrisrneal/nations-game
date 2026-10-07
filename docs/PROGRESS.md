@@ -16,8 +16,39 @@ Nations log is at commit `67d1d92`.
 - [x] The WMS is home: a live floor drawn from the WMS, and the plan (W7, wms-plan slice 11)
 - [x] The WMS is the game: tasks for every worker, a Crew page, dock appointments, the idle game removed (W8, wms-plan slice 12)
 - [x] Speed (5 warehouse minutes a second, pause, 1x, 10x), wave interval, moving people by need (W9)
+- [x] Outbound doors with scheduled trailers, three times the orders, the dock crew loads, a crew of 20 to 40 (W10)
 
 ## Session log
+
+### 2026-10-07 - Outbound doors, more business, more staff (lanes C, S, H, U, P, D; owner request, W10)
+**What changed.** Shipping now goes through **outbound doors**: three to
+start (S1-S3), up to six. Each has a trailer that leaves every warehouse
+hour (the doors take turns, so one leaves every 20 minutes); packed orders
+are staged at the door whose trailer will take them soonest, a dock hand
+walks down and loads each one, and everything on a trailer ships when it
+pulls out. Orders come **three times as often** (every 6-10 warehouse
+minutes), the warehouse opens with **14 pickers and 6 dock crew** (was 6
+and 3), hires up to 40 and each hire costs only 15% more than the last.
+Receivers are now the **dock crew**: they load trailers first, then receive
+and put away. The floor draws a column per outbound door (its lane, its
+trailer filling up, minutes until it leaves) and dock hands (teal) loading;
+Out has a **Trucks** tab; an order shows its door; Plan sells outbound
+doors. Saves are schema 9: the owner's warehouse gets the doors and is
+topped up to the new crew for free.
+**Checks.** `npm test` (414) and `npm run check` pass; new tests for
+staging, loading, trailer capacity, departures, holds on the dock, the
+dock crew's priorities, the door timetable and a real version-8 save.
+`npm run harness -- report`: 868 orders a seed in 2 h of ticks (290 at W9),
+84% OTIF, 96% fill, pickers 61% busy, dock crew 48%. Phone check 55/55:
+60 fps on a 40-worker floor with six outbound doors (CPU slowed 4x), 10
+hours away reopens in 1.2-1.6 s. Catch-up stays inside the budget at three
+times the work after the task planner was made to read only live work.
+**How to see it.** Open the app: more people on the floor, cartons in the
+door lanes along the bottom, trailers pulling out. Out › Trucks lists each
+door's trailer; Plan › Grow opens more outbound doors.
+**What is left.** Demand is fixed, so a 4th door or extra people mostly cut
+waiting rather than earn more (docs/GAPS.md): business that grows with
+goodwill is the owner's call.
 
 ### 2026-10-07 - Speed, waves and labour by need (lanes C, S, H, U, P, D; owner request, W9)
 **What changed.** The warehouse now runs at **5 warehouse minutes a second**

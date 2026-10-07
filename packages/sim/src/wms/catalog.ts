@@ -130,8 +130,26 @@ export const WMS_BAYS = 20;
 /** Bays' worth of walking from one aisle's walkway to the next along the front cross aisle (W7). */
 export const WMS_AISLE_GAP_BAYS = 3;
 
-/** Where a bin is (W7): its aisle (0 = A) and bay (1-20); -1, the pick-and-drop point, is at the front of aisle A (bay 0). */
+/** Bays' worth of walking from one outbound door to the next along the shipping dock (W10). */
+export const WMS_SHIP_DOOR_BAYS = 2;
+
+/** Where a worker stands at outbound door `door` (W10): -10 - door, so -11 is S1. */
+export function shipDoorAt(door: number): number {
+  return -10 - door;
+}
+
+/** The outbound door a spot is at (W10), or 0 if it is not one. */
+export function shipDoorOf(at: number): number {
+  return at <= -11 ? -10 - at : 0;
+}
+
+/**
+ * Where a bin is (W7): its aisle (0 = A) and bay (1-20); -1, the pick-and-drop
+ * point, is at the front of aisle A (bay 0); an outbound door (W10) is past
+ * the front of the last aisle.
+ */
 export function binPlace(bin: number): { readonly aisle: number; readonly bay: number } {
+  if (shipDoorOf(bin) > 0) return { aisle: WMS_AISLES - 1, bay: 0 };
   if (bin < 0) return { aisle: 0, bay: 0 };
   return { aisle: Math.floor(bin / WMS_BINS_PER_AISLE) % WMS_AISLES, bay: (Math.floor(bin / 8) % WMS_BAYS) + 1 };
 }
@@ -139,13 +157,59 @@ export function binPlace(bin: number): { readonly aisle: number; readonly bay: n
 /**
  * Bays a picker walks between two bins (RULES 16, W7): along the aisle if
  * both are in it, else out to the front cross aisle, across, and in again.
- * -1 is the pick-and-drop point at the front of aisle A.
+ * -1 is the pick-and-drop point at the front of aisle A. The outbound doors
+ * (W10) are down the front cross aisle past the last aisle, then along the
+ * shipping dock, `WMS_SHIP_DOOR_BAYS` a door.
  */
 export function travelBays(from: number, to: number): number {
-  const a = binPlace(from);
-  const b = binPlace(to);
-  if (a.aisle === b.aisle) return Math.abs(a.bay - b.bay);
-  return a.bay + b.bay + WMS_AISLE_GAP_BAYS * Math.abs(a.aisle - b.aisle);
+  const da = shipDoorOf(from);
+  const db = shipDoorOf(to);
+  if (da > 0 && db > 0) return Math.abs(da - db) * WMS_SHIP_DOOR_BAYS;
+  if (da > 0 || db > 0) {
+    const bin = da > 0 ? to : from;
+    return bayOf(bin) + WMS_AISLE_GAP_BAYS * (WMS_AISLES - aisleOf(bin)) + (da > 0 ? da : db) * WMS_SHIP_DOOR_BAYS;
+  }
+  const aa = aisleOf(from);
+  const ab = aisleOf(to);
+  if (aa === ab) return Math.abs(bayOf(from) - bayOf(to));
+  return bayOf(from) + bayOf(to) + WMS_AISLE_GAP_BAYS * Math.abs(aa - ab);
+}
+
+/** `binPlace` without the object (W10: the nearest-bin plan measures hundreds of walks a step). The pick-and-drop point (-1) is aisle A, bay 0. */
+function aisleOf(bin: number): number {
+  return bin < 0 ? 0 : Math.floor(bin / WMS_BINS_PER_AISLE) % WMS_AISLES;
+}
+
+function bayOf(bin: number): number {
+  return bin < 0 ? 0 : (Math.floor(bin / 8) % WMS_BAYS) + 1;
+}
+
+/** An outbound door's name (W10): S1, S2, ... */
+export function shipDoorCode(door: number): string {
+  return `S${door}`;
+}
+
+/** A trailer's number as shown (W10): TR-0042. */
+export function trailerCode(no: number): string {
+  return `TR-${String(no).padStart(4, '0')}`;
+}
+
+/**
+ * Finds a record by its number in an array kept in ascending number order
+ * (orders, POs and tasks are only ever appended in number order and filtered),
+ * by halving (W10: a busy warehouse holds hundreds of tasks).
+ */
+export function byNo<V extends { readonly no: number }>(list: readonly V[], no: number): V | undefined {
+  let lo = 0;
+  let hi = list.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const v = list[mid] as V;
+    if (v.no === no) return v;
+    if (v.no < no) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  return undefined;
 }
 
 /** A worker's name (W8): W01, W02, ... */

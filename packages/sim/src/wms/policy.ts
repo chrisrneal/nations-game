@@ -148,9 +148,9 @@ function whoMoves(w: MWms, from: WmsRole): MWms['workers'][number] | undefined {
 export function moveWorker(w: MWms, id: number, role: WmsRole, tick: number, auto = false): string | null {
   const from: WmsRole = role === 'pick' ? 'receive' : 'pick';
   const worker = id === 0 ? whoMoves(w, from) : w.workers.find((p) => p.id === id);
-  if (worker === undefined) return id === 0 ? `Nobody is ${from === 'pick' ? 'picking' : 'receiving'}` : 'No such worker';
-  if (worker.role === role) return `Already ${role === 'pick' ? 'picking' : 'receiving'}`;
-  if (w.workers.filter((p) => p.role === from).length <= 1) return `Someone has to keep ${from === 'pick' ? 'picking' : 'receiving'}`;
+  if (worker === undefined) return id === 0 ? `Nobody is ${from === 'pick' ? 'picking' : 'on the dock'}` : 'No such worker';
+  if (worker.role === role) return `Already ${role === 'pick' ? 'picking' : 'on the dock'}`;
+  if (w.workers.filter((p) => p.role === from).length <= 1) return `Someone has to stay ${from === 'pick' ? 'picking' : 'on the dock'}`;
   const waiting = waitingByRole(w)[role];
   freeWorker(w, worker, tick);
   worker.role = role;
@@ -173,6 +173,49 @@ export function hireCost(crew: number): number | null {
   return grow(T.wmsHireCostCents.value, T.wmsHireCostGrowthBp.value, hired);
 }
 
+/** Cents the next outbound door costs (RULES 9, W10), or null at the most. */
+export function shipDoorCost(doors: number): number | null {
+  if (doors >= T.wmsMaxShipDoors.value) return null;
+  return grow(T.wmsShipDoorCostCents.value, T.wmsShipDoorCostGrowthBp.value, Math.max(0, doors - T.wmsShipDoors.value));
+}
+
+/** A new warehouse's outbound doors (W10): `wmsShipDoors`, their first trailers leaving one after another over the first trailer interval. */
+export function openingShipDoors(tick: number): MWms['shipDoors'] {
+  const n = T.wmsShipDoors.value;
+  return Array.from({ length: n }, (_, i) => ({ door: i + 1, trailer: i + 1, departs: tick + Math.floor((T.wmsTrailerTicks.value * (i + 1)) / n) }));
+}
+
+/**
+ * When a new outbound door's first trailer leaves (W10): in the middle of the
+ * longest wait between the trailers already on the timetable over the next
+ * trailer interval (the earliest such gap on a tie), so a new door fills the
+ * biggest gap.
+ */
+export function newDeparture(w: MWms, tick: number): number {
+  const every = T.wmsTrailerTicks.value;
+  // Each door's next departure, folded into (tick, tick + every].
+  const times = w.shipDoors.map((d) => tick + ((((d.departs - tick - 1) % every) + every) % every) + 1).sort((a, b) => a - b);
+  if (times.length === 0) return tick + every;
+  let bestAt = (times[0] as number) + every;
+  let bestGap = -1;
+  times.forEach((t, i) => {
+    const next = i + 1 < times.length ? (times[i + 1] as number) : (times[0] as number) + every;
+    if (next - t > bestGap) {
+      bestGap = next - t;
+      bestAt = t + Math.floor((next - t) / 2);
+    }
+  });
+  return bestAt > tick ? bestAt : bestAt + every;
+}
+
+/** Opens one more outbound door (RULES 9, W10): its first trailer backs in and leaves in the biggest gap of the timetable. */
+export function addShipDoor(w: MWms, tick: number): void {
+  const door = w.shipDoors.length + 1;
+  w.shipDoors.push({ door, trailer: w.nextTrailerNo, departs: newDeparture(w, tick) });
+  w.nextTrailerNo += 1;
+  log(w, { tick, code: 'DOOR', line: 2, qty: door });
+}
+
 /** Cents the next dock door costs (RULES 9, W8), or null at the most doors. */
 export function doorCost(doors: number): number | null {
   if (doors >= T.wmsMaxDoors.value) return null;
@@ -191,5 +234,5 @@ export function hire(w: MWms, role: WmsRole, tick: number): void {
 /** Opens one more dock door (RULES 9, W8): one more truck a slot, and one more truck received at once. */
 export function addDoor(w: MWms, tick: number): void {
   w.doors += 1;
-  log(w, { tick, code: 'DOOR', qty: w.doors });
+  log(w, { tick, code: 'DOOR', line: 1, qty: w.doors });
 }

@@ -2,18 +2,18 @@ import type { WarehouseEvent, WmsOrder } from '@warehouse/contracts';
 import { dayAt } from '../clock.ts';
 import { mulDiv } from '../math.ts';
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
-import { WMS_RATE_BUCKETS, WMS_RATE_BUCKET_TICKS, destinationAt, isClosed } from './catalog.ts';
+import { WMS_RATE_BUCKETS, WMS_RATE_BUCKET_TICKS, byNo, destinationAt, isClosed, shipDoorAt } from './catalog.ts';
 import { confirmReceipt, cycleCount, planReorders, stepInbound, storeLine } from './inbound.ts';
-import { log, type MLine, type MOrder, type MTask, type MWms, type MWorker } from './mutable.ts';
+import { log, trimLog, type MLine, type MOrder, type MTask, type MWms, type MWorker } from './mutable.ts';
 import { Roller, rollOrder, unitsOf } from './orders.ts';
 import { balanceCrew } from './policy.ts';
-import { finishTask, findTask, newTask, pickTarget, planTasks, poTarget, purgeTasks, startNext, urgency } from './tasks.ts';
+import { finishTask, findTask, newTask, pickTarget, planTasks, poTarget, shipUnits, startNext, sweepTasks, urgency } from './tasks.ts';
 
-export { cloneWms, log, type MLine, type MOrder, type MWms } from './mutable.ts';
-export { urgency, walkTicks } from './tasks.ts';
+export { cloneWms, log, trimLog, type MLine, type MOrder, type MWms } from './mutable.ts';
+export { sweepTasks, urgency, walkTicks } from './tasks.ts';
 
 export function findOrder(w: MWms, no: number): MOrder | undefined {
-  return w.orders.find((o) => o.no === no);
+  return byNo(w.orders, no);
 }
 
 /** The rate bucket a tick falls in. */
@@ -98,9 +98,10 @@ function confirmPick(w: MWms, r: Roller, o: MOrder, line: MLine, picker: number,
   log(w, { tick, code: 'PICK CONF', order: o.no, line: line.no, sku: line.sku, qty: line.picked, of: line.ordered, picker });
 }
 
-/** Whether the worker's active task is still the work its line waits for; if not, it is dropped. */
+/** Whether the worker's active task is still the work its line (or, for a load, its order) waits for; if not, it is dropped. */
 function stillLive(w: MWms, t: MTask): boolean {
   if (t.kind === 'PICK') return pickTarget(w, t)?.line.status === 'PICKING';
+  if (t.kind === 'LOAD') return byNo(w.orders, t.ref)?.status === 'STAGED';
   const target = poTarget(w, t);
   return t.kind === 'RECEIVE' ? target?.line.status === 'RECEIVING' : target?.line.status === 'RECEIVED';
 }
@@ -142,6 +143,15 @@ function workWorker(w: MWms, r: Roller, worker: MWorker, tick: number): void {
     if (worker.progress < line.allocated * 1000) return;
     confirmPick(w, r, o, line, worker.id, tick);
     t.done = line.picked;
+  } else if (t.kind === 'LOAD') {
+    // Loading an order onto its door's trailer (W10): at the end it is LOADED and leaves with the trailer.
+    const o = byNo(w.orders, t.ref);
+    if (o === undefined) return;
+    worker.progress += perStep(T.wmsLoadMilliPerSec.value);
+    t.done = Math.min(t.qty, Math.floor(worker.progress / 1000));
+    if (worker.progress < t.qty * 1000) return;
+    o.status = 'LOADED';
+    log(w, { tick, code: 'LOAD', order: o.no, qty: t.qty, of: o.door, picker: worker.id });
   } else if (t.kind === 'RECEIVE') {
     const target = poTarget(w, t);
     if (target === undefined) return;
@@ -221,31 +231,102 @@ function ship(w: MWms, o: MOrder, tick: number, events: WarehouseEvent[] | null)
   return cents;
 }
 
-/** One timed move for an order past picking: PICKED or SHORT, PACKED, STAGED, LOADED, SHIPPED. Returns the cents a shipment earns. */
-function moveOn(w: MWms, o: MOrder, tick: number, events: WarehouseEvent[] | null): number {
-  if (o.next === 0 || tick < o.next) return 0;
+/** Ticks a dock hand takes to load `units` (W10), for choosing a trailer it can still catch. */
+export function loadTicks(units: number): number {
+  return Math.ceil((units * 1000) / Math.max(1, perStep(T.wmsLoadMilliPerSec.value))) * T.wmsStepTicks.value;
+}
+
+/** Whether an order is headed out of its door (W10): staged at it or on its trailer, held or not. */
+function atDoor(o: MOrder): boolean {
+  const status = o.status === 'ON HOLD' ? o.held : o.status;
+  return o.door > 0 && (status === 'STAGED' || status === 'LOADED');
+}
+
+/**
+ * The outbound door a packed order is staged at (RULES 4, W10): the one whose
+ * trailer will take it soonest. A trailer takes it if the orders already
+ * headed for its door leave room and it can be loaded before the trailer
+ * leaves; if not, the next trailer at that door, or the one after for every
+ * trailer's worth already waiting. A tie goes to the door with least waiting,
+ * then the lowest number.
+ */
+export function chooseDoor(w: MWms, o: MOrder, tick: number): number {
+  const need = shipUnits(o);
+  const cap = T.wmsTrailerUnits.value;
+  const headed = Array.from({ length: w.shipDoors.length + 1 }, () => 0);
+  for (const other of w.orders) if (atDoor(other)) headed[other.door] = (headed[other.door] ?? 0) + shipUnits(other);
+  let best = 0;
+  let bestAt = Number.POSITIVE_INFINITY;
+  let bestLoad = Number.POSITIVE_INFINITY;
+  for (const d of w.shipDoors) {
+    const load = headed[d.door] ?? 0;
+    let trips = load === 0 ? 0 : Math.floor((load + need - 1) / cap);
+    if (trips === 0 && d.departs - tick < loadTicks(need)) trips = 1;
+    const at = d.departs + trips * T.wmsTrailerTicks.value;
+    if (at < bestAt || (at === bestAt && load < bestLoad)) {
+      best = d.door;
+      bestAt = at;
+      bestLoad = load;
+    }
+  }
+  return best;
+}
+
+/** A packed order goes to the staging lane of its outbound door, and the WMS creates its LOAD task (W10). */
+function stage(w: MWms, o: MOrder, tick: number): void {
+  const door = chooseDoor(w, o, tick);
+  o.status = 'STAGED';
+  o.door = door;
+  o.next = 0;
+  log(w, { tick, code: 'STAGE', order: o.no, qty: door });
+  if (door > 0) newTask(w, 'LOAD', o.no, 0, -1, shipDoorAt(door), shipUnits(o), tick);
+}
+
+/** One timed move for an order past picking (RULES 4): PICKED or SHORT to PACKED, then PACKED to STAGED at an outbound door (W10). */
+function moveOn(w: MWms, o: MOrder, tick: number): void {
+  if (o.next === 0 || tick < o.next) return;
   switch (o.status) {
     case 'PICKED':
     case 'SHORT':
       o.status = 'PACKED';
       o.next = tick + T.wmsStageTicks.value;
       log(w, { tick, code: 'PACK', order: o.no });
-      return 0;
+      return;
     case 'PACKED':
-      o.status = 'STAGED';
-      o.next = tick + T.wmsLoadTicks.value;
-      log(w, { tick, code: 'STAGE', order: o.no });
-      return 0;
-    case 'STAGED':
-      o.status = 'LOADED';
-      o.next = tick + T.wmsShipTicks.value;
-      log(w, { tick, code: 'LOAD', order: o.no });
-      return 0;
-    case 'LOADED':
-      return ship(w, o, tick, events);
+      stage(w, o, tick);
+      return;
     default:
-      return 0;
+      return;
   }
+}
+
+/**
+ * Trailers leave (RULES 4, W10): each outbound door's trailer leaves when its
+ * time comes, every order loaded on it ships (held ones stay for the next),
+ * and the next trailer backs in to leave `wmsTrailerTicks` later. An empty
+ * trailer waits for the next time. Returns the cents the shipments earn.
+ */
+function departTrailers(w: MWms, tick: number, events: WarehouseEvent[] | null): number {
+  let earned = 0;
+  for (const d of w.shipDoors) {
+    if (tick < d.departs) continue;
+    let orders = 0;
+    let units = 0;
+    for (const o of w.orders) {
+      if (o.door !== d.door || o.status !== 'LOADED') continue;
+      orders += 1;
+      units += shipUnits(o);
+      earned += ship(w, o, tick, events);
+    }
+    if (orders > 0) {
+      log(w, { tick, code: 'DEPART', line: d.door, qty: units, of: orders });
+      w.stats.trailers += 1;
+      d.trailer = w.nextTrailerNo;
+      w.nextTrailerNo += 1;
+    }
+    while (d.departs <= tick) d.departs += T.wmsTrailerTicks.value;
+  }
+  return earned;
 }
 
 /** Orders whose lines a picker may work: allocated or being picked, not on hold. */
@@ -291,9 +372,11 @@ export function emptyDay(day: number): MWms['today'] {
  * planning raises POs and books their dock appointments, inbound trucks
  * arrive and dock (receive tasks), a cycle count may run, released and
  * backordered lines are allocated (pick tasks), every worker works its task,
- * the balance plan may move a person (W9), the WMS lines up the next tasks, finished orders pack, stage, load and
- * ship, and cutoffs pass. Returns the cents shipments earned. Shipments,
- * cutoff misses and a new day go to `events` when it is given.
+ * the balance plan may move a person (W9), the WMS lines up the next tasks,
+ * cutoffs pass, finished orders pack and are staged at an outbound door (a
+ * load task, W10), and trailers whose time has come leave with what is
+ * loaded on them, shipping it. Returns the cents shipments earned.
+ * Shipments, cutoff misses and a new day go to `events` when it is given.
  */
 export function wmsStep(w: MWms, tick: number, events: WarehouseEvent[] | null = null): number {
   let earned = 0;
@@ -344,7 +427,6 @@ export function wmsStep(w: MWms, tick: number, events: WarehouseEvent[] | null =
   // The balance plan (W9) may move one person to where the work waits, before the tasks are shared out.
   balanceCrew(w, tick);
   planTasks(w, tick);
-  let closedNow = false;
   for (const o of w.orders) {
     if (isClosed(o.status)) continue;
     if (!o.late && tick > o.shipBy) {
@@ -355,11 +437,13 @@ export function wmsStep(w: MWms, tick: number, events: WarehouseEvent[] | null =
     }
     if (o.status === 'ON HOLD') continue;
     finishPicking(o, tick);
-    earned += moveOn(w, o, tick, events);
-    if (o.status === 'SHIPPED') closedNow = true;
+    moveOn(w, o, tick);
   }
-  if (closedNow) purge(w);
-  purgeTasks(w);
+  const shipped = w.stats.shipped;
+  earned += departTrailers(w, tick, events);
+  if (w.stats.shipped > shipped) purge(w);
+  sweepTasks(w);
+  trimLog(w);
   w.rng = r.rng;
   return earned;
 }

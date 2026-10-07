@@ -10,7 +10,7 @@ export type MPoLine = DeepMutable<WmsPoLine>;
 export type MWorker = DeepMutable<WmsWorker>;
 export type MTask = DeepMutable<WmsTask>;
 
-/** A copy the step may change in place (P4). Events are never changed, so they are shared. */
+/** A copy the step may change in place (P4). Events and finished tasks are never changed, so they are shared. */
 export function cloneWms(w: WmsState): MWms {
   return {
     ...w,
@@ -19,6 +19,8 @@ export function cloneWms(w: WmsState): MWms {
     inventory: w.inventory.map((s) => ({ ...s })),
     workers: w.workers.map((p) => ({ ...p, queue: [...p.queue], stats: { ...p.stats } })),
     tasks: w.tasks.map((t) => ({ ...t })),
+    // Finished tasks are never changed again, so they are shared, like events.
+    history: [...w.history],
     events: [...w.events],
     stats: { ...w.stats },
     today: { ...w.today },
@@ -26,6 +28,7 @@ export function cloneWms(w: WmsState): MWms {
     dests: w.dests.map((d) => ({ ...d })),
     recent: [...w.recent],
     pos: w.pos.map((po) => ({ ...po, lines: po.lines.map((l) => ({ ...l })) })),
+    shipDoors: w.shipDoors.map((d) => ({ ...d })),
     inbound: { ...w.inbound },
     recentIn: [...w.recentIn],
     recentPay: [...w.recentPay],
@@ -33,8 +36,20 @@ export function cloneWms(w: WmsState): MWms {
   };
 }
 
-/** Appends to the activity log, keeping the latest `wmsEventsKept`. */
+/** Appends to the activity log; the step and each command then keep only the latest `wmsEventsKept` (`trimLog`). */
 export function log(w: MWms, e: Pick<WmsEvent, 'tick' | 'code'> & Partial<WmsEvent>): void {
   w.events.push({ order: 0, line: 0, sku: -1, qty: 0, of: 0, picker: 0, ...e });
-  if (w.events.length > T.wmsEventsKept.value) w.events.splice(0, w.events.length - T.wmsEventsKept.value);
+}
+
+/**
+ * How far past its limit the log (and the task history) may grow before it is
+ * cut back (W10): cutting a few hundred entries every warehouse minute was a
+ * tenth of the catch-up time. Not a balance number: the View shows the latest
+ * `wmsEventsKept` whatever State holds.
+ */
+export const WMS_TRIM_SLACK = 100;
+
+/** Keeps the latest `wmsEventsKept` events, cut back once `WMS_TRIM_SLACK` more have come in. */
+export function trimLog(w: MWms): void {
+  if (w.events.length > T.wmsEventsKept.value + WMS_TRIM_SLACK) w.events.splice(0, w.events.length - T.wmsEventsKept.value);
 }

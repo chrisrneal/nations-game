@@ -54,6 +54,8 @@ export type {
   WmsPriority,
   WmsReleaseMode,
   WmsRole,
+  WmsShipDoor,
+  WmsShipDoorView,
   WmsSlotView,
   WmsState,
   WmsStats,

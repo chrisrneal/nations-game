@@ -13,10 +13,11 @@ function percent(value: number | null): string {
   return value === null ? '—' : `${value}%`;
 }
 
-/** Outbound (docs/wms-plan.md slice 6): the next wave, then lines/hr over the last four minutes; fill rate and OTIF over every order shipped since opening. */
-export function outboundKpis(k: WmsKpis, nextWave: string): Kpi[] {
+/** Outbound (docs/wms-plan.md slice 6): the next wave and the next trailer out (W10), then lines/hr over the last four minutes; fill rate and OTIF over every order shipped since opening. */
+export function outboundKpis(k: WmsKpis, nextWave: string, nextTruck: string): Kpi[] {
   return [
     { label: 'Wave in', value: nextWave, testId: 'wms-next-wave' },
+    { label: 'Truck in', value: nextTruck, testId: 'wms-next-truck' },
     { label: 'Open', value: String(k.open) },
     { label: 'Lines/hr', value: short(k.linesPerHour) },
     { label: 'Fill', value: percent(k.fillRatePct), alert: k.fillRatePct !== null && k.fillRatePct < 95 },
@@ -26,7 +27,7 @@ export function outboundKpis(k: WmsKpis, nextWave: string): Kpi[] {
   ];
 }
 
-/** The floor (W7, W8): the next wave (or how orders are released), OTIF, money a warehouse hour, lines an hour, and who is busy: pickers, doors and receivers. */
+/** The floor (W7, W8): the next wave (or how orders are released), OTIF, money a warehouse hour, lines an hour, and who is busy: pickers, inbound doors and the dock crew. */
 export function floorKpis(k: WmsKpis, ik: WmsInboundKpis, nextWave: string): Kpi[] {
   return [
     { label: 'Wave in', value: nextWave, testId: 'wms-next-wave' },
@@ -35,18 +36,18 @@ export function floorKpis(k: WmsKpis, ik: WmsInboundKpis, nextWave: string): Kpi
     { label: 'Lines/hr', value: short(k.linesPerHour) },
     { label: 'Pickers', value: `${k.pickersBusy}/${k.pickersTotal}` },
     { label: 'Doors', value: `${ik.doorsBusy}/${ik.doorsTotal}`, alert: ik.atDock > ik.doorsBusy },
-    { label: 'Rcvrs', value: `${ik.receiversBusy}/${ik.receiversTotal}` },
+    { label: 'Dock', value: `${ik.receiversBusy}/${ik.receiversTotal}` },
     { label: 'Exc', value: String(k.exceptions), alert: k.exceptions > 0 },
   ];
 }
 
-/** Inbound (W6): POs open and where they are, doors and receivers busy, units counted in an hour, exceptions, POs on time. */
+/** Inbound (W6): POs open and where they are, doors and the dock crew busy, units counted in an hour, exceptions, POs on time. */
 export function inboundKpis(k: WmsInboundKpis): Kpi[] {
   return [
     { label: 'Open POs', value: String(k.open) },
     { label: 'Transit', value: String(k.inTransit) },
     { label: 'Doors', value: `${k.doorsBusy}/${k.doorsTotal}`, alert: k.atDock > k.doorsBusy },
-    { label: 'Rcvrs', value: `${k.receiversBusy}/${k.receiversTotal}` },
+    { label: 'Dock', value: `${k.receiversBusy}/${k.receiversTotal}` },
     { label: 'Units/hr', value: short(k.unitsPerHour) },
     { label: 'Exc', value: String(k.exceptions), alert: k.exceptions > 0 },
     { label: 'On time', value: percent(k.onTimePct), alert: k.onTimePct !== null && k.onTimePct < 85 },
@@ -65,7 +66,7 @@ export function inventoryKpis(k: WmsInventoryKpis): Kpi[] {
   ];
 }
 
-/** The crew (W8): how many are working, walking and idle, the tasks waiting for a picker or a receiver, and the crew's share of time working. */
+/** The crew (W8): how many are working, walking and idle, the tasks waiting for a picker or the dock crew, and the crew's share of time working. */
 export function crewKpis(k: WmsCrewKpis): Kpi[] {
   return [
     { label: 'Crew', value: String(k.crew) },
@@ -73,7 +74,7 @@ export function crewKpis(k: WmsCrewKpis): Kpi[] {
     { label: 'Walking', value: String(k.walking) },
     { label: 'Idle', value: String(k.idle), alert: k.idle > 0 && k.pickOpen + k.receiveOpen > 0 },
     { label: 'Pick wait', value: String(k.pickOpen), alert: k.pickOpen > 0 },
-    { label: 'Rcv wait', value: String(k.receiveOpen), alert: k.receiveOpen > 0 },
+    { label: 'Dock wait', value: String(k.receiveOpen), alert: k.receiveOpen > 0 },
     { label: 'Busy', value: percent(k.utilPct) },
   ];
 }

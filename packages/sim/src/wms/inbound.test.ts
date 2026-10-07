@@ -113,7 +113,7 @@ describe('WMS reorder planning (W6)', () => {
 
   it('nets out what order lines are waiting for, NEW orders included, but not lines of orders past picking', () => {
     const line = (sku: number, ordered: number, status: WmsLine['status'] = 'OPEN'): WmsLine => ({ no: 1, sku, bin: 0, ordered, allocated: 0, picked: 0, short: 0, status });
-    const order = (status: WmsOrder['status'], lines: WmsLine[]): WmsOrder => ({ no: 1, dest: 0, customer: 0, priority: 3, wave: 0, status, lines, shipBy: 1e6, created: 0, next: 0, late: false, held: null, closed: 0, expedited: false });
+    const order = (status: WmsOrder['status'], lines: WmsLine[]): WmsOrder => ({ no: 1, dest: 0, customer: 0, priority: 3, wave: 0, status, lines, shipBy: 1e6, created: 0, next: 0, late: false, held: null, closed: 0, expedited: false, door: 0 });
     const w = wms({}, { orders: [order('NEW', [line(5, 30)]), order('BACKORDER', [line(5, 20, 'SHORT')]), order('PACKED', [line(5, 99, 'SHORT')])] });
     expect(waitingUnits(w)[5]).toBe(50);
     w.inventory[5]!.onHand = ROP + 49;
@@ -188,11 +188,10 @@ describe('WMS receiving and put-away: tasks for the receivers (W6, W8)', () => {
       work(w, 11 * STEP, 1);
       expect(w.pos[0]!.status).toBe('PUTAWAY');
       expect(w.events.find((e) => e.code === 'RCV')).toMatchObject({ order: 1, line: 1, sku: 0, qty: units, of: units, picker: receiver.id });
-      expect(w.tasks.map((t) => [t.kind, t.status])).toEqual([
-        ['RECEIVE', 'DONE'],
-        ['PUTAWAY', expect.stringMatching(/QUEUED|ACTIVE/)],
-      ]);
-      expect(w.tasks[1]).toMatchObject({ ref: 1, line: 1, bin: 0, qty: units });
+      // The finished receive is in the history (W10); the put-away is lined up.
+      expect(w.history.map((t) => [t.kind, t.status])).toEqual([['RECEIVE', 'DONE']]);
+      expect(w.tasks.map((t) => [t.kind, t.status])).toEqual([['PUTAWAY', expect.stringMatching(/QUEUED|ACTIVE/)]]);
+      expect(w.tasks[0]).toMatchObject({ ref: 1, line: 1, bin: 0, qty: units });
     });
   });
 
@@ -231,13 +230,15 @@ describe('WMS receiving and put-away: tasks for the receivers (W6, W8)', () => {
 
   it('receivers share a truck’s lines, one task each, lowest id first', () => {
     withTunables(CALM, () => {
-      const w = wms({}, { pos: [po(7, [poLine(1, 0, 99), poLine(2, 1, 99), poLine(3, 2, 99), poLine(4, 3, 99)])] as WmsPo[] });
+      const crew = T.wmsStartReceivers.value;
+      const lines = Array.from({ length: crew + 2 }, (_, i) => poLine(i + 1, i, 99));
+      const w = wms({}, { pos: [po(7, lines)] as WmsPo[] });
       work(w, 0, 1);
       const receivers = w.workers.filter((x) => x.role === 'receive');
       const lineOf = (no: number): number | undefined => w.tasks.find((t) => t.no === no)?.line;
-      expect(receivers.map((x) => lineOf(x.task))).toEqual([1, 2, 3]);
-      expect(receivers.map((x) => x.queue.map(lineOf))).toEqual([[4], [], []]);
-      expect(w.pos[0]!.lines.map((l) => l.status)).toEqual(['RECEIVING', 'RECEIVING', 'RECEIVING', 'OPEN']);
+      expect(receivers.map((x) => lineOf(x.task))).toEqual(Array.from({ length: crew }, (_, i) => i + 1));
+      expect(receivers.map((x) => x.queue.map(lineOf))).toEqual(Array.from({ length: crew }, (_, i) => (i < 2 ? [crew + 1 + i] : [])));
+      expect(w.pos[0]!.lines.map((l) => l.status)).toEqual([...Array.from({ length: crew }, () => 'RECEIVING'), 'OPEN', 'OPEN']);
     });
   });
 

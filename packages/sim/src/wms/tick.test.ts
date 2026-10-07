@@ -4,13 +4,14 @@ import { hashState } from '../hash.ts';
 import { createWarehouse } from '../state.ts';
 import { advanceMany, step } from '../step.ts';
 import { WAREHOUSE_TUNABLES } from '../tunables.ts';
-import { isClosed } from './catalog.ts';
+import { isClosed, shipDoorAt } from './catalog.ts';
 import { createWms } from './generate.ts';
-import { cloneWms, goodwillChange, shipmentPay, wmsStep, type MWms } from './tick.ts';
+import { WMS_TRIM_SLACK } from './mutable.ts';
+import { chooseDoor, cloneWms, goodwillChange, loadTicks, shipmentPay, wmsStep, type MWms } from './tick.ts';
 
 const T = WAREHOUSE_TUNABLES;
 const STEP = T.wmsStepTicks.value;
-/** Milli-units a picker picks in one step (0.65 a second at 1 s a step). */
+/** Milli-units a picker picks in one step (1.1 a second at 1 s a step). */
 const PER_STEP = Math.floor((T.wmsPickMilliPerSec.value * STEP * T.tickMs.value) / 1000);
 
 /** Runs `fn` with tunables replaced, then puts them back. */
@@ -30,7 +31,7 @@ function line(no: number, sku: number, ordered: number): WmsLine {
 }
 
 function order(no: number, lines: WmsLine[], extra: Partial<WmsOrder> = {}): WmsOrder {
-  return { no, dest: 0, customer: 0, priority: 3, wave: 0, status: 'NEW', lines, shipBy: 100_000, created: 0, next: 0, late: false, held: null, closed: 0, expedited: false, ...extra };
+  return { no, dest: 0, customer: 0, priority: 3, wave: 0, status: 'NEW', lines, shipBy: 100_000, created: 0, next: 0, late: false, held: null, closed: 0, expedited: false, door: 0, ...extra };
 }
 
 /** A quiet WMS: these orders and stock, no arrivals, waves or replenishment unless asked. */
@@ -123,7 +124,7 @@ describe('WMS pickers (slice 2)', () => {
     ]);
   });
 
-  it('a picker at its bin picks 0.65 units a second, then confirms the line and takes the stock off the shelf', () => {
+  it('a picker at its bin picks 1.1 units a second, then confirms the line and takes the stock off the shelf', () => {
     const w = withTunables({ wmsShortPickChanceBp: 0, wmsWalkTicksPerBay: 0 }, () => {
       const m = wms([order(1, [line(1, 0, 13)])], { 0: 20 });
       const steps = Math.ceil((13 * 1000) / PER_STEP);
@@ -163,20 +164,75 @@ describe('WMS pickers (slice 2)', () => {
 });
 
 describe('WMS order flow (slice 2)', () => {
-  it('a picked order packs, stages, loads and ships after the fixed delays, on time and in full', () => {
+  it('a picked order packs, is staged at an outbound door, a dock hand loads it, and it ships when the trailer leaves (W10)', () => {
     const w = withTunables({ wmsShortPickChanceBp: 0 }, () => {
       const m = wms([order(1, [line(1, 0, 1)])], { 0: 5 });
-      run(m, 0, 40);
+      run(m, 0, 150);
       return m;
     });
     const flow = w.events.filter((e) => e.order === 1).map((e) => e.code);
     expect(flow).toEqual(['WAVE REL', 'ALLOC', 'PICK START', 'PICK CONF', 'PACK', 'STAGE', 'LOAD', 'SHIP']);
-    const ticks = Object.fromEntries(w.events.map((e) => [e.code, e.tick]));
-    expect((ticks.PACK ?? 0) - (ticks['PICK CONF'] ?? 0)).toBe(T.wmsPackTicks.value);
-    expect((ticks.SHIP ?? 0) - (ticks.LOAD ?? 0)).toBe(T.wmsShipTicks.value);
-    expect(w.orders[0]).toMatchObject({ status: 'SHIPPED', closed: ticks.SHIP });
-    expect(w.stats).toMatchObject({ shipped: 1, onTime: 1, inFull: 1, otif: 1, unitsOrdered: 1, unitsShipped: 1 });
+    const at = (code: string) => w.events.find((e) => e.code === code && e.order === 1);
+    expect((at('PACK')?.tick ?? 0) - (at('PICK CONF')?.tick ?? 0)).toBe(T.wmsPackTicks.value);
+    expect((at('STAGE')?.tick ?? 0) - (at('PACK')?.tick ?? 0)).toBe(T.wmsStageTicks.value);
+    const door = w.orders[0]?.door ?? 0;
+    expect(door).toBeGreaterThan(0);
+    expect(at('STAGE')?.qty).toBe(door);
+    // A dock hand (not a picker) loaded it onto that door's trailer.
+    const load = at('LOAD');
+    expect(load).toMatchObject({ qty: 1, of: door });
+    expect(w.workers.find((p) => p.id === load?.picker)?.role).toBe('receive');
+    expect(w.history.find((t) => t.kind === 'LOAD' && t.ref === 1)).toMatchObject({ status: 'DONE', bin: shipDoorAt(door), qty: 1, worker: load?.picker });
+    // It shipped when its trailer left, and the trailer left with it.
+    const depart = w.events.find((e) => e.code === 'DEPART' && e.line === door);
+    expect(depart).toMatchObject({ tick: at('SHIP')?.tick, qty: 1, of: 1 });
+    expect(w.orders[0]).toMatchObject({ status: 'SHIPPED', closed: at('SHIP')?.tick });
+    expect(w.stats).toMatchObject({ shipped: 1, onTime: 1, inFull: 1, otif: 1, unitsOrdered: 1, unitsShipped: 1, trailers: 1 });
     expect(w.dests[0]).toMatchObject({ shipped: 1, otif: 1 });
+    // The next trailer backed in: a new number, on the door's timetable (empty ones since wait for their next time).
+    const d = w.shipDoors[door - 1];
+    expect(d?.trailer).toBe(T.wmsShipDoors.value + 1);
+    expect(((d?.departs ?? 0) - (depart?.tick ?? 0)) % T.wmsTrailerTicks.value).toBe(0);
+  });
+
+  it('an empty trailer waits for its next time: no DEPART, same trailer (W10)', () => {
+    const w = wms([], {});
+    const first = w.shipDoors[0]?.departs ?? 0;
+    run(w, 0, first / STEP + 1);
+    expect(codes(w)).not.toContain('DEPART');
+    expect(w.shipDoors[0]).toEqual({ door: 1, trailer: 1, departs: first + T.wmsTrailerTicks.value });
+  });
+
+  it('stages a packed order at the door whose trailer takes it soonest (W10)', () => {
+    const packed = order(1, [{ ...line(1, 0, 40), allocated: 40, picked: 40, status: 'PICKED' }], { status: 'PACKED' });
+    const w = wms([packed], {});
+    w.shipDoors = [
+      { door: 1, trailer: 1, departs: 400 },
+      { door: 2, trailer: 2, departs: 200 },
+      { door: 3, trailer: 3, departs: 300 },
+    ];
+    expect(chooseDoor(w, w.orders[0] as MWms['orders'][number], 0)).toBe(2);
+    // Door 2's trailer leaves too soon to load 40 units: door 3's.
+    expect(chooseDoor(w, w.orders[0] as MWms['orders'][number], 200 - loadTicks(40) + 1)).toBe(3);
+    // Door 3's trailer is full of orders already staged there: door 1's, which leaves before door 3's next.
+    const full = order(2, [{ ...line(1, 1, T.wmsTrailerUnits.value), allocated: T.wmsTrailerUnits.value, picked: T.wmsTrailerUnits.value, status: 'PICKED' }], { status: 'STAGED', door: 3 });
+    w.orders.push(full as MWms['orders'][number]);
+    expect(chooseDoor(w, w.orders[0] as MWms['orders'][number], 200 - loadTicks(40) + 1)).toBe(1);
+  });
+
+  it('a load starts only if it fits on the trailer: the second big order waits for the next (W10)', () => {
+    const big = Math.floor(T.wmsTrailerUnits.value * 0.6);
+    const staged = (no: number, sku: number) => order(no, [{ ...line(1, sku, big), allocated: big, picked: big, status: 'PICKED' }], { status: 'STAGED', door: 1 });
+    const w = withTunables({ wmsStartReceivers: 2 }, () => wms([staged(1, 0), staged(2, 1)], {}, { nextWaveAt: 1e9 }));
+    w.shipDoors = [{ door: 1, trailer: 1, departs: 10_000 }];
+    for (const o of w.orders) {
+      w.tasks.push({ no: w.nextTaskNo, kind: 'LOAD', ref: o.no, line: 0, sku: -1, bin: shipDoorAt(1), qty: big, done: 0, status: 'OPEN', worker: 0, created: 0, started: 0, finished: 0 });
+      w.nextTaskNo += 1;
+    }
+    run(w, 0, 3);
+    const active = w.tasks.filter((t) => t.status === 'ACTIVE');
+    expect(active.map((t) => t.ref)).toEqual([1]);
+    expect(w.tasks.find((t) => t.ref === 2)?.status).toMatch(/OPEN|QUEUED/);
   });
 
   it('an order past its ship-by logs CUTOFF MISS once and ships late, not OTIF', () => {
@@ -222,7 +278,8 @@ describe('WMS in the warehouse (slice 2)', () => {
       const s = advanceMany(createWarehouse({ seed }), 2 * 3600 * 4);
       const w = s.wms;
       expect(w.stats.shipped).toBeGreaterThan(100);
-      expect(w.events.length).toBe(T.wmsEventsKept.value);
+      expect(w.events.length).toBeGreaterThanOrEqual(T.wmsEventsKept.value);
+      expect(w.events.length).toBeLessThanOrEqual(T.wmsEventsKept.value + WMS_TRIM_SLACK);
       expect(w.orders.filter((o) => !isClosed(o.status)).length).toBeLessThanOrEqual(T.wmsMaxOpenOrders.value);
       expect(w.orders.filter((o) => isClosed(o.status)).length).toBeLessThanOrEqual(T.wmsKeepClosedOrders.value);
       expect(w.stats.otif).toBeGreaterThan(w.stats.shipped / 2);

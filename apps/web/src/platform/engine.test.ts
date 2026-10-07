@@ -127,7 +127,7 @@ describe('WarehouseEngine (the host clock, S4)', () => {
     e.resume();
     const expected = new WarehouseSession(createWarehouse({ seed: 77 }));
     expected.submit({ ...PLAN, tick: 0 });
-    expected.advance(1 + CAP);
+    expected.advance(1 + CAP, { events: false });
     expect(seen.at(-1)?.fingerprint).toBe(hashState(expected.state));
   });
 

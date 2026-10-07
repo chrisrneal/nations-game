@@ -49,7 +49,7 @@ export function rollOrder(r: Roller, no: number, tick: number, bins: readonly nu
   const priority = rollPriority(r);
   const shipBy = tick + rollLead(r, priority);
   const lines = rollLines(r, bins);
-  return { no, dest, customer, priority, wave: 0, status: 'NEW', lines, shipBy, created: tick, next: 0, late: false, held: null, closed: 0, expedited: false };
+  return { no, dest, customer, priority, wave: 0, status: 'NEW', lines, shipBy, created: tick, next: 0, late: false, held: null, closed: 0, expedited: false, door: 0 };
 }
 
 /** Units ordered on the lines not cancelled. */

@@ -7,10 +7,12 @@ import { formatCash } from '../format.ts';
  * real WMS worker doing its task: pickers walk the route the sim times (out
  * of the aisle to the front cross aisle, across, and in) and pick at the bin
  * of their task, and when one confirms a line its tote rides the conveyor to
- * packing; receivers count lines in at the door of their truck, then drive
- * each received line to its bin on a pallet (a put-away task). Orders past
- * picking sit at the pack bench, the packed area, the staging lanes and the
- * truck as their status says, and leave on the truck when they ship.
+ * packing; the dock crew count lines in at the door of their truck, drive
+ * each received line to its bin on a pallet (a put-away task), and walk down
+ * to the outbound doors to load staged orders onto the trailers (W10).
+ * Orders past picking sit at the pack bench, the packed area, their door's
+ * staging lane and its trailer as their status says, and leave with the
+ * trailer when it pulls out.
  *
  * Pure bookkeeping on the View and a clock passed in, so it is tested in
  * Node; WmsFloor.tsx measures the box and draws it on a canvas (P7).
@@ -28,11 +30,11 @@ export interface Rect {
   readonly bottom: number;
 }
 
-/** Where an order past picking is, by its status. */
-export type Zone = 'pack' | 'packed' | 'staging' | 'truck';
+/** Where an order past picking is, by its status: the pack bench, packed, its outbound door's lane, or its trailer (W10). */
+export type Zone = 'pack' | 'packed' | 'lane' | 'truck';
 
-export const ZONES: readonly Zone[] = ['pack', 'packed', 'staging', 'truck'];
-export const ZONE_NAMES: Readonly<Record<Zone, string>> = { pack: 'Pack', packed: 'Packed', staging: 'Staging', truck: 'Truck' };
+export const ZONES: readonly Zone[] = ['pack', 'packed', 'lane', 'truck'];
+export const ZONE_NAMES: Readonly<Record<Zone, string>> = { pack: 'Pack', packed: 'Packed', lane: 'Lane', truck: 'Truck' };
 
 export function zoneOf(status: WmsOrderStatus): Zone | null {
   switch (status) {
@@ -42,7 +44,7 @@ export function zoneOf(status: WmsOrderStatus): Zone | null {
     case 'PACKED':
       return 'packed';
     case 'STAGED':
-      return 'staging';
+      return 'lane';
     case 'LOADED':
       return 'truck';
     default:
@@ -54,6 +56,8 @@ export interface FloorShape {
   readonly aisles: number;
   readonly bays: number;
   readonly doors: number;
+  /** Outbound doors (W10). */
+  readonly shipDoors: number;
 }
 
 /** Where everything is, in CSS pixels, for a box `width` x `height`. */
@@ -74,9 +78,15 @@ export interface FloorLayout {
   readonly walk: readonly number[];
   /** The conveyor from the front cross aisle down to the pack bench. */
   readonly conveyor: number;
-  /** The outbound band and its four zones, left to right. */
+  /** The outbound band: the pack bench and packed area on the left, then a column per outbound door (W10). */
   readonly outbound: Rect;
-  readonly zones: Readonly<Record<Zone, Rect>>;
+  readonly zones: Readonly<Record<'pack' | 'packed', Rect>>;
+  /** Each outbound door's column, its staging lane and its trailer (W10). */
+  readonly shipCols: readonly Rect[];
+  readonly lanes: readonly Rect[];
+  readonly trailers: readonly Rect[];
+  /** Where the dock crew walk along the top of the outbound band, and stand to load (W10). */
+  readonly shipWalk: number;
 }
 
 const PAD = 8;
@@ -110,17 +120,34 @@ export function floorLayout(width: number, height: number, shape: FloorShape): F
   const rackH = Math.round(clamp(block * 0.34, 8, 16));
   const rackTop = Array.from({ length: shape.aisles }, (_, a) => inbound.bottom + block * a + 5);
   const walk = rackTop.map((t) => t + rackH + (block - rackH - 5) / 2);
-  const fractions: Readonly<Record<Zone, number>> = { pack: 0.27, packed: 0.17, staging: 0.29, truck: 0.27 };
-  const zones = {} as Record<Zone, Rect>;
-  // The zones start right of the conveyor, under a header row and a row of zone names.
+  // The pack bench and packed area start right of the conveyor, under a header row and a row of names; the outbound doors share the rest (W10).
   let left = conveyor + 9;
   const span = width - PAD - left;
-  for (const z of ZONES) {
-    const right = z === 'truck' ? width - PAD : left + span * fractions[z];
-    zones[z] = { left, top: outbound.top + 30, right: right - 4, bottom: height - 6 };
-    left = right;
-  }
-  return { width, height, shape, inbound, yard, doors, dockLane, x0, bayW, rackTop, rackH, walk, conveyor, outbound, zones };
+  const top = outbound.top + 30;
+  const pack: Rect = { left, top, right: left + span * 0.17 - 4, bottom: height - 6 };
+  left += span * 0.17;
+  const packed: Rect = { left, top, right: left + span * 0.12 - 4, bottom: height - 6 };
+  left += span * 0.12;
+  const m = Math.max(1, shape.shipDoors);
+  const colW = (width - PAD - left) / m;
+  const shipCols = Array.from({ length: m }, (_, i): Rect => ({ left: left + colW * i, top: outbound.top + 16, right: left + colW * (i + 1) - 3, bottom: height - 4 }));
+  const laneH = CARTON * 2 + CARTON_GAP;
+  const lanes = shipCols.map((c): Rect => ({ left: c.left + 1, top, right: c.right - 1, bottom: top + laneH }));
+  const trailers = shipCols.map((c): Rect => ({ left: c.left + 1, top: top + laneH + 4, right: c.right - 1, bottom: height - 6 }));
+  return { width, height, shape, inbound, yard, doors, dockLane, x0, bayW, rackTop, rackH, walk, conveyor, outbound, zones: { pack, packed }, shipCols, lanes, trailers, shipWalk: outbound.top - 3 };
+}
+
+/** The space cartons fill in a zone: the pack bench, packed, or an outbound door's lane or trailer (W10). */
+export function zoneRect(l: FloorLayout, zone: Zone, door: number): Rect {
+  if (zone === 'pack' || zone === 'packed') return l.zones[zone];
+  const list = zone === 'lane' ? l.lanes : l.trailers;
+  return list[clamp(door - 1, 0, list.length - 1)] as Rect;
+}
+
+/** Where a dock hand stands to load at outbound door `door` (W10): on the walk along the top of the band, over its column. */
+export function shipSpot(l: FloorLayout, door: number): Point {
+  const c = l.shipCols[clamp(door - 1, 0, l.shipCols.length - 1)] as Rect;
+  return { x: (c.left + c.right) / 2, y: l.shipWalk };
 }
 
 /** A spot on an aisle's walkway: bay 0 is the front cross aisle. */
@@ -235,8 +262,9 @@ export interface WorkerDot extends Mover {
   /** The active task's number and kind; 0 and null when it has none. */
   task: number;
   kind: WmsTaskKind | null;
-  /** At the dock (bin -1), else at aisle and bay. */
+  /** At the inbound dock (bin -1), at an outbound door (W10), else at aisle and bay. */
   dock: boolean;
+  ship: number;
   aisle: number;
   bay: number;
   /** The door of its receive task; 0 otherwise. */
@@ -255,6 +283,8 @@ export interface Carton {
   readonly order: number;
   priority: number;
   zone: Zone;
+  /** Its outbound door (W10); 0 before it is staged. */
+  door: number;
   short: boolean;
   x: number;
   y: number;
@@ -263,7 +293,7 @@ export interface Carton {
   toX: number;
   toY: number;
   t0: number;
-  /** Shipped: it rides out on the truck (drawn moving with it); loaded orders not yet shipped wait at the dock. */
+  /** Shipped: it rides out on its door's trailer (drawn moving with it). */
   leaving: boolean;
 }
 
@@ -294,9 +324,13 @@ export const TRUCK_IN_MS = 700;
 export const FLASH_MS = 600;
 export const POP_MS = 1200;
 
-/** Where a worker stands (W8): at its bin, at the door of the truck it counts, or (idle at the dock) on the dock lane; pickers wait at the pick-and-drop point. */
-export function workerSpot(l: FloorLayout, pv: Pick<WmsWorkerView, 'id' | 'role' | 'at' | 'aisle' | 'bay' | 'door'>): Point {
+/** Where a worker stands (W8): at its bin, at the door of the truck it counts, at the outbound door it loads at (W10), or (idle at the dock) on the dock lane; pickers wait at the pick-and-drop point. */
+export function workerSpot(l: FloorLayout, pv: Pick<WmsWorkerView, 'id' | 'role' | 'at' | 'aisle' | 'bay' | 'door'> & { readonly shipDoor?: number }): Point {
   const off = spread(pv.id);
+  if ((pv.shipDoor ?? 0) > 0) {
+    const s = shipSpot(l, pv.shipDoor ?? 0);
+    return { x: s.x + off.x * 2, y: s.y + off.y };
+  }
   if (pv.at < 0 && pv.role === 'receive') {
     if (pv.door > 0) {
       const d = doorSpot(l, pv.door);
@@ -310,6 +344,8 @@ export function workerSpot(l: FloorLayout, pv: Pick<WmsWorkerView, 'id' | 'role'
 
 interface Spot {
   readonly dock: boolean;
+  /** The outbound door it is at (W10); 0 or left out for none. */
+  readonly ship?: number;
   readonly aisle: number;
   readonly bay: number;
 }
@@ -318,9 +354,18 @@ interface Spot {
  * A worker's way between two spots (W8): along the racks as the sim times it
  * (`route`), or between the dock and a bin: along the dock lane to the front
  * of the aisle, down the front cross aisle and along the aisle (a put-away),
- * or the same way back.
+ * or the same way back. To an outbound door (W10): down the front cross aisle
+ * past the last aisle, then along the top of the outbound band.
  */
 export function workerRoute(l: FloorLayout, from: Spot, to: Spot, start: Point, end: Point): Point[] {
+  const fromShip = (from.ship ?? 0) > 0;
+  const toShip = (to.ship ?? 0) > 0;
+  if (fromShip && toShip) return [start, end];
+  if (fromShip) return workerRoute(l, to, from, end, start).reverse();
+  if (toShip) {
+    const out = from.dock ? [start, { x: l.x0, y: l.dockLane }] : [start, place(l, from.aisle, 0)];
+    return [...out, { x: l.x0, y: l.shipWalk }, { x: end.x, y: l.shipWalk }, end];
+  }
   if (from.dock && to.dock) return [start, end];
   if (!from.dock && !to.dock) {
     const path = route(l, from, to);
@@ -351,8 +396,10 @@ export class WmsFloorModel {
   cartons: Carton[] = [];
   flashes: Flash[] = [];
   pops: Pop[] = [];
-  /** The truck at the outbound dock: 0 parked, else when it started pulling out (ms). */
-  truckOut = 0;
+  /** Each outbound door's trailer (W10), by door: 0 parked, else when it started pulling out (ms). */
+  trucksOut: number[] = [];
+  /** The outbound doors as the View last showed them (W10): each trailer's fill. */
+  ship: WmsView['shipDoors'] = [];
   /** Bumped whenever what stands still changes (a new View or a new layout): the still canvas is redrawn then. */
   still = 0;
   private last: WmsView | null = null;
@@ -384,6 +431,7 @@ export class WmsFloorModel {
     this.lastTickMs = tickMs;
     this.lastNow = now;
     this.still += 1;
+    this.ship = w.shipDoors ?? [];
     if (l === null) return;
     this.ingestWorkers(l, w, tickMs, now);
     this.ingestCartons(l, w, now, shipped);
@@ -398,7 +446,8 @@ export class WmsFloorModel {
         role: pv.role,
         task: pv.task?.no ?? 0,
         kind: pv.task?.kind ?? null,
-        dock: pv.at < 0,
+        dock: pv.at < 0 && (pv.shipDoor ?? 0) === 0,
+        ship: pv.shipDoor ?? 0,
         aisle: pv.aisle,
         bay: pv.bay,
         door: pv.door,
@@ -417,7 +466,7 @@ export class WmsFloorModel {
       }
       const end = was.path[was.path.length - 1] ?? target;
       if (end.x !== target.x || end.y !== target.y) {
-        const path = workerRoute(l, { dock: was.dock, aisle: was.aisle, bay: was.bay }, { dock: facts.dock, aisle: facts.aisle, bay: facts.bay }, { x: was.x, y: was.y }, target);
+        const path = workerRoute(l, { dock: was.dock, ship: was.ship, aisle: was.aisle, bay: was.bay }, { dock: facts.dock, ship: facts.ship, aisle: facts.aisle, bay: facts.bay }, { x: was.x, y: was.y }, target);
         const ms = this.reduced ? 0 : pv.walk > 0 ? pv.walk * tickMs : SNAP_MS;
         Object.assign(was, mover(path, now, ms));
       } else if (!arrived(was)) {
@@ -435,28 +484,36 @@ export class WmsFloorModel {
     for (const o of w.orders) {
       const c = byOrder.get(o.no);
       const zone = zoneOf(o.status);
+      const door = o.door ?? 0;
       if (zone !== null) {
         if (c === undefined) {
-          const from = zone === 'pack' ? { x: l.zones.pack.left + 6, y: l.zones.pack.top + 6 } : slot(l.zones[zone], 99);
-          next.push({ order: o.no, priority: o.priority, zone, short: o.shortUnits > 0, x: from.x, y: from.y, fromX: from.x, fromY: from.y, toX: from.x, toY: from.y, t0: now, leaving: false });
+          const from = zone === 'pack' ? { x: l.zones.pack.left + 6, y: l.zones.pack.top + 6 } : slot(zoneRect(l, zone, door), 99);
+          next.push({ order: o.no, priority: o.priority, zone, door, short: o.shortUnits > 0, x: from.x, y: from.y, fromX: from.x, fromY: from.y, toX: from.x, toY: from.y, t0: now, leaving: false });
         } else {
           c.zone = zone;
+          c.door = door;
           c.priority = o.priority;
           c.short = o.shortUnits > 0;
           next.push(c);
         }
       } else if (c !== undefined && !c.leaving && (o.status === 'SHIPPED' || o.status === 'ON HOLD')) {
-        // Shipped: out with the truck. On hold: it waits where it is.
+        // Shipped: out with its trailer. On hold: it waits where it is.
         if (o.status === 'SHIPPED') c.leaving = true;
         next.push(c);
       } else if (c !== undefined && c.leaving) next.push(c);
     }
     this.cartons = next;
-    // Each zone's cartons in order number, each gliding to its space.
-    for (const z of ZONES) {
-      const here = this.cartons.filter((c) => c.zone === z && !c.leaving).sort((a, b) => a.order - b.order);
+    // Each zone's cartons (each door's lane and trailer apart) in order number, each gliding to its space.
+    const groups = new Map<string, Carton[]>();
+    for (const c of this.cartons) {
+      if (c.leaving) continue;
+      const key = `${c.zone}:${c.zone === 'pack' || c.zone === 'packed' ? 0 : c.door}`;
+      groups.set(key, [...(groups.get(key) ?? []), c]);
+    }
+    for (const here of groups.values()) {
+      here.sort((a, b) => a.order - b.order);
       here.forEach((c, i) => {
-        const to = slot(l.zones[z], i);
+        const to = slot(zoneRect(l, c.zone, c.door), i);
         if (to.x === c.toX && to.y === c.toY) return;
         c.fromX = c.x;
         c.fromY = c.y;
@@ -465,16 +522,19 @@ export class WmsFloorModel {
         c.t0 = this.reduced ? now - GLIDE_MS : now;
       });
     }
-    const dock = l.zones.truck;
     for (const s of shipped) {
-      if (s.cents > 0) this.pops.push({ x: (dock.left + dock.right) / 2, y: dock.top + 6, text: `+${formatCash(s.cents)}`, at: now });
+      if (s.cents <= 0) continue;
+      const c = byOrder.get(s.order);
+      const r = zoneRect(l, 'truck', c?.door ?? 1);
+      this.pops.push({ x: (r.left + r.right) / 2, y: r.top + 6, text: `+${formatCash(s.cents)}`, at: now });
     }
   }
 
-  /** Where the truck is drawn: 0 parked, up to 1 gone off the right edge; then it backs in from the right. */
-  truckShift(now: number): number {
-    if (this.truckOut === 0) return 0;
-    const t = now - this.truckOut;
+  /** Where door `door`'s trailer is drawn (W10): 0 parked, up to 1 gone off the bottom edge; then the next backs in. */
+  truckShift(door: number, now: number): number {
+    const out = this.trucksOut[door] ?? 0;
+    if (out === 0) return 0;
+    const t = now - out;
     if (t < TRUCK_OUT_MS) return t / TRUCK_OUT_MS;
     if (t < TRUCK_OUT_MS + TRUCK_IN_MS) return 1 - (t - TRUCK_OUT_MS) / TRUCK_IN_MS;
     return 0;
@@ -482,8 +542,8 @@ export class WmsFloorModel {
 
   /** One frame: everything moves `dt` ms on towards where it is due. */
   advance(now: number, dt: number): void {
-    // The truck leaves once every order loaded on it has shipped (each ships on its own, a few seconds apart).
-    if (this.truckOut === 0 && this.cartons.some((c) => c.leaving) && !this.cartons.some((c) => c.zone === 'truck' && !c.leaving)) this.truckOut = now;
+    // A trailer pulls out when its orders ship (they all ship as it leaves, W10).
+    for (const c of this.cartons) if (c.leaving && (this.trucksOut[c.door] ?? 0) === 0) this.trucksOut[c.door] = now;
     for (const p of this.workers) move(p, now, dt);
     for (const t of this.totes) move(t, now, dt);
     this.totes = this.totes.filter((t) => !arrived(t));
@@ -493,11 +553,12 @@ export class WmsFloorModel {
       c.x = c.fromX + (c.toX - c.fromX) * e;
       c.y = c.fromY + (c.toY - c.fromY) * e;
     }
-    // The truck has gone with its shipped cartons; the next one is empty.
-    if (this.truckOut > 0 && now - this.truckOut >= TRUCK_OUT_MS) {
-      this.cartons = this.cartons.filter((c) => !c.leaving);
-      if (now - this.truckOut >= TRUCK_OUT_MS + TRUCK_IN_MS) this.truckOut = 0;
-    }
+    // A trailer has gone with its shipped cartons; the next one backs in empty.
+    this.trucksOut.forEach((out, door) => {
+      if (out === 0 || now - out < TRUCK_OUT_MS) return;
+      this.cartons = this.cartons.filter((c) => !(c.leaving && c.door === door));
+      if (now - out >= TRUCK_OUT_MS + TRUCK_IN_MS) this.trucksOut[door] = 0;
+    });
     this.flashes = this.flashes.filter((f) => now - f.at < FLASH_MS);
     this.pops = this.pops.filter((p) => now - p.at < POP_MS);
   }

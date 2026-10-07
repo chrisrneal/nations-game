@@ -24,6 +24,7 @@ function row(no: number, extra: Partial<WmsOrderView> = {}): WmsOrderView {
     exception: false,
     open: true,
     expedited: false,
+    door: 0,
     lines: [],
     ...extra,
   };

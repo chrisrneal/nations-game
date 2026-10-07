@@ -1,13 +1,13 @@
 import type { WmsAction, WmsOrderStatus } from '@warehouse/contracts';
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
 import { isClosed } from './catalog.ts';
-import { addDoor, doorCost, fullPolicy, hire, hireCost, moveWorker, policyProblem, setPolicy } from './policy.ts';
-import { freeWorker, lineTask, newTask, releaseTask, startTask } from './tasks.ts';
+import { addDoor, addShipDoor, doorCost, fullPolicy, hire, hireCost, moveWorker, policyProblem, setPolicy, shipDoorCost } from './policy.ts';
+import { freeWorker, lineTask, loadTask, newTask, releaseTask, requeue, startTask } from './tasks.ts';
 import { findOrder, log, releaseWave, type MLine, type MOrder, type MWms } from './tick.ts';
 
 export type WmsActionResult = { readonly ok: true; readonly order: number; readonly cents: number } | { readonly ok: false; readonly reason: string };
 
-/** Statuses an order waits in for a timer, and how long (RULES 4). */
+/** Statuses an order waits in for a timer, and how long (RULES 4); staged and loaded orders wait for a dock hand and their trailer instead (W10). */
 function delayFor(status: WmsOrderStatus): number {
   switch (status) {
     case 'PICKED':
@@ -15,10 +15,6 @@ function delayFor(status: WmsOrderStatus): number {
       return T.wmsPackTicks.value;
     case 'PACKED':
       return T.wmsStageTicks.value;
-    case 'STAGED':
-      return T.wmsLoadTicks.value;
-    case 'LOADED':
-      return T.wmsShipTicks.value;
     default:
       return 0;
   }
@@ -45,7 +41,7 @@ function cancellable(line: MLine): boolean {
 }
 
 const BEFORE_PICKED: ReadonlySet<WmsOrderStatus> = new Set(['NEW', 'RELEASED', 'ALLOCATED', 'PICKING', 'BACKORDER']);
-const TIMED: ReadonlySet<WmsOrderStatus> = new Set(['PICKED', 'SHORT', 'PACKED', 'STAGED', 'LOADED']);
+const TIMED: ReadonlySet<WmsOrderStatus> = new Set(['PICKED', 'SHORT', 'PACKED']);
 
 function fail(reason: string): WmsActionResult {
   return { ok: false, reason };
@@ -56,7 +52,7 @@ function fail(reason: string): WmsActionResult {
  * change priority, hold and release from hold, put a picker on a line,
  * cancel a line, expedite an order for cash, set the operating plan (W7),
  * hire a worker and open a dock door (W8), move a worker between picking
- * and receiving (W9). Each logs an event. `cash` is what
+ * and the dock (W9), open an outbound door (W10). Each logs an event. `cash` is what
  * the player has; anything that costs more is refused.
  */
 export function wmsAction(w: MWms, a: WmsAction, tick: number, cash: number): WmsActionResult {
@@ -89,10 +85,12 @@ export function wmsAction(w: MWms, a: WmsAction, tick: number, cash: number): Wm
       return { ok: true, order: 0, cents: cost };
     }
     case 'door': {
-      const cost = doorCost(w.doors);
-      if (cost === null) return fail('No room for another door');
+      const out = a.side === 'out';
+      const cost = out ? shipDoorCost(w.shipDoors.length) : doorCost(w.doors);
+      if (cost === null) return fail(out ? 'No room for another outbound door' : 'No room for another door');
       if (cash < cost) return fail('Not enough cash');
-      addDoor(w, tick);
+      if (out) addShipDoor(w, tick);
+      else addDoor(w, tick);
       return { ok: true, order: 0, cents: cost };
     }
     default:
@@ -105,12 +103,16 @@ export function wmsAction(w: MWms, a: WmsAction, tick: number, cash: number): Wm
     case 'priority': {
       if (o.priority === a.priority) return fail(`Already P${a.priority}`);
       o.priority = a.priority;
+      requeue(w, 'pick');
       log(w, { tick, code: 'PRIO', order: o.no, qty: a.priority });
       return { ok: true, order: o.no, cents: 0 };
     }
     case 'hold': {
       if (o.status === 'ON HOLD') return fail('Already on hold');
       for (const line of o.lines) freeLine(w, o, line, tick);
+      // A staged order's load waits too (W10); a loaded one stays on its trailer but does not leave with it.
+      const load = loadTask(w, o.no);
+      if (load !== undefined) releaseTask(w, load, tick);
       o.held = o.status;
       o.status = 'ON HOLD';
       log(w, { tick, code: 'HOLD', order: o.no });
@@ -122,6 +124,8 @@ export function wmsAction(w: MWms, a: WmsAction, tick: number, cash: number): Wm
       o.status = back;
       o.held = null;
       if (TIMED.has(back)) o.next = tick + delayFor(back);
+      requeue(w, 'pick');
+      requeue(w, 'receive');
       log(w, { tick, code: 'UNHOLD', order: o.no });
       return { ok: true, order: o.no, cents: 0 };
     }
@@ -129,7 +133,7 @@ export function wmsAction(w: MWms, a: WmsAction, tick: number, cash: number): Wm
       const worker = w.workers.find((p) => p.id === a.picker);
       const line = o.lines.find((l) => l.no === a.line);
       if (worker === undefined) return fail('No such worker');
-      if (worker.role !== 'pick') return fail('That worker is receiving');
+      if (worker.role !== 'pick') return fail('That worker is on the dock');
       if (line === undefined) return fail('No such line');
       if (o.status !== 'ALLOCATED' && o.status !== 'PICKING') return fail(`The order is ${o.status.toLowerCase()}`);
       if (!pickableLine(line)) return fail(`The line is ${line.status.toLowerCase()}`);
@@ -172,6 +176,7 @@ export function wmsAction(w: MWms, a: WmsAction, tick: number, cash: number): Wm
       o.expedited = true;
       o.priority = 1;
       o.shipBy += T.wmsExpediteLeadTicks.value;
+      requeue(w, 'pick');
       log(w, { tick, code: 'EXPEDITE', order: o.no, qty: cost });
       return { ok: true, order: o.no, cents: cost };
     }

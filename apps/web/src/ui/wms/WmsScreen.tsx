@@ -15,6 +15,7 @@ import { OrderDetail } from './OrderDetail.tsx';
 import { OrderGrid, type GridScroll } from './OrderGrid.tsx';
 import { NeedsPanel } from './Labour.tsx';
 import { PICK_RULES, Plan, RELEASE_MODES, waveName } from './Plan.tsx';
+import { Trucks } from './Trucks.tsx';
 import { WmsFloor } from './WmsFloor.tsx';
 import { useWms } from './useWms.ts';
 import './wms.css';
@@ -38,7 +39,7 @@ const DONE: Readonly<Record<WmsActionName, string>> = {
   expedite: 'Expedited',
   policy: 'Plan changed',
   hire: 'Hired',
-  door: 'Dock door opened',
+  door: 'Door opened',
   role: 'Worker moved',
 };
 
@@ -52,7 +53,7 @@ function planLine(policy: WmsPolicy, crew: number, time: ClockShape): string {
   const pick = PICK_RULES.find((r) => r.id === policy.pick)?.name ?? '';
   const release = RELEASE_MODES.find((r) => r.id === policy.release)?.name ?? '';
   const every = policy.release === 'waves' ? ` ${waveName(policy.waveTicks, time)}` : '';
-  return `${pick} · ${release}${every} · ${policy.pickers} pick / ${crew - policy.pickers} receive${policy.labor === 'balance' ? ' · balance' : ''}`;
+  return `${pick} · ${release}${every} · ${policy.pickers} pick / ${crew - policy.pickers} dock${policy.labor === 'balance' ? ' · balance' : ''}`;
 }
 
 /**
@@ -75,6 +76,7 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; t
   const [feed, setFeed] = useState(false);
   const [page, setPage] = useState<WmsPage>('floor');
   const [countries, setCountries] = useState(false);
+  const [trucks, setTrucks] = useState(false);
   const [openPo, setOpenPo] = useState<number | null>(null);
   const [worker, setWorker] = useState<number | null>(null);
   const [choosing, setChoosing] = useState(false);
@@ -132,6 +134,7 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; t
   const openOrder = useCallback((no: number) => {
     setPage('outbound');
     setCountries(false);
+    setTrucks(false);
     setChoosing(false);
     setOpen(no);
     setLine(null);
@@ -161,6 +164,7 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; t
     } else {
       setPage('outbound');
       setCountries(false);
+      setTrucks(false);
       setOpen(e.order);
       setLine(null);
     }
@@ -187,7 +191,7 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; t
         : page === 'inventory'
           ? inventoryKpis(live.wms.inventoryKpis)
           : page === 'outbound'
-            ? outboundKpis(live.wms.kpis, wave)
+            ? outboundKpis(live.wms.kpis, wave, countdown(Math.min(...live.wms.shipDoors.map((d) => d.departsIn)), live.time))
             : page === 'crew'
               ? crewKpis(live.wms.crewKpis)
               : floorKpis(live.wms.kpis, live.wms.inboundKpis, wave);
@@ -212,6 +216,7 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; t
               policy={live.wms.policy}
               crew={live.wms.crew}
               doors={live.wms.layout.doors}
+              shipDoors={live.wms.layout.shipDoors}
               growth={live.wms.growth}
               cash={live.cash}
               needs={live.wms.needs}
@@ -250,6 +255,7 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; t
               tick={live.tick}
               time={live.time}
               goodwill={live.wms.countries.find((c) => c.iso === detail?.dest.iso)?.goodwill ?? null}
+              shipDoor={detail === undefined || detail.door === 0 ? undefined : live.wms.shipDoors[detail.door - 1]}
               onBack={() => setOpen(null)}
               selectedLine={line}
               onSelectLine={(no) => setLine((l) => (l === no ? null : no))}
@@ -268,6 +274,7 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; t
                     setChoosing((c) => !c);
                     setChosen(new Set());
                     setCountries(false);
+                    setTrucks(false);
                   }}
                   data-testid="wms-choose"
                 >
@@ -278,11 +285,12 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; t
                     key={f.id}
                     type="button"
                     role="tab"
-                    aria-selected={!countries && filter === f.id}
+                    aria-selected={!countries && !trucks && filter === f.id}
                     className="wms-filter"
                     onClick={() => {
                       setFilter(f.id);
                       setCountries(false);
+                      setTrucks(false);
                     }}
                     data-testid={`wms-filter-${f.id}`}
                   >
@@ -292,10 +300,26 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; t
                 <button
                   type="button"
                   role="tab"
+                  aria-selected={trucks}
+                  className="wms-filter"
+                  onClick={() => {
+                    setTrucks(true);
+                    setCountries(false);
+                    setChoosing(false);
+                    setChosen(new Set());
+                  }}
+                  data-testid="wms-trucks-tab"
+                >
+                  Trucks <span className="num">{live.wms.shipDoors.length}</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
                   aria-selected={countries}
                   className="wms-filter"
                   onClick={() => {
                     setCountries(true);
+                    setTrucks(false);
                     setChoosing(false);
                     setChosen(new Set());
                   }}
@@ -304,7 +328,9 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; t
                   Countries
                 </button>
               </div>
-              {countries ? (
+              {trucks ? (
+                <Trucks doors={live.wms.shipDoors} orders={live.wms.orders} time={live.time} onOpen={openOrder} />
+              ) : countries ? (
                 <Countries countries={live.wms.countries} />
               ) : (
                 <OrderGrid orders={shown} time={live.time} sort={sort} selected={marked} scroll={scroll} onSort={onSort} onOpen={onOpen} empty={EMPTY[filter]} />

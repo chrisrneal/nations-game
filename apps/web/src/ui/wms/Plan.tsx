@@ -20,7 +20,7 @@ export const RELEASE_MODES: readonly { readonly id: WmsReleaseMode; readonly nam
 /** The labour plans (W9). */
 export const LABOR_MODES: readonly { readonly id: WmsLaborMode; readonly name: string; readonly does: string; readonly cost: string }[] = [
   { id: 'fixed', name: 'Fixed', does: 'People stay where you put them: the split below, or a move from Crew.', cost: 'When a truck docks or a wave lands, the other side does not help.' },
-  { id: 'balance', name: 'Balance by need', does: 'Every 15 warehouse minutes the WMS moves one person to the side with more tasks waiting a head.', cost: 'Whoever moves drops what they hold, and fewer receivers means stock lands later: on time goes up, fill can drop.' },
+  { id: 'balance', name: 'Balance by need', does: 'Every 15 warehouse minutes the WMS moves one person to the side with more tasks waiting a head.', cost: 'Whoever moves drops what they hold, and a thinner dock crew means stock lands later and trailers leave half loaded: on time can go either way, fill can drop.' },
 ];
 
 /** A wave interval in warehouse time: 30 min, 1 h, 2 h. */
@@ -39,6 +39,7 @@ export function Plan(props: {
   policy: WmsPolicy;
   crew: number;
   doors: number;
+  shipDoors: number;
   growth: WmsGrowthView;
   cash: number;
   needs: WmsNeeds;
@@ -47,7 +48,7 @@ export function Plan(props: {
   time: ClockShape;
   submit: (action: WmsAction) => void;
 }): ReactElement {
-  const { policy, crew, doors, growth, cash, needs, waveChoices, newOrders, time, submit } = props;
+  const { policy, crew, doors, shipDoors, growth, cash, needs, waveChoices, newOrders, time, submit } = props;
   const key = `${policy.pick}|${policy.release}|${policy.pickers}|${policy.waveTicks}|${policy.labor}`;
   // A choice waits for the sim's plan to change; once it has (or after a few seconds, if refused), the sim's plan shows.
   const [pending, setPending] = useState<{ plan: WmsPolicy; from: string } | null>(null);
@@ -66,7 +67,7 @@ export function Plan(props: {
   const pick = PICK_RULES.find((r) => r.id === shown.pick) ?? PICK_RULES[0];
   const release = RELEASE_MODES.find((r) => r.id === shown.release) ?? RELEASE_MODES[0];
   const labor = LABOR_MODES.find((r) => r.id === shown.labor) ?? LABOR_MODES[0];
-  const receivers = crew - shown.pickers;
+  const dock = crew - shown.pickers;
   return (
     <div className="wms-plan" data-testid="wms-plan">
       <p className="wms-plan-intro">You run the floor. These are the decisions the WMS makes on its own unless you change them. Watch the KPIs above and the Floor tab to see what each one does.</p>
@@ -116,7 +117,7 @@ export function Plan(props: {
       <section className="wms-plan-part" aria-labelledby="plan-crew">
         <h3 id="plan-crew">Crew</h3>
         <div className="wms-crew">
-          <button type="button" className="wms-btn" aria-label="One fewer picker, one more receiver" disabled={shown.pickers <= 1} onClick={() => change({ pickers: shown.pickers - 1 })} data-testid="plan-crew-less">
+          <button type="button" className="wms-btn" aria-label="One fewer picker, one more on the dock" disabled={shown.pickers <= 1} onClick={() => change({ pickers: shown.pickers - 1 })} data-testid="plan-crew-less">
             −
           </button>
           <div className="wms-crew-split" aria-live="polite" data-testid="plan-crew">
@@ -129,15 +130,15 @@ export function Plan(props: {
               ))}
             </span>
             <span>
-              <b className="num">{receivers}</b> receiving
+              <b className="num">{dock}</b> on the dock
             </span>
           </div>
-          <button type="button" className="wms-btn" aria-label="One more picker, one fewer receiver" disabled={receivers <= 1} onClick={() => change({ pickers: shown.pickers + 1 })} data-testid="plan-crew-more">
+          <button type="button" className="wms-btn" aria-label="One more picker, one fewer on the dock" disabled={dock <= 1} onClick={() => change({ pickers: shown.pickers + 1 })} data-testid="plan-crew-more">
             +
           </button>
         </div>
-        <p className="wms-plan-does">Your {crew} people split between picking orders and receiving and putting away trucks. Moving someone takes effect at once; a task they leave goes to someone else.</p>
-        <p className="wms-plan-cost">Catch: more pickers ship faster but trucks wait longer at the doors, and the shelves can run dry.</p>
+        <p className="wms-plan-does">Your {crew} people split between picking orders and the dock: loading outbound trailers, receiving trucks and putting their stock away. Moving someone takes effect at once; a task they leave goes to someone else.</p>
+        <p className="wms-plan-cost">Catch: more pickers pick faster, but packed orders wait in the lanes for a dock hand, trucks wait at the doors, and the shelves can run dry.</p>
       </section>
       <section className="wms-plan-part" aria-labelledby="plan-labour">
         <h3 id="plan-labour">Labour</h3>
@@ -173,18 +174,29 @@ export function Plan(props: {
             onClick={() => submit({ action: 'hire', role: 'receive' })}
             data-testid="plan-hire-receive"
           >
-            Hire a receiver
+            Hire a dock hand
             <span className="num">{growth.hireCost === null ? 'Full' : formatCash(growth.hireCost)}</span>
           </button>
           <button type="button" className="wms-btn" disabled={growth.doorCost === null || cash < growth.doorCost} onClick={() => submit({ action: 'door' })} data-testid="plan-door">
-            Open dock door {doors + 1}
+            Open inbound door D{doors + 1}
             <span className="num">{growth.doorCost === null ? 'All open' : formatCash(growth.doorCost)}</span>
+          </button>
+          <button
+            type="button"
+            className="wms-btn"
+            disabled={growth.shipDoorCost === null || cash < growth.shipDoorCost}
+            onClick={() => submit({ action: 'door', side: 'out' })}
+            data-testid="plan-ship-door"
+          >
+            Open outbound door S{shipDoors + 1}
+            <span className="num">{growth.shipDoorCost === null ? 'All open' : formatCash(growth.shipDoorCost)}</span>
           </button>
         </div>
         <p className="wms-plan-does">
-          {crew} of {growth.maxCrew} people, {doors} of {growth.maxDoors} dock doors. Shipments pay for both. A door takes one more truck an appointment slot and one more truck at once.
+          {crew} of {growth.maxCrew} people, {doors} of {growth.maxDoors} inbound doors, {shipDoors} of {growth.maxShipDoors} outbound doors. Shipments pay for all of it. An inbound door takes one more truck an appointment slot and one more
+          at once; an outbound door adds a trailer an hour, so packed orders leave sooner and a big wave has room.
         </p>
-        <p className="wms-plan-cost">Catch: each hire costs more than the last, and people only help when there is work for them.</p>
+        <p className="wms-plan-cost">Catch: each hire costs more than the last, people only help when there is work for them, and a door is no use without a dock hand to work it.</p>
       </section>
     </div>
   );

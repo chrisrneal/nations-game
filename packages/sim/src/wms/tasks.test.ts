@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { WmsLine, WmsOrder, WmsState, WmsStock } from '@warehouse/contracts';
+import type { WmsLine, WmsOrder, WmsPo, WmsState, WmsStock } from '@warehouse/contracts';
+import { shipDoorAt } from './catalog.ts';
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
 import { wmsAction } from './actions.ts';
 import { createWms } from './generate.ts';
@@ -13,7 +14,7 @@ function line(no: number, sku: number, ordered: number): WmsLine {
 }
 
 function order(no: number, lines: WmsLine[], extra: Partial<WmsOrder> = {}): WmsOrder {
-  return { no, dest: 0, customer: 0, priority: 3, wave: 0, status: 'NEW', lines, shipBy: 100_000, created: 0, next: 0, late: false, held: null, closed: 0, expedited: false, ...extra };
+  return { no, dest: 0, customer: 0, priority: 3, wave: 0, status: 'NEW', lines, shipBy: 100_000, created: 0, next: 0, late: false, held: null, closed: 0, expedited: false, door: 0, ...extra };
 }
 
 /** A quiet WMS with plenty of every SKU: these orders, released at the first step, no arrivals, POs or counts. */
@@ -72,9 +73,24 @@ describe('the WMS assigns tasks (RULES 6, W8)', () => {
       expect(p.queue).toHaveLength(DEPTH - 1);
     }
     expect(w.tasks.filter((t) => t.status === 'OPEN')).toHaveLength(4);
-    // Round by round: the first round's tasks go to pickers 1-6 in turn.
-    expect(pickers(w).map((p) => refOf(w, p.task))).toEqual([1, 2, 3, 4, 5, 6]);
-    expect(pickers(w).map((p) => refOf(w, p.queue[0] ?? 0))).toEqual([7, 8, 9, 10, 11, 12]);
+    // Round by round: the first round's tasks go to the pickers in turn, then the second round's.
+    const n = pickers(w).length;
+    expect(pickers(w).map((p) => refOf(w, p.task))).toEqual(Array.from({ length: n }, (_, i) => i + 1));
+    expect(pickers(w).map((p) => refOf(w, p.queue[0] ?? 0))).toEqual(Array.from({ length: n }, (_, i) => n + i + 1));
+  });
+
+  it('the dock crew load before they receive: a newer load goes ahead of older receiving (W10)', () => {
+    const staged = order(1, [{ ...line(1, 0, 20), allocated: 20, picked: 20, status: 'PICKED' }], { status: 'STAGED', door: 1 });
+    const po: WmsPo = { no: 50_001, supplier: 0, status: 'RECEIVING', lines: [1, 2].map((no) => ({ no, sku: no, bin: no * 37, expected: 50, received: 0, damaged: 0, short: 0, status: 'OPEN' as const })), created: 0, appt: 0, arrive: 0, arrived: 1, door: 1, closed: 0, late: false };
+    const base = wms([staged], { pos: [po], nextWaveAt: 1e9 });
+    base.workers = [base.workers[0], base.workers.find((p) => p.role === 'receive')].filter((p) => p !== undefined) as MWms['workers'];
+    const task = (no: number, kind: 'RECEIVE' | 'LOAD', ref: number, l: number, bin: number, created: number): MWms['tasks'][number] => ({ no, kind, ref, line: l, sku: kind === 'LOAD' ? -1 : l, bin, qty: kind === 'LOAD' ? 20 : 50, done: 0, status: 'OPEN', worker: 0, created, started: 0, finished: 0 });
+    base.tasks = [task(1, 'RECEIVE', 50_001, 1, -1, 0), task(2, 'RECEIVE', 50_001, 2, -1, 0), task(3, 'LOAD', 1, 0, shipDoorAt(1), 4)];
+    base.nextTaskNo = 4;
+    wmsStep(base, 8);
+    const dock = base.workers.find((p) => p.role === 'receive');
+    expect(dock?.task).toBe(3);
+    expect(dock?.queue).toEqual([1, 2]);
   });
 
   it('receivers never get pick tasks, and pickers never receive', () => {
@@ -122,6 +138,18 @@ describe('the WMS assigns tasks (RULES 6, W8)', () => {
     wmsStep(w, STEP);
     expect(refOf(w, w.workers[1]!.task)).toBe(3);
     expect(w.workers[0]!.queue).toEqual([]);
+  });
+
+  it('raising an old waiting order to P1 lines its task up at the next step, ahead of queued P3s (W10)', () => {
+    const count = pickers(wms([])).length * DEPTH + 4;
+    const w = wms(many(count));
+    wmsStep(w, 0);
+    const waiting = w.tasks.find((t) => t.status === 'OPEN');
+    if (waiting === undefined) throw new Error('needs a waiting task');
+    run(w, STEP, 2);
+    expect(wmsAction(w, { action: 'priority', order: waiting.ref, priority: 1 }, 3 * STEP, 0).ok).toBe(true);
+    run(w, 3 * STEP, 1);
+    expect(w.tasks.find((t) => t.no === waiting.no)?.status).toMatch(/QUEUED|ACTIVE/);
   });
 
   it('a held order’s tasks leave the queues and wait; released, they are lined up again', () => {
