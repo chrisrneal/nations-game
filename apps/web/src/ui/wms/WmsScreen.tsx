@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
-import type { WmsAction, WmsActionName } from '@warehouse/contracts';
+import type { WmsAction, WmsActionName, WmsEventView } from '@warehouse/contracts';
 import type { WarehouseHost } from '../../platform/index.ts';
 import { formatCash } from '../format.ts';
 import type { WarehouseStore } from '../store.ts';
 import { ActivityFeed } from './ActivityFeed.tsx';
 import { Countries } from './Countries.tsx';
 import { LineActions, OrderActions, ReleaseBar } from './Actions.tsx';
-import { FILTERS, countdown, filterCounts, matches, nextSort, sortOrders, type Sort, type SortKey, type WmsFilter } from './grid.ts';
-import { KpiStrip } from './KpiStrip.tsx';
+import { FILTERS, PAGES, countdown, filterCounts, matches, nextSort, sortOrders, type Sort, type SortKey, type WmsFilter, type WmsPage } from './grid.ts';
+import { InboundGrid, PoDetail } from './Inbound.tsx';
+import { InventoryGrid } from './Inventory.tsx';
+import { KpiStrip, inboundKpis, inventoryKpis, outboundKpis } from './KpiStrip.tsx';
 import { OrderDetail } from './OrderDetail.tsx';
 import { OrderGrid, type GridScroll } from './OrderGrid.tsx';
 import { useWms } from './useWms.ts';
@@ -34,9 +36,11 @@ const DONE: Readonly<Record<WmsActionName, string>> = {
 
 /**
  * The warehouse management system (docs/wms-plan.md): a full-screen,
- * terminal-style view of the WMS orders over the warehouse. The page never
- * scrolls sideways; only the grid does. Actions (slice 7) are commands sent
- * through the host; the sim decides, and the answer shows as a short note.
+ * terminal-style view over the warehouse, in three pages (W6): Inbound
+ * (purchase orders from suppliers), Outbound (customer orders, and their
+ * countries) and Inventory (every SKU's bin). The page never scrolls
+ * sideways; only the grids do. Actions (slice 7) are commands sent through
+ * the host; the sim decides, and the answer shows as a short note.
  */
 export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; onClose: () => void }): ReactElement {
   const { store, host, onClose } = props;
@@ -46,7 +50,9 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; o
   const [open, setOpen] = useState<number | null>(null);
   const [line, setLine] = useState<number | null>(null);
   const [feed, setFeed] = useState(false);
-  const [page, setPage] = useState<'orders' | 'countries'>('orders');
+  const [page, setPage] = useState<WmsPage>('outbound');
+  const [countries, setCountries] = useState(false);
+  const [openPo, setOpenPo] = useState<number | null>(null);
   const [choosing, setChoosing] = useState(false);
   const [chosen, setChosen] = useState<ReadonlySet<number>>(() => new Set());
   const [note, setNote] = useState<{ text: string; bad: boolean } | null>(null);
@@ -57,12 +63,13 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; o
     const onKey = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
       if (feed) setFeed(false);
-      else if (open !== null) setOpen(null);
+      else if (page === 'inbound' && openPo !== null) setOpenPo(null);
+      else if (page === 'outbound' && open !== null) setOpen(null);
       else onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, open, feed]);
+  }, [onClose, open, openPo, page, feed]);
   useEffect(
     () =>
       store.onFrame((update) => {
@@ -98,10 +105,16 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; o
     },
     [choosing],
   );
-  const openFromFeed = useCallback((no: number) => {
-    setPage('orders');
-    setOpen(no);
-    setLine(null);
+  const openFromFeed = useCallback((e: WmsEventView) => {
+    if (e.po > 0) {
+      setPage('inbound');
+      setOpenPo(e.po);
+    } else {
+      setPage('outbound');
+      setCountries(false);
+      setOpen(e.order);
+      setLine(null);
+    }
     setFeed(false);
   }, []);
   const counts = useMemo(() => filterCounts(orders ?? []), [orders]);
@@ -116,6 +129,7 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; o
   const newOrders = useMemo(() => (orders ?? []).filter((o) => o.status === 'NEW').map((o) => o.no), [orders]);
   const marked = useMemo(() => (choosing ? new Set([...chosen].filter((no) => newOrders.includes(no))) : new Set(open === null ? [] : [open])), [choosing, chosen, newOrders, open]);
   const detail = open === null ? undefined : orders?.find((o) => o.no === open);
+  const kpis = live === null ? [] : page === 'inbound' ? inboundKpis(live.wms.inboundKpis) : page === 'inventory' ? inventoryKpis(live.wms.inventoryKpis) : outboundKpis(live.wms.kpis, countdown(live.wms.nextWaveIn, live.tickMs));
 
   return (
     <div className="wms" role="dialog" aria-modal="true" aria-label="Warehouse management system" data-testid="wms">
@@ -123,37 +137,27 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; o
         <button type="button" className="wms-back" onClick={onClose} aria-label="Back to the floor" data-testid="wms-close">
           ‹ Floor
         </button>
-        <h2 className="wms-title">WMS</h2>
         <div className="wms-tabs" role="tablist" aria-label="WMS page">
-          <button type="button" role="tab" aria-selected={page === 'orders'} onClick={() => setPage('orders')} data-testid="wms-tab-orders">
-            Orders
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={page === 'countries'}
-            onClick={() => {
-              setPage('countries');
-              setOpen(null);
-            }}
-            data-testid="wms-tab-countries"
-          >
-            Countries
-          </button>
+          {PAGES.map((p) => (
+            <button key={p.id} type="button" role="tab" aria-selected={page === p.id} onClick={() => setPage(p.id)} data-testid={`wms-tab-${p.id}`}>
+              {p.label}
+            </button>
+          ))}
         </div>
-        {live !== null && (
-          <span className="wms-wave" data-testid="wms-next-wave">
-            Wave in {countdown(live.wms.nextWaveIn, live.tickMs)}
-          </span>
-        )}
       </header>
-      {live !== null && <KpiStrip kpis={live.wms.kpis} />}
+      {live !== null && <KpiStrip items={kpis} />}
       {live === null ? (
         <p className="wms-empty">Connecting…</p>
       ) : (
         <>
-          {page === 'countries' ? (
-            <Countries countries={live.wms.countries} />
+          {page === 'inbound' ? (
+            openPo !== null ? (
+              <PoDetail po={live.wms.pos.find((p) => p.no === openPo)} events={live.wms.events.filter((e) => e.po === openPo)} tick={live.tick} tickMs={live.tickMs} onBack={() => setOpenPo(null)} />
+            ) : (
+              <InboundGrid pos={live.wms.pos} tickMs={live.tickMs} onOpen={setOpenPo} />
+            )
+          ) : page === 'inventory' ? (
+            <InventoryGrid stock={live.wms.stock} tickMs={live.tickMs} />
           ) : open !== null ? (
             <OrderDetail
               order={detail}
@@ -178,18 +182,48 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; o
                   onClick={() => {
                     setChoosing((c) => !c);
                     setChosen(new Set());
+                    setCountries(false);
                   }}
                   data-testid="wms-choose"
                 >
                   Release…
                 </button>
                 {FILTERS.map((f) => (
-                  <button key={f.id} type="button" role="tab" aria-selected={filter === f.id} className="wms-filter" onClick={() => setFilter(f.id)} data-testid={`wms-filter-${f.id}`}>
+                  <button
+                    key={f.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={!countries && filter === f.id}
+                    className="wms-filter"
+                    onClick={() => {
+                      setFilter(f.id);
+                      setCountries(false);
+                    }}
+                    data-testid={`wms-filter-${f.id}`}
+                  >
                     {f.label} <span className="num">{counts[f.id]}</span>
                   </button>
                 ))}
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={countries}
+                  className="wms-filter"
+                  onClick={() => {
+                    setCountries(true);
+                    setChoosing(false);
+                    setChosen(new Set());
+                  }}
+                  data-testid="wms-countries-tab"
+                >
+                  Countries
+                </button>
               </div>
-              <OrderGrid orders={shown} tickMs={live.tickMs} sort={sort} selected={marked} scroll={scroll} onSort={onSort} onOpen={onOpen} empty={EMPTY[filter]} />
+              {countries ? (
+                <Countries countries={live.wms.countries} />
+              ) : (
+                <OrderGrid orders={shown} tickMs={live.tickMs} sort={sort} selected={marked} scroll={scroll} onSort={onSort} onOpen={onOpen} empty={EMPTY[filter]} />
+              )}
               {choosing && (
                 <ReleaseBar
                   chosen={marked.size}

@@ -41,14 +41,14 @@ function LineRow(props: { line: WmsLineView; selected: boolean; onSelect: (no: n
   );
 }
 
-/** One order's activity, newest first: a few lines of the WMS console. */
-export function EventLines(props: { events: readonly WmsEventView[]; tickMs: number; onOpen?: (order: number) => void }): ReactElement {
+/** Activity lines, newest first: a few lines of the WMS console. Tapping one opens its order or PO. */
+export function EventLines(props: { events: readonly WmsEventView[]; tickMs: number; onOpen?: (event: WmsEventView) => void }): ReactElement {
   const { onOpen } = props;
   return (
     <ol className="wms-log">
       {props.events.map((e) => (
         <li key={e.key} className={e.exception ? 'exc' : undefined}>
-          <button type="button" disabled={onOpen === undefined || e.order === 0} onClick={() => onOpen?.(e.order)}>
+          <button type="button" disabled={onOpen === undefined || (e.order === 0 && e.po === 0)} onClick={() => onOpen?.(e)}>
             <span className="t">{clock(e.tick, props.tickMs)}</span>
             <span className="code">{e.code}</span>
             <span className="ref">{e.ref}</span>
