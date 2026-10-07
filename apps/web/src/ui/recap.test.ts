@@ -6,6 +6,7 @@ const base: AwayRecap = {
   awayMs: 3_600_000,
   ranMs: 3_600_000,
   capMinutes: 480,
+  capDays: 20,
   skipped: false,
   earned: 1_240_000,
   shipped: 140,
@@ -32,7 +33,13 @@ describe('the away recap (RULES 11)', () => {
 
   it('says when the offline cap stopped the warehouse', () => {
     expect(recapLines({ ...base, awayMs: 10 * 3_600_000, ranMs: 8 * 3_600_000, days: 20 })[0]).toBe(
-      'You were away 10h 0m. The warehouse ran for 8h 0m (20 warehouse days went by), then stopped: it runs at most 8h 0m while the app is closed.',
+      'You were away 10h 0m. The warehouse ran for 8h 0m (20 warehouse days went by), then stopped: while the app is closed it runs at most 20 warehouse days, 8h 0m at this speed.',
+    );
+  });
+
+  it('at 5 warehouse minutes a second the same cap is 1h 36m of real time (W9)', () => {
+    expect(recapLines({ ...base, awayMs: 3 * 3_600_000, ranMs: 96 * 60_000, capMinutes: 96, days: 20 })[0]).toBe(
+      'You were away 3h 0m. The warehouse ran for 1h 36m (20 warehouse days went by), then stopped: while the app is closed it runs at most 20 warehouse days, 1h 36m at this speed.',
     );
   });
 

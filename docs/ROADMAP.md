@@ -11,7 +11,8 @@ task. The crew (pickers, and receivers who also put away) do the tasks the
 WMS lines up for them, and a tap on any worker shows their tasks and record.
 Picked orders are packed, staged, loaded and shipped; every shipment pays,
 more for countries whose goodwill is high. The player sets the WMS's plan
-(pick order, release, crew split), steps in on orders, and spends what
+(pick order, release and wave interval, crew split, labour by need), moves
+people between picking and receiving, steps in on orders, and spends what
 shipments earn on more people and dock doors. The warehouse keeps running
 while the app is closed, up to a cap. Single player, offline-first, no
 backend. Rules: docs/RULES.md. Why the idle game was removed: decision record
@@ -33,11 +34,13 @@ W8 (and W1, P1 before it).
 ## Architecture (kept from Nations, the airport and the idle warehouse, decision records P1, W1 and W8)
 1. Pure sim core: `step(state, commands) -> state + events` (S1, D6).
 2. Commands are the only mutation: `wms` actions (release, priority, hold,
-   unhold, assign, cancelLine, expedite, policy, hire, door) (S2, P5, W8).
+   unhold, assign, cancelLine, expedite, policy, role, hire, door) (S2, P5,
+   W8, W9).
 3. Host interface: the UI submits and subscribes; LocalHost runs the sim in a Web
    Worker (S3).
 4. The host owns the clock; catch-up is "run N ticks fast", up to the offline
-   cap (S4, P4).
+   cap (S4, P4). The host's speed (pause, 1x, 5x by default, 10x warehouse
+   minutes a second) sets how much wall time a tick takes (W9).
 5. Determinism: seeded RNG in State, integer maths (cents, whole units, ticks),
    state-hash test in Node and Chromium on every build (S5, P3).
 6. The UI reads a View (S6, P5).
@@ -76,7 +79,8 @@ save-reload-continue.
   is the last with the idle game.
 - **The WMS simulator** (2026-10-07): the idle game removed; tasks for every
   worker, a Crew page, dock appointments in a warehouse day, hiring and doors
-  (W8).
+  (W8); then 5 warehouse minutes a second with pause and 1x/10x, the wave
+  interval, and moving people by need, by hand or by the balance plan (W9).
 
 ## Next (not planned until the owner picks)
 - Play it on a real phone and say what feels slow or confusing (docs/GAPS.md

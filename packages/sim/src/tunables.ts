@@ -17,7 +17,7 @@ export const WAREHOUSE_TUNABLES = {
   cashCapCents: { value: 9_000_000_000_000_000, min: 9_000_000_000_000_000, max: 9_000_000_000_000_000, note: 'Engine limit: the safe-integer ceiling. The safe is full.' },
   startingCashCents: { value: 0, min: 0, max: 100_000, note: 'Cash a new warehouse opens with: nothing; the first shipments pay for the first hire.' },
   offlineCapMinutes: { value: 480, min: 30, max: 1440, note: 'The warehouse runs while the app is closed for at most this long (8 h, a shift and a night): the catch-up is the same sim stepped fast (P4), so the cap bounds how long reopening takes.' },
-  wmsMinuteTicks: { value: 4, min: 1, max: 60, note: 'WMS clock (W8): ticks to a warehouse minute (one a real second), so a warehouse day is 24 real minutes and the dock schedule, cutoffs and appointments read as times of day.' },
+  wmsMinuteTicks: { value: 4, min: 1, max: 60, note: 'WMS clock (W8): ticks to a warehouse minute (one a real second at 1x, five at the default 5x, W9), so a warehouse day is 24 real minutes at 1x and the dock schedule, cutoffs and appointments read as times of day.' },
   wmsDayStartMinute: { value: 360, min: 0, max: 1439, note: 'WMS clock: the minute of the day a new warehouse opens at (06:00, day 1).' },
   wmsSampleOrdersMin: { value: 10, min: 5, max: 30, note: 'WMS: fewest sample orders a new warehouse opens with (docs/wms-plan.md slice 1).' },
   wmsSampleOrdersMax: { value: 15, min: 5, max: 40, note: 'WMS: most sample orders a new warehouse opens with: enough to fill a phone screen of the order grid.' },

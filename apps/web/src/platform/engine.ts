@@ -14,6 +14,8 @@ export interface AwayRecap {
   readonly ranMs: number;
   /** Real minutes the warehouse runs while the app is closed, at the speed it ran at (W9). */
   readonly capMinutes: number;
+  /** The same cap in warehouse days, whatever the speed (W9). */
+  readonly capDays: number;
   /** The testing time skip ran it, not an absence. */
   readonly skipped: boolean;
   /** Cents shipments paid. */
@@ -52,6 +54,7 @@ export function awayRecap(before: WarehouseState, after: WarehouseState, awayMs:
     awayMs,
     ranMs,
     capMinutes: Math.floor(WAREHOUSE_TUNABLES.offlineCapMinutes.value / Math.max(1, speed)),
+    capDays: Math.floor(offlineCapTicks() / (WAREHOUSE_TUNABLES.wmsMinuteTicks.value * 1440)),
     skipped,
     earned: a.stats.earned - b.stats.earned,
     shipped: a.stats.shipped - b.stats.shipped,

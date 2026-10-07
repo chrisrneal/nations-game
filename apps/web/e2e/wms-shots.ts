@@ -2,7 +2,7 @@
  * Screenshots of the WMS screens (docs/wms-plan.md) on the 360 x 740 budget
  * phone: the home's live floor (W7) after five minutes, a worker's tasks
  * opened by a tap on the floor and from the Crew page (W8), the plan with
- * hiring, the order grid, scrolled sideways, filtered to exceptions, and
+ * hiring, its waves and labour (W9), the order grid, scrolled sideways, filtered to exceptions, and
  * (when they exist) an order's detail and the activity feed; the countries,
  * the inbound grid, the dock schedule and a PO, and the inventory grid (W6).
  * Also reports whether the page scrolls sideways. Run `npm run build` first,
@@ -97,6 +97,10 @@ async function main(): Promise<void> {
     await page.getByTestId('plan-hire-pick').tap();
     await page.waitForTimeout(1500);
     await shot(page, out, 'plan-changed');
+    await page.getByTestId('plan-release-now').scrollIntoViewIfNeeded();
+    await shot(page, out, 'plan-waves');
+    await page.getByTestId('needs').scrollIntoViewIfNeeded();
+    await shot(page, out, 'plan-labour');
     await page.getByTestId('plan-door').scrollIntoViewIfNeeded();
     await shot(page, out, 'plan-grow');
     await page.getByTestId('wms-tab-floor').tap();

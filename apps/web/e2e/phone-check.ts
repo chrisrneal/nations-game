@@ -11,6 +11,8 @@
  * on the floor opens their tasks; the Crew page lists every worker and a
  * worker's page shows what they do now and next; 60 fps on the floor with the
  * CPU slowed 4x; the plan changes in two taps and the floor shows it; the
+ * speed buttons pause and step the speed (W9); the wave interval, the balance
+ * plan and a move by need show on the floor (W9); the
  * testing time skip runs an hour and recaps it, and its earnings hire a
  * picker; the dock schedule shows appointments; export a file, clear site
  * data, import a busy warehouse (16 workers, 4 doors) and it resumes; 60 fps
@@ -208,6 +210,38 @@ async function main(): Promise<void> {
     await page.waitForFunction(() => Number(document.querySelector('[data-testid="wms-floor-canvas"]')?.getAttribute('data-pickers') ?? 0) === 7, undefined, { timeout: 4000 }).catch(() => undefined);
     check('the plan changes in two taps and the floor shows it: nearest bin, seven pickers', /Nearest bin.*7 pick \/ 2 receive/.test(plan) && Number(await canvas.getAttribute('data-pickers')) === 7, plan);
 
+    // Speed (W9): 5 warehouse minutes a second by default; pause stops the clock; the speed button steps 5, 10, 1 and back.
+    const clockNow = async (): Promise<string> => ((await page.getByTestId('clock').textContent()) ?? '').trim();
+    check('the warehouse runs at 5 warehouse minutes a second', (await page.getByTestId('speed').textContent()) === '5×', (await page.getByTestId('speed').textContent()) ?? '');
+    await page.getByTestId('pause').tap();
+    await page.waitForTimeout(300);
+    const paused = await clockNow();
+    await page.waitForTimeout(1500);
+    const stillPaused = await clockNow();
+    await page.getByTestId('pause').tap();
+    await page.waitForTimeout(1500);
+    check('pause stops the warehouse clock and a second tap runs it again', paused === stillPaused && (await clockNow()) !== paused, `${paused} / ${stillPaused} / ${await clockNow()}`);
+    const speeds: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      await page.getByTestId('speed').tap();
+      await page.waitForTimeout(400);
+      speeds.push((await page.getByTestId('speed').textContent()) ?? '');
+    }
+    check('the speed button steps 10x, 1x and back to 5x', speeds.join(' ') === '10× 1× 5×', speeds.join(' '));
+
+    // Waves and labour (W9): a 30-minute wave, the balance plan, and one person moved by need.
+    await page.getByTestId('wms-plan-chip').tap();
+    await page.getByTestId('wms-plan').waitFor();
+    await page.getByTestId('plan-wave-120').tap();
+    await page.getByTestId('plan-labor-balance').tap();
+    await page.getByTestId('needs').waitFor();
+    await touchTargets(page, 'WMS plan with labour');
+    await page.getByTestId('need-move-receive').tap();
+    await page.getByTestId('wms-tab-floor').tap();
+    await page.waitForFunction(() => /30 min.*6 pick \/ 3 receive · balance/.test(document.querySelector('[data-testid="wms-plan-chip"]')?.textContent ?? ''), undefined, { timeout: 4000 }).catch(() => undefined);
+    const labourPlan = (await page.getByTestId('wms-plan-chip').textContent()) ?? '';
+    check('waves every 30 min, balance by need, and a picker moved to receiving in three taps', /Waves 30 min.*6 pick \/ 3 receive · balance/.test(labourPlan), labourPlan);
+
     // The testing time skip: an hour at once, recapped; its earnings hire a picker.
     const beforeSkip = await savedTick(page);
     await page.getByTestId('settings').tap();
@@ -315,7 +349,8 @@ async function main(): Promise<void> {
     check('10 hours away: reopens to the recap inside 2 s (CPU slowed 4x)', reopenMs < 2000, `${reopenMs} ms from opening to the recap, saved at tick ${shifted} (was ${ticksBefore})`);
     const lines = await back.getByTestId('recap').locator('li').allTextContents();
     check('the recap is three lines', lines.length === 3, lines.join(' | '));
-    check('the recap says the offline cap stopped it after 8 hours', /ran for 8h 0m/.test(lines[0] ?? ''), lines[0] ?? '');
+    // At 5 warehouse minutes a second (W9) the 8-hour cap's ticks are 1 h 36 m of real time: 20 warehouse days.
+    check('the recap says the offline cap stopped it after 20 warehouse days', /ran for 1h 36m .*at most 20 warehouse days/.test(lines[0] ?? ''), lines[0] ?? '');
     await back.getByTestId('collect').tap();
     await back.getByTestId('recap').waitFor({ state: 'detached', timeout: 2000 });
     check('one tap collects and closes the recap', (await back.getByTestId('recap').count()) === 0);
