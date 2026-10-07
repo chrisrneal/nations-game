@@ -1,7 +1,7 @@
 /**
  * Screenshots for layout work: a Pixel 10 Pro XL (412 x 915 CSS px, DPR 3.25)
  * and the 360 x 740 budget phone, each with a new warehouse's floor, a busy
- * warehouse's floor (16 workers, 4 doors), its crew and a worker's tasks (W8). Run `npm run build` first, then `npx tsx e2e/shots.ts [outDir]`.
+ * warehouse's floor (40 workers, 4 inbound and 6 outbound doors), its crew and a worker's tasks (W8). Run `npm run build` first, then `npx tsx e2e/shots.ts [outDir]`.
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -50,7 +50,7 @@ async function main(): Promise<void> {
       writeFileSync(path, JSON.stringify({ format: 'warehouse-idle-save', version: 1, exportedAt: Date.now(), game: { save: session.save({ compact: true }), anchor: Date.now() } }));
       await page.getByTestId('settings').tap();
       await page.getByTestId('import-file').setInputFiles(path);
-      await page.waitForFunction(() => Number(document.querySelector('[data-testid="wms-floor-canvas"]')?.getAttribute('data-workers') ?? 0) === 16, undefined, { timeout: 5000 });
+      await page.waitForFunction(() => Number(document.querySelector('[data-testid="wms-floor-canvas"]')?.getAttribute('data-workers') ?? 0) === 40, undefined, { timeout: 5000 });
       await page.waitForTimeout(3000);
       await page.screenshot({ path: join(out, `${phone.name}-busy.png`) });
       const scroll = await page.evaluate(() => [document.documentElement.scrollHeight, window.innerHeight]);

@@ -185,10 +185,33 @@ export function openingShipDoors(tick: number): MWms['shipDoors'] {
   return Array.from({ length: n }, (_, i) => ({ door: i + 1, trailer: i + 1, departs: tick + Math.floor((T.wmsTrailerTicks.value * (i + 1)) / n) }));
 }
 
-/** Opens one more outbound door (RULES 9, W10): its first trailer backs in and leaves a trailer interval from now. */
+/**
+ * When a new outbound door's first trailer leaves (W10): in the middle of the
+ * longest wait between the trailers already on the timetable over the next
+ * trailer interval (the earliest such gap on a tie), so a new door fills the
+ * biggest gap.
+ */
+export function newDeparture(w: MWms, tick: number): number {
+  const every = T.wmsTrailerTicks.value;
+  // Each door's next departure, folded into (tick, tick + every].
+  const times = w.shipDoors.map((d) => tick + ((((d.departs - tick - 1) % every) + every) % every) + 1).sort((a, b) => a - b);
+  if (times.length === 0) return tick + every;
+  let bestAt = (times[0] as number) + every;
+  let bestGap = -1;
+  times.forEach((t, i) => {
+    const next = i + 1 < times.length ? (times[i + 1] as number) : (times[0] as number) + every;
+    if (next - t > bestGap) {
+      bestGap = next - t;
+      bestAt = t + Math.floor((next - t) / 2);
+    }
+  });
+  return bestAt > tick ? bestAt : bestAt + every;
+}
+
+/** Opens one more outbound door (RULES 9, W10): its first trailer backs in and leaves in the biggest gap of the timetable. */
 export function addShipDoor(w: MWms, tick: number): void {
   const door = w.shipDoors.length + 1;
-  w.shipDoors.push({ door, trailer: w.nextTrailerNo, departs: tick + T.wmsTrailerTicks.value });
+  w.shipDoors.push({ door, trailer: w.nextTrailerNo, departs: newDeparture(w, tick) });
   w.nextTrailerNo += 1;
   log(w, { tick, code: 'DOOR', line: 2, qty: door });
 }

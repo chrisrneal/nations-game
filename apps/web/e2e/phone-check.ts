@@ -15,7 +15,7 @@
  * plan and a move by need show on the floor (W9); the
  * testing time skip runs an hour and recaps it, and its earnings hire a
  * picker; the dock schedule shows appointments; export a file, clear site
- * data, import a busy warehouse (16 workers, 4 doors) and it resumes; 60 fps
+ * data, import a busy warehouse (40 workers, 4 inbound and 6 outbound doors) and it resumes; 60 fps
  * on the busy floor; reopens offline; closed for 10 hours (the autosave's
  * clock moved back), it reopens on a CPU slowed 4x inside the 2 s budget,
  * runs only the 8-hour offline cap, and shows a three-line recap that one tap
@@ -156,7 +156,7 @@ async function main(): Promise<void> {
     const canvas = page.getByTestId('wms-floor-canvas');
     const workers = Number(await canvas.getAttribute('data-workers'));
     const pickers = Number(await canvas.getAttribute('data-pickers'));
-    check('the app opens on the WMS floor, the whole crew on it', (await page.getByTestId('wms-tab-floor').getAttribute('aria-selected')) === 'true' && workers === 9 && pickers === 6, `${workers} workers, ${pickers} picking`);
+    check('the app opens on the WMS floor, the whole crew on it', (await page.getByTestId('wms-tab-floor').getAttribute('aria-selected')) === 'true' && workers === 20 && pickers === 14, `${workers} workers, ${pickers} picking`);
     const clockText = (await page.getByTestId('clock').textContent()) ?? '';
     check('the clock shows day 1 from 06:00', /^Day 1\s*0[67]:\d\d$/.test(clockText.trim()), clockText);
     check('cash shows at the top', /\$/.test((await page.getByTestId('cash').textContent()) ?? ''));
@@ -179,7 +179,7 @@ async function main(): Promise<void> {
     await page.getByTestId('wms-tab-crew').tap();
     await page.getByTestId('crew-list').waitFor();
     const rows = await page.locator('[data-testid^="crew-worker-"]').count();
-    check('the Crew page lists every worker', rows === 9, `${rows} rows`);
+    check('the Crew page lists every worker', rows === 20, `${rows} rows`);
     await noHorizontalScroll(page, 'crew');
     await touchTargets(page, 'crew');
     await page.getByTestId('crew-worker-1').tap();
@@ -205,10 +205,10 @@ async function main(): Promise<void> {
     await page.getByTestId('plan-pick-nearest').tap();
     await page.getByTestId('plan-crew-more').tap();
     await page.getByTestId('wms-tab-floor').tap();
-    await page.waitForFunction(() => /Nearest bin.*7 pick \/ 2 receive/.test(document.querySelector('[data-testid="wms-plan-chip"]')?.textContent ?? ''), undefined, { timeout: 4000 }).catch(() => undefined);
+    await page.waitForFunction(() => /Nearest bin.*15 pick \/ 5 dock/.test(document.querySelector('[data-testid="wms-plan-chip"]')?.textContent ?? ''), undefined, { timeout: 4000 }).catch(() => undefined);
     const plan = (await page.getByTestId('wms-plan-chip').textContent()) ?? '';
-    await page.waitForFunction(() => Number(document.querySelector('[data-testid="wms-floor-canvas"]')?.getAttribute('data-pickers') ?? 0) === 7, undefined, { timeout: 4000 }).catch(() => undefined);
-    check('the plan changes in two taps and the floor shows it: nearest bin, seven pickers', /Nearest bin.*7 pick \/ 2 receive/.test(plan) && Number(await canvas.getAttribute('data-pickers')) === 7, plan);
+    await page.waitForFunction(() => Number(document.querySelector('[data-testid="wms-floor-canvas"]')?.getAttribute('data-pickers') ?? 0) === 15, undefined, { timeout: 4000 }).catch(() => undefined);
+    check('the plan changes in two taps and the floor shows it: nearest bin, fifteen pickers', /Nearest bin.*15 pick \/ 5 dock/.test(plan) && Number(await canvas.getAttribute('data-pickers')) === 15, plan);
 
     // Speed (W9): 5 warehouse minutes a second by default; pause stops the clock; the speed button steps 5, 10, 1 and back.
     const clockNow = async (): Promise<string> => ((await page.getByTestId('clock').textContent()) ?? '').trim();
@@ -238,9 +238,9 @@ async function main(): Promise<void> {
     await touchTargets(page, 'WMS plan with labour');
     await page.getByTestId('need-move-receive').tap();
     await page.getByTestId('wms-tab-floor').tap();
-    await page.waitForFunction(() => /30 min.*6 pick \/ 3 receive · balance/.test(document.querySelector('[data-testid="wms-plan-chip"]')?.textContent ?? ''), undefined, { timeout: 4000 }).catch(() => undefined);
+    await page.waitForFunction(() => /30 min.*14 pick \/ 6 dock · balance/.test(document.querySelector('[data-testid="wms-plan-chip"]')?.textContent ?? ''), undefined, { timeout: 4000 }).catch(() => undefined);
     const labourPlan = (await page.getByTestId('wms-plan-chip').textContent()) ?? '';
-    check('waves every 30 min, balance by need, and a picker moved to receiving in three taps', /Waves 30 min.*6 pick \/ 3 receive · balance/.test(labourPlan), labourPlan);
+    check('waves every 30 min, balance by need, and a picker moved to the dock in three taps', /Waves 30 min.*14 pick \/ 6 dock · balance/.test(labourPlan), labourPlan);
 
     // The testing time skip: an hour at once, recapped; its earnings hire a picker.
     const beforeSkip = await savedTick(page);
@@ -268,8 +268,18 @@ async function main(): Promise<void> {
     await page.getByTestId('wms-tab-plan').tap();
     await page.getByTestId('plan-hire-pick').tap();
     await page.getByTestId('wms-tab-crew').tap();
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid^="crew-worker-"]').length === 10, undefined, { timeout: 4000 }).catch(() => undefined);
-    check('a hire adds a worker to the crew', (await page.locator('[data-testid^="crew-worker-"]').count()) === 10);
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid^="crew-worker-"]').length === 21, undefined, { timeout: 4000 }).catch(() => undefined);
+    check('a hire adds a worker to the crew', (await page.locator('[data-testid^="crew-worker-"]').count()) === 21);
+
+    // Outbound doors (W10): Out › Trucks lists each door's trailer, when it leaves and what is on it.
+    await page.getByTestId('wms-tab-outbound').tap();
+    await page.getByTestId('wms-trucks-tab').tap();
+    await page.getByTestId('wms-trucks').waitFor();
+    await noHorizontalScroll(page, 'trucks');
+    await touchTargets(page, 'trucks');
+    const doors = await page.locator('.truck-code').allTextContents();
+    const leaves = await page.locator('.truck-leaves').allTextContents();
+    check('Out › Trucks shows the three outbound doors and when each trailer leaves', doors.join(' ') === 'S1 S2 S3' && leaves.every((t) => /leaves \d\d:\d\d/.test(t)), `${doors.join(' ')}; ${leaves.join(' | ')}`);
 
     // Inbound: purchase orders booked into dock appointments (W8).
     await page.getByTestId('wms-tab-inbound').tap();
@@ -298,23 +308,23 @@ async function main(): Promise<void> {
     const busy = busyFile(profile);
     await page.getByTestId('settings').tap();
     await page.getByTestId('import-file').setInputFiles(busy.path);
-    await page.waitForFunction(() => Number(document.querySelector('[data-testid="wms-floor-canvas"]')?.getAttribute('data-workers') ?? 0) === 16, undefined, { timeout: 5000 }).catch(() => undefined);
-    check('import resumes the busy warehouse: 16 workers', Number(await canvas.getAttribute('data-workers')) === 16, `${await canvas.getAttribute('data-workers')} workers`);
+    await page.waitForFunction(() => Number(document.querySelector('[data-testid="wms-floor-canvas"]')?.getAttribute('data-workers') ?? 0) === 40, undefined, { timeout: 5000 }).catch(() => undefined);
+    check('import resumes the busy warehouse: 40 workers', Number(await canvas.getAttribute('data-workers')) === 40, `${await canvas.getAttribute('data-workers')} workers`);
     await noHorizontalScroll(page, 'busy floor');
     await touchTargets(page, 'busy floor');
     await page.waitForTimeout(1500);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
     const busyFps = await measureFps(page, 5000);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
-    check('60 fps on the busy floor: 16 workers, 4 doors (CPU slowed 4x)', busyFps.frames >= 55, `${busyFps.frames.toFixed(1)} fps, worst frame ${busyFps.worst.toFixed(0)} ms`);
+    check('60 fps on the busy floor: 40 workers, 4 inbound and 6 outbound doors (CPU slowed 4x)', busyFps.frames >= 55, `${busyFps.frames.toFixed(1)} fps, worst frame ${busyFps.worst.toFixed(0)} ms`);
 
     // Offline: the installed app reopens and continues from the autosave.
     await page.waitForTimeout(1000);
     await context.setOffline(true);
     await page.reload();
     await page.getByTestId('wms-floor').waitFor({ timeout: 8000 });
-    await page.waitForFunction(() => Number(document.querySelector('[data-testid="wms-floor-canvas"]')?.getAttribute('data-workers') ?? 0) === 16, undefined, { timeout: 5000 }).catch(() => undefined);
-    check('reopens offline and continues the warehouse', Number(await page.getByTestId('wms-floor-canvas').getAttribute('data-workers')) === 16);
+    await page.waitForFunction(() => Number(document.querySelector('[data-testid="wms-floor-canvas"]')?.getAttribute('data-workers') ?? 0) === 40, undefined, { timeout: 5000 }).catch(() => undefined);
+    check('reopens offline and continues the warehouse', Number(await page.getByTestId('wms-floor-canvas').getAttribute('data-workers')) === 40);
     await context.setOffline(false);
 
     // Away for 10 hours: close the app, move the autosave's wall clock back, reopen on a slow CPU.

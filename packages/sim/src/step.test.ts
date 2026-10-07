@@ -74,7 +74,10 @@ describe('commands (RULES 8)', () => {
     const first = T.wmsShipDoors.value + 1;
     s = act(s, { action: 'door', side: 'out' }).state;
     expect(s.wms.shipDoors).toHaveLength(first);
-    expect(s.wms.shipDoors[first - 1]).toEqual({ door: first, trailer: first, departs: T.wmsTrailerTicks.value });
+    // The opening trailers leave at 80, 160 and 240 ticks: the new door's first goes in the middle of the first longest gap (80 to 160), the next in the next (160 to 240).
+    expect(s.wms.shipDoors[first - 1]).toEqual({ door: first, trailer: first, departs: 120 });
+    const next = act(s, { action: 'door', side: 'out' }).state;
+    expect(next.wms.shipDoors.map((d) => d.departs)).toEqual([80, 160, 240, 120, 200]);
     expect(s.wms.doors).toBe(T.wmsDoors.value);
     expect(s.cash).toBe(1_000_000_000 - T.wmsShipDoorCostCents.value);
     expect(s.wms.events.find((e) => e.code === 'DOOR')).toMatchObject({ line: 2, qty: first });

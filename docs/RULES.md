@@ -332,8 +332,10 @@ A `wms` command; each logs an event, and a refused one says why.
 - *Open an outbound door* (W10): the fourth costs `wmsShipDoorCostCents`
   ($1,500), each further one `wmsShipDoorCostGrowthBp` (x2) more, up to
   `wmsMaxShipDoors` (6) (DOOR, line 2). Its first trailer backs in at once and
-  leaves `wmsTrailerTicks` later: one more trailer an hour, so packed orders
-  wait less and a big wave has room.
+  leaves in the middle of the longest wait between the trailers already on
+  the timetable over the next `wmsTrailerTicks` (the earliest such wait on a
+  tie): one more trailer an hour, so packed orders wait less and a big wave
+  has room.
 - Growth is in basis points: "grows by g" means `cost(n) = floor(cost(n-1) x
   g / 10000)`, so every machine computes the same integers.
 

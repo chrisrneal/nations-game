@@ -72,7 +72,7 @@ async function determinism(): Promise<void> {
 async function bench(): Promise<void> {
   const ticks = flag('ticks', 115_200);
   const runs = flag('runs', 5);
-  console.log(`catch-up benchmark: ${ticks} ticks (${(ticks / 14_400).toFixed(1)} h) of a busy warehouse (16 workers, 4 doors)`);
+  console.log(`catch-up benchmark: ${ticks} ticks (${(ticks / 14_400).toFixed(1)} h) of a busy warehouse (40 workers, 4 inbound and 6 outbound doors)`);
   benchWarehouseCatchUp(ticks, 1, () => performance.now()); // warm-up
   console.log(`node:     ${stats(benchWarehouseCatchUp(ticks, runs, () => performance.now()))}`);
   if (useBrowser && findChromium() !== undefined) {

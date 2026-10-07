@@ -47,5 +47,5 @@ export {
   type WmsSupplier,
 } from './wms/catalog.ts';
 export { createWms } from './wms/generate.ts';
-export { WMS_PICK_RULES, WMS_RELEASE_MODES, defaultPolicy, doorCost, hireCost } from './wms/policy.ts';
+export { WMS_PICK_RULES, WMS_RELEASE_MODES, defaultPolicy, doorCost, hireCost, shipDoorCost } from './wms/policy.ts';
 export { PICK_RULE_NAMES, RELEASE_NAMES, eventText, wmsView } from './wms/view.ts';

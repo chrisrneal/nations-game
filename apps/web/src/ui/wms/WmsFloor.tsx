@@ -63,7 +63,9 @@ export function WmsFloor(props: { store: WarehouseStore; onWorker: (id: number) 
       rev = v.wms.rev;
       latest.current = { wms: v.wms, tick: v.tick, perMinute: v.clock.ticksPerMinute };
       const m = model.current as WmsFloorModel;
-      if (m.layout === null && box.current !== null) {
+      // A new layout the first time, and whenever a door opens (inbound or outbound, W10): the floor makes room for it.
+      const shape = m.layout?.shape;
+      if ((shape === undefined || shape.doors !== v.wms.layout.doors || shape.shipDoors !== v.wms.layout.shipDoors) && box.current !== null) {
         const r = box.current.getBoundingClientRect();
         if (r.width > 0 && r.height > 0) m.setLayout(floorLayout(r.width, r.height, v.wms.layout));
       }
@@ -207,9 +209,8 @@ function drawStill(ctx: CanvasRenderingContext2D, l: FloorLayout, w: WmsView, pe
   const transit = w.pos.filter((p) => p.status === 'IN TRANSIT').length;
   const yard = w.pos.filter((p) => p.status === 'ARRIVED');
   label(ctx, 'INBOUND', 8, 9);
-  label(ctx, `${transit} on the road`, l.width - 8, 9, C.label, 9, 'right');
   stroke(ctx, l.yard, C.rule, [3, 3]);
-  label(ctx, yard.length === 0 ? 'YARD' : `YARD ${yard.length}`, l.yard.left + 4, l.yard.top + 7, yard.length > 0 ? C.low : C.label, 8);
+  label(ctx, `${yard.length === 0 ? 'YARD' : `YARD ${yard.length}`} · ${transit} on road`, l.yard.left + 4, l.yard.top + 7, yard.length > 0 ? C.low : C.label, 7);
   yard.slice(0, 4).forEach((po, i) => {
     const x = l.yard.left + 4 + (i % 2) * ((l.yard.right - l.yard.left - 8) / 2);
     const y = l.yard.top + 14 + Math.floor(i / 2) * 13;
@@ -293,7 +294,7 @@ function drawStill(ctx: CanvasRenderingContext2D, l: FloorLayout, w: WmsView, pe
   ] as const) {
     const r = l.zones[z];
     stroke(ctx, r, C.rule, [3, 3]);
-    label(ctx, `${name} ${counts[z]}`, r.left + 1, r.top - 7, counts[z] > 0 ? C.text : C.label, 8);
+    label(ctx, `${name} ${counts[z]}`, r.left + 1, r.top - 7, counts[z] > 0 ? C.text : C.label, 7);
   }
   const narrow = (l.shipCols[0]?.right ?? 0) - (l.shipCols[0]?.left ?? 0) < 52;
   l.shipCols.forEach((c, i) => {
