@@ -12,6 +12,27 @@ passengers, security). The Nations log is at commit `67d1d92`.
 
 ## Session log
 
+### 2026-10-07 - Multi-item orders picked into totes (lanes U, D; owner request)
+**What changed.** About a third of the orders a picker takes are now
+multi-item orders of 2 to 4 items. The picker pushes a blue tote, walks to a
+different rack location for each item (along the same aisle where it can,
+otherwise out the aisle's left end and into the next), takes a carton at each
+(that location empties and flashes), and the tote fills as it goes. Then it
+takes the full tote down to staging like a single carton. Each item is one
+ticket off the board and one unit of stock, so every count on screen is still
+exact. This is a screen change only: in the game's rules every order is still
+one unit (RULES 3), and RULES 14 now says how orders group into totes.
+**Checks.** `npm test` (366; new: tote orders are 2-4 items, about a third of
+orders, each item from a different location, and the 60 orders picked are
+exactly 60 items) and `npm run check` pass. Phone check 65/65 at 360 x 740
+(57.2 and 57.8 fps with the CPU slowed 4x). At 412 x 915 the 60 fps check
+read 47.5-54.0 fps, against 54.4-54.6 for the unchanged game on this
+machine; see docs/GAPS.md.
+**How to see it.** Open the app and watch the pickers leave the order board:
+some push a blue tote that fills with cartons, one rack location at a time.
+**What is left.** Making big orders a real rule (more stock and picking time
+per order) needs a decision record; see docs/GAPS.md.
+
 ### 2026-10-06 - Picked orders leave the racks on the left (lanes U, D; owner request)
 **What changed.** A picker used to carry its carton out of the right end of
 the aisle and down the same cross aisle the inbound forklifts use, so

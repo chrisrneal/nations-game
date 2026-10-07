@@ -12,6 +12,8 @@ const TINT: Readonly<Record<Tint, string>> = { out: '#8fd0ff', box: BOX, express
 const PICKER = '#d9e8ff';
 const FORKLIFT = '#fff06a';
 const PICK_SPOT = 'rgb(143 208 255 / 13%)';
+/** A multi-item order's tote, filling with its cartons. */
+const TOTE = '#4f7fd0';
 /** The flash on a location that just filled or emptied: put away, picked, replenished. */
 const MARK: Readonly<Record<Mark['kind'], string>> = { put: '#d7b4ff', pick: '#8fd0ff', rep: FORKLIFT };
 /** A truck's parcel spaces: empty, loaded, and all loaded (it leaves full). */
@@ -30,7 +32,7 @@ export function lanesFor(level: number): number {
  * trucks replenish the floor pick locations from reserve; new orders come in
  * at the order desk and wait on the order board (the real backlog); pickers
  * take the oldest down an aisle, pick a carton from a floor pick location and
- * carry it back out past the board (left, clear of the forklifts' cross
+ * carry it (a multi-item order in a tote, one location an item) back out past the board (left, clear of the forklifts' cross
  * aisle on the right), through any export stations, to the staging lanes, one lane per
  * dock, where it waits to be loaded onto a truck at the outbound docks.
  * Tapping picking sends extra pickers (RULES 6). The stations, racks and lanes are DOM; the goods are
@@ -515,7 +517,7 @@ function drawLoads(ctx: CanvasRenderingContext2D, g: FlowGeometry, loads: readon
 /**
  * Everything on the move, batched by colour, one path each per frame: order
  * tickets as dots, cartons as squares, pickers as figures behind what they
- * carry, forklifts and reach trucks as yellow bodies behind their forks
+ * carry (a multi-item order's tote filling as it is picked), forklifts and reach trucks as yellow bodies behind their forks
  * (`booths`: the inbound dock's stations, before which stock is on the dock,
  * not a forklift).
  */
@@ -524,6 +526,7 @@ function drawDots(ctx: CanvasRenderingContext2D, flow: FlowModel, now: number, b
   const boxes = new Path2D();
   const people = new Path2D();
   const trucks = new Path2D();
+  const totes = new Path2D();
   for (const d of flow.dots) {
     if (d.alpha < 1 || !visible(d, now)) continue;
     const back = d.x - d.dir * 4;
@@ -537,6 +540,13 @@ function drawDots(ctx: CanvasRenderingContext2D, flow: FlowModel, now: number, b
     if (d.kind === 'dep' && (d.phase === 'pick' || d.phase === 'carry')) {
       people.moveTo(back + 2.1, d.y);
       people.arc(back, d.y, 2.1, 0, Math.PI * 2);
+      if (d.items > 1) {
+        // A multi-item order: a tote, filled as far as its items are picked.
+        totes.rect(d.x - 3.6, d.y - 2.7, 7.2, 5.4);
+        const taken = d.items - d.left;
+        if (taken > 0) boxes.rect(d.x - 2.2, d.y - 1.3, (4.4 * taken) / d.items, 2.6);
+        continue;
+      }
       // Walking to the rack with the order in hand: the picker is enough.
       if (d.tint !== 'box') continue;
     }
@@ -552,6 +562,8 @@ function drawDots(ctx: CanvasRenderingContext2D, flow: FlowModel, now: number, b
   ctx.fill(people);
   ctx.fillStyle = FORKLIFT;
   ctx.fill(trucks);
+  ctx.fillStyle = TOTE;
+  ctx.fill(totes);
   ctx.fillStyle = BOX;
   ctx.fill(boxes);
   // Fading ones (cancelled) one by one: there are only ever a few.

@@ -1,6 +1,6 @@
 import type { WarehouseEvent, WarehouseView, DockView, Stats } from '@warehouse/contracts';
 import { describe, expect, it } from 'vitest';
-import { DOTS_MAX, FlowModel, MAZE_MAX, PITCH, boardSpot, choosePerDot, laneCount, laneSpots, parcelSpots, rackSlots, visible, type FlowGeometry, type Mark, type Rect } from './flow.ts';
+import { DOTS_MAX, FlowModel, MAZE_MAX, PITCH, boardSpot, choosePerDot, laneCount, laneSpots, parcelSpots, rackSlots, visible, type Dot, type FlowGeometry, type Mark, type Rect } from './flow.ts';
 
 const STATS: Stats = { earned: 0, shipments: 0, fullShipments: 0, orders: 0, missed: 0, expresses: 0, pos: 0, received: 0, taps: 0 };
 
@@ -343,6 +343,43 @@ describe('goods on the floor (RULES 14)', () => {
     expect(picked).toBeGreaterThan(0);
     expect(model.queue.length).toBeLessThanOrEqual(2);
     for (let i = 0; i < 600; i++) model.advance(16, (now += 16), GEO);
+    expect(model.dots.filter((d) => d.kind === 'dep')).toHaveLength(0);
+  });
+
+  it('some orders have several items: the picker fills a tote from a different location for each, then takes it to staging', () => {
+    const model = new FlowModel();
+    let tick = feed(model, 0, 1, (t) => view(t, { orderPerTick: 0, backlog: 60_000 }));
+    let now = tick * 250;
+    for (let i = 0; i < 60; i++) model.advance(16, (now += 16), GEO);
+    const stops = new Map<Dot, { left: number; at: string[] }>();
+    const sizes: number[] = [];
+    for (let k = 0; k < 120; k++) {
+      tick = feed(model, tick, 1, (t) => view(t, { orderPerTick: 0, backlog: Math.max(0, 60_000 - t * 600) }));
+      for (let i = 0; i < 16; i++) {
+        model.advance(16, (now += 16), GEO);
+        for (const d of model.dots) {
+          if (d.kind !== 'dep' || d.phase === 'desk' || d.phase === 'board') continue;
+          let seen = stops.get(d);
+          if (seen === undefined) {
+            seen = { left: d.items, at: [] };
+            stops.set(d, seen);
+            sizes.push(d.items);
+          }
+          // Each item is taken where the picker stands, reaching into a rack location.
+          if (d.left < seen.left) seen.at.push(`${d.x},${d.y}`);
+          seen.left = d.left;
+        }
+      }
+    }
+    expect(sizes.every((n) => n >= 1 && n <= 4)).toBe(true);
+    const multi = [...stops.entries()].filter(([d]) => d.items > 1);
+    expect(multi.length).toBeGreaterThan(sizes.length * 0.15);
+    expect(multi.length).toBeLessThan(sizes.length * 0.6);
+    // Every order picked is all its items: 60 orders in all, however they were grouped.
+    expect(sizes.reduce((a, b) => a + b, 0)).toBe(60);
+    for (const [, seen] of multi) expect(new Set(seen.at).size).toBe(seen.at.length);
+    expect(multi.some(([d, seen]) => seen.at.length === d.items)).toBe(true);
+    for (let i = 0; i < 900; i++) model.advance(16, (now += 16), GEO);
     expect(model.dots.filter((d) => d.kind === 'dep')).toHaveLength(0);
   });
 
