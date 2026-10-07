@@ -85,3 +85,12 @@ export function binCode(index: number): string {
   const aisle = LETTERS[Math.floor(index / 160) % LETTERS.length];
   return `${aisle}-${String(bay).padStart(2, '0')}-${level}${position}`;
 }
+
+/** Lines per hour is measured over this many buckets of `WMS_RATE_BUCKET_TICKS` (16 x 15 s = 4 minutes). */
+export const WMS_RATE_BUCKETS = 16;
+export const WMS_RATE_BUCKET_TICKS = 60;
+
+/** Statuses after which nothing more happens to an order. */
+export function isClosed(status: string): boolean {
+  return status === 'SHIPPED' || status === 'CANCELLED';
+}

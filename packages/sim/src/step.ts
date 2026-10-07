@@ -1,4 +1,4 @@
-import type { WarehouseCommand, WarehouseEvent, WarehouseState, BoostId, BoostState, DockState, Levels, PoState, RngState, Stats, UpgradeId, WmsState } from '@warehouse/contracts';
+import type { WarehouseCommand, WarehouseEvent, WarehouseState, BoostId, BoostState, DockState, Levels, PoState, RngState, Stats, UpgradeId } from '@warehouse/contracts';
 import { randomInt } from './rng.ts';
 import { BOOST_IDS, UPGRADE_IDS } from './catalog.ts';
 import { warehouseCommandProblem } from './commands.ts';
@@ -7,6 +7,7 @@ import { expressChanceBp } from './perks.ts';
 import { boostProblem, boostTicks, cashCap, derive, lockReason, orderBpAt, rushed, starsFor, turnTicksFor, upgradeCost, type Derived } from './rules.ts';
 import { arrivingDock, arrivingPo, openWarehouse } from './state.ts';
 import { WAREHOUSE_TUNABLES as T } from './tunables.ts';
+import { cloneWms, wmsStep, type MWms } from './wms/tick.ts';
 
 const BP = 10_000;
 
@@ -33,8 +34,7 @@ interface MState {
   boosts: Record<BoostId, Mutable<BoostState>>;
   run: MStats;
   life: MStats;
-  /** Not stepped yet (docs/wms-plan.md slice 2): shared, never changed in place. */
-  wms: WmsState;
+  wms: MWms;
 }
 
 function clone(s: WarehouseState): MState {
@@ -57,7 +57,7 @@ function clone(s: WarehouseState): MState {
     boosts: { flashSale: { ...s.boosts.flashSale }, allHands: { ...s.boosts.allHands }, surge: { ...s.boosts.surge } },
     run: { ...s.run },
     life: { ...s.life },
-    wms: s.wms,
+    wms: cloneWms(s.wms),
   };
 }
 
@@ -312,6 +312,7 @@ function tickInPlace(m: MState, commands: readonly WarehouseCommand[], d: Derive
   const start = m.tick % n;
   for (let k = 0; k < n; k++) dockTick(m, (start + k) % n, current, events);
   boostClocks(m);
+  if (m.tick % T.wmsStepTicks.value === 0) wmsStep(m.wms, m.tick, m.levels.contract);
   m.tick += 1;
   return current;
 }

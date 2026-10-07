@@ -428,6 +428,23 @@ disagree.
 | `wmsStockCoverMinPct` | 60 | 0 | 100 | WMS: least stock a SKU opens with, as % of the units ordered of it: under 100 some lines will be short. |
 | `wmsStockCoverMaxPct` | 180 | 100 | 400 | WMS: most stock a SKU opens with, as % of the units ordered of it. |
 | `wmsEventsKept` | 200 | 50 | 1000 | WMS: activity events kept in State (the oldest drop off); bounds the save and the feed. |
+| `wmsStepTicks` | 4 | 1 | 8 | WMS: it steps once every this many ticks (1 s): timestamps a WMS shows are seconds, and 24 h of catch-up stays cheap. |
+| `wmsPickMilliPerSec` | 650 | 200 | 4000 | WMS: milli-units a picker picks a second (0.65): six pickers keep up with an order every 25 s of about 80 units with a little to spare, so a queue forms when luck runs bad. |
+| `wmsFirstWaveTicks` | 120 | 0 | 1200 | WMS: ticks from opening to the first automatic wave (30 s): long enough to see NEW orders and release them by hand. |
+| `wmsWaveTicks` | 240 | 40 | 2400 | WMS: ticks between automatic waves (60 s): every NEW order not on hold is released. |
+| `wmsOrderMinTicks` | 80 | 20 | 1200 | WMS: shortest gap before the next order arrives (20 s). |
+| `wmsOrderMaxTicks` | 120 | 40 | 2400 | WMS: longest gap before the next order arrives (30 s). |
+| `wmsMaxOpenOrders` | 40 | 10 | 300 | WMS: no new order arrives while this many are open, so a long absence cannot swamp the floor. |
+| `wmsKeepClosedOrders` | 40 | 0 | 300 | WMS: shipped and cancelled orders kept on the grid; older ones drop off. |
+| `wmsPackTicks` | 20 | 0 | 240 | WMS: ticks from PICKED (or SHORT) to PACKED (5 s). |
+| `wmsStageTicks` | 20 | 0 | 240 | WMS: ticks from PACKED to STAGED (5 s). |
+| `wmsLoadTicks` | 20 | 0 | 240 | WMS: ticks from STAGED to LOADED (5 s). |
+| `wmsShipTicks` | 20 | 0 | 240 | WMS: ticks from LOADED to SHIPPED (5 s). |
+| `wmsShortPickChanceBp` | 300 | 0 | 2000 | WMS: chance a picker finds a bin short of what was allocated (3%): a SHORT PICK of 1 unit up to the whole line. |
+| `wmsReplenTicks` | 240 | 40 | 2400 | WMS: ticks between replenishment runs (60 s). |
+| `wmsReorderUnits` | 40 | 0 | 500 | WMS: a SKU with fewer units available than this is replenished. |
+| `wmsReplenUnits` | 120 | 10 | 1000 | WMS: units a replenishment adds to a SKU. |
+| `wmsGoodwillStart` | 50 | 0 | 100 | WMS: goodwill (0-100) every destination country starts at. |
 
 ## 13. Invariants
 
@@ -584,3 +601,37 @@ picking, stock or pacing in RULES 3-11.
 - **Pickers.** `wmsPickers` (6), all idle.
 - **Log.** One ORD CRT event per order with its units; the latest
   `wmsEventsKept` (200) events are kept.
+- **The step.** The WMS steps every `wmsStepTicks` ticks (1 s), on its own
+  stream, in this order: a new order, a wave, replenishment, allocation,
+  picking, picker assignment, then each order's cutoff and timed moves.
+- **New orders.** One arrives every `wmsOrderMinTicks`-`wmsOrderMaxTicks`
+  ticks (20-30 s) from a customer on the current contract, unless
+  `wmsMaxOpenOrders` (40) are open. Shipped and cancelled orders beyond the
+  latest `wmsKeepClosedOrders` (40) drop off the grid.
+- **Waves.** The first automatic wave is `wmsFirstWaveTicks` after opening
+  (30 s), then one every `wmsWaveTicks` (60 s): every NEW order not on hold
+  is RELEASED in one wave (WAVE REL per order) and allocated at once.
+- **Allocation.** Each open line takes what its SKU has available (on hand
+  minus allocated), up to what it ordered (ALLOC). A line given less is short
+  by the rest (ALLOC SHORT); a line given nothing is SHORT and tries again
+  every step until stock comes or its order finishes picking. An order given
+  nothing at all is a BACKORDER and tries again every step.
+- **Replenishment.** Every `wmsReplenTicks` (60 s) each SKU with fewer than
+  `wmsReorderUnits` (40) available gains `wmsReplenUnits` (120) (REPLEN).
+- **Picking.** `wmsPickers` (6) pickers each pick one line at a time at
+  `wmsPickMilliPerSec` (0.65 units a second). An idle picker takes the
+  waiting allocated line with the best priority, then the earliest ship-by,
+  then the lowest order and line number (PICK START; the order is PICKING).
+  At the end of the line the picker confirms it (PICK CONF): the allocated
+  units leave the bin, but with chance `wmsShortPickChanceBp` (3%) 1 to all
+  of them were not there (SHORT PICK): the line is short by those. A line
+  with nothing picked goes back to waiting for stock.
+- **Packing to shipping.** When no line of an order is waiting for or under
+  a picker, the order is PICKED (SHORT if any unit is short; back to
+  BACKORDER if nothing at all was picked). It then moves to PACKED, STAGED,
+  LOADED and SHIPPED after `wmsPackTicks`, `wmsStageTicks`, `wmsLoadTicks`
+  and `wmsShipTicks` (5 s each), logging PACK, STAGE, LOAD and SHIP.
+- **Cutoffs and OTIF.** An open order whose ship-by tick passes logs CUTOFF
+  MISS once and is late. A shipped order is on time if it was never late and
+  in full if no line is short; on time and in full is OTIF. Totals since
+  opening and per destination country are kept for the KPI strip.
