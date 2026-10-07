@@ -57,6 +57,35 @@ export const WMS_DESTINATIONS: readonly WmsDestination[] = [
   { iso: 'AUS', flag: '🇦🇺', name: 'Australia' },
 ];
 
+/** A supplier the WMS buys from (W6), and the SKUs it supplies. */
+export interface WmsSupplier {
+  readonly name: string;
+  readonly skus: readonly number[];
+}
+
+/** Every SKU has exactly one supplier; a planning run raises at most one PO per supplier. */
+export const WMS_SUPPLIERS: readonly WmsSupplier[] = [
+  { name: 'Prairie Grain', skus: [0, 1, 2, 3] },
+  { name: 'Nordic Steel', skus: [4, 5] },
+  { name: 'Andes Energy', skus: [6, 7] },
+  { name: 'SunGrid', skus: [8, 9] },
+  { name: 'Silicon Fdry', skus: [10] },
+  { name: 'MedLine', skus: [11, 12, 13] },
+  { name: 'ClearFlow', skus: [14] },
+  { name: 'Delta Cotton', skus: [15] },
+];
+
+export function supplierAt(index: number): WmsSupplier {
+  return WMS_SUPPLIERS[index % WMS_SUPPLIERS.length] as WmsSupplier;
+}
+
+/** The first PO number a warehouse issues (W6). */
+export const WMS_FIRST_PO_NO = 50_001;
+
+export function poCode(no: number): string {
+  return `PO-${no}`;
+}
+
 /** The first order number a warehouse issues. */
 export const WMS_FIRST_ORDER_NO = 10_234;
 

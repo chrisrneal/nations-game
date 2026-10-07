@@ -85,15 +85,19 @@ describe('WMS waves and allocation (slice 2)', () => {
     ]);
   });
 
-  it('a backorder allocates once replenishment brings stock', () => {
-    const w = wms([order(1, [line(1, 2, 6)])], {}, { nextReplenAt: 2 * STEP });
-    wmsStep(w, 0, 0);
-    expect(w.orders[0]?.status).toBe('BACKORDER');
-    run(w, STEP, 2);
-    expect(codes(w)).toContain('REPLEN');
-    expect(w.orders[0]?.lines[0]?.allocated).toBe(6);
-    expect(w.orders[0]?.status).toBe('PICKING');
-    expect(w.inventory[2]?.onHand).toBe(T.wmsReplenUnits.value);
+  it('a backorder allocates once a purchase order is received and put away (W6)', () => {
+    withTunables({ wmsPoLateChanceBp: 0, wmsPoLeadMinTicks: 40, wmsPoLeadMaxTicks: 40, wmsRcvShortChanceBp: 0, wmsDamageChanceBp: 0, wmsCountVarianceBp: 0, wmsShortPickChanceBp: 0 }, () => {
+      const w = wms([order(1, [line(1, 2, 6)])], {}, { nextReplenAt: 2 * STEP });
+      wmsStep(w, 0, 0);
+      expect(w.orders[0]?.status).toBe('BACKORDER');
+      run(w, STEP, 150);
+      expect(codes(w)).toEqual(expect.arrayContaining(['PO CRT', 'ARRIVE', 'DOCK', 'RCV', 'PUTAWAY', 'PO CLOSE']));
+      expect(codes(w)).not.toContain('REPLEN');
+      expect(w.orders[0]?.lines[0]?.allocated).toBe(6);
+      expect(w.orders[0]?.status).not.toBe('BACKORDER');
+      // Ordered up to the reorder point plus a PO's worth, as the order was waiting for 6 of them.
+      expect(w.pos.find((po) => po.lines.some((l) => l.sku === 2))?.lines.find((l) => l.sku === 2)?.expected).toBe(T.wmsReorderUnits.value + T.wmsReplenUnits.value + 6);
+    });
   });
 });
 

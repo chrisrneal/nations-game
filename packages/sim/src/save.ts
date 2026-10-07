@@ -2,7 +2,7 @@ import type { WarehouseCommand, WarehouseSaveFile, WarehouseState } from '@wareh
 import { hashState } from './hash.ts';
 import { WAREHOUSE_SCHEMA_VERSION } from './state.ts';
 import { advanceMany, step } from './step.ts';
-import { createWms } from './wms/generate.ts';
+import { createWms, emptyInbound } from './wms/generate.ts';
 
 export type Migration = (save: Record<string, unknown>) => Record<string, unknown>;
 
@@ -20,6 +20,10 @@ export type Migration = (save: Record<string, unknown>) => Record<string, unknow
  *   way, which gives the same orders and stock with the new fields.
  * - 3 to 4 (W5, WMS slice 7): every order gains `expedited: false`; the WMS
  *   is otherwise kept exactly as saved.
+ * - 4 to 5 (W6, inbound and inventory): the WMS gains purchase orders (none
+ *   yet), receivers, a cycle-count clock and inbound totals, and each SKU
+ *   gains `picked: 0`, `counted: -1` and `variance: 0`. Orders, stock and the
+ *   log are kept exactly as saved; the next planning run raises the POs.
  *
  * Old rules are not kept, so a migration changes only the snapshot, and
  * `migrateWarehouseSave` replays the history since it under today's rules and
@@ -42,6 +46,12 @@ export const WAREHOUSE_MIGRATIONS: Readonly<Record<number, Migration>> = {
     const snapshot = save.snapshot as WarehouseState;
     const orders = snapshot.wms.orders.map((o) => ({ ...o, expedited: false }));
     return { ...save, schemaVersion: 4, snapshot: { ...snapshot, schemaVersion: 4, wms: { ...snapshot.wms, orders } } };
+  },
+  4: (save) => {
+    const snapshot = save.snapshot as WarehouseState;
+    const inventory = snapshot.wms.inventory.map((s) => ({ ...s, picked: 0, counted: -1, variance: 0 }));
+    const wms = { ...snapshot.wms, inventory, ...emptyInbound(snapshot.tick) };
+    return { ...save, schemaVersion: 5, snapshot: { ...snapshot, schemaVersion: 5, wms } };
   },
 };
 

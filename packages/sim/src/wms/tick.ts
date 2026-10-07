@@ -1,36 +1,14 @@
-import type { WarehouseEvent, WmsEvent, WmsLine, WmsOrder, WmsState } from '@warehouse/contracts';
+import type { WarehouseEvent, WmsOrder } from '@warehouse/contracts';
 import { mulDiv } from '../math.ts';
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
 import { WMS_RATE_BUCKETS, WMS_RATE_BUCKET_TICKS, destinationAt, isClosed } from './catalog.ts';
+import { cycleCount, planReorders, stepInbound } from './inbound.ts';
+import { log, type MLine, type MOrder, type MPicker, type MWms } from './mutable.ts';
 import { Roller, rollOrder, unitsOf } from './orders.ts';
 
 const BP = 10_000;
 
-type DeepMutable<V> = { -readonly [K in keyof V]: V[K] extends readonly (infer U)[] ? DeepMutable<U>[] : V[K] extends object ? DeepMutable<V[K]> : V[K] };
-export type MWms = DeepMutable<WmsState>;
-export type MOrder = DeepMutable<WmsOrder>;
-export type MLine = DeepMutable<WmsLine>;
-
-/** A copy the step may change in place (P4). Events are never changed, so they are shared. */
-export function cloneWms(w: WmsState): MWms {
-  return {
-    ...w,
-    rng: { ...w.rng },
-    orders: w.orders.map((o) => ({ ...o, lines: o.lines.map((l) => ({ ...l })) })),
-    inventory: w.inventory.map((s) => ({ ...s })),
-    pickers: w.pickers.map((p) => ({ ...p })),
-    events: [...w.events],
-    stats: { ...w.stats },
-    dests: w.dests.map((d) => ({ ...d })),
-    recent: [...w.recent],
-  };
-}
-
-/** Appends to the activity log, keeping the latest `wmsEventsKept`. */
-export function log(w: MWms, e: Pick<WmsEvent, 'tick' | 'code'> & Partial<WmsEvent>): void {
-  w.events.push({ order: 0, line: 0, sku: -1, qty: 0, of: 0, picker: 0, ...e });
-  if (w.events.length > T.wmsEventsKept.value) w.events.splice(0, w.events.length - T.wmsEventsKept.value);
-}
+export { cloneWms, log, type MLine, type MOrder, type MWms } from './mutable.ts';
 
 export function findOrder(w: MWms, no: number): MOrder | undefined {
   return w.orders.find((o) => o.no === no);
@@ -79,14 +57,6 @@ function allocate(w: MWms, o: MOrder, tick: number): void {
   if (o.status === 'RELEASED' || o.status === 'BACKORDER') o.status = o.lines.some((l) => l.allocated > 0) ? 'ALLOCATED' : 'BACKORDER';
 }
 
-function replenish(w: MWms, tick: number): void {
-  for (const stock of w.inventory) {
-    if (stock.onHand - stock.allocated >= T.wmsReorderUnits.value) continue;
-    stock.onHand += T.wmsReplenUnits.value;
-    log(w, { tick, code: 'REPLEN', sku: stock.sku, qty: T.wmsReplenUnits.value });
-  }
-}
-
 /** Milli-units a picker picks in one WMS step. */
 function pickPerStep(): number {
   return Math.floor((T.wmsPickMilliPerSec.value * T.wmsStepTicks.value * T.tickMs.value) / 1000);
@@ -100,11 +70,12 @@ function confirm(w: MWms, r: Roller, o: MOrder, line: MLine, picker: number, tic
     missing = r.int(1, line.allocated);
     log(w, { tick, code: 'SHORT PICK', order: o.no, line: line.no, sku: line.sku, qty: missing, of: line.allocated, picker });
   }
+  line.picked = line.allocated - missing;
   if (stock !== undefined) {
     stock.onHand = Math.max(0, stock.onHand - line.allocated);
     stock.allocated = Math.max(0, stock.allocated - line.allocated);
+    stock.picked += line.picked;
   }
-  line.picked = line.allocated - missing;
   line.allocated = line.picked;
   line.short = line.ordered - line.picked;
   line.status = line.short > 0 ? 'SHORT' : 'PICKED';
@@ -142,7 +113,7 @@ function pickable(o: MOrder): boolean {
 }
 
 /** Puts a picker on a line (RULES 16): the line and its order go to PICKING. */
-export function startPick(w: MWms, picker: DeepMutable<WmsState['pickers'][number]>, o: MOrder, line: MLine, tick: number): void {
+export function startPick(w: MWms, picker: MPicker, o: MOrder, line: MLine, tick: number): void {
   picker.order = o.no;
   picker.line = line.no;
   picker.progress = 0;
@@ -273,7 +244,9 @@ function purge(w: MWms): void {
 
 /**
  * One WMS step (RULES 16), every `wmsStepTicks` ticks: a new order may arrive,
- * the wave planner releases NEW orders, low SKUs are replenished, released and
+ * the wave planner releases NEW orders, reorder planning raises POs for low
+ * SKUs, inbound trucks arrive, dock, are received and put away (W6), a cycle
+ * count may run, released and
  * backordered lines are allocated, pickers pick and confirm, idle pickers take
  * the next line, finished orders pack, stage, load and ship, and cutoffs pass.
  * Returns the cents shipments earned (slice 8); `payCents` is an idle order's
@@ -282,7 +255,11 @@ function purge(w: MWms): void {
 export function wmsStep(w: MWms, tick: number, contract: number, payCents = 0, events: WarehouseEvent[] | null = null): number {
   let earned = 0;
   const r = new Roller(w.rng);
-  if (tick % WMS_RATE_BUCKET_TICKS < T.wmsStepTicks.value) w.recent[Math.floor(tick / WMS_RATE_BUCKET_TICKS) % WMS_RATE_BUCKETS] = 0;
+  if (tick % WMS_RATE_BUCKET_TICKS < T.wmsStepTicks.value) {
+    const bucket = Math.floor(tick / WMS_RATE_BUCKET_TICKS) % WMS_RATE_BUCKETS;
+    w.recent[bucket] = 0;
+    w.recentIn[bucket] = 0;
+  }
   if (tick >= w.nextOrderAt) {
     const open = w.orders.filter((o) => !isClosed(o.status)).length;
     if (open < T.wmsMaxOpenOrders.value) {
@@ -298,8 +275,13 @@ export function wmsStep(w: MWms, tick: number, contract: number, payCents = 0, e
     w.nextWaveAt = tick + T.wmsWaveTicks.value;
   }
   if (tick >= w.nextReplenAt) {
-    replenish(w, tick);
+    planReorders(w, r, tick);
     w.nextReplenAt = tick + T.wmsReplenTicks.value;
+  }
+  stepInbound(w, r, tick);
+  if (tick >= w.nextCountAt) {
+    cycleCount(w, r, tick);
+    w.nextCountAt = tick + T.wmsCountTicks.value;
   }
   for (const o of w.orders) {
     if (o.status === 'RELEASED' || o.status === 'BACKORDER' || (pickable(o) && o.lines.some(waitingForStock))) allocate(w, o, tick);

@@ -1,7 +1,8 @@
 /**
  * Screenshots of the WMS screens (docs/wms-plan.md) on the 360 x 740 budget
  * phone: the order grid after five minutes, scrolled sideways, filtered to
- * exceptions, and (when they exist) an order's detail and the activity feed.
+ * exceptions, and (when they exist) an order's detail and the activity feed;
+ * the countries, the inbound grid and a PO, and the inventory grid (W6).
  * Also reports whether the page scrolls sideways. Run `npm run build` first,
  * then `npx tsx e2e/wms-shots.ts [outDir]` from apps/web.
  */
@@ -84,12 +85,34 @@ async function main(): Promise<void> {
       await shot(page, out, 'release');
       await page.getByRole('button', { name: 'Done' }).tap();
     }
-    if (await page.getByTestId('wms-tab-countries').isVisible().catch(() => false)) {
-      await page.getByTestId('wms-tab-countries').tap();
+    if (await page.getByTestId('wms-countries-tab').isVisible().catch(() => false)) {
+      await page.getByTestId('wms-countries-tab').tap();
       await page.waitForTimeout(400);
       await shot(page, out, 'countries');
-      await page.getByTestId('wms-tab-orders').tap();
+      await page.getByTestId('wms-filter-all').tap();
     }
+    await page.getByTestId('wms-tab-inbound').tap();
+    await page.getByTestId('wms-inbound').waitFor();
+    await page.waitForTimeout(400);
+    await shot(page, out, 'inbound');
+    await page.getByTestId('wms-inbound').evaluate((el) => el.scrollBy(400, 0));
+    await page.waitForTimeout(300);
+    await shot(page, out, 'inbound-scrolled');
+    const po = page.locator('[data-testid="wms-inbound"] tbody tr').first();
+    if (await po.isVisible().catch(() => false)) {
+      await po.tap();
+      await page.waitForTimeout(400);
+      await shot(page, out, 'po-detail');
+      await page.getByTestId('wms-po-back').tap();
+    }
+    await page.getByTestId('wms-tab-inventory').tap();
+    await page.getByTestId('wms-inventory').waitFor();
+    await page.waitForTimeout(400);
+    await shot(page, out, 'inventory');
+    await page.getByTestId('wms-inventory').evaluate((el) => el.scrollBy(400, 0));
+    await page.waitForTimeout(300);
+    await shot(page, out, 'inventory-scrolled');
+    await page.getByTestId('wms-tab-outbound').tap();
     const feed = page.getByTestId('wms-feed-toggle');
     if (await feed.isVisible().catch(() => false)) {
       await feed.tap();

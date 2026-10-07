@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { WmsOrderView } from '@warehouse/contracts';
-import { HEAD_H, ROW_H, clock, countdown, filterCounts, matches, nextSort, rowSignature, rowWindow, sortOrders, statusTone } from './grid.ts';
+import type { WmsOrderView, WmsPoView, WmsStockView } from '@warehouse/contracts';
+import { HEAD_H, PO_FILTERS, ROW_H, STOCK_FILTERS, clock, countMatches, countdown, filterCounts, matches, nextSort, nextSortKey, poMatches, poTone, rowSignature, rowWindow, signed, sortOrders, sortRows, statusTone, stockMatches, stockTone } from './grid.ts';
 
 function row(no: number, extra: Partial<WmsOrderView> = {}): WmsOrderView {
   return {
@@ -85,5 +85,38 @@ describe('grid windowing (slice 9)', () => {
     expect(rowWindow(1e6, 600, 300).end).toBe(300);
     expect(rowWindow(0, 600, 10)).toEqual({ start: 0, end: 10 });
     expect(rowWindow(0, 600, 0)).toEqual({ start: 0, end: 0 });
+  });
+});
+
+function po(no: number, extra: Partial<WmsPoView> = {}): WmsPoView {
+  return { no, code: `PO-${no}`, supplier: 'SunGrid', status: 'IN TRANSIT', created: 0, eta: 100, arrived: 0, closed: 0, late: false, door: 0, linesTotal: 1, linesReceived: 0, unitsExpected: 200, unitsReceived: 0, unitsDamaged: 0, unitsShort: 0, pct: 0, exception: false, open: true, lines: [], ...extra };
+}
+
+function sku(index: number, extra: Partial<WmsStockView> = {}): WmsStockView {
+  return { index, sku: 'GRN-0042', desc: '', bin: 'A-01-1A', onHand: 100, allocated: 0, available: 100, onOrder: 0, dock: 0, demand: 0, picked: 0, counted: -1, variance: 0, status: 'OK', ...extra };
+}
+
+describe('inbound and inventory grids (W6)', () => {
+  it('filters POs by where they are, and counts every filter', () => {
+    const pos = [po(1), po(2, { status: 'ARRIVED' }), po(3, { status: 'RECEIVING', exception: true }), po(4, { status: 'PUTAWAY' }), po(5, { status: 'CLOSED', open: false })];
+    const counts = countMatches(pos, PO_FILTERS, poMatches);
+    expect(counts).toEqual({ all: 5, open: 4, transit: 1, dock: 2, putaway: 1, exceptions: 1, closed: 1 });
+    expect(pos.map((p) => poTone(p.status))).toEqual(['new', 'released', 'picking', 'done', 'done']);
+  });
+
+  it('filters SKUs: short, anything not OK, and anything on its way', () => {
+    const rows = [sku(0), sku(1, { status: 'LOW' }), sku(2, { status: 'OUT' }), sku(3, { status: 'SHORT', demand: 5, onOrder: 200 }), sku(4, { dock: 12 })];
+    expect(countMatches(rows, STOCK_FILTERS, stockMatches)).toEqual({ all: 5, short: 1, low: 3, inbound: 2 });
+    expect(rows.map((r) => stockTone(r.status))).toEqual(['done', 'picking', 'bad', 'bad', 'done']);
+  });
+
+  it('sorts any column up, down, then off; ties by key', () => {
+    expect(nextSortKey(null, 'eta')).toEqual({ key: 'eta', dir: 1 });
+    expect(nextSortKey({ key: 'eta', dir: 1 }, 'eta')).toEqual({ key: 'eta', dir: -1 });
+    expect(nextSortKey({ key: 'eta', dir: -1 }, 'eta')).toBeNull();
+    const pos = [po(3, { eta: 5 }), po(1, { eta: 9 }), po(2, { eta: 5 })];
+    expect(sortRows(pos, (p) => p.eta, -1, (p) => p.no).map((p) => p.no)).toEqual([1, 2, 3]);
+    expect(pos.map((p) => p.no)).toEqual([3, 1, 2]);
+    expect([signed(2), signed(-3), signed(0)]).toEqual(['+2', '-3', '0']);
   });
 });

@@ -441,9 +441,9 @@ disagree.
 | `wmsLoadTicks` | 20 | 0 | 240 | WMS: ticks from STAGED to LOADED (5 s). |
 | `wmsShipTicks` | 20 | 0 | 240 | WMS: ticks from LOADED to SHIPPED (5 s). |
 | `wmsShortPickChanceBp` | 300 | 0 | 2000 | WMS: chance a picker finds a bin short of what was allocated (3%): a SHORT PICK of 1 unit up to the whole line. |
-| `wmsReplenTicks` | 240 | 40 | 2400 | WMS: ticks between replenishment runs (60 s). |
-| `wmsReorderUnits` | 40 | 0 | 500 | WMS: a SKU with fewer units available than this is replenished. |
-| `wmsReplenUnits` | 120 | 10 | 1000 | WMS: units a replenishment adds to a SKU. |
+| `wmsReplenTicks` | 240 | 40 | 2400 | WMS: ticks between reorder planning runs (60 s, W6); the first runs at opening. |
+| `wmsReorderUnits` | 80 | 0 | 500 | WMS: reorder point: a SKU whose position (available + inbound - units waiting) is under this gets a PO line (W6). At 80 an idle WMS ships as it did with instant replenishment at 40 (about 81% OTIF, 96% fill); at 40 the lead time cut OTIF to 64%. |
+| `wmsReplenUnits` | 120 | 10 | 1000 | WMS: a PO line orders the SKU up to the reorder point plus this many units (W6). |
 | `wmsGoodwillStart` | 50 | 0 | 100 | WMS: goodwill (0-100) every destination country starts at. |
 | `wmsExpediteCostOrders` | 30 | 5 | 200 | WMS: an expedite costs the pay of this many orders at today's pay (about $30 at the start): real money, but small next to a truck. |
 | `wmsExpediteLeadTicks` | 1200 | 0 | 7200 | WMS: an expedited order goes P1 and onto a later, faster truck: this much is added to its ship-by (5 min). |
@@ -452,6 +452,21 @@ disagree.
 | `wmsGoodwillLatePerMin` | 4 | 0 | 50 | WMS: goodwill lost for each whole minute (or part) an order ships after its cutoff. |
 | `wmsGoodwillLateMax` | 20 | 0 | 100 | WMS: most goodwill one late order can cost. |
 | `wmsGoodwillShortMax` | 15 | 0 | 100 | WMS: goodwill an order shipped with nothing would cost; a short order costs this times its share of units short. |
+| `wmsPoLeadMinTicks` | 120 | 40 | 4800 | WMS inbound (W6): shortest promised lead time from raising a PO to its truck arriving (30 s). |
+| `wmsPoLeadMaxTicks` | 360 | 40 | 9600 | WMS inbound: longest promised lead time (90 s). With 30-90 s and 6 units a second an idle WMS ships about 84% OTIF and 98% fill over 2 h (seeds 1-8); 1-2 min gave 81% and 96%. |
+| `wmsPoLateChanceBp` | 1500 | 0 | 5000 | WMS inbound: chance a supplier's truck arrives after its ETA (15%). |
+| `wmsPoLateMaxTicks` | 360 | 40 | 4800 | WMS inbound: most a late truck is late (90 s); it is at least 10 s late. |
+| `wmsDockDoors` | 2 | 1 | 8 | WMS inbound: dock doors: a truck arriving with every door busy waits in the yard (ARRIVED). |
+| `wmsReceivers` | 3 | 1 | 12 | WMS inbound: receivers (Rcvr 01..N); each counts in one PO line at a time. |
+| `wmsReceiveMilliPerSec` | 6000 | 500 | 20000 | WMS inbound: milli-units a receiver counts in a second (6): a 200-unit line takes about 33 s. |
+| `wmsPutawayTicks` | 40 | 0 | 480 | WMS inbound: ticks from a line being received to its units reaching the bin (10 s). |
+| `wmsRcvShortChanceBp` | 500 | 0 | 5000 | WMS inbound: chance a supplier sends a line short (5%): 1 unit up to a quarter of it is missing. |
+| `wmsDamageChanceBp` | 300 | 0 | 5000 | WMS inbound: chance some of a line arrives damaged (3%): written off, never put away. |
+| `wmsDamageMaxUnits` | 4 | 1 | 50 | WMS inbound: most units of a line that arrive damaged. |
+| `wmsKeepClosedPos` | 20 | 0 | 200 | WMS inbound: closed POs kept on the inbound grid; older ones drop off. |
+| `wmsCountTicks` | 120 | 20 | 2400 | WMS inventory (W6): ticks between cycle counts (30 s); each counts the next SKU in turn, so every SKU is counted every 8 min. |
+| `wmsCountVarianceBp` | 1000 | 0 | 5000 | WMS inventory: chance a cycle count finds the bin differs from the system (10%); two in three are losses. |
+| `wmsCountVarianceMax` | 3 | 1 | 50 | WMS inventory: most units a cycle count adjusts by; a loss never takes allocated units. |
 
 ## 13. Invariants
 
@@ -605,12 +620,15 @@ picking, stock or pacing in RULES 3-11.
   `wmsStockCoverMinPct`-`wmsStockCoverMaxPct` (60-180%) of the units ordered
   of it, rounded down, so some lines will run short; an SKU nobody ordered
   holds `wmsQtyMin`-`wmsQtyMax` units.
-- **Pickers.** `wmsPickers` (6), all idle.
+- **Pickers and receivers.** `wmsPickers` (6) and `wmsReceivers` (3), all
+  idle; no purchase orders yet (the first planning run is the first step).
 - **Log.** One ORD CRT event per order with its units; the latest
   `wmsEventsKept` (200) events are kept.
 - **The step.** The WMS steps every `wmsStepTicks` ticks (1 s), on its own
-  stream, in this order: a new order, a wave, replenishment, allocation,
-  picking, picker assignment, then each order's cutoff and timed moves.
+  stream, in this order: a new order, a wave, reorder planning, inbound
+  (arrivals, docking, put-away, receiving, receiver assignment, PO
+  closing), a cycle count, allocation, picking, picker assignment, then
+  each order's cutoff and timed moves.
 - **New orders.** One arrives every `wmsOrderMinTicks`-`wmsOrderMaxTicks`
   ticks (20-30 s) from a customer on the current contract, unless
   `wmsMaxOpenOrders` (40) are open. Shipped and cancelled orders beyond the
@@ -623,8 +641,47 @@ picking, stock or pacing in RULES 3-11.
   by the rest (ALLOC SHORT); a line given nothing is SHORT and tries again
   every step until stock comes or its order finishes picking. An order given
   nothing at all is a BACKORDER and tries again every step.
-- **Replenishment.** Every `wmsReplenTicks` (60 s) each SKU with fewer than
-  `wmsReorderUnits` (40) available gains `wmsReplenUnits` (120) (REPLEN).
+- **Reorder planning** (inbound, W6; this replaced the instant REPLEN of
+  slice 2). At opening and then every `wmsReplenTicks` (60 s), each SKU's
+  position is worked out: available (on hand minus allocated), plus units
+  on open purchase orders not yet in the bin, minus the units order lines
+  are waiting for (lines not yet given stock, on orders not yet past
+  picking, NEW orders included). A SKU whose position is under the reorder
+  point `wmsReorderUnits` (80) is ordered up to the reorder point plus
+  `wmsReplenUnits` (120). Each SKU has one supplier (8 suppliers,
+  `WMS_SUPPLIERS`); a run raises one PO per supplier, numbered from
+  PO-50001 (PO CRT).
+- **Trucks.** A PO's supplier promises an ETA `wmsPoLeadMinTicks`-
+  `wmsPoLeadMaxTicks` (30-90 s) away. With chance `wmsPoLateChanceBp` (15%)
+  the truck is late by 10 s to `wmsPoLateMaxTicks` (90 s), drawn when the PO
+  is raised: once the ETA passes it logs PO LATE. A truck that arrives is
+  ARRIVED, in the yard (ARRIVE), and docks at the lowest free door of
+  `wmsDockDoors` (2), oldest arrival first (DOCK); it is then RECEIVING.
+- **Receiving.** `wmsReceivers` (3) receivers each count in one PO line at a
+  time at `wmsReceiveMilliPerSec` (6 units a second), oldest docked truck
+  and lowest line first. At the end of a line (RCV): with chance
+  `wmsRcvShortChanceBp` (5%) the supplier sent 1 unit up to a quarter of it
+  short (RCV SHORT), and with chance `wmsDamageChanceBp` (3%) 1 to
+  `wmsDamageMaxUnits` (4) of the rest arrived damaged (DAMAGE) and are
+  written off. Once every line is counted in, the truck leaves its door and
+  the PO is PUTAWAY.
+- **Put-away.** A received line's good units reach its SKU's bin
+  `wmsPutawayTicks` (10 s) after it was counted in (PUTAWAY); only then can
+  they be allocated. Once every line is in its bin the PO is CLOSED (PO
+  CLOSE). Closed POs beyond the latest `wmsKeepClosedPos` (20) drop off the
+  inbound grid.
+- **Cycle counts** (inventory, W6). Every `wmsCountTicks` (30 s) the next SKU
+  in turn is counted (CYCLE CNT), so each is counted every 8 minutes. With
+  chance `wmsCountVarianceBp` (10%) the bin differs from the system by 1 to
+  `wmsCountVarianceMax` (3) units, two times in three a loss: on hand is
+  adjusted to what is there (ADJUST). A loss never takes allocated units.
+  Accuracy is the share of counts that matched.
+- **Inventory status** (what the Inventory page shows). A SKU is SHORT when
+  the units order lines wait for (NEW orders included) are more than is
+  available, OUT when nothing is available, LOW when
+  available is under the reorder point, else OK. Each SKU also keeps the
+  units picked out of it since opening and the net adjustment of its
+  counts.
 - **Picking.** `wmsPickers` (6) pickers each pick one line at a time at
   `wmsPickMilliPerSec` (0.65 units a second). An idle picker takes the
   waiting allocated line with the best priority, then the earliest ship-by,

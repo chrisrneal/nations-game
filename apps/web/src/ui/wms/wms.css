@@ -48,25 +48,6 @@
   font-weight: 700;
 }
 
-.wms-title {
-  margin: 0;
-  font-size: 0.95rem;
-  font-family: var(--mono);
-  letter-spacing: 0.04em;
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.wms-wave {
-  font-family: var(--mono);
-  font-size: 0.75rem;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
 .wms-empty {
   padding: 1.5rem 1rem;
   color: var(--muted);
@@ -883,11 +864,7 @@
   color: #2a0505;
 }
 
-/* ---- pages and countries (slice 8) ---- */
-.wms-title {
-  flex: none;
-}
-
+/* ---- pages (W6: Inbound, Outbound, Inventory) and countries (slice 8) ---- */
 .wms-tabs {
   display: flex;
   flex: 1;
@@ -1025,4 +1002,52 @@
   .wms-progress i {
     transition: none;
   }
+}
+
+/* ---- inbound and inventory grids (W6) ---- */
+.wms-grid thead th .th-plain {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 0.4rem;
+}
+
+.wms-grid thead th.num .th-plain {
+  justify-content: flex-end;
+}
+
+.wms-grid .c-supplier {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wms-grid .c-skucell,
+.wms-grid .c-bincell {
+  font-family: var(--mono);
+}
+
+.wms-grid .c-skucell {
+  line-height: 1.1;
+}
+
+.wms-grid .c-desc {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: system-ui, sans-serif;
+  font-weight: 400;
+  font-size: 0.6rem;
+  color: var(--muted);
+}
+
+.lstatus-receiving {
+  color: var(--wms-amber);
+}
+
+.lstatus-received {
+  color: var(--wms-blue);
+}
+
+.lstatus-stored {
+  color: var(--wms-green);
 }

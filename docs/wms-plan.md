@@ -160,3 +160,17 @@ WMS catalog, so State stays compact and hashable.
    tick plus its View under 4 ms) and `apps/web/e2e/wms-perf.ts`: opening
    the WMS 1.7 s -> 0.35-0.45 s, a fast fling through all 300 orders
    37-41 -> 52-58 fps (budget 55; the floor alone 58-59 on this machine).
+10. **Inbound, Outbound, Inventory** (owner request, decision record W6).
+    The Orders | Countries toggle becomes Inbound | Outbound | Inventory;
+    Countries is a chip at the end of the Outbound filters and the wave
+    countdown is the first item of the Outbound KPI strip. STATUS: DONE.
+    Sim: `packages/sim/src/wms/inbound.ts` (`planReorders`, `stepInbound`,
+    `cycleCount`, `waitingUnits`, `inboundUnits`), called from `wmsStep`;
+    the mutable WMS types, `cloneWms` and `log` moved to `wms/mutable.ts`
+    (re-exported from `tick.ts`); suppliers and `poCode` in `catalog.ts`.
+    State: `WmsPo`, `WmsPoLine`, `WmsReceiver`, `WmsInboundStats` and the
+    new `WmsStock` fields (save schema 5). View: `pos`, `inboundKpis`,
+    `stock`, `inventoryKpis`; events gain `po`. UI: `Inbound.tsx` (PO grid,
+    PO detail), `Inventory.tsx` (SKU grid), `DataGrid.tsx` (the small grid
+    both use), `KpiStrip.tsx` (a strip per page). RULES 16 has the rules.
+

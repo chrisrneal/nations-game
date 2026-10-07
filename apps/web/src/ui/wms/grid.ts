@@ -1,4 +1,4 @@
-import type { WmsOrderStatus, WmsOrderView } from '@warehouse/contracts';
+import type { WmsOrderStatus, WmsOrderView, WmsPoStatus, WmsPoView, WmsStockStatus, WmsStockView } from '@warehouse/contracts';
 
 /** The filter chips above the order grid. */
 export type WmsFilter = 'all' | 'open' | 'picking' | 'exceptions' | 'shipped';
@@ -148,4 +148,132 @@ export function rowWindow(scrollTop: number, viewHeight: number, total: number, 
   const start = Math.min(Math.floor(first / chunk) * chunk, Math.max(0, total - 1));
   const shown = Math.ceil(viewHeight / ROW_H) + 2 * margin + chunk;
   return { start: Math.max(0, start), end: Math.min(total, start + shown) };
+}
+
+/** The WMS's three pages (W6): what comes in, what goes out, and what is on the shelves. */
+export type WmsPage = 'inbound' | 'outbound' | 'inventory';
+
+export const PAGES: readonly { readonly id: WmsPage; readonly label: string }[] = [
+  { id: 'inbound', label: 'Inbound' },
+  { id: 'outbound', label: 'Outbound' },
+  { id: 'inventory', label: 'Inventory' },
+];
+
+/** The filter chips above the inbound grid (W6). */
+export type PoFilter = 'all' | 'open' | 'transit' | 'dock' | 'putaway' | 'exceptions' | 'closed';
+
+export const PO_FILTERS: readonly { readonly id: PoFilter; readonly label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'open', label: 'Open' },
+  { id: 'transit', label: 'In transit' },
+  { id: 'dock', label: 'At dock' },
+  { id: 'putaway', label: 'Put-away' },
+  { id: 'exceptions', label: 'Exceptions' },
+  { id: 'closed', label: 'Closed' },
+];
+
+export function poMatches(po: WmsPoView, filter: PoFilter): boolean {
+  switch (filter) {
+    case 'all':
+      return true;
+    case 'open':
+      return po.open;
+    case 'transit':
+      return po.status === 'IN TRANSIT';
+    case 'dock':
+      return po.status === 'ARRIVED' || po.status === 'RECEIVING';
+    case 'putaway':
+      return po.status === 'PUTAWAY';
+    case 'exceptions':
+      return po.exception;
+    case 'closed':
+      return po.status === 'CLOSED';
+  }
+}
+
+/** The filter chips above the inventory grid (W6). */
+export type StockFilter = 'all' | 'short' | 'low' | 'inbound';
+
+export const STOCK_FILTERS: readonly { readonly id: StockFilter; readonly label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'short', label: 'Short' },
+  { id: 'low', label: 'Low' },
+  { id: 'inbound', label: 'Inbound' },
+];
+
+export function stockMatches(row: WmsStockView, filter: StockFilter): boolean {
+  switch (filter) {
+    case 'all':
+      return true;
+    case 'short':
+      return row.status === 'SHORT';
+    case 'low':
+      return row.status !== 'OK';
+    case 'inbound':
+      return row.onOrder + row.dock > 0;
+  }
+}
+
+/** How many rows each filter would show. */
+export function countMatches<R, F extends string>(rows: readonly R[], filters: readonly { readonly id: F }[], match: (row: R, filter: F) => boolean): Record<F, number> {
+  const counts = {} as Record<F, number>;
+  for (const f of filters) counts[f.id] = 0;
+  for (const row of rows) for (const f of filters) if (match(row, f.id)) counts[f.id] += 1;
+  return counts;
+}
+
+/** A PO's chip colour: grey on the road, blue in the yard, amber at a door, green once counted in. */
+export function poTone(status: WmsPoStatus): StatusTone {
+  switch (status) {
+    case 'IN TRANSIT':
+      return 'new';
+    case 'ARRIVED':
+      return 'released';
+    case 'RECEIVING':
+      return 'picking';
+    case 'PUTAWAY':
+    case 'CLOSED':
+      return 'done';
+  }
+}
+
+/** A SKU's chip colour: green OK, amber under the reorder point, red out or short. */
+export function stockTone(status: WmsStockStatus): StatusTone {
+  switch (status) {
+    case 'OK':
+      return 'done';
+    case 'LOW':
+      return 'picking';
+    case 'OUT':
+    case 'SHORT':
+      return 'bad';
+  }
+}
+
+/** A signed whole number: +2, -3, 0. */
+export function signed(n: number): string {
+  return n > 0 ? `+${n}` : String(n);
+}
+
+/** A sort on any named column (the inbound and inventory grids, W6). */
+export interface ColumnSort {
+  readonly key: string;
+  readonly dir: 1 | -1;
+}
+
+/** Tapping a header: ascending, then descending, then back to the view's own order. */
+export function nextSortKey(current: ColumnSort | null, key: string): ColumnSort | null {
+  if (current === null || current.key !== key) return { key, dir: 1 };
+  if (current.dir === 1) return { key, dir: -1 };
+  return null;
+}
+
+/** Rows sorted by `value` in direction `dir`, ties by `key`. Never changes `rows`. */
+export function sortRows<R>(rows: readonly R[], value: (row: R) => number | string, dir: 1 | -1, key: (row: R) => number): R[] {
+  return [...rows].sort((a, b) => {
+    const x = value(a);
+    const y = value(b);
+    const c = x < y ? -1 : x > y ? 1 : 0;
+    return c * dir || key(a) - key(b);
+  });
 }

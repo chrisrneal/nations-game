@@ -6,9 +6,10 @@ import { EventLines } from './OrderDetail.tsx';
 /**
  * The activity feed (docs/wms-plan.md slice 5): a console docked at the bottom
  * of the WMS. Collapsed, it shows the latest event; open, the latest 200,
- * newest first, exceptions in red. Tapping an event opens its order.
+ * newest first, exceptions in red. Tapping an event opens its order, or its
+ * purchase order on the inbound page (W6).
  */
-export function ActivityFeed(props: { events: readonly WmsEventView[]; tickMs: number; open: boolean; onToggle: () => void; onOpen: (order: number) => void }): ReactElement {
+export function ActivityFeed(props: { events: readonly WmsEventView[]; tickMs: number; open: boolean; onToggle: () => void; onOpen: (event: WmsEventView) => void }): ReactElement {
   const { events, tickMs, open } = props;
   const latest = events[0];
   const exceptions = events.filter((e) => e.exception).length;

@@ -854,3 +854,60 @@ inside the phone budget (S4). The WMS's orders are not the idle flow's
 orders, which a player may notice; slice 8 links the two through pay.
 **Reversing it.** Remove `wms` with a migration from 2 to 3 and delete
 packages/sim/src/wms and its screens; the idle game is untouched.
+
+## W6 - The WMS gets inbound and inventory: real purchase orders replace instant top-ups
+**Status.** Accepted, 2026-10-07, at the owner's request ("change the orders
+countries toggle to inbound, outbound, and inventory and implement the
+corresponding inbound and inventory view simulations"). As for W3-W5, the
+owner asked for it directly, so this session wrote the record.
+**Decision.** The WMS screen's Orders | Countries toggle becomes three pages:
+Inbound, Outbound (the order grid, as before) and Inventory. Countries moves
+to a chip at the end of the Outbound filters, so goodwill stays one tap
+away; the next-wave countdown moves from the header into the Outbound KPI
+strip to make room for three tabs on a 360 px phone. Each page has its own
+KPI strip. Behind the two new pages are two new parts of the WMS sim
+(RULES 16):
+- *Inbound.* The instant REPLEN of slice 2 (+120 units to any SKU under 40,
+  every minute) is gone. Reorder planning raises purchase orders to eight
+  suppliers instead: every minute, a SKU whose position (available plus
+  inbound, less the units order lines wait for) is under the reorder point
+  is ordered up to it plus a PO quantity. Trucks come on a promised ETA
+  (15% late), wait in the yard for one of two dock doors, are counted in by
+  three receivers (some lines short or damaged), and each line's units reach
+  the bin after a short put-away. Only then can they be allocated.
+- *Inventory.* Rolling cycle counts check one SKU every 30 s and adjust the
+  bin when it differs (10% of counts, mostly losses, never allocated units);
+  each SKU keeps units picked out of it and its net adjustment. The
+  Inventory page shows on hand, allocated, available, inbound, units
+  waiting, bin, picked, last count and variance, with a status (SHORT, OUT,
+  LOW, OK) and count accuracy.
+State gains `pos`, `receivers`, `nextPoNo`, `nextCountAt`, `countCursor`,
+`inbound` (totals) and `recentIn`, and each SKU `picked`, `counted` and
+`variance` (save schema 5; the migration from 4 adds them empty and keeps
+orders, stock and the log as saved). No new command: the player watches
+inbound and inventory; the actions are still the outbound ones of slice 7.
+Inbound log lines carry the PO number in the event's `order` field (the
+code says which); the View splits it into `order` and `po`, and tapping an
+inbound line in the activity feed opens the PO.
+**Tuning.** With lead times, the old reorder numbers (40 and 120) cut an idle
+WMS's OTIF from 80% to 64% and fill from 97% to 92% (seeds 1-8, 2 h). A
+reorder point of 80, 30-90 s lead times and 6 units a second of receiving
+give 84% OTIF and 98% fill; the first ten minutes run lower than with
+instant top-ups (about 55% OTIF against 59%), because a new warehouse waits
+for its first trucks. Every RULES 11 target holds (first sale 36.2 min).
+24 h of catch-up: 568 ms in Node against 496 ms for the build before, on
+this session's machine (Chromium unchanged at about 480-500 ms).
+**Why.** A real WMS is three screens: receiving, shipping and stock. Stock
+that appears from nowhere made the inventory page meaningless; with POs,
+shorts on the Outbound page trace back to a late truck or a busy dock on
+the Inbound page, and the Inventory page shows why. Keeping it watch-only
+keeps the change bounded and the pacing untouched.
+**Cost.** A save migration and about 6 KB more State (20-30 POs kept; a
+save of a 2-hour warehouse is about 49 KB). The WMS step does a
+little more work (inbound every second, planning every minute). Early WMS
+OTIF is a little lower. Inbound has no player actions yet (expedite a truck,
+change a door, raise a PO by hand would each be a new `wms` action).
+**Reversing it.** Restore REPLEN in `wmsStep` in place of `planReorders`,
+`stepInbound` and `cycleCount`, migrate the new fields away (5 to 6), and
+put the two tabs back in WmsScreen.
+
