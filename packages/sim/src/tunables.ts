@@ -110,6 +110,19 @@ export const WAREHOUSE_TUNABLES = {
   surgeRechargeTicks: { value: 3600, min: 1200, max: 7200, note: 'Boost: Peak rates recharge (15 min): one per idle check-in.' },
   surgePayBp: { value: 20_000, min: 15_000, max: 30_000, note: 'Boost: pay multiplier during Peak rates (2x).' },
   surgeMinContract: { value: 1, min: 0, max: 3, note: 'Boost: contract level before Peak rates opens (the first new contract, about minute 4).' },
+  wmsSampleOrdersMin: { value: 10, min: 5, max: 30, note: 'WMS: fewest sample orders a new warehouse opens with (docs/wms-plan.md slice 1).' },
+  wmsSampleOrdersMax: { value: 15, min: 5, max: 40, note: 'WMS: most sample orders a new warehouse opens with: enough to fill a phone screen of the order grid.' },
+  wmsLinesMax: { value: 5, min: 1, max: 12, note: 'WMS: most lines an order has (1 to this many, each a different SKU).' },
+  wmsQtyMin: { value: 4, min: 1, max: 50, note: 'WMS: fewest units on an order line.' },
+  wmsQtyMax: { value: 48, min: 2, max: 500, note: 'WMS: most units on an order line.' },
+  wmsPickers: { value: 6, min: 1, max: 20, note: 'WMS: pickers in the pool (Picker 01..N); each works one line at a time.' },
+  wmsCutoffMinTicks: { value: 2400, min: 240, max: 14_400, note: 'WMS: shortest time to ship-by of a Standard (P3) order (10 min); High (P2) gets 3/4 of that, Expedite (P1) half.' },
+  wmsCutoffMaxTicks: { value: 7200, min: 480, max: 28_800, note: 'WMS: longest time to ship-by of a Standard order (30 min).' },
+  wmsExpediteChanceBp: { value: 1000, min: 0, max: 5000, note: 'WMS: chance a new order is P1 Expedite (10%).' },
+  wmsHighChanceBp: { value: 2500, min: 0, max: 5000, note: 'WMS: chance a new order is P2 High (25%); the rest are P3 Standard.' },
+  wmsStockCoverMinPct: { value: 60, min: 0, max: 100, note: 'WMS: least stock a SKU opens with, as % of the units ordered of it: under 100 some lines will be short.' },
+  wmsStockCoverMaxPct: { value: 180, min: 100, max: 400, note: 'WMS: most stock a SKU opens with, as % of the units ordered of it.' },
+  wmsEventsKept: { value: 200, min: 50, max: 1000, note: 'WMS: activity events kept in State (the oldest drop off); bounds the save and the feed.' },
 } as const satisfies Readonly<Record<string, Tunable>>;
 
 export type WarehouseTunableId = keyof typeof WAREHOUSE_TUNABLES;

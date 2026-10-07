@@ -42,3 +42,6 @@ export { advanceMany, step, step as stepWarehouse, type WarehouseStepResult } fr
 export { NO_BOOST, warehouseView, estimate, runningBoosts, type BoostEffect, type Estimate } from './view.ts';
 export { WAREHOUSE_MIGRATIONS, createWarehouseSave, loadWarehouseSave, migrateWarehouseSave, replay, type LoadedWarehouse } from './save.ts';
 export { WarehouseSession, type WarehouseSubmitResult } from './session.ts';
+export { WMS_DESTINATIONS, WMS_FIRST_ORDER_NO, WMS_SKUS, binCode, destinationAt, orderCode, skuAt, type WmsDestination, type WmsSku } from './wms/catalog.ts';
+export { createWms } from './wms/generate.ts';
+export { wmsSummary } from './wms/view.ts';

@@ -3,9 +3,10 @@ import { startingCashFor, startingDockLevelFor } from './perks.ts';
 import { seedRng } from './rng.ts';
 import { derive, type Derived } from './rules.ts';
 import { WAREHOUSE_TUNABLES as T } from './tunables.ts';
+import { createWms } from './wms/generate.ts';
 
 /** Current warehouse save schema. Bump it with a migration in save.ts. */
-export const WAREHOUSE_SCHEMA_VERSION = 1;
+export const WAREHOUSE_SCHEMA_VERSION = 2;
 
 export const EMPTY_STATS: Stats = { earned: 0, shipments: 0, fullShipments: 0, orders: 0, missed: 0, expresses: 0, pos: 0, received: 0, taps: 0 };
 
@@ -48,7 +49,8 @@ export function createWarehouse(options: CreateWarehouseOptions): WarehouseState
 /**
  * The warehouse for a site, keeping the clock, the RNG, stars, lifetime stats,
  * and truck and PO numbering. Head start and Second dock (RULES 10a) open it
- * with more cash and docks.
+ * with more cash and docks. Each site opens a fresh WMS (docs/wms-plan.md),
+ * seeded from the warehouse seed and the site.
  */
 export function openWarehouse(keep: {
   readonly tick: number;
@@ -81,5 +83,6 @@ export function openWarehouse(keep: {
     boosts: READY_BOOSTS,
     run: EMPTY_STATS,
     life: keep.life,
+    wms: createWms({ seed: keep.rng.seed + keep.site, tick: keep.tick, contract: 0 }),
   };
 }
