@@ -22,11 +22,15 @@ export function useWms(store: WarehouseStore): WmsLive | null {
   const [live, setLive] = useState<WmsLive | null>(null);
   useEffect(() => {
     let rev = Number.NaN;
+    // The clock's shape never changes in a game: one object, so memoised rows that take it do not re-render for it.
+    let time: ClockShape | null = null;
     return store.onFrame((update) => {
       const view = update.view;
       if (view.wms.rev === rev) return;
       rev = view.wms.rev;
-      setLive({ wms: view.wms, tick: view.tick, tickMs: view.tickMs, cash: view.cash, time: view.clock, day: view.clock.day });
+      const c = view.clock;
+      if (time === null || time.ticksPerMinute !== c.ticksPerMinute || time.startMinute !== c.startMinute) time = { ticksPerMinute: c.ticksPerMinute, startMinute: c.startMinute };
+      setLive({ wms: view.wms, tick: view.tick, tickMs: view.tickMs, cash: view.cash, time, day: c.day });
     });
   }, [store]);
   return live;

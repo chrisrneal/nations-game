@@ -1,10 +1,11 @@
 # Progress
-Current state: **Warehouse Idle, becoming a WMS sim** (decision records W1,
-W2; the WMS is home since W7). On 2026-10-06 the
-airport game became a warehouse game: its engine and rules renamed, plus
-stock, purchase orders and a dashboard. The airport is at commit `5f78bce`;
-the entries below that date describe it in airport words (gates, planes,
-passengers, security). The Nations log is at commit `67d1d92`.
+Current state: **a warehouse simulator: the WMS is the whole game** (decision
+record W8). The idle game (backlog, trucks, upgrades, boosts, stars) was
+removed on 2026-10-07; it is at commit `b34368a`, and the entries below W8
+describe it. On 2026-10-06 the airport game became a warehouse game (W1,
+W2). The airport is at commit `5f78bce`; the entries below that date
+describe it in airport words (gates, planes, passengers, security). The
+Nations log is at commit `67d1d92`.
 
 ## Slices
 - [x] Airport pivot slices 1-8 (docs/ROADMAP.md, History)
@@ -13,8 +14,40 @@ passengers, security). The Nations log is at commit `67d1d92`.
 - [x] WMS, nine slices (W5, docs/wms-plan.md)
 - [x] WMS Inbound, Outbound and Inventory pages (W6, wms-plan slice 10)
 - [x] The WMS is home: a live floor drawn from the WMS, and the plan (W7, wms-plan slice 11)
+- [x] The WMS is the game: tasks for every worker, a Crew page, dock appointments, the idle game removed (W8, wms-plan slice 12)
 
 ## Session log
+
+### 2026-10-07 - The WMS is the whole game: workers' tasks, dock appointments, the idle game removed (lanes C, S, H, U, P, D; owner request, W8)
+**What changed.** The idle game is gone: no docks screen, trucks, taps,
+upgrades, boosts, selling or stars. The WMS now creates a task for every
+piece of work (pick a line, count a PO line in at the dock, put it away in
+its bin) and lines up the next few for each worker of the right role; every
+worker keeps a record of tasks, units and time working, walking and idle.
+Tap a worker on the floor, or open the new **Crew** tab, to see what they do
+now, what is next and what they finished. Receivers now put away themselves
+(you see them drive pallets into the racks). The warehouse has a clock (a
+minute a second, day 1 opens at 06:00); new POs are booked into **dock
+appointments** in the day (In > Dock schedule), and every time on screen is a
+time of day. Shipments are the only income ($1 a unit times goodwill); the
+Plan tab hires pickers and receivers and opens dock doors. The tabs are at
+the bottom; the top bar shows the clock, cash and today's earnings. Away
+time runs up to 8 hours (was 2-24 with the night shift). Old saves keep their
+cash and time and open a fresh WMS (save schema 7).
+**Checks.** `npm test` and `npm run check` pass (new: 10 task-engine tests,
+property tests over random WMS play, appointment and receiving-task tests, a
+real version-6 save migrated, a WMS report test; the idle tests and pacing
+bots are gone). `npm run harness -- report`, seeds 1-8, 2 h: 82% OTIF, 97%
+fill, pickers working 69% of the time, $210 a warehouse hour. Determinism:
+1,000 warehouses identical in Node and Chromium. Phone check 47/47 at
+360 x 740 (floor and busy floor at 58-60 fps with the CPU slowed 4x; reopens
+after 10 hours away in 1.5-1.7 s); no sideways scroll on any page
+(`e2e/wms-shots.ts`).
+**How to see it.** Open the app; tap any numbered dot on the floor. Or the
+Crew tab, then a worker. In > Dock schedule for the appointments.
+**What is left.** Demand is fixed (an order every 20-30 warehouse minutes), so
+hiring past what the orders need does little; growing demand, automation to
+buy and dock hours are owner decisions (docs/GAPS.md, ROADMAP Next).
 
 ### 2026-10-07 - The WMS becomes the game: live floor, plan, home (lanes C, S, H, U, D; owner request, W7)
 **What changed.** The app opens on the WMS. Its new Floor tab draws the

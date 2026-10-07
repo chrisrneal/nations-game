@@ -5,7 +5,8 @@ would have to happen to reverse it. **Changing one of these needs a new record
 appended here, not an edit to an old one** - later sessions rely on these being
 stable.
 
-**Read W1 first, then P1.** On 2026-10-06 the airport game became a warehouse
+**Read W8 first, then W1, then P1.** On 2026-10-07 the idle game was removed
+and the warehouse management system became the whole game (W8). On 2026-10-06 the airport game became a warehouse
 game (W1); on 2026-10-01 "Nations" had become the airport game (P1). P1 lists
 which of the older records still bind (the architecture ones) and W1 which of
 the `P` records carry over, renamed. `W` records cover the warehouse game, `P`
@@ -984,3 +985,97 @@ being home.
 home back. For the rules: `wmsWalkTicksPerBay` 0 and `wmsPickMilliPerSec`
 650 remove walking; the default plan is the old behaviour except
 allocation order (`needing.sort` in `wmsStep`).
+
+
+## W8 - The WMS is the whole game: workers do the tasks the WMS creates, POs book dock appointments, the idle game is gone
+**Status.** Accepted, 2026-10-07, at the owner's request ("i want to be able
+to tap on a warehouse worker and see their assigned tasks, the wms should
+create tasks for pickers and receivers and track the work of each worker,
+assigning them accordingly. i also need you to prune down the idle features,
+this really becomes a warehouse automation simulator - with pos generate new
+pos that have an appt in the day"). As for W3-W7, the owner asked for it
+directly, so this session wrote the record and, as in W2, acted as architect
+for this change: it updated docs/ROADMAP.md, CLAUDE.md's description of the
+game and its units rule, and rewrote docs/RULES.md for the new game.
+**Reading.** Four asks, read the way closest to docs/ROADMAP.md and W7's
+"next step" (docs/GAPS.md: make the WMS the money-maker):
+1. *Tasks.* Every piece of WMS work becomes a task the WMS creates and
+   assigns: a PICK task per allocated order line, a RECEIVE task per line of
+   a docked PO, and a PUTAWAY task per line counted in. Put-away was a timer
+   (W6); it is now receivers' work, so receivers "receive" in the full sense.
+2. *Assigning.* The WMS lines up the next few tasks for each worker of the
+   right role (`wmsTaskQueue`, 3, its active task included), by the plan's
+   pick order, and redoes the plan when work waits, a more urgent task comes
+   in or someone runs dry. A worker's queue is real: it is what they do next.
+3. *Tracking.* Every worker keeps a record (tasks, units, time working,
+   walking and idle), and every finished task is kept for a while
+   (`wmsTasksKept`) so each worker's page lists their recent work. A tap on a
+   worker on the floor, or a row on a new Crew page, opens it.
+4. *Pruning.* "Prune down the idle features" is read as remove them: the idle
+   flow (the backlog in milli-orders, docks and trucks, taps and rushes,
+   upgrades, boosts, selling for stars, perks and sites, the pacing bots) is
+   deleted, and the WMS is the whole game. Its shipments are the only income,
+   at `wmsUnitPayCents` ($1) a unit times the goodwill factor. Money buys what
+   a WMS supervisor would buy: more people (hire a picker or a receiver,
+   rising prices) and more dock doors. This is the smallest money sink that
+   keeps cash meaningful; demand that grows with goodwill was left out
+   (docs/GAPS.md: an owner decision).
+5. *Appointments "in the day".* The game gains a warehouse clock: a warehouse
+   minute a second (a day is 24 real minutes), opening at 06:00 on day 1.
+   Reorder planning books every new PO into the first appointment slot (30
+   warehouse minutes) after its supplier's lead time with a door free; trucks
+   come up to 10 minutes early or (15%) miss the slot, and the yard docks
+   earliest appointment first. The In page shows each PO's appointment and a
+   dock schedule. Every time on screen is a time of this clock, and rates are
+   per warehouse hour; cutoffs (3-8 real minutes) now read as 3-8 hours.
+**Decision.**
+- *State* (save schema 7) is `{ schemaVersion, tick, cash, wms }`. The WMS
+  replaces `pickers` and `receivers` with `workers` (id, role, active task,
+  queue, position, walk, record) and gains `tasks`, `nextTaskNo`, `doors`,
+  `today` and `yesterday` (day totals), `recentPay`, and `earned` and `spent`
+  in its stats; POs swap `eta` for `appt` and lose `putAt`; orders name a
+  `customer` (8 customers) instead of a contract level. The WMS keeps its own
+  seeded stream; the idle game's RNG is gone.
+- *Commands* are `wms` actions only; two are new, `hire` (a role) and `door`.
+  `assign` puts a picker on a line now (it drops its queue).
+- *Saves.* Versions 1-6 migrate by keeping the snapshot's tick and cash and
+  opening a fresh WMS at that tick, seeded from the old warehouse seed and
+  site; commands other than WMS actions are dropped from the log. The old
+  WMS's orders and stock are not carried over: its workers had no tasks, and
+  the owner is the only player (as for W1's airport saves).
+- *Offline cap* is fixed at `offlineCapMinutes` (8 hours; the night shift
+  upgrade is gone). The recap reports orders shipped, OTIF, earnings, POs in
+  and cutoffs missed.
+- *Harness.* `npm run harness -- report` (the default command) replaces the
+  pacing pass: an untouched warehouse on several seeds, checked against the
+  RULES 11 targets. The determinism player uses every WMS action.
+- *Screen.* The top bar is the warehouse clock, cash and today's earnings; the
+  page tabs (Floor, In, Out, Stock, Crew, Plan) moved to the bottom third,
+  where Docks, Upgrades and Sell were. The floor draws every worker doing its
+  task (receivers drive pallets to the racks; the separate forklifts are
+  gone).
+**Measured** (`npm run harness -- report`, seeds 1-8, 2 h, an untouched
+warehouse): 82% OTIF (80-86%), on time 92-98%, fill 97%, pickers working 69%
+of their time, receivers 20%, $210 a warehouse hour (the first hire after
+2.4 warehouse hours). The first 15 minutes average 64% OTIF over 16 seeds
+(W7's build: 59%). Catch-up: 8 hours of a new warehouse 370-480 ms in Node
+(the old game's 8 hours, idle flow included: 250-400 ms); the phone check
+reopens after 10 hours away in 1.5-1.7 s with the CPU slowed 4x (budget 2 s).
+Phone check 47/47.
+**Why.** The owner wants a warehouse automation simulator, not an idle game.
+Tasks are how a real WMS directs labour, so making them the unit of work
+makes the floor, the Crew page and the numbers all the same truth, and gives
+the player something to read off each worker. Appointments are how a real
+dock is run, and they need a day to live in.
+**Cost.** Everything idle is gone, with its tests and screens (the airport and
+idle warehouse stay in history: `git checkout b34368a`). The owner's save
+loses its WMS orders and stock (cash and time are kept). The sim does more
+work a step (the task plan), so catch-up is about 1.5x slower than the idle
+game's for the same hours, and the cap came down from 24 h to 8 h to stay
+inside the phone budget. The pacing targets of P9/W1 no longer apply; the
+report's targets replace them. Receivers are idle much of the time with the
+opening crew (20%), which the Plan's crew split and hiring are for.
+**Reversing it.** `git checkout b34368a` restores the idle game with the WMS
+beside it. Within this design: `wmsTaskQueue` 1 gives a task only when a
+worker is free; `wmsPutawayDropTicks` 0 and `wmsWalkTicksPerBay` 0 make
+put-away and walking instant.

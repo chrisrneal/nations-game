@@ -1,11 +1,11 @@
 # Rules for every AI session on this project
 
-You are building a mobile-first PWA idle game: the player runs a warehouse. Orders and purchase orders come in, workers receive, pick, pack and load them onto trucks, and every truck pays when it leaves. Single player, offline-first, no backend. (Until 2026-10-06 this repo held an airport idle game, and before 2026-10-01 "Nations"; see decision records W1 and P1 in docs/DECISIONS.md.)
+You are building a mobile-first PWA warehouse simulator: the player runs a warehouse through its warehouse management system (WMS). Customer orders and purchase orders (booked into dock appointments in the warehouse day) come in; the WMS turns the work into pick, receive and put-away tasks and assigns them to the crew; orders are packed, staged and shipped, and every shipment pays. The player sets the WMS's plan, steps in on orders, and hires people and opens dock doors. Single player, offline-first, no backend. (Until 2026-10-07 this was an idle game with the WMS beside it, until 2026-10-06 an airport idle game, and before 2026-10-01 "Nations"; see decision records W8, W1 and P1 in docs/DECISIONS.md.)
 
 The owner is not a programmer. Explain outcomes in plain language, and ask questions only when a choice is irreversible. For anything else that's ambiguous, pick the reading most consistent with docs/ROADMAP.md, say which one you picked, and proceed.
 
 ## Start of every session
-Read docs/ROADMAP.md (the plan), docs/DECISIONS.md (why things are built this way; start at W1, then P1) and docs/PROGRESS.md (where the project stands). docs/RULES.md is the game-rules spec: read it before touching the sim, the harness or anything that shows a number.
+Read docs/ROADMAP.md (the plan), docs/DECISIONS.md (why things are built this way; start at W8, then W1, then P1) and docs/PROGRESS.md (where the project stands). docs/RULES.md is the game-rules spec: read it before touching the sim, the harness or anything that shows a number.
 
 For build work, open by stating the task in three bullets and listing the files you will touch, then proceed without waiting for confirmation. This lets the owner follow along.
 
@@ -15,8 +15,8 @@ These rules keep the sim deterministic and offline earnings exact. Breaking one 
 - packages/sim and packages/contracts are pure TypeScript: no DOM, network, Date, Math.random, or imports except packages/contracts.
 - State changes only through Commands processed by the sim step. The UI never writes state.
 - The UI reads only the View, never State.
-- Randomness comes from the seeded RNG in State. All game maths uses integers: money in cents, orders and stock in milli-units (P3).
-- The host owns the clock. Offline earnings are the same sim stepped fast, up to the offline cap; catching up N ticks must equal stepping N ticks (P4).
+- Randomness comes from the seeded RNG in State. All game maths uses integers: money in cents, stock and orders in whole units, time in ticks (P3, W8).
+- The host owns the clock. Time away is the same sim stepped fast, up to the offline cap; catching up N ticks must equal stepping N ticks (P4).
 - Tunable numbers live in packages/sim/src/tunables.ts with a documented band, and in the RULES.md tunables table; never inline.
 - The UI reaches the sim only through the Host interface.
 - Animate with CSS or direct DOM writes, not React re-renders every tick (P7).

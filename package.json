@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Mobile-first idle PWA: run an warehouse, fill trucks with passengers, earn while away.",
+  "description": "Mobile-first PWA warehouse simulator: run a warehouse through its WMS, from dock appointments to shipping.",
   "engines": {
     "node": ">=22"
   },

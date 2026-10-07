@@ -188,3 +188,18 @@ WMS catalog, so State stays compact and hashable.
     `WmsScreen` is the home with tabs Floor, In, Out, Stock, Plan; App's
     `screen` switches to the Docks screen (the old floor).
 
+12. **The WMS is the game: tasks, the crew, dock appointments** (owner
+    request, decision record W8). STATUS: DONE. Sim: `wms/tasks.ts` (task
+    creation, the plan, `startTask`, `releaseTask`, `freeWorker`), worked by
+    `workWorker` in `tick.ts`; allocation creates PICK tasks, docking RECEIVE
+    tasks (`stepInbound`), a counted-in line a PUTAWAY task; `bookSlot` and
+    the appointment draw in `inbound.ts`; the warehouse clock in
+    `packages/sim/src/clock.ts`; `hire` and `addDoor` in `policy.ts`. The idle
+    game (rules.ts, perks.ts, catalog.ts, the idle step and view) is deleted.
+    State: `workers`, `tasks`, `nextTaskNo`, `doors`, `today`, `yesterday`,
+    `recentPay`; POs `appt`; orders `customer` (save schema 7). View:
+    `workers` (each with task, queue, done and record), `crewKpis`,
+    `schedule`, `growth`, `stats`, `today`. UI: `Crew.tsx` (`CrewList`,
+    `WorkerDetail`), the floor's `WorkerDot`s (`floorModel.ts`), the dock
+    schedule in `Inbound.tsx`, Grow on `Plan.tsx`, `Home.tsx` (the clock
+    bar), the tabs at the bottom of `WmsScreen`.

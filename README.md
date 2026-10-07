@@ -1,35 +1,36 @@
-# Warehouse Idle
+# Warehouse WMS
 
-A game you play on your phone. You run a warehouse: customer orders come in,
-your pickers take each item off the shelves, packed orders are loaded onto
-trucks at your docks, and every truck pays when it leaves. Purchase orders
-(POs) arrive at the receiving dock and keep the shelves stocked; if the
-shelves run empty, picking stops. A dashboard at the top shows orders shipped,
-orders a minute, the backlog and how full the shelves are. Spend the cash on
-more docks, bigger trucks, faster loading, more sales, more pickers, a bigger
-receiving bay, better contracts and a quicker yard crew; each upgrade fixes one
-bottleneck and the screen tells you which one you have. Close the app and the
-warehouse keeps earning (up to a cap the night shift raises); open it again
-for a three-line recap. When the warehouse is worth it, sell it for **stars**
-that raise every order's pay forever and unlock permanent perks, and start
-again at a new site with a twist: a narrow yard, a crossdock, sale seasons.
+A warehouse simulator you play on your phone. You run a warehouse through its
+warehouse management system (WMS): customers abroad send orders, and the WMS
+turns every line into a pick task for one of your pickers. When stock runs
+low it raises purchase orders (POs) to suppliers and books each truck into a
+dock appointment in the warehouse day; your receivers count each truck in at
+the door and put the stock away in its bin. Tap any worker on the live floor
+to see what they are doing, what the WMS has lined up for them next and what
+they have done. You set the WMS's plan (the pick order, how orders are
+released, how many people pick and how many receive), step in on single
+orders (priority, hold, expedite), and spend what shipments earn on more
+people and more dock doors. Ship on time and in full and your customers'
+goodwill, and what they pay, goes up. Close the app and the warehouse keeps
+running (up to 8 hours); open it again for a three-line recap.
 
 It works offline, installs like an app, and needs no account or server.
 
-This repository held two other games before: an airport idle game until
-6 October 2026 (`git checkout 5f78bce`, decision record W1 in
-`docs/DECISIONS.md`) and "Nations" until October 2026 (`git checkout 67d1d92`,
-decision record P1).
+This repository held other games before: an idle warehouse game until
+7 October 2026 (`git checkout b34368a`, decision record W8 in
+`docs/DECISIONS.md`), an airport idle game until 6 October 2026
+(`git checkout 5f78bce`, decision record W1) and "Nations" until October 2026
+(`git checkout 67d1d92`, decision record P1).
 
 ## What is in here
 
 | Folder | What it is |
 | --- | --- |
 | `apps/web` | The app you actually see, and the code that makes it installable on a phone. |
-| `packages/sim` | The game rules as code: orders, stock, docks, trucks, upgrades, sites. Deliberately knows nothing about screens, clocks or the internet, so it gives the same result everywhere. |
+| `packages/sim` | The game rules as code: orders, stock, purchase orders and dock appointments, the crew and their tasks. Deliberately knows nothing about screens, clocks or the internet, so it gives the same result everywhere. |
 | `packages/contracts` | The shared vocabulary (what a "command", a "view", a "save file" is). |
-| `packages/harness` | Robots that play the game with no screen, to check the pacing and that it runs the same in every browser. |
-| `docs/` | The plan (`ROADMAP.md`), the reasoning (`DECISIONS.md`), the game rules with every number (`RULES.md`), the running log (`PROGRESS.md`), known shortcuts (`GAPS.md`), and the latest pacing report (`balance/`). |
+| `packages/harness` | Runs the game with no screen, to report how a warehouse performs and check that it runs the same in every browser. |
+| `docs/` | The plan (`ROADMAP.md`), the reasoning (`DECISIONS.md`), the game rules with every number (`RULES.md`), the running log (`PROGRESS.md`), known shortcuts (`GAPS.md`), and the latest WMS report (`balance/wms-report.md`). |
 | `CLAUDE.md` | The rules every AI session must follow when building this. |
 
 ## Running it on your computer
@@ -49,7 +50,7 @@ Other commands, useful if something looks broken or you want to see the numbers:
 ```bash
 npm test                      # runs the automatic checks; should end in "passed"
 npm run check                 # checks the code follows the project's rules
-npm run harness               # the pacing report: when each milestone arrives
+npm run harness               # the WMS report: how an untouched warehouse performs
 npm run build && npm run e2e --workspace web   # the phone check in a headless browser
 ```
 

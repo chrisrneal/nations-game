@@ -16,6 +16,16 @@ function clone(s: WarehouseState): MState {
   return { schemaVersion: s.schemaVersion, tick: s.tick, cash: s.cash, wms: cloneWms(s.wms) };
 }
 
+/**
+ * The copy for one tick: the WMS is copied only when this tick can change it
+ * (a WMS step, or a command); otherwise the new state shares it, unchanged,
+ * which also lets the View reuse what it built for it (view.ts).
+ */
+function cloneForTick(s: WarehouseState, commands: readonly WarehouseCommand[]): MState {
+  if (commands.length > 0 || s.tick % T.wmsStepTicks.value === 0) return clone(s);
+  return { schemaVersion: s.schemaVersion, tick: s.tick, cash: s.cash, wms: s.wms as MWms };
+}
+
 type Sink = WarehouseEvent[] | null;
 
 function cashCap(): number {
@@ -56,7 +66,7 @@ export interface WarehouseStepResult {
 
 /** The whole simulation surface (S1): one tick with the commands stamped for it. */
 export function step(state: WarehouseState, commands: readonly WarehouseCommand[]): WarehouseStepResult {
-  const m = clone(state);
+  const m = cloneForTick(state, commands);
   const events: WarehouseEvent[] = [];
   tickInPlace(m, commands, events);
   return { state: m, events };
