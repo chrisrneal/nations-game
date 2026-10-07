@@ -27,7 +27,8 @@ export type WmsOrderStatus =
   | 'BACKORDER'
   | 'CANCELLED';
 
-export type WmsLineStatus = 'OPEN' | 'ALLOCATED' | 'PICKING' | 'PICKED' | 'SHORT';
+/** CANCELLED: the player cancelled the line (slice 7); it no longer counts towards the order. */
+export type WmsLineStatus = 'OPEN' | 'ALLOCATED' | 'PICKING' | 'PICKED' | 'SHORT' | 'CANCELLED';
 
 /** 1 Expedite, 2 High, 3 Standard. */
 export type WmsPriority = 1 | 2 | 3;
@@ -91,6 +92,8 @@ export interface WmsOrder {
   readonly held: WmsOrderStatus | null;
   /** Tick it shipped or was cancelled; 0 while open. */
   readonly closed: number;
+  /** The player paid to expedite it (slice 7); an order is expedited at most once. */
+  readonly expedited: boolean;
 }
 
 /** One SKU in one bin. Available = onHand - allocated. */
@@ -170,6 +173,21 @@ export interface WmsState {
   readonly recent: readonly number[];
 }
 
+/**
+ * What the player can do in the WMS (docs/wms-plan.md slice 7), the payload of
+ * a `wms` command. Orders are named by number, pickers by id, lines by number.
+ */
+export type WmsAction =
+  | { readonly action: 'release'; readonly orders: readonly number[] }
+  | { readonly action: 'priority'; readonly order: number; readonly priority: WmsPriority }
+  | { readonly action: 'hold'; readonly order: number }
+  | { readonly action: 'unhold'; readonly order: number }
+  | { readonly action: 'assign'; readonly picker: number; readonly order: number; readonly line: number }
+  | { readonly action: 'cancelLine'; readonly order: number; readonly line: number }
+  | { readonly action: 'expedite'; readonly order: number };
+
+export type WmsActionName = WmsAction['action'];
+
 /** A destination country as the screens show it. */
 export interface WmsDestView {
   /** ISO 3166-1 alpha-3, e.g. DEU. */
@@ -220,8 +238,9 @@ export interface WmsOrderView {
   readonly late: boolean;
   /** An exception: SHORT, ON HOLD, BACKORDER, short units, or late. */
   readonly exception: boolean;
-  /** NEW orders may be released, open orders held, held orders released from hold (slice 7). */
+  /** Not shipped or cancelled. */
   readonly open: boolean;
+  readonly expedited: boolean;
   readonly lines: readonly WmsLineView[];
 }
 

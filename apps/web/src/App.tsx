@@ -10,6 +10,7 @@ import { Floor } from './ui/Floor.tsx';
 import { SellSheet } from './ui/SellSheet.tsx';
 import { SettingsSheet } from './ui/SettingsSheet.tsx';
 import { StarsSheet } from './ui/StarsSheet.tsx';
+import { formatCash } from './ui/format.ts';
 import { WarehouseStore } from './ui/store.ts';
 import { TopBar } from './ui/TopBar.tsx';
 import { UpgradeSheet } from './ui/UpgradeSheet.tsx';
@@ -61,6 +62,12 @@ export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedb
             const b = update.view.boosts.find((x) => x.id === e.payload.boost);
             feedback?.cue('boost');
             if (b !== undefined) setToast(`${b.name}! ${b.effect}`);
+          } else if (e.type === 'wmsShipped' && e.payload.priority === 1) {
+            const p = e.payload;
+            const how = p.onTime && p.inFull ? 'on time, in full' : !p.onTime ? 'late' : 'short';
+            setToast(`O-${p.order} to ${p.iso} shipped ${how}${p.cents > 0 ? ` · +${formatCash(p.cents)}` : ''}`);
+          } else if (e.type === 'wmsMissed' && e.payload.priority <= 2) {
+            setToast(`O-${e.payload.order} to ${e.payload.iso} (P${e.payload.priority}) missed its cutoff`);
           } else if (e.type === 'bought') {
             const text = unlockText(e.payload.upgrade, e.payload.level, update.view, checkpoints.current);
             feedback?.cue(text === null ? 'buy' : 'unlock');
@@ -113,6 +120,9 @@ export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedb
 
   return (
     <div className="app">
+      {/* The WMS covers the whole screen: the floor and its animation stop while it is open (slice 9). */}
+      {sheet !== 'wms' && (
+        <>
       <TopBar view={view} store={store} onSettings={() => setSheet('settings')} onStars={() => setSheet('stars')} />
       <InstallBanner install={install} onToast={setToast} />
       <Floor journey={view.journey} pickingLevel={view.upgrades.find((u) => u.id === 'picking')?.level ?? 0} docks={view.docks.length} tickMs={view.tickMs} store={store} onTapPick={tapPick} onTapReceive={tapReceive}>
@@ -140,7 +150,9 @@ export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedb
         </Pier>
       </Floor>
       <BottomBar view={view} store={store} onUpgrades={() => setSheet('upgrades')} onSell={() => setSheet('sell')} onBoost={boost} onWms={() => setSheet('wms')} />
-      {sheet === 'wms' && <WmsScreen store={store} onClose={close} />}
+        </>
+      )}
+      {sheet === 'wms' && <WmsScreen store={store} host={host} onClose={close} />}
       {sheet === 'upgrades' && <UpgradeSheet view={view} store={store} onBuy={buy} onSell={() => setSheet('sell')} onClose={close} />}
       {sheet === 'sell' && (
         <SellSheet

@@ -421,8 +421,8 @@ disagree.
 | `wmsQtyMin` | 4 | 1 | 50 | WMS: fewest units on an order line. |
 | `wmsQtyMax` | 48 | 2 | 500 | WMS: most units on an order line. |
 | `wmsPickers` | 6 | 1 | 20 | WMS: pickers in the pool (Picker 01..N); each works one line at a time. |
-| `wmsCutoffMinTicks` | 2400 | 240 | 14400 | WMS: shortest time to ship-by of a Standard (P3) order (10 min); High (P2) gets 3/4 of that, Expedite (P1) half. |
-| `wmsCutoffMaxTicks` | 7200 | 480 | 28800 | WMS: longest time to ship-by of a Standard order (30 min). |
+| `wmsCutoffMinTicks` | 720 | 240 | 14400 | WMS: shortest time to ship-by of a Standard (P3) order (3 min); High (P2) gets 3/4 of that, Expedite (P1) half. With 3-8 min an idle WMS ships about 93% on time and 80% OTIF (seeds 1-8, 2 h): misses happen, and priorities and expedites can save them. |
+| `wmsCutoffMaxTicks` | 1920 | 480 | 28800 | WMS: longest time to ship-by of a Standard order (8 min). |
 | `wmsExpediteChanceBp` | 1000 | 0 | 5000 | WMS: chance a new order is P1 Expedite (10%). |
 | `wmsHighChanceBp` | 2500 | 0 | 5000 | WMS: chance a new order is P2 High (25%); the rest are P3 Standard. |
 | `wmsStockCoverMinPct` | 60 | 0 | 100 | WMS: least stock a SKU opens with, as % of the units ordered of it: under 100 some lines will be short. |
@@ -447,6 +447,11 @@ disagree.
 | `wmsGoodwillStart` | 50 | 0 | 100 | WMS: goodwill (0-100) every destination country starts at. |
 | `wmsExpediteCostOrders` | 30 | 5 | 200 | WMS: an expedite costs the pay of this many orders at today's pay (about $30 at the start): real money, but small next to a truck. |
 | `wmsExpediteLeadTicks` | 1200 | 0 | 7200 | WMS: an expedited order goes P1 and onto a later, faster truck: this much is added to its ship-by (5 min). |
+| `wmsUnitPayBp` | 500 | 0 | 5000 | WMS: a shipped WMS order pays this share of an idle order's pay for each unit shipped (5%), times its country's goodwill factor: a bonus beside the trucks, small enough to leave the pacing targets in place. |
+| `wmsGoodwillGain` | 3 | 0 | 20 | WMS: goodwill a country gains when its order ships on time and in full. |
+| `wmsGoodwillLatePerMin` | 4 | 0 | 50 | WMS: goodwill lost for each whole minute (or part) an order ships after its cutoff. |
+| `wmsGoodwillLateMax` | 20 | 0 | 100 | WMS: most goodwill one late order can cost. |
+| `wmsGoodwillShortMax` | 15 | 0 | 100 | WMS: goodwill an order shipped with nothing would cost; a short order costs this times its share of units short. |
 
 ## 13. Invariants
 
@@ -592,7 +597,7 @@ picking, stock or pacing in RULES 3-11.
   source the current contract level, status NEW, no wave. Priority: P1
   Expedite `wmsExpediteChanceBp` (10%), P2 High `wmsHighChanceBp` (25%), else
   P3 Standard. Ship-by is a lead time drawn in
-  `[wmsCutoffMinTicks, wmsCutoffMaxTicks]` (10-30 min) for P3, three
+  `[wmsCutoffMinTicks, wmsCutoffMaxTicks]` (3-8 min) for P3, three
   quarters of a draw for P2, half for P1.
 - **Lines.** 1 to `wmsLinesMax` (5) lines of different SKUs, each
   `wmsQtyMin`-`wmsQtyMax` units (4-48), status OPEN.
@@ -637,3 +642,33 @@ picking, stock or pacing in RULES 3-11.
   MISS once and is late. A shipped order is on time if it was never late and
   in full if no line is short; on time and in full is OTIF. Totals since
   opening and per destination country are kept for the KPI strip.
+- **Player actions** (a `wms` command; each logs an event, and a refused one
+  says why):
+  - *Release*: chosen NEW orders go out at once as one wave (WAVE REL); the
+    automatic wave timer is unchanged.
+  - *Priority*: P1, P2 or P3 for an open order (PRIO); pickers take lines by
+    priority from then on.
+  - *Hold* and *release hold*: an order ON HOLD is not allocated, picked or
+    moved on, and its pickers leave it (a line half picked waits again, its
+    count undone); its cutoff still runs. Released, it goes back to where it
+    was (PICKING goes back to ALLOCATED) and timed moves start their delay
+    again (HOLD, UNHOLD).
+  - *Assign*: a chosen picker drops what it is doing (that line waits again)
+    and starts the chosen allocated line (ASSIGN, PICK START).
+  - *Cancel a line*: a line not yet picked, on an order not yet picked, is
+    CANCELLED: its allocation goes back to stock and it no longer counts.
+    Cancelling every line cancels the order (CANCEL).
+  - *Expedite*: once per order, not after its cutoff has passed, for the pay
+    of `wmsExpediteCostOrders` (30) orders at today's pay: the order becomes
+    P1 and moves to a later, faster truck, `wmsExpediteLeadTicks` (5 min)
+    added to its ship-by (EXPEDITE).
+- **Goodwill and pay** (slice 8). Each destination country has goodwill,
+  0-100, starting at `wmsGoodwillStart` (50). A shipment pays the warehouse
+  `wmsUnitPayBp` (5%) of an idle order's pay (stars and site included) for
+  each unit shipped, times (50 + the country's goodwill)%: x0.5 at goodwill
+  0, x1.5 at 100. The cash counts as earned, so it counts towards stars.
+  Then goodwill moves: +`wmsGoodwillGain` (3) for on time and in full; a
+  late shipment loses `wmsGoodwillLatePerMin` (4) a started minute late, at
+  most `wmsGoodwillLateMax` (20); a short one loses `wmsGoodwillShortMax`
+  (15) times its share of units short. The bonus is small next to the
+  trucks: the RULES 11 targets hold (first sale 36.2 min, was 36.3).

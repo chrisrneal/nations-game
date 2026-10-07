@@ -48,11 +48,12 @@ export function rollOrder(r: Roller, no: number, tick: number, contract: number,
   const priority = rollPriority(r);
   const shipBy = tick + rollLead(r, priority);
   const lines = rollLines(r, bins);
-  return { no, dest, source: contract, priority, wave: 0, status: 'NEW', lines, shipBy, created: tick, next: 0, late: false, held: null, closed: 0 };
+  return { no, dest, source: contract, priority, wave: 0, status: 'NEW', lines, shipBy, created: tick, next: 0, late: false, held: null, closed: 0, expedited: false };
 }
 
+/** Units ordered on the lines not cancelled. */
 export function unitsOf(order: WmsOrder): number {
   let units = 0;
-  for (const line of order.lines) units += line.ordered;
+  for (const line of order.lines) if (line.status !== 'CANCELLED') units += line.ordered;
   return units;
 }

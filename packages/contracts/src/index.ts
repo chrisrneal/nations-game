@@ -52,6 +52,8 @@ export type {
   WmsOrderStatus,
   WmsPicker,
   WmsPriority,
+  WmsAction,
+  WmsActionName,
   WmsDestStats,
   WmsStats,
   WmsState,

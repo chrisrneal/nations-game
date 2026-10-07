@@ -9,9 +9,31 @@ passengers, security). The Nations log is at commit `67d1d92`.
 - [x] Airport pivot slices 1-8 (docs/ROADMAP.md, History)
 - [x] Warehouse pivot (W1), one pull request (W2)
 - [x] Star perks (W3)
-- [ ] WMS, nine slices (W5, docs/wms-plan.md): slices 1-3 done
+- [x] WMS, nine slices (W5, docs/wms-plan.md)
 
 ## Session log
+
+### 2026-10-07 - WMS slices 4-9: detail, activity, KPIs, actions, goodwill, polish (lanes C, S, H, U, P, D; owner request, W5)
+**What changed.** The WMS is complete (docs/wms-plan.md). Tap an order for
+its detail: summary, lines with shorts in red, its own activity, and
+actions: priority, hold, expedite for cash (once, P1 and 5 more minutes),
+and per line a picker to put on it or a two-tap cancel. Release... on the
+grid releases chosen NEW orders as a wave. A console docked at the bottom
+shows the latest 200 events, exceptions in red, tap to open the order. A
+KPI strip shows open orders, lines an hour, fill, OTIF, exceptions and
+pickers. Shipped WMS orders now pay 5% of an idle order's pay a unit times
+their country's goodwill factor (x0.5-x1.5); goodwill moves with on-time,
+in-full shipments, shown on a Countries tab; a toast says when a P1 order
+ships or a P1/P2 order misses its cutoff. Cutoffs tightened to 3-8 min so
+priorities matter (idle: about 93% on time, 80% OTIF). Save schema 4.
+Polish: windowed grid rows, the floor paused under the WMS, 40 px controls,
+empty states, reduced motion.
+**Checks.** `npm test` (486) and `npm run check` pass; pacing targets hold
+(first sale 36.2 min, was 36.3); no sideways page scroll at 360 px on any
+WMS screen (`e2e/wms-shots.ts`); 300 orders and 2,000 lines scroll at
+52-58 fps with the CPU slowed 4x (`e2e/wms-perf.ts`, budget 55).
+**How to see it.** Tap WMS (bottom left). Countries is the tab at the top.
+**What is left.** See docs/GAPS.md (W5): play it on a real phone.
 
 ### 2026-10-07 - WMS slices 2-3: orders move, and the order grid (lanes C, S, H, U, D; owner request, W5)
 **What changed.** The WMS now runs (RULES 16): a new order every 20-30 s,

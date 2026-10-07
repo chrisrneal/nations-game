@@ -1,5 +1,5 @@
 import type { RngState } from './state.ts';
-import type { WmsState, WmsView } from './wms.ts';
+import type { WmsAction, WmsActionName, WmsState, WmsView } from './wms.ts';
 
 /**
  * The warehouse game's shared vocabulary (docs/RULES.md, decision records W1
@@ -143,7 +143,8 @@ export type WarehouseCommand =
   | { readonly tick: number; readonly type: 'tapReceive'; readonly payload: NoPayload }
   | { readonly tick: number; readonly type: 'buy'; readonly payload: BuyPayload }
   | { readonly tick: number; readonly type: 'boost'; readonly payload: BoostPayload }
-  | { readonly tick: number; readonly type: 'sell'; readonly payload: NoPayload };
+  | { readonly tick: number; readonly type: 'sell'; readonly payload: NoPayload }
+  | { readonly tick: number; readonly type: 'wms'; readonly payload: WmsAction };
 
 export type WarehouseCommandType = WarehouseCommand['type'];
 
@@ -158,6 +159,12 @@ export interface WarehouseEventPayloads {
   readonly bought: { upgrade: UpgradeId; level: number; cents: number };
   readonly boosted: { boost: BoostId; ticks: number };
   readonly sold: { stars: number; site: number };
+  /** A WMS order shipped (slice 8): what it paid, and whether it was on time and in full. */
+  readonly wmsShipped: { order: number; iso: string; priority: number; cents: number; onTime: boolean; inFull: boolean; goodwill: number };
+  /** A WMS order's cutoff passed before it shipped. */
+  readonly wmsMissed: { order: number; iso: string; priority: number };
+  /** A WMS action succeeded (slice 7); `cents` is what it cost. */
+  readonly wms: { action: WmsActionName; order: number; cents: number };
   readonly rejected: { command: WarehouseCommandType; reason: string };
 }
 export type WarehouseEventType = keyof WarehouseEventPayloads;

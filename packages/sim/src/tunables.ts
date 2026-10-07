@@ -116,8 +116,8 @@ export const WAREHOUSE_TUNABLES = {
   wmsQtyMin: { value: 4, min: 1, max: 50, note: 'WMS: fewest units on an order line.' },
   wmsQtyMax: { value: 48, min: 2, max: 500, note: 'WMS: most units on an order line.' },
   wmsPickers: { value: 6, min: 1, max: 20, note: 'WMS: pickers in the pool (Picker 01..N); each works one line at a time.' },
-  wmsCutoffMinTicks: { value: 2400, min: 240, max: 14_400, note: 'WMS: shortest time to ship-by of a Standard (P3) order (10 min); High (P2) gets 3/4 of that, Expedite (P1) half.' },
-  wmsCutoffMaxTicks: { value: 7200, min: 480, max: 28_800, note: 'WMS: longest time to ship-by of a Standard order (30 min).' },
+  wmsCutoffMinTicks: { value: 720, min: 240, max: 14_400, note: 'WMS: shortest time to ship-by of a Standard (P3) order (3 min); High (P2) gets 3/4 of that, Expedite (P1) half. With 3-8 min an idle WMS ships about 93% on time and 80% OTIF (seeds 1-8, 2 h): misses happen, and priorities and expedites can save them.' },
+  wmsCutoffMaxTicks: { value: 1920, min: 480, max: 28_800, note: 'WMS: longest time to ship-by of a Standard order (8 min).' },
   wmsExpediteChanceBp: { value: 1000, min: 0, max: 5000, note: 'WMS: chance a new order is P1 Expedite (10%).' },
   wmsHighChanceBp: { value: 2500, min: 0, max: 5000, note: 'WMS: chance a new order is P2 High (25%); the rest are P3 Standard.' },
   wmsStockCoverMinPct: { value: 60, min: 0, max: 100, note: 'WMS: least stock a SKU opens with, as % of the units ordered of it: under 100 some lines will be short.' },
@@ -142,6 +142,11 @@ export const WAREHOUSE_TUNABLES = {
   wmsGoodwillStart: { value: 50, min: 0, max: 100, note: 'WMS: goodwill (0-100) every destination country starts at.' },
   wmsExpediteCostOrders: { value: 30, min: 5, max: 200, note: 'WMS: an expedite costs the pay of this many orders at today\'s pay (about $30 at the start): real money, but small next to a truck.' },
   wmsExpediteLeadTicks: { value: 1200, min: 0, max: 7200, note: 'WMS: an expedited order goes P1 and onto a later, faster truck: this much is added to its ship-by (5 min).' },
+  wmsUnitPayBp: { value: 500, min: 0, max: 5000, note: 'WMS: a shipped WMS order pays this share of an idle order\'s pay for each unit shipped (5%), times its country\'s goodwill factor: a bonus beside the trucks, small enough to leave the pacing targets in place.' },
+  wmsGoodwillGain: { value: 3, min: 0, max: 20, note: 'WMS: goodwill a country gains when its order ships on time and in full.' },
+  wmsGoodwillLatePerMin: { value: 4, min: 0, max: 50, note: 'WMS: goodwill lost for each whole minute (or part) an order ships after its cutoff.' },
+  wmsGoodwillLateMax: { value: 20, min: 0, max: 100, note: 'WMS: most goodwill one late order can cost.' },
+  wmsGoodwillShortMax: { value: 15, min: 0, max: 100, note: 'WMS: goodwill an order shipped with nothing would cost; a short order costs this times its share of units short.' },
 } as const satisfies Readonly<Record<string, Tunable>>;
 
 export type WarehouseTunableId = keyof typeof WAREHOUSE_TUNABLES;

@@ -67,8 +67,29 @@ async function main(): Promise<void> {
     const row = page.locator('[data-testid="wms-grid"] tbody tr').first();
     await row.tap();
     await page.waitForTimeout(500);
-    if (await page.getByTestId('wms-detail').isVisible().catch(() => false)) await shot(page, out, 'detail');
+    if (await page.getByTestId('wms-detail').isVisible().catch(() => false)) {
+      await shot(page, out, 'detail');
+      await page.locator('.wms-lines tbody tr').first().tap();
+      await page.waitForTimeout(400);
+      await shot(page, out, 'line-actions');
+      await page.getByTestId('wms-hold').tap();
+      await page.waitForTimeout(1200);
+      await shot(page, out, 'held');
+    }
     if (await page.getByTestId('wms-detail-back').isVisible().catch(() => false)) await page.getByTestId('wms-detail-back').tap();
+    if (await page.getByTestId('wms-choose').isVisible().catch(() => false)) {
+      await page.getByTestId('wms-choose').tap();
+      await page.getByRole('button', { name: /All NEW/ }).tap();
+      await page.waitForTimeout(400);
+      await shot(page, out, 'release');
+      await page.getByRole('button', { name: 'Done' }).tap();
+    }
+    if (await page.getByTestId('wms-tab-countries').isVisible().catch(() => false)) {
+      await page.getByTestId('wms-tab-countries').tap();
+      await page.waitForTimeout(400);
+      await shot(page, out, 'countries');
+      await page.getByTestId('wms-tab-orders').tap();
+    }
     const feed = page.getByTestId('wms-feed-toggle');
     if (await feed.isVisible().catch(() => false)) {
       await feed.tap();

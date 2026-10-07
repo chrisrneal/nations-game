@@ -331,6 +331,8 @@ async function main(): Promise<void> {
     await back.getByTestId('settings').tap();
     await back.getByTestId('import-file').setInputFiles(worth.path);
     await back.getByTestId('open-sell').waitFor({ timeout: 5000 });
+    // The warehouse before the import may already offer a sale of its own: wait for the imported one's.
+    await back.waitForFunction(() => (document.querySelector('[data-testid="open-sell"]')?.textContent ?? '').includes('+3'), undefined, { timeout: 5000 }).catch(() => undefined);
     check('the bottom bar offers the sale', ((await back.getByTestId('open-sell').textContent()) ?? '').includes('+3'), (await back.getByTestId('open-sell').textContent()) ?? '');
     await touchTargets(back, 'bottom bar with sell');
     await noHorizontalScroll(back, 'bottom bar with sell');

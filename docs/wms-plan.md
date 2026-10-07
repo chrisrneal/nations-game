@@ -116,16 +116,47 @@ WMS catalog, so State stays compact and hashable.
    `rowSignature`), `grid.ts` (filters, sort, tones, clock), `useWms.ts`
    (re-renders once per WMS step), `wms.css`. `e2e/wms-shots.ts` screenshots.
 4. **Order detail.** Header summary, lines grid, shorts in red, the order's own
-   history; back keeps scroll and filter. STATUS: TODO
+   history; back keeps scroll and filter. STATUS: DONE. `OrderDetail.tsx`:
+   summary, lines (description under the SKU so Status fits 360 px), the
+   order's events (`EventLines`, shared with the feed). `WmsScreen` keeps
+   filter, sort and the grid's scroll (`GridScroll`) while detail is open.
 5. **Activity feed.** Collapsible bottom console, newest first, tap to open the
-   order, exceptions in red. STATUS: TODO
+   order, exceptions in red. STATUS: DONE. `ActivityFeed.tsx`, docked under
+   the grid and the detail; collapsed it shows the latest event and the
+   count of exceptions in the log; open, 52% of the screen.
 6. **KPI strip.** Open orders, lines/hr, fill rate, OTIF, exceptions, pickers
-   busy/total. STATUS: TODO
+   busy/total. STATUS: DONE. `KpiStrip.tsx` from `view.wms.kpis` (lines/hr
+   over the last 4 minutes, `recent` buckets); fill under 95%, OTIF under
+   90% and any exception show red. The header shows the next wave's
+   countdown. Ship-by tightened to 3-8 min for P3 (idle: ~93% on time, ~80%
+   OTIF) so priorities and expedites matter.
 7. **Player actions.** Release a wave, change priority, hold/unhold, reassign a
-   picker, cancel a line, expedite for cash; each logs an event. STATUS: TODO
+   picker, cancel a line, expedite for cash; each logs an event. STATUS: DONE.
+   A `wms` command (`WmsAction` in contracts; shape check in `commands.ts`)
+   applied by `wmsAction` in `packages/sim/src/wms/actions.ts`; the step
+   charges the expedite and emits a `wms` event or `rejected`. Orders gained
+   `expedited` (save schema 4); lines can be CANCELLED. UI: `Actions.tsx`
+   (priority, hold, expedite; per line, picker buttons and a two-tap cancel;
+   the Release… mode with its bar). RULES 16 lists the rules.
 8. **Feedback loop.** OTIF and shipping results into customer goodwill per
    country and pay; OTIF per country on screen; toasts for key ships and
-   misses. STATUS: TODO
+   misses. STATUS: DONE. `ship()` in `tick.ts` pays `shipmentPay` and moves
+   goodwill by `goodwillChange`; `wmsStep` returns the cents, which the step
+   adds to cash and `earned`, and pushes `wmsShipped` and `wmsMissed`
+   events. UI: a Countries page (`Countries.tsx`, tab in the WMS header:
+   shipped, OTIF %, goodwill bar and pay factor), goodwill on the order
+   detail, and App toasts when a P1 order ships or a P1/P2 order misses its
+   cutoff. Pacing unchanged (first sale 36.2 min).
 9. **Polish.** Tap targets, dark mode, reduced motion, empty states, 300
    orders / 2,000 lines scrolling smoothly (virtualise by hand if needed).
-   STATUS: TODO
+   STATUS: DONE. The grid renders only the rows near the screen
+   (`rowWindow` in `grid.ts`: chunks of 4, a margin of 8, spacer rows), with
+   fixed column widths, the height from a ResizeObserver and scroll read
+   once a frame; the floor stops rendering while the WMS is open; the row
+   handler is stable so unchanged rows skip the once-a-second update.
+   Filters, tabs and the sort header are 40 px; empty grids say why; bars
+   do not animate with reduced motion; the WMS is dark (`color-scheme`).
+   Load: `wmsUnderLoad()` in packages/harness (a sim-side test keeps a
+   tick plus its View under 4 ms) and `apps/web/e2e/wms-perf.ts`: opening
+   the WMS 1.7 s -> 0.35-0.45 s, a fast fling through all 300 orders
+   37-41 -> 52-58 fps (budget 55; the floor alone 58-59 on this machine).

@@ -133,3 +133,19 @@ export function countdown(ticks: number, tickMs: number): string {
 export function rowSignature(o: WmsOrderView): string {
   return `${o.status}|${o.linesPicked}|${o.unitsPicked}|${o.pct}|${o.priority}|${o.wave}|${o.late ? 1 : 0}|${o.exception ? 1 : 0}|${o.shipBy}`;
 }
+
+/** The grid's row height and header height in CSS px; wms.css sets the same (slice 9). */
+export const ROW_H = 36;
+export const HEAD_H = 40;
+
+/**
+ * Which rows to render (slice 9): the ones on screen plus a margin either
+ * side, in steps of `chunk` rows, so scrolling re-renders the grid once every
+ * few rows instead of every frame. `end` is exclusive.
+ */
+export function rowWindow(scrollTop: number, viewHeight: number, total: number, chunk = 4, margin = 8): { start: number; end: number } {
+  const first = Math.max(0, Math.floor((scrollTop - HEAD_H) / ROW_H) - margin);
+  const start = Math.min(Math.floor(first / chunk) * chunk, Math.max(0, total - 1));
+  const shown = Math.ceil(viewHeight / ROW_H) + 2 * margin + chunk;
+  return { start: Math.max(0, start), end: Math.min(total, start + shown) };
+}

@@ -114,7 +114,7 @@ describe('warehouse invariants under random play (RULES 13)', () => {
     fc.assert(fc.property(game, (g) => void play(g, 420, invariants)), { numRuns: 60 });
   }, 20_000);
 
-  it('cash only moves by pays and purchases', () => {
+  it('cash only moves by pays, WMS shipments and purchases (an expedite is a purchase)', () => {
     fc.assert(
       fc.property(game, (g) => {
         const cmds = byTick(g.moves);
@@ -125,6 +125,8 @@ describe('warehouse invariants under random play (RULES 13)', () => {
           for (const e of r.events) {
             if (e.type === 'departed') expected += e.payload.cents;
             if (e.type === 'bought') expected -= e.payload.cents;
+            if (e.type === 'wmsShipped') expected += e.payload.cents;
+            if (e.type === 'wms') expected -= e.payload.cents;
           }
           if (!r.events.some((e) => e.type === 'sold')) expect(r.state.cash).toBe(expected);
           s = r.state;
