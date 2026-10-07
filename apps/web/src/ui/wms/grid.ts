@@ -150,13 +150,15 @@ export function rowWindow(scrollTop: number, viewHeight: number, total: number, 
   return { start: Math.max(0, start), end: Math.min(total, start + shown) };
 }
 
-/** The WMS's three pages (W6): what comes in, what goes out, and what is on the shelves. */
-export type WmsPage = 'inbound' | 'outbound' | 'inventory';
+/** The WMS's pages: the live floor and the plan (W7), and what comes in, what goes out and what is on the shelves (W6). */
+export type WmsPage = 'floor' | 'inbound' | 'outbound' | 'inventory' | 'plan';
 
 export const PAGES: readonly { readonly id: WmsPage; readonly label: string }[] = [
-  { id: 'inbound', label: 'Inbound' },
-  { id: 'outbound', label: 'Outbound' },
-  { id: 'inventory', label: 'Inventory' },
+  { id: 'floor', label: 'Floor' },
+  { id: 'inbound', label: 'In' },
+  { id: 'outbound', label: 'Out' },
+  { id: 'inventory', label: 'Stock' },
+  { id: 'plan', label: 'Plan' },
 ];
 
 /** The filter chips above the inbound grid (W6). */

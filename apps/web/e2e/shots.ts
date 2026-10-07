@@ -42,6 +42,9 @@ async function main(): Promise<void> {
       });
       const page = context.pages()[0] ?? (await context.newPage());
       await page.goto(URL);
+      // The WMS is home (W7): these shots are of the docks screen.
+      await page.getByTestId('wms-floor').waitFor();
+      await page.getByTestId('open-docks').tap();
       await page.getByTestId('dock-0').waitFor();
       await page.waitForTimeout(3000);
       await page.screenshot({ path: join(out, `${phone.name}-new.png`) });

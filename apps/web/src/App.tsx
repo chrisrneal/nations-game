@@ -14,6 +14,7 @@ import { formatCash } from './ui/format.ts';
 import { WarehouseStore } from './ui/store.ts';
 import { TopBar } from './ui/TopBar.tsx';
 import { UpgradeSheet } from './ui/UpgradeSheet.tsx';
+import { HomeActions, HomeTop } from './ui/wms/Home.tsx';
 import { WmsScreen } from './ui/wms/WmsScreen.tsx';
 
 /** Names of the stations on the floor (RULES 14). */
@@ -37,13 +38,22 @@ function unlockText(upgrade: UpgradeId, level: number, view: WarehouseView, befo
   }
 }
 
-type SheetName = 'upgrades' | 'settings' | 'sell' | 'stars' | 'wms' | null;
+type SheetName = 'upgrades' | 'settings' | 'sell' | 'stars' | null;
+/** The two screens (W7): the WMS, the home, and the docks: the idle flow and its trucks. */
+type Screen = 'wms' | 'docks';
 
-/** The warehouse screen (docs/ROADMAP.md, phone UX): money and the dashboard on top, the floor (inbound dock, racks, the picking backlog at its heart, staging) and the outbound docks in the middle, actions under the thumb. */
+/**
+ * The warehouse (docs/ROADMAP.md, phone UX; decision record W7). Home is the
+ * WMS: the money bar, the live floor and the WMS's pages, actions under the
+ * thumb. The docks screen holds the idle flow (inbound dock, racks, the
+ * picking backlog, staging) and the trucks at the outbound docks, with the
+ * boosts; the sheets open over either.
+ */
 export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedback?: Feedback }): ReactElement {
   const { host, install, feedback } = props;
   const store = useMemo(() => new WarehouseStore(), []);
   const [sheet, setSheet] = useState<SheetName>(null);
+  const [screen, setScreen] = useState<Screen>('wms');
   const [toast, setToast] = useState<string | null>(null);
   const [intro, setIntro] = useState(false);
   const checkpoints = useRef<ReadonlySet<string>>(new Set());
@@ -120,39 +130,50 @@ export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedb
 
   return (
     <div className="app">
-      {/* The WMS covers the whole screen: the floor and its animation stop while it is open (slice 9). */}
-      {sheet !== 'wms' && (
+      {screen === 'docks' ? (
         <>
-      <TopBar view={view} store={store} onSettings={() => setSheet('settings')} onStars={() => setSheet('stars')} />
-      <InstallBanner install={install} onToast={setToast} />
-      <Floor journey={view.journey} pickingLevel={view.upgrades.find((u) => u.id === 'picking')?.level ?? 0} docks={view.docks.length} tickMs={view.tickMs} store={store} onTapPick={tapPick} onTapReceive={tapReceive}>
-        <Pier model={view.truckModel}>
-          {view.docks.map((g) => (
-            <DockCard
-              key={g.index}
-              index={g.index}
-              truck={g.truck}
-              turning={g.turn > 0}
-              express={g.express}
-              parcels={g.parcels}
-              model={g.model}
-              tickMs={view.tickMs}
-              store={store}
-              onTap={tap}
-            />
-          ))}
-          {nextDock !== undefined && nextDock.cost !== null && (
-            <NextDockCard number={view.docks.length + 1} cost={nextDock.cost} affordable={nextDock.affordable} onOpen={() => setSheet('upgrades')} />
-          )}
-          {nextDock !== undefined &&
-            nextDock.cost !== null &&
-            Array.from({ length: Math.max(0, 2 * STANDS_PER_ROW - view.docks.length - 1) }, (_, i) => <EmptyStand key={i} number={view.docks.length + 2 + i} />)}
-        </Pier>
-      </Floor>
-      <BottomBar view={view} store={store} onUpgrades={() => setSheet('upgrades')} onSell={() => setSheet('sell')} onBoost={boost} onWms={() => setSheet('wms')} />
+          <TopBar view={view} store={store} onSettings={() => setSheet('settings')} onStars={() => setSheet('stars')} />
+          <InstallBanner install={install} onToast={setToast} />
+          <Floor journey={view.journey} pickingLevel={view.upgrades.find((u) => u.id === 'picking')?.level ?? 0} docks={view.docks.length} tickMs={view.tickMs} store={store} onTapPick={tapPick} onTapReceive={tapReceive}>
+            <Pier model={view.truckModel}>
+              {view.docks.map((g) => (
+                <DockCard
+                  key={g.index}
+                  index={g.index}
+                  truck={g.truck}
+                  turning={g.turn > 0}
+                  express={g.express}
+                  parcels={g.parcels}
+                  model={g.model}
+                  tickMs={view.tickMs}
+                  store={store}
+                  onTap={tap}
+                />
+              ))}
+              {nextDock !== undefined && nextDock.cost !== null && (
+                <NextDockCard number={view.docks.length + 1} cost={nextDock.cost} affordable={nextDock.affordable} onOpen={() => setSheet('upgrades')} />
+              )}
+              {nextDock !== undefined &&
+                nextDock.cost !== null &&
+                Array.from({ length: Math.max(0, 2 * STANDS_PER_ROW - view.docks.length - 1) }, (_, i) => <EmptyStand key={i} number={view.docks.length + 2 + i} />)}
+            </Pier>
+          </Floor>
+          <BottomBar view={view} store={store} onUpgrades={() => setSheet('upgrades')} onSell={() => setSheet('sell')} onBoost={boost} onWms={() => setScreen('wms')} />
         </>
+      ) : (
+        // The idle floor and its animation stop while the WMS is on screen (slice 9).
+        <WmsScreen
+          store={store}
+          host={host}
+          top={
+            <>
+              <HomeTop view={view} store={store} onSettings={() => setSheet('settings')} onStars={() => setSheet('stars')} />
+              <InstallBanner install={install} onToast={setToast} />
+            </>
+          }
+          bottom={<HomeActions view={view} onDocks={() => setScreen('docks')} onUpgrades={() => setSheet('upgrades')} onSell={() => setSheet('sell')} />}
+        />
       )}
-      {sheet === 'wms' && <WmsScreen store={store} host={host} onClose={close} />}
       {sheet === 'upgrades' && <UpgradeSheet view={view} store={store} onBuy={buy} onSell={() => setSheet('sell')} onClose={close} />}
       {sheet === 'sell' && (
         <SellSheet

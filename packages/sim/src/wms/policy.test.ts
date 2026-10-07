@@ -77,7 +77,7 @@ describe('walking between bins (RULES 16, W7)', () => {
       expect(p).toMatchObject({ order: 1, line: 1, at: 80, walk: walkTicks(-1, 80), progress: 0 });
       expect(walkTicks(-1, 80)).toBe(22);
       const v = wmsView(m, 1, ['Local'], 100);
-      expect(v.pickers[0]).toMatchObject({ order: 1, at: 80, walk: 22, picked: 0, units: 4, priority: 3 });
+      expect(v.pickers[0]).toMatchObject({ order: 1, at: 80, aisle: 0, bay: 11, walk: 22, picked: 0, units: 4, priority: 3 });
       // 22 ticks of walking take 6 steps (whole seconds); no unit is picked meanwhile.
       run(m, STEP, 6);
       expect(m.pickers[0]?.walk).toBe(0);
@@ -220,6 +220,7 @@ describe('the plan as a command (RULES 16, W7)', () => {
     const v = wmsView(stepped.wms, stepped.tick, ['Local'], 100);
     expect(v.policy).toEqual(plan);
     expect(v.crew).toBe(wmsCrew());
+    expect(v.layout).toEqual({ aisles: 4, bays: 20, aisleGap: 3, doors: T.wmsDockDoors.value });
     expect(v.receivers.length).toBe(wmsCrew() - 7);
   });
 });

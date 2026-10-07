@@ -1,8 +1,10 @@
 /**
  * Screenshots of the WMS screens (docs/wms-plan.md) on the 360 x 740 budget
- * phone: the order grid after five minutes, scrolled sideways, filtered to
+ * phone: the home's live floor (W7) after five minutes, a picker's order
+ * opened from the floor, the plan, the order grid, scrolled sideways, filtered to
  * exceptions, and (when they exist) an order's detail and the activity feed;
- * the countries, the inbound grid and a PO, and the inventory grid (W6).
+ * the countries, the inbound grid and a PO, the inventory grid (W6), and
+ * the docks screen.
  * Also reports whether the page scrolls sideways. Run `npm run build` first,
  * then `npx tsx e2e/wms-shots.ts [outDir]` from apps/web.
  */
@@ -47,13 +49,25 @@ async function main(): Promise<void> {
     });
     const page = context.pages()[0] ?? (await context.newPage());
     await page.goto(URL);
-    await page.getByTestId('dock-0').waitFor();
+    await page.getByTestId('wms-floor').waitFor();
     await page.getByTestId('settings').tap();
     await page.getByTestId('skip-5').tap();
     await page.getByTestId('collect').tap({ timeout: 10_000 });
-    await page.waitForTimeout(1000);
-    await shot(page, out, 'floor');
-    await page.getByTestId('open-wms').tap();
+    await page.waitForTimeout(2500);
+    await shot(page, out, 'home');
+    await page.waitForTimeout(1700);
+    await shot(page, out, 'home-later');
+    await page.getByTestId('wms-tab-plan').tap();
+    await page.getByTestId('wms-plan').waitFor();
+    await shot(page, out, 'plan');
+    await page.getByTestId('plan-pick-nearest').tap();
+    await page.getByTestId('plan-crew-more').tap();
+    await page.waitForTimeout(1500);
+    await shot(page, out, 'plan-changed');
+    await page.getByTestId('wms-tab-floor').tap();
+    await page.waitForTimeout(1500);
+    await shot(page, out, 'home-plan');
+    await page.getByTestId('wms-tab-outbound').tap();
     await page.getByTestId('wms-grid').waitFor();
     await page.waitForTimeout(1500);
     await shot(page, out, 'grid');
@@ -118,7 +132,14 @@ async function main(): Promise<void> {
       await feed.tap();
       await page.waitForTimeout(400);
       await shot(page, out, 'feed');
+      await feed.tap();
     }
+    await page.getByTestId('open-docks').tap();
+    await page.getByTestId('dock-0').waitFor();
+    await page.waitForTimeout(800);
+    await shot(page, out, 'docks');
+    await page.getByTestId('open-wms').tap();
+    await page.getByTestId('wms-floor').waitFor();
     await context.close();
   } finally {
     server.kill();

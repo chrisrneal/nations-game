@@ -16,7 +16,7 @@ import type {
   WmsView,
 } from '@warehouse/contracts';
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
-import { WMS_RATE_BUCKETS, WMS_RATE_BUCKET_TICKS, binCode, destinationAt, isClosed, orderCode, poCode, skuAt, supplierAt } from './catalog.ts';
+import { WMS_AISLES, WMS_AISLE_GAP_BAYS, WMS_BAYS, WMS_RATE_BUCKETS, WMS_RATE_BUCKET_TICKS, binCode, binPlace, destinationAt, isClosed, orderCode, poCode, skuAt, supplierAt } from './catalog.ts';
 import { inboundUnits, waitingUnits } from './inbound.ts';
 import { WMS_PICK_RULES, WMS_RELEASE_MODES, wmsCrew } from './policy.ts';
 
@@ -238,7 +238,7 @@ function poView(po: WmsPo, receiverOn: ReadonlyMap<string, number>): WmsPoView {
         short: l.short,
         status: l.status,
         receiver: receiverOn.get(`${po.no}/${l.no}`) ?? 0,
-        binNo: l.bin,
+        ...binPlace(l.bin),
         putAt: l.putAt,
       };
     }),
@@ -291,7 +291,7 @@ function inventoryView(w: WmsState): { stock: WmsStockView[]; inventoryKpis: Wms
       sku: sku.code,
       desc: sku.desc,
       bin: binCode(s.bin),
-      binNo: s.bin,
+      ...binPlace(s.bin),
       onHand: s.onHand,
       allocated: s.allocated,
       available,
@@ -357,7 +357,7 @@ export function wmsView(w: WmsState, tick: number, contracts: readonly string[],
     pickers: w.pickers.map((p) => {
       const o = p.order === 0 ? undefined : w.orders.find((x) => x.no === p.order);
       const l = o?.lines.find((x) => x.no === p.line);
-      return { id: p.id, order: p.order, line: p.line, at: p.at, walk: p.walk, picked: l?.picked ?? 0, units: l?.allocated ?? 0, priority: o?.priority ?? 0 };
+      return { id: p.id, order: p.order, line: p.line, at: p.at, ...binPlace(p.at), walk: p.walk, picked: l?.picked ?? 0, units: l?.allocated ?? 0, priority: o?.priority ?? 0 };
     }),
     receivers: w.receivers.map((rc) => {
       const po = rc.po === 0 ? undefined : w.pos.find((x) => x.no === rc.po);
@@ -366,6 +366,7 @@ export function wmsView(w: WmsState, tick: number, contracts: readonly string[],
     }),
     policy: w.policy,
     crew: wmsCrew(),
+    layout: { aisles: WMS_AISLES, bays: WMS_BAYS, aisleGap: WMS_AISLE_GAP_BAYS, doors: T.wmsDockDoors.value },
     countries: w.dests.map((d, i) => ({ ...destinationAt(i), shipped: d.shipped, otif: d.otif, otifPct: pct(d.otif, d.shipped), goodwill: d.goodwill })),
     nextWaveIn: Math.max(0, w.nextWaveAt - tick),
     expediteCost: payCents * T.wmsExpediteCostOrders.value,

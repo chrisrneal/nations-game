@@ -27,6 +27,10 @@
  * order board, its six pickers shown, and the bottleneck names it. The inbound dock
  * is a tap target too and a tap sends extra hands. The testing time skip runs
  * an hour at once and recaps it.
+ * The WMS is home (W7): the app opens on the live floor with every picker
+ * on it, Docks and Upgrades in the bottom third, the plan one tap away and
+ * a change to it applied by the sim, 60 fps on the floor with the CPU
+ * slowed 4x; the checks of the docks screen follow from the Docks button.
  * Boosts: a new warehouse has Flash sale ready and the other two locked, in
  * the bottom third; a tap starts Flash sale with a countdown; the eight-dock
  * warehouse runs All hands (every dock glows) and Peak rates (boosted
@@ -55,6 +59,28 @@ function chromiumPath(): string {
 }
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
+
+/** Frames a second and the worst frame over `ms`, measured in the page. A string, not a function: tsx would inject a helper the page does not have. */
+async function measureFps(page: Page, ms: number): Promise<{ frames: number; worst: number }> {
+  return (await page.evaluate(`new Promise((resolve) => {
+    let frames = 0, worst = 0, last = performance.now();
+    const start = last;
+    const frame = (now) => {
+      frames++;
+      worst = Math.max(worst, now - last);
+      last = now;
+      if (now - start < ${ms}) requestAnimationFrame(frame);
+      else resolve({ frames: frames / ((now - start) / 1000), worst });
+    };
+    requestAnimationFrame(frame);
+  })`)) as { frames: number; worst: number };
+}
+
+/** From the WMS home (W7) to the docks screen. */
+async function toDocks(page: Page, first = 'dock-0'): Promise<void> {
+  await page.getByTestId('open-docks').tap();
+  await page.getByTestId(first).waitFor({ timeout: 8000 });
+}
 function check(name: string, ok: boolean, detail = ''): void {
   results.push({ name, ok, detail });
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  (${detail})` : ''}`);
@@ -110,11 +136,23 @@ async function main(): Promise<void> {
     const page = context.pages()[0] ?? (await context.newPage());
     const opened = Date.now();
     await page.goto(URL);
-    await page.getByTestId('dock-0').waitFor();
+    await page.getByTestId('wms-floor').waitFor();
     await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
     const cdp = await context.newCDPSession(page);
     const installErrors = (await cdp.send('Page.getInstallabilityErrors')) as { installabilityErrors: unknown[] };
     check('installable (manifest + service worker)', installErrors.installabilityErrors.length === 0, JSON.stringify(installErrors.installabilityErrors));
+
+    // The WMS is home (W7).
+    await page.waitForFunction(() => Number(document.querySelector('[data-testid="wms-floor-canvas"]')?.getAttribute('data-pickers') ?? 0) > 0, undefined, { timeout: 5000 }).catch(() => undefined);
+    const pickers = Number(await page.getByTestId('wms-floor-canvas').getAttribute('data-pickers'));
+    check('the app opens on the WMS floor, every picker on it', (await page.getByTestId('wms-tab-floor').getAttribute('aria-selected')) === 'true' && pickers === 6, `${pickers} pickers`);
+    await noHorizontalScroll(page, 'WMS home');
+    await touchTargets(page, 'WMS home');
+    for (const id of ['open-docks', 'open-upgrades']) {
+      const b = await page.getByTestId(id).boundingBox();
+      check(`${id} in the bottom third of the WMS home`, b !== null && b.y + b.height / 2 >= (HEIGHT * 2) / 3, `centre at ${Math.round((b?.y ?? 0) + (b?.height ?? 0) / 2)}`);
+    }
+    await toDocks(page);
 
     check('a new warehouse opens with one dock', (await page.locator('.dock:not(.dock-next)').count()) === 1);
     check('the next dock shows as something to aim for', (await page.getByTestId('next-dock').count()) === 1);
@@ -199,9 +237,30 @@ async function main(): Promise<void> {
     check('export downloads a save file', /^warehouse-tick-\d+\.json$/.test(download.suggestedFilename()), download.suggestedFilename());
     await page.getByRole('dialog').getByRole('button', { name: 'Close' }).first().tap();
 
+    // Back on the WMS home: its floor runs at 60 fps, and the plan is one tap away (W7).
+    await page.getByTestId('open-wms').tap();
+    await page.getByTestId('wms-floor').waitFor();
+    await page.waitForTimeout(1500);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    const floorFps = await measureFps(page, 4000);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    check('60 fps on the WMS floor (CPU slowed 4x)', floorFps.frames >= 55, `${floorFps.frames.toFixed(1)} fps, worst frame ${floorFps.worst.toFixed(0)} ms`);
+    await page.getByTestId('wms-plan-chip').tap();
+    await page.getByTestId('wms-plan').waitFor();
+    await noHorizontalScroll(page, 'WMS plan');
+    await touchTargets(page, 'WMS plan');
+    await page.getByTestId('plan-pick-nearest').tap();
+    await page.getByTestId('plan-crew-more').tap();
+    await page.getByTestId('wms-tab-floor').tap();
+    await page.waitForFunction(() => /Nearest bin.*7 pick \/ 2 receive/.test(document.querySelector('[data-testid="wms-plan-chip"]')?.textContent ?? ''), undefined, { timeout: 4000 }).catch(() => undefined);
+    const plan = (await page.getByTestId('wms-plan-chip').textContent()) ?? '';
+    await page.waitForFunction(() => Number(document.querySelector('[data-testid="wms-floor-canvas"]')?.getAttribute('data-pickers') ?? 0) === 7, undefined, { timeout: 4000 }).catch(() => undefined);
+    check('the plan changes in two taps and the floor shows it: nearest bin, seven pickers', /Nearest bin.*7 pick \/ 2 receive/.test(plan) && Number(await page.getByTestId('wms-floor-canvas').getAttribute('data-pickers')) === 7, plan);
+
     await cdp.send('Storage.clearDataForOrigin', { origin: new globalThis.URL(URL).origin, storageTypes: 'indexeddb,local_storage,cache_storage,service_workers' });
     await page.reload();
-    await page.getByTestId('dock-0').waitFor();
+    await page.getByTestId('wms-floor').waitFor();
+    await toDocks(page);
     check('site data cleared: a fresh warehouse opens', (await page.locator('.dock:not(.dock-next)').count()) === 1);
     const busy = busyFile(profile);
     await page.getByTestId('settings').tap();
@@ -236,19 +295,7 @@ async function main(): Promise<void> {
         await page.waitForTimeout(300);
       }
     })();
-    // A string, not a function: tsx would inject a helper the page does not have.
-    const fps = (await page.evaluate(`new Promise((resolve) => {
-      let frames = 0, worst = 0, last = performance.now();
-      const start = last;
-      const frame = (now) => {
-        frames++;
-        worst = Math.max(worst, now - last);
-        last = now;
-        if (now - start < 5000) requestAnimationFrame(frame);
-        else resolve({ frames: frames / ((now - start) / 1000), worst });
-      };
-      requestAnimationFrame(frame);
-    })`)) as { frames: number; worst: number };
+    const fps = await measureFps(page, 5000);
     await tapping;
     const crowd = Number(await page.getByTestId('flow-dots').getAttribute('data-dots'));
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
@@ -258,7 +305,8 @@ async function main(): Promise<void> {
     await page.waitForTimeout(1000);
     await context.setOffline(true);
     await page.reload();
-    await page.getByTestId('dock-7').waitFor({ timeout: 8000 });
+    await page.getByTestId('wms-floor').waitFor({ timeout: 8000 });
+    await toDocks(page, 'dock-7');
     check('reopens offline and continues the warehouse', (await page.locator('.dock:not(.dock-next)').count()) === 8);
     await context.setOffline(false);
 
@@ -352,6 +400,7 @@ async function main(): Promise<void> {
     await back.getByTestId('site-twist').waitFor({ timeout: 3000 });
     check('Port Calder opens with its twist', /Narrow yard/.test((await back.getByTestId('site-twist').textContent()) ?? ''));
     await back.getByTestId('open-site').tap();
+    await toDocks(back);
     const owned = (await back.getByTestId('open-stars').textContent()) ?? '';
     check('the new warehouse has the stars, two docks (Second dock) and cash (Head start)', /Port Calder Docks/.test((await back.getByTestId('site').textContent()) ?? '') && owned.trim() === '★ 3' && (await back.locator('.dock:not(.dock-next)').count()) === 2 && (await cashCents(back)) >= WAREHOUSE_TUNABLES.perkHeadStartCents.value, owned);
 

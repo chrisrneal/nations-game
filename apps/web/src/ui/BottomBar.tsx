@@ -6,9 +6,9 @@ import { nextGoal, secondsUntil } from './goal.ts';
 import type { WarehouseStore } from './store.ts';
 
 /**
- * The thumb zone: what the warehouse is staged for, the next goal with a
- * countdown, the boosts, and the Upgrades button (primary actions in the
- * bottom third).
+ * The thumb zone of the docks screen: what the warehouse is staged for, the
+ * next goal with a countdown, the boosts, the way back to the WMS (the home
+ * since W7) and the Upgrades button (primary actions in the bottom third).
  */
 export function BottomBar(props: { view: WarehouseView; store: WarehouseStore; onUpgrades: () => void; onSell: () => void; onBoost: (id: BoostId) => void; onWms: () => void }): ReactElement {
   const { view, store, onUpgrades, onSell, onBoost, onWms } = props;
@@ -51,8 +51,8 @@ export function BottomBar(props: { view: WarehouseView; store: WarehouseStore; o
       )}
       <BoostBar boosts={view.boosts} tickMs={view.tickMs} store={store} onBoost={onBoost} />
       <div className="actions">
-        <button type="button" className="btn btn-wide btn-wms" onClick={onWms} data-testid="open-wms" aria-label="WMS: orders, picking and the activity log">
-          WMS
+        <button type="button" className="btn btn-wide btn-wms" onClick={onWms} data-testid="open-wms" aria-label="Back to the WMS: the floor, orders, picking and the plan">
+          ‹ WMS
           <span ref={wmsBadge} className="count" />
         </button>
         <button type="button" className="btn btn-primary btn-wide" onClick={onUpgrades} data-testid="open-upgrades">

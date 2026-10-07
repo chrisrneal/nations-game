@@ -24,6 +24,11 @@ the app is closed, up to a cap. When it has earned enough you can sell it for
 **stars**, which permanently raise the pay per order, and start again at a new
 site with its own twist.
 
+The app opens on the **WMS** (section 16, decision record W7): a
+warehouse management system running key-account orders beside the idle
+flow, its live floor drawn from what it is doing, with an operating plan the
+player sets. The idle flow and its trucks are on the **Docks** screen.
+
 Tapping a dock gives it a short **rush**; tapping picking sends extra pickers
 and tapping receiving extra hands. Playing actively earns about 2-3x what
 idling earns; it is never required. Three free **boosts** (section 15) each fix
@@ -494,6 +499,9 @@ Checked by property tests on every build:
 
 ## 14. The floor (what the screen shows)
 
+Since W7 this is the **Docks** screen, one tap from the WMS home (section
+16, The WMS floor).
+
 Under the cash, a **dashboard** row of four tiles: orders shipped by this
 warehouse, orders a minute at today's levels (the estimate of section 8), the
 backlog, and how full the shelves are. The tile that names the bottleneck
@@ -602,8 +610,9 @@ to do and an active player a burst to plan around.
 
 ## 16. The WMS (warehouse management system)
 A layer beside the idle flow (decision record W5, plan in docs/wms-plan.md):
-key-account orders the player manages by hand. It does not change income,
-picking, stock or pacing in RULES 3-11.
+key-account orders the player manages by hand, and since W7 the home screen,
+with an operating plan the player sets. It does not change income, picking,
+stock or pacing in RULES 3-11 beyond its own shipments' pay.
 - **Opening.** Every new warehouse (and every migrated version-1 save) opens
   a WMS seeded from the warehouse seed plus the site, on its own RNG stream.
 - **SKUs and bins.** 16 SKUs (`WMS_SKUS`), each in one bin; SKU `i` sits in
@@ -622,7 +631,8 @@ picking, stock or pacing in RULES 3-11.
   of it, rounded down, so some lines will run short; an SKU nobody ordered
   holds `wmsQtyMin`-`wmsQtyMax` units.
 - **Pickers and receivers.** `wmsPickers` (6) and `wmsReceivers` (3), all
-  idle, the pickers at the pick-and-drop point, and the default plan (W7); no purchase orders yet (the first planning run is the first step).
+  idle, the pickers at the pick-and-drop point, and the default plan (W7);
+  no purchase orders yet (the first planning run is the first step).
 - **Log.** One ORD CRT event per order with its units; the latest
   `wmsEventsKept` (200) events are kept.
 - **The step.** The WMS steps every `wmsStepTicks` ticks (1 s), on its own
@@ -759,6 +769,28 @@ picking, stock or pacing in RULES 3-11.
   84%, 97%, 97.1% (work starts sooner, but stock goes to whichever order
   comes first); seven pickers and two receivers 85%, 98%, 97.3%; five
   pickers 65%, 74%, 97.4%.
+- **The WMS floor** (what the home screen shows, W7). Drawn only from the
+  WMS View. Inbound across the top: the trucks on the road (a count), the
+  yard (ARRIVED POs), each dock door with the PO being received and its %
+  counted in, the receivers (orange, numbered) at the door of the PO they
+  count with an arc for the line's share, idle ones on the dock lane, and a
+  forklift for each received line driving along the dock lane, down the
+  front cross aisle and along the aisle to its bin, arriving when the line
+  is put away (the bin flashes). The racks: aisles A-D of 20 bays, every
+  SKU's bin filled to its stock (green OK, amber LOW, red OUT or SHORT).
+  The pickers (numbered discs: blue walking, green picking with an arc for
+  the share picked, grey idle; a gold or blue ring for a P1 or P2 order)
+  walk the route the sim times and arrive when it says. When a line is
+  confirmed its tote runs along the aisle to the front, down the conveyor
+  to packing. Outbound along the bottom: every order past picking is a
+  carton (gold P1, blue P2, cardboard P3; a red edge if short) at the pack
+  bench (PICKED, SHORT), packed (PACKED), staging (STAGED) or the truck
+  (LOADED); a shipped order's pay rises from the truck, and the truck pulls
+  out once every order on it has shipped and the next backs in. Each zone
+  shows its count, with orders waiting to pick and being picked. A tap on a
+  picker or a carton opens its order, on a docked trailer its PO, on a bin
+  its SKU, name and stock. Over the floor a line names the plan; a tap opens
+  it.
 - **Goodwill and pay** (slice 8). Each destination country has goodwill,
   0-100, starting at `wmsGoodwillStart` (50). A shipment pays the warehouse
   `wmsUnitPayBp` (5%) of an idle order's pay (stars and site included) for

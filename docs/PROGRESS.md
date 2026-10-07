@@ -1,5 +1,6 @@
 # Progress
-Current state: **Warehouse Idle** (decision records W1, W2). On 2026-10-06 the
+Current state: **Warehouse Idle, becoming a WMS sim** (decision records W1,
+W2; the WMS is home since W7). On 2026-10-06 the
 airport game became a warehouse game: its engine and rules renamed, plus
 stock, purchase orders and a dashboard. The airport is at commit `5f78bce`;
 the entries below that date describe it in airport words (gates, planes,
@@ -11,8 +12,40 @@ passengers, security). The Nations log is at commit `67d1d92`.
 - [x] Star perks (W3)
 - [x] WMS, nine slices (W5, docs/wms-plan.md)
 - [x] WMS Inbound, Outbound and Inventory pages (W6, wms-plan slice 10)
+- [x] The WMS is home: a live floor drawn from the WMS, and the plan (W7, wms-plan slice 11)
 
 ## Session log
+
+### 2026-10-07 - The WMS becomes the game: live floor, plan, home (lanes C, S, H, U, D; owner request, W7)
+**What changed.** The app opens on the WMS. Its new Floor tab draws the
+warehouse from what the WMS is doing: trucks at the two dock doors,
+receivers counting them in, forklifts putting each line into its bin, the
+real pickers walking to their line's bin and picking it (an arc fills), a
+tote down the conveyor for each finished line, and every order past picking
+as a carton moving from the pack bench to packed, staging and the truck,
+which pulls out when its orders ship. Tap a picker or carton for its order,
+a trailer for its PO, a bin for its SKU. A new Plan tab lets you change the
+WMS's own decisions: pick order (priority, cutoff, nearest bin), release
+(timed waves, continuous, manual) and crew (how many of the nine pick and
+how many receive). Each change is logged (PLAN) and saved (schema 6). In
+the sim, pickers now walk between bins (four aisles of 20 bays), and
+allocation goes most urgent first. The old floor with the trucks and boosts
+is the Docks screen (button at the bottom); the tabs are now Floor, In, Out,
+Stock, Plan.
+**Checks.** `npm test` and `npm run check` pass (new: 12 plan and walking
+sim tests, 10 floor-model tests, a real version-5 save migrated). Idle WMS
+over 2 h, seeds 1-8: 82% OTIF, 94% on time (was 84%, 95%); pacing targets
+hold. Phone check 74/74 at 360 x 740 (the WMS floor at 60 fps with the CPU
+slowed 4x; the plan changes in two taps); no sideways scroll on any WMS
+page (`e2e/wms-shots.ts`).
+**How to see it.** Open the app: it starts on the Floor. Watch the numbered
+pickers walk and the cartons move along the bottom. Tap Plan, choose
+Nearest bin and press + under Crew, then go back to Floor: a seventh picker
+appears and the KPIs above show the effect. Docks (bottom left) has the
+trucks and boosts.
+**What is left.** Most of the money still comes from the Docks screen;
+making the WMS the money-maker needs a pacing pass and the owner's go
+(docs/GAPS.md, W7).
 
 ### 2026-10-07 - WMS Inbound, Outbound and Inventory (lanes C, S, H, U, D; owner request, W6)
 **What changed.** The WMS's Orders | Countries toggle is now Inbound |

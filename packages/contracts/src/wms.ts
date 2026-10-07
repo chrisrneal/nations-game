@@ -409,6 +409,9 @@ export interface WmsPickerView {
   readonly line: number;
   /** Bin index it stands at or walks to; -1 at the pick-and-drop point (W7). */
   readonly at: number;
+  /** Where that is on the floor (W7): aisle (0 = A) and bay (1-20; 0 the front cross aisle). */
+  readonly aisle: number;
+  readonly bay: number;
   /** Ticks of walking left (W7). */
   readonly walk: number;
   /** Units picked so far and units to pick on its line; 0 when idle. */
@@ -451,8 +454,9 @@ export interface WmsPoLineView {
   readonly status: WmsPoLineStatus;
   /** The receiver on it now; 0 for none. */
   readonly receiver: number;
-  /** Bin index it is put away to, and the tick its units reach the bin (0 while not received) (W7). */
-  readonly binNo: number;
+  /** Where its bin is on the floor (W7), and the tick its units reach the bin (0 while not received). */
+  readonly aisle: number;
+  readonly bay: number;
   readonly putAt: number;
 }
 
@@ -494,8 +498,9 @@ export interface WmsStockView {
   readonly sku: string;
   readonly desc: string;
   readonly bin: string;
-  /** Bin index (W7), for the floor map. */
-  readonly binNo: number;
+  /** Where its bin is on the floor (W7): aisle (0 = A) and bay (1-20). */
+  readonly aisle: number;
+  readonly bay: number;
   readonly onHand: number;
   readonly allocated: number;
   readonly available: number;
@@ -565,4 +570,6 @@ export interface WmsView {
   readonly policy: WmsPolicy;
   readonly crew: number;
   readonly receivers: readonly WmsReceiverView[];
+  /** The floor's shape (W7): aisles, bays down each, bays of walking from one aisle to the next, dock doors. */
+  readonly layout: { readonly aisles: number; readonly bays: number; readonly aisleGap: number; readonly doors: number };
 }

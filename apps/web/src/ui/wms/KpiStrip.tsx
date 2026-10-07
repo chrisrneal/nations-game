@@ -26,6 +26,19 @@ export function outboundKpis(k: WmsKpis, nextWave: string): Kpi[] {
   ];
 }
 
+/** The floor (W7): the next wave (or how orders are released), OTIF, lines an hour, and who is busy: pickers, doors and receivers. */
+export function floorKpis(k: WmsKpis, ik: WmsInboundKpis, nextWave: string): Kpi[] {
+  return [
+    { label: 'Wave in', value: nextWave, testId: 'wms-next-wave' },
+    { label: 'OTIF', value: percent(k.otifPct), alert: k.otifPct !== null && k.otifPct < 90 },
+    { label: 'Lines/hr', value: short(k.linesPerHour) },
+    { label: 'Pickers', value: `${k.pickersBusy}/${k.pickersTotal}` },
+    { label: 'Doors', value: `${ik.doorsBusy}/${ik.doorsTotal}`, alert: ik.atDock > ik.doorsBusy },
+    { label: 'Rcvrs', value: `${ik.receiversBusy}/${ik.receiversTotal}` },
+    { label: 'Exc', value: String(k.exceptions), alert: k.exceptions > 0 },
+  ];
+}
+
 /** Inbound (W6): POs open and where they are, doors and receivers busy, units counted in an hour, exceptions, POs on time. */
 export function inboundKpis(k: WmsInboundKpis): Kpi[] {
   return [
