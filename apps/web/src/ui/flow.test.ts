@@ -11,13 +11,13 @@ function dock(index: number, over: Partial<DockView> = {}): DockView {
 /** The parts of a View the flow reads; the rest is never touched. */
 function view(
   tick: number,
-  over: { staged?: number; orderPerTick?: number; missed?: number; docks?: DockView[]; site?: number; backlog?: number; po?: { id: number; units: number; received: number }; stock?: number } = {},
+  over: { staged?: number; orderPerTick?: number; missed?: number; docks?: DockView[]; site?: number; backlog?: number; po?: { id: number; units: number; received: number }; stock?: number; items?: number } = {},
 ): WarehouseView {
   return {
     tick,
     tickMs: 250,
     staging: { staged: over.staged ?? 10_000, cap: 40_000, orderPerTick: over.orderPerTick ?? 400 },
-    picking: { backlog: over.backlog ?? 0, cap: 72_000, ratePerTick: 600, baseRatePerTick: 600, rushed: false, waitTicks: 0, slowBp: 10_000 },
+    picking: { backlog: over.backlog ?? 0, cap: 72_000, ratePerTick: 600, baseRatePerTick: 600, rushed: false, waitTicks: 0, slowBp: 10_000, itemsMilli: over.items ?? 1000 },
     receiving: { stock: over.stock ?? 60_000, shelfCap: 120_000, ratePerTick: 600, baseRatePerTick: 600, rushed: false, po: over.po ?? { id: 1, units: 48, received: 0 } },
     docks: over.docks ?? [dock(0)],
     site: { index: over.site ?? 0, name: 'Millbrook Depot', twist: '' },
@@ -346,15 +346,16 @@ describe('goods on the floor (RULES 14)', () => {
     expect(model.dots.filter((d) => d.kind === 'dep')).toHaveLength(0);
   });
 
-  it('some orders have several items: the picker fills a tote from a different location for each, then takes it to staging', () => {
+  it('orders of several items (RULES 3b): the picker fills a tote from a different location for each, and the mix averages the real items per order', () => {
     const model = new FlowModel();
-    let tick = feed(model, 0, 1, (t) => view(t, { orderPerTick: 0, backlog: 60_000 }));
+    // Overseas: 2.1 items an order.
+    let tick = feed(model, 0, 1, (t) => view(t, { orderPerTick: 0, backlog: 60_000, items: 2100, stock: 120_000 }));
     let now = tick * 250;
     for (let i = 0; i < 60; i++) model.advance(16, (now += 16), GEO);
     const stops = new Map<Dot, { left: number; at: string[] }>();
     const sizes: number[] = [];
     for (let k = 0; k < 120; k++) {
-      tick = feed(model, tick, 1, (t) => view(t, { orderPerTick: 0, backlog: Math.max(0, 60_000 - t * 600) }));
+      tick = feed(model, tick, 1, (t) => view(t, { orderPerTick: 0, backlog: Math.max(0, 60_000 - t * 600), items: 2100, stock: 120_000 }));
       for (let i = 0; i < 16; i++) {
         model.advance(16, (now += 16), GEO);
         for (const d of model.dots) {
@@ -371,16 +372,39 @@ describe('goods on the floor (RULES 14)', () => {
         }
       }
     }
-    expect(sizes.every((n) => n >= 1 && n <= 4)).toBe(true);
+    // A tote holds 2 to 4 items, or up to twice the average when that is more (5 here).
+    expect(sizes.every((n) => n >= 1 && n <= 5)).toBe(true);
+    // Each ticket is one order: 60 in all.
+    expect(sizes).toHaveLength(60);
     const multi = [...stops.entries()].filter(([d]) => d.items > 1);
-    expect(multi.length).toBeGreaterThan(sizes.length * 0.15);
-    expect(multi.length).toBeLessThan(sizes.length * 0.6);
-    // Every order picked is all its items: 60 orders in all, however they were grouped.
-    expect(sizes.reduce((a, b) => a + b, 0)).toBe(60);
+    expect(multi.length).toBeGreaterThan(60 * 0.25);
+    expect(multi.length).toBeLessThan(60 * 0.65);
+    const mean = sizes.reduce((a, b) => a + b, 0) / sizes.length;
+    expect(Math.abs(mean - 2.1)).toBeLessThan(0.4);
     for (const [, seen] of multi) expect(new Set(seen.at).size).toBe(seen.at.length);
     expect(multi.some(([d, seen]) => seen.at.length === d.items)).toBe(true);
     for (let i = 0; i < 900; i++) model.advance(16, (now += 16), GEO);
     expect(model.dots.filter((d) => d.kind === 'dep')).toHaveLength(0);
+  });
+
+  it('one-item orders need no tote: at 1 item an order none is drawn, at Local shops about one in ten', () => {
+    for (const [items, lo, hi] of [[1000, 0, 0], [1200, 0.03, 0.2]] as const) {
+      const model = new FlowModel();
+      let tick = feed(model, 0, 1, (t) => view(t, { orderPerTick: 0, backlog: 200_000, items, stock: 120_000 }));
+      let now = tick * 250;
+      const seen = new Map<Dot, number>();
+      for (let k = 0; k < 340; k++) {
+        tick = feed(model, tick, 1, (t) => view(t, { orderPerTick: 0, backlog: Math.max(0, 200_000 - (t - 1) * 600), items, stock: 120_000 }));
+        for (let i = 0; i < 16; i++) {
+          model.advance(16, (now += 16), GEO);
+          for (const d of model.dots) if (d.kind === 'dep' && d.phase === 'pick') seen.set(d, d.items);
+        }
+      }
+      const totes = [...seen.values()].filter((n) => n > 1).length / seen.size;
+      expect(seen.size).toBeGreaterThan(150);
+      expect(totes).toBeGreaterThanOrEqual(lo);
+      expect(totes).toBeLessThanOrEqual(hi);
+    }
   });
 
   it('a backlog longer than the board holds squeezes up, and dots stand for more of it', () => {

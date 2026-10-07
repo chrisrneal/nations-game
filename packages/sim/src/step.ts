@@ -101,14 +101,19 @@ function receivingTick(m: MState, d: Derived, events: Sink): void {
   }
 }
 
-/** Pickers take orders from the head of the backlog, a unit of stock each, into staging; empty shelves or full staging hold them (RULES 3, 6). */
+/**
+ * Pickers take orders from the head of the backlog into staging, a unit of
+ * stock for each item (an order is `itemsMilli` / 1000 items, rounded up when
+ * taken); empty shelves or full staging hold them (RULES 3, 3b, 6).
+ */
 function pickingTick(m: MState, d: Derived): void {
   const fast = m.pickRush > 0 || m.boosts.allHands.left > 0;
   if (m.pickRush > 0) m.pickRush -= 1;
   const rate = fast ? rushed(d.pickingMilli) : d.pickingMilli;
-  const picked = Math.min(rate, m.backlog, m.stock, Math.max(0, d.stageCapMilli - m.staged));
+  const stocked = Math.floor((m.stock * 1000) / d.itemsMilli);
+  const picked = Math.min(rate, m.backlog, stocked, Math.max(0, d.stageCapMilli - m.staged));
   m.backlog -= picked;
-  m.stock -= picked;
+  m.stock -= Math.ceil((picked * d.itemsMilli) / 1000);
   m.staged += picked;
 }
 

@@ -15,7 +15,7 @@ export const UPGRADE_TEXT: Readonly<Record<UpgradeId, { name: string; catch: str
   sales: { name: 'More sales', catch: 'More orders and packing space. Only pays if picking, stock and the docks keep up.' },
   picking: { name: 'More pickers', catch: 'Faster picking, and customers wait behind a longer backlog. Only pays while orders queue.' },
   receiving: { name: 'Receiving bay', catch: 'Faster put-away and more shelves. Only pays while the shelves run low.' },
-  contract: { name: 'Better contracts', catch: 'More pay per order; needs trucks as big as its level. Export paperwork slows picking.' },
+  contract: { name: 'Better contracts', catch: 'More pay per order, but bigger orders: more picks and stock each. Needs trucks as big as its level.' },
   crew: { name: 'Yard crew', catch: 'Faster truck swaps. Worth most with small trucks that fill fast.' },
   night: { name: 'Night shift', catch: 'Keeps the warehouse running longer while you are away. Earns nothing while you play.' },
 };

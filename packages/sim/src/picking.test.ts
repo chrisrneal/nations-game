@@ -2,7 +2,7 @@ import type { WarehouseCommand, WarehouseEvent, WarehouseState, Levels } from '@
 import { describe, expect, it } from 'vitest';
 import { createWarehouse } from './state.ts';
 import { step } from './step.ts';
-import { orderMilliAt, derive, backlogCapMilliFor, pickingMilliAt, upgradeCost, stageCapMilliAt } from './rules.ts';
+import { orderMilliAt, derive, backlogCapMilliFor, itemsMilliAt, pickingItemsMilliAt, pickingMilliAt, upgradeCost, stageCapMilliAt } from './rules.ts';
 import { warehouseView, estimate } from './view.ts';
 import { WAREHOUSE_TUNABLES as T } from './tunables.ts';
 
@@ -99,10 +99,23 @@ describe('the picking line (RULES 3)', () => {
   });
 
   it('export paperwork (Cross-border) and customs (Overseas) each slow picking to 95%', () => {
-    expect(pickingMilliAt(0, 4)).toBe(600);
-    expect(pickingMilliAt(0, 5)).toBe(570);
-    expect(pickingMilliAt(0, 6)).toBe(541); // 600 x 0.95 x 0.95, floored at each step
-    expect(pickingMilliAt(3, 0)).toBe(2025); // 600 x 1.5^3
+    expect(pickingItemsMilliAt(0, 4)).toBe(720);
+    expect(pickingItemsMilliAt(0, 5)).toBe(684);
+    expect(pickingItemsMilliAt(0, 6)).toBe(649); // 720 x 0.95 x 0.95, floored at each step
+    expect(pickingItemsMilliAt(3, 0)).toBe(2430); // 720 x 1.5^3
+    expect(pickingMilliAt(3, 0)).toBe(2025); // in orders of 1.2 items
+  });
+
+  it('bigger customers send bigger orders: 1.2 items at Local shops, +0.15 a contract level, each a pick (RULES 3b)', () => {
+    expect([0, 1, 4, 5, 6, 9].map(itemsMilliAt)).toEqual([1200, 1350, 1800, 1950, 2100, 2550]);
+    // Picking in orders: the items picked a tick over the items an order.
+    expect([0, 1, 4, 5, 6].map((c) => pickingMilliAt(0, c))).toEqual([600, 533, 400, 350, 309]);
+    expect(warehouseView(withLevels(createWarehouse({ seed: 1 }), { contract: 4, truck: 4 })).picking).toMatchObject({ baseRatePerTick: 400, itemsMilli: 1800 });
+    // A tick at National retailer (1.8 items an order): 0.4 orders picked take 0.72 units of stock.
+    const s = noLoading(tweak(withLevels(createWarehouse({ seed: 1 }), { contract: 4, truck: 4 }), { staged: 0, backlog: 50_000, stock: 50_000 }));
+    const after = step(s, []).state;
+    expect(after.staged).toBe(400);
+    expect(after.stock).toBe(50_000 + 720 - 720);
   });
 
   it('More pickers costs $25, then x1.8 a level, and shows its speed now and next', () => {
@@ -134,7 +147,7 @@ describe('the picking line (RULES 3)', () => {
   it('the view shows the line, its cap, the rate, the wait and the extra lane', () => {
     const s = tweak(withLevels(createWarehouse({ seed: 1 }), { sales: 5 }), { backlog: 12_000, pickRush: 3 });
     const v = warehouseView(s).picking;
-    expect(v).toEqual({ backlog: 12_000, cap: 72_000, ratePerTick: 1500, baseRatePerTick: 600, rushed: true, waitTicks: 8, slowBp: 10_000 });
+    expect(v).toEqual({ backlog: 12_000, cap: 72_000, ratePerTick: 1500, baseRatePerTick: 600, rushed: true, waitTicks: 8, slowBp: 10_000, itemsMilli: 1200 });
   });
 });
 

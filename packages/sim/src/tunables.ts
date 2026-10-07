@@ -8,8 +8,9 @@ import type { Tunable } from '@warehouse/contracts';
  * - No balance number lives anywhere else: not inline, not in the interface.
  * - Each entry has a note saying what it is and why the band is what it is.
  * - The harness may sweep inside [min, max]; leaving the band is a design change.
- * - All values are integers in code units (P3): cents, milli-orders (one order
- *   is one unit of stock), ticks, basis points (10000 = x1).
+ * - All values are integers in code units (P3): cents, milli-orders, milli-items
+ *   (an order is one or more items; each item is one pick and one unit of
+ *   stock, RULES 3b), ticks, basis points (10000 = x1).
  */
 export const WAREHOUSE_TUNABLES = {
   tickMs: { value: 250, min: 100, max: 1000, note: 'Wall ms per tick. Short enough that a tap feels immediate, long enough that 24 h of catch-up is 345,600 cheap steps.' },
@@ -17,18 +18,20 @@ export const WAREHOUSE_TUNABLES = {
   cashCapCents: { value: 9_000_000_000_000_000, min: 9_000_000_000_000_000, max: 9_000_000_000_000_000, note: 'Engine limit: the safe-integer ceiling. The safe is full.' },
   startingCashCents: { value: 0, min: 0, max: 10_000, note: 'Cash a new warehouse opens with.' },
   startingStaged: { value: 10, min: 0, max: 40, note: 'Orders packed and staged at opening, so the first truck fills at once.' },
-  startingStock: { value: 60, min: 0, max: 200, note: 'Units on the shelves at opening: half the first shelves.' },
+  startingStock: { value: 72, min: 0, max: 240, note: 'Units on the shelves at opening: half the first shelves.' },
   orderBaseMilliPerTick: { value: 400, min: 200, max: 1000, note: 'Milli-orders a tick at sales level 0 (1.6 a second).' },
   orderGrowthBp: { value: 13_500, min: 12_000, max: 15_000, note: 'Orders per sales level (+35%).' },
   stagingCapBase: { value: 40, min: 20, max: 100, note: 'Packed orders the staging area holds at sales level 0.' },
   stagingCapGrowthBp: { value: 13_500, min: 12_000, max: 15_000, note: 'Staging space per sales level; matches orders so it holds the same seconds of them.' },
-  pickingBaseMilliPerTick: { value: 600, min: 400, max: 1500, note: 'Milli-orders picked a tick at level 0 (2.4 a second): ahead of level-0 orders, so the first minutes have no backlog.' },
+  pickingBaseMilliPerTick: { value: 720, min: 400, max: 1800, note: 'Milli-items picked a tick at level 0 (2.88 a second: 2.4 Local shops orders of 1.2 items): ahead of level-0 orders, so the first minutes have no backlog.' },
   pickingGrowthBp: { value: 15_000, min: 12_500, max: 16_000, note: 'Picking per pickers level (+50%): ahead of sales\'s +35%, so pickers hired keep up for a while.' },
+  itemsBaseMilli: { value: 1200, min: 1000, max: 2000, note: 'Milli-items in an order at contract level 0 (1.2: most Local shops orders are one item, some a tote of several).' },
+  itemsPerContractMilli: { value: 150, min: 0, max: 600, note: 'Extra milli-items an order per contract level (+0.15; at +0.2 or more the wait for contract 6 passed 5 minutes): bigger customers send bigger orders, the catch that keeps +60% pay a trade-off. 0 turns the rule off.' },
   backlogWaitTicks: { value: 120, min: 40, max: 240, note: 'The longest wait customers accept (30 s of picking): the backlog holds this many ticks of picking; beyond it new orders are cancelled.' },
   exportCheckBp: { value: 9500, min: 6000, max: 10_000, note: 'Picking speed for each export station (export paperwork, customs): x0.95 each. The catch of the big contracts.' },
-  receiveBaseMilliPerTick: { value: 600, min: 300, max: 1500, note: 'Milli-units put away a tick at receiving level 0 (2.4 a second), level with picking: at 2 a second the first bay came before the second dock (2.5 minutes).' },
+  receiveBaseMilliPerTick: { value: 720, min: 300, max: 1800, note: 'Milli-units put away a tick at receiving level 0 (2.88 a second), level with picking: at the old 2 orders a second the first bay came before the second dock (2.5 minutes).' },
   receiveGrowthBp: { value: 15_000, min: 12_500, max: 16_000, note: 'Put-away per receiving level (+50%), like picking: ahead of sales, so a bay bought keeps up for a while.' },
-  shelfCapBase: { value: 120, min: 40, max: 400, note: 'Units the shelves hold at receiving level 0 (about a minute of orders): a buffer for flash sales.' },
+  shelfCapBase: { value: 144, min: 40, max: 480, note: 'Units the shelves hold at receiving level 0 (about a minute of orders): a buffer for flash sales.' },
   shelfCapGrowthBp: { value: 15_000, min: 12_500, max: 16_000, note: 'Shelf space per receiving level; matches put-away so the shelves hold the same seconds of it.' },
   poTicks: { value: 80, min: 20, max: 240, note: 'A purchase order is this many ticks of put-away (20 s), so a new PO reaches the dock every 20 s or so.' },
   maxDocks: { value: 8, min: 4, max: 12, note: 'Most docks: 8 fit a phone screen in two rows of four.' },

@@ -102,9 +102,19 @@ export function pickingSlowBpAt(contract: number): number {
   return grow(BP, T.exportCheckBp.value, slowCheckpointsAt(contract));
 }
 
-/** Milli-orders picked a tick (RULES 3), before any extra pickers. */
-export function pickingMilliAt(level: number, contract: number): number {
+/** Milli-items in an order at this contract level (RULES 3b): bigger customers send bigger orders. */
+export function itemsMilliAt(contract: number): number {
+  return T.itemsBaseMilli.value + T.itemsPerContractMilli.value * contract;
+}
+
+/** Milli-items picked a tick (RULES 3, 3b), before any extra pickers. */
+export function pickingItemsMilliAt(level: number, contract: number): number {
   return mulDiv(grow(T.pickingBaseMilliPerTick.value, T.pickingGrowthBp.value, level), pickingSlowBpAt(contract), BP);
+}
+
+/** Milli-orders picked a tick (RULES 3, 3b), before any extra pickers: the items picked, in orders of this contract's size. */
+export function pickingMilliAt(level: number, contract: number): number {
+  return mulDiv(pickingItemsMilliAt(level, contract), 1000, itemsMilliAt(contract));
 }
 
 /** The longest backlog customers accept, milli-orders: `backlogWaitTicks` of picking. */
@@ -206,6 +216,8 @@ export interface Derived {
   readonly pickingMilli: number;
   readonly backlogCapMilli: number;
   readonly receiveMilli: number;
+  /** Milli-items in an order, each a unit of stock (RULES 3b). */
+  readonly itemsMilli: number;
   readonly shelfCapMilli: number;
   readonly poUnits: number;
   readonly payCents: number;
@@ -229,6 +241,7 @@ export function derive(state: Pick<WarehouseState, 'levels' | 'site' | 'stars'>)
     pickingMilli,
     backlogCapMilli: backlogCapMilliFor(pickingMilli),
     receiveMilli,
+    itemsMilli: itemsMilliAt(levels.contract),
     shelfCapMilli: shelfCapMilliAt(levels.receiving),
     poUnits: poUnitsFor(receiveMilli),
     payCents: payCentsAt(levels.contract),

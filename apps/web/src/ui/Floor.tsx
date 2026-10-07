@@ -91,7 +91,8 @@ export function Floor(props: {
         if (rate.current) rate.current.textContent = `+${formatRate((t.orderPerTick * 1000) / tickMs)}`;
         if (scale.current) scale.current.textContent = flow.perDot === 1 ? '' : `• = ${short(flow.perDot)}`;
         const packed = pick.backlog > 0 && t.staged >= t.cap;
-        const empty = pick.backlog > 0 && !packed && recv.stock < pick.ratePerTick;
+        // Stock for less than a tick's picking, in orders of today's size (RULES 3b).
+        const empty = pick.backlog > 0 && !packed && (recv.stock * 1000) / pick.itemsMilli < pick.ratePerTick;
         const orders = Math.floor(pick.backlog / 1000);
         if (lineText.current) {
           lineText.current.textContent =

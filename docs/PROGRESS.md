@@ -12,6 +12,34 @@ passengers, security). The Nations log is at commit `67d1d92`.
 
 ## Session log
 
+### 2026-10-07 - Bigger customers send bigger orders (architect, lanes C, S, H, U, D; owner request, W4)
+**What changed.** Order size is now a real rule (RULES 3b). An order averages
+1.2 items at Local shops, and each Better contracts level adds 0.15 (2.1 at
+Overseas, 2.55 at Everything store). Every item is its own pick and its own
+unit of stock, so a better contract pays 60% more an order but makes picking
+and the racks work harder: the bottleneck moves to pickers or receiving
+sooner. Pickers and receiving were raised 20% (2.88 items a second, 144-unit
+shelves, 72 units at opening) so the first warehouse opens exactly as before.
+On the floor each ticket is now one order, and its size is drawn so the totes
+match the real average: about one in ten at Local shops, over 40% by
+Overseas. The Better contracts card says "bigger orders".
+**Tuning.** Every RULES 11 target holds on seeds 1-5: first sale 36.0-36.3
+minutes (was 35.3-35.6), longest wait 4.3 min, tapping 2.1-3.2x idle,
+estimate within 4%. At +0.2 items a level the wait for contract 6 passed 5
+minutes, so the step is 0.15. Report: docs/balance/warehouse-pacing.md.
+**Checks.** `npm test` (370; new: items per contract with worked numbers, a
+tick at National retailer takes 1.8 units an order, the tote mix averages the
+real figure, no totes at 1 item an order) and `npm run check` pass. Phone
+check 64/65 at 360 x 740: the 60 fps run read 32.7-38.6 fps with the CPU
+slowed 4x, but this session's machine reads 35.4-37.1 for the unchanged game
+(earlier sessions read 56-58), so it is logged in docs/GAPS.md to recheck.
+Forklifts now carry an average order's items each, so bigger orders do not
+add forklifts; pickers filling totes still mean about 20% more goods moving
+in the busy warehouse (104-109 against 86-87).
+**How to see it.** Buy Better contracts a few times and watch the floor: more
+pickers push totes, and the racks empty faster for the same orders.
+**What is left.** See docs/GAPS.md (W4 entries).
+
 ### 2026-10-07 - Multi-item orders picked into totes (lanes U, D; owner request)
 **What changed.** About a third of the orders a picker takes are now
 multi-item orders of 2 to 4 items. The picker pushes a blue tote, walks to a
