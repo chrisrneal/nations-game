@@ -10,8 +10,34 @@ passengers, security). The Nations log is at commit `67d1d92`.
 - [x] Warehouse pivot (W1), one pull request (W2)
 - [x] Star perks (W3)
 - [x] WMS, nine slices (W5, docs/wms-plan.md)
+- [x] WMS Inbound, Outbound and Inventory pages (W6, wms-plan slice 10)
 
 ## Session log
+
+### 2026-10-07 - WMS Inbound, Outbound and Inventory (lanes C, S, H, U, D; owner request, W6)
+**What changed.** The WMS's Orders | Countries toggle is now Inbound |
+Outbound | Inventory. Outbound is the order grid as before (Countries is a
+chip at the end of its filters; the wave countdown is in its KPI strip).
+Stock no longer refills by magic: the WMS plans reorders every minute and
+raises purchase orders to eight suppliers; trucks arrive on an ETA (some
+late), wait for one of two dock doors, are counted in by three receivers
+(some lines short or damaged) and put away into the bins. Inbound lists the
+POs with status, supplier, % received, ETA and door; tap one for its lines
+and history. Inventory lists every SKU with on hand, allocated, available,
+inbound, units waiting, bin, picked, last cycle count and variance, with a
+status chip; rolling cycle counts find and adjust small variances. Each page
+has its own KPI strip. The activity feed opens a PO from an inbound line.
+Save schema 5 (old saves keep their orders and stock and gain empty
+inbound).
+**Checks.** `npm test` and `npm run check` pass (new: 17 inbound and
+inventory sim tests, 3 view tests, 3 grid tests, the version-4 save
+migration with a real save file). Pacing targets hold (first sale 36.2 min).
+An idle WMS ships 84% OTIF and 98% fill over 2 h (was 80% and 97%). 24 h
+catch-up 568 ms in Node (496 ms for the build before on this machine). No
+sideways page scroll at 360 px on any WMS page (`e2e/wms-shots.ts`).
+**How to see it.** Tap WMS (bottom left), then Inbound or Inventory at the
+top. Watch a PO go IN TRANSIT, ARRIVED, RECEIVING, PUTAWAY, CLOSED.
+**What is left.** See docs/GAPS.md (W6): no inbound actions yet.
 
 ### 2026-10-07 - WMS slices 4-9: detail, activity, KPIs, actions, goodwill, polish (lanes C, S, H, U, P, D; owner request, W5)
 **What changed.** The WMS is complete (docs/wms-plan.md). Tap an order for
