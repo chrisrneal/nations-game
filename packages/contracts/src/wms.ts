@@ -52,7 +52,26 @@ export type WmsEventCode =
   | 'PRIO'
   | 'ASSIGN'
   | 'CANCEL'
-  | 'EXPEDITE';
+  | 'EXPEDITE'
+  // Inbound (W6): `order` holds the PO number, `picker` the receiver.
+  | 'PO CRT'
+  | 'ARRIVE'
+  | 'PO LATE'
+  | 'DOCK'
+  | 'RCV'
+  | 'RCV SHORT'
+  | 'DAMAGE'
+  | 'PUTAWAY'
+  | 'PO CLOSE'
+  // Inventory (W6).
+  | 'CYCLE CNT'
+  | 'ADJUST';
+
+/** Purchase order statuses (W6): on the road, in the yard waiting for a door, at a door being received, being put away, done. */
+export type WmsPoStatus = 'IN TRANSIT' | 'ARRIVED' | 'RECEIVING' | 'PUTAWAY' | 'CLOSED';
+
+/** A PO line: not yet received, under a receiver, received and waiting for put-away, in its bin. */
+export type WmsPoLineStatus = 'OPEN' | 'RECEIVING' | 'RECEIVED' | 'STORED';
 
 export interface WmsLine {
   /** 1-based within its order (shown L3). */
@@ -102,6 +121,76 @@ export interface WmsStock {
   readonly bin: number;
   readonly onHand: number;
   readonly allocated: number;
+  /** Units picked out of the bin since the warehouse opened (W6): how fast it moves. */
+  readonly picked: number;
+  /** Tick of its last cycle count; -1 if never counted (W6). */
+  readonly counted: number;
+  /** Net units cycle counts have added (+) or written off (-) since opening (W6). */
+  readonly variance: number;
+}
+
+/** One line of a purchase order (W6): one SKU, put away into its bin. */
+export interface WmsPoLine {
+  /** 1-based within its PO. */
+  readonly no: number;
+  readonly sku: number;
+  readonly bin: number;
+  /** Units ordered from the supplier. */
+  readonly expected: number;
+  /** Good units counted in at the dock (live while a receiver works the line). */
+  readonly received: number;
+  /** Units that arrived damaged: written off, never put away. */
+  readonly damaged: number;
+  /** Units the supplier did not send. */
+  readonly short: number;
+  readonly status: WmsPoLineStatus;
+  /** Tick the received units reach the bin; 0 while not received. */
+  readonly putAt: number;
+}
+
+/** A purchase order to a supplier (W6), raised by the WMS's reorder planning. */
+export interface WmsPo {
+  /** Sequential PO number (shown PO-50001). */
+  readonly no: number;
+  /** Index into the supplier catalog. */
+  readonly supplier: number;
+  readonly status: WmsPoStatus;
+  readonly lines: readonly WmsPoLine[];
+  readonly created: number;
+  /** The tick the supplier promised. */
+  readonly eta: number;
+  /** The tick the truck really arrives (drawn when the PO is raised; the screens show only `eta`). */
+  readonly arrive: number;
+  /** Tick it arrived; 0 while in transit. */
+  readonly arrived: number;
+  /** Dock door it was received at (1-based); 0 before it docks. */
+  readonly door: number;
+  /** Tick its last line was put away; 0 while open. */
+  readonly closed: number;
+  /** Its ETA passed before it arrived (PO LATE was logged). */
+  readonly late: boolean;
+}
+
+export interface WmsReceiver {
+  /** 1-based (shown Rcvr 01). */
+  readonly id: number;
+  /** PO number and line it is receiving; both 0 while idle. */
+  readonly po: number;
+  readonly line: number;
+  /** Milli-units counted so far on the current line. */
+  readonly progress: number;
+}
+
+/** Inbound and inventory totals since the warehouse opened (W6). */
+export interface WmsInboundStats {
+  readonly posClosed: number;
+  readonly posLate: number;
+  readonly unitsReceived: number;
+  readonly unitsDamaged: number;
+  readonly unitsShort: number;
+  readonly counts: number;
+  /** Cycle counts that matched the system. */
+  readonly countsAccurate: number;
 }
 
 export interface WmsPicker {
@@ -118,7 +207,7 @@ export interface WmsPicker {
 export interface WmsEvent {
   readonly tick: number;
   readonly code: WmsEventCode;
-  /** Order and line numbers it refers to; 0 for none. */
+  /** Order (or, for an inbound code, PO) and line numbers it refers to; 0 for none. */
   readonly order: number;
   readonly line: number;
   /** SKU index it refers to; -1 for none. */
@@ -127,7 +216,7 @@ export interface WmsEvent {
   readonly qty: number;
   /** Out of how many (PICK CONF 24/24); 0 for none. */
   readonly of: number;
-  /** Picker id; 0 for none. */
+  /** Picker id (receiver id for an inbound code); 0 for none. */
   readonly picker: number;
 }
 
@@ -171,6 +260,16 @@ export interface WmsState {
   readonly dests: readonly WmsDestStats[];
   /** Lines confirmed in each of the last few rate buckets (a ring indexed by tick), for lines per hour. */
   readonly recent: readonly number[];
+  /** Inbound (W6): purchase orders, open first then the latest closed, and the receiving crew. */
+  readonly nextPoNo: number;
+  readonly pos: readonly WmsPo[];
+  readonly receivers: readonly WmsReceiver[];
+  /** Inventory (W6): the next cycle count's tick and the SKU it counts. */
+  readonly nextCountAt: number;
+  readonly countCursor: number;
+  readonly inbound: WmsInboundStats;
+  /** Units received in each rate bucket, like `recent`. */
+  readonly recentIn: readonly number[];
 }
 
 /**
@@ -252,7 +351,9 @@ export interface WmsEventView {
   readonly code: WmsEventCode;
   /** Order number to open on a tap; 0 for none. */
   readonly order: number;
-  /** e.g. O-10234/L3, or a SKU for REPLEN, or '' */
+  /** PO number to open on a tap (W6); 0 for none. */
+  readonly po: number;
+  /** e.g. O-10234/L3, PO-50001/L2, or a SKU for REPLEN and counts, or '' */
   readonly ref: string;
   /** e.g. "GRN-0042  24/24  Picker 07". */
   readonly detail: string;
@@ -289,6 +390,104 @@ export interface WmsCountryView extends WmsDestView {
   readonly goodwill: number;
 }
 
+/** One PO line, ready to show (W6). */
+export interface WmsPoLineView {
+  readonly no: number;
+  readonly sku: string;
+  readonly desc: string;
+  readonly bin: string;
+  readonly expected: number;
+  readonly received: number;
+  readonly damaged: number;
+  readonly short: number;
+  readonly status: WmsPoLineStatus;
+  /** The receiver on it now; 0 for none. */
+  readonly receiver: number;
+}
+
+/** One row of the inbound grid (W6), with its lines for the PO detail. */
+export interface WmsPoView {
+  readonly no: number;
+  /** e.g. PO-50001. */
+  readonly code: string;
+  readonly supplier: string;
+  readonly status: WmsPoStatus;
+  readonly created: number;
+  readonly eta: number;
+  readonly arrived: number;
+  readonly closed: number;
+  readonly late: boolean;
+  readonly door: number;
+  readonly linesTotal: number;
+  /** Lines counted in (received or stored). */
+  readonly linesReceived: number;
+  readonly unitsExpected: number;
+  readonly unitsReceived: number;
+  readonly unitsDamaged: number;
+  readonly unitsShort: number;
+  /** Units received as a whole percentage of units expected, rounded down. */
+  readonly pct: number;
+  /** Late, short or damaged, while open. */
+  readonly exception: boolean;
+  readonly open: boolean;
+  readonly lines: readonly WmsPoLineView[];
+}
+
+/** OK, LOW under the reorder point, OUT with nothing free, SHORT when order lines waiting for it need more than is free. */
+export type WmsStockStatus = 'OK' | 'LOW' | 'OUT' | 'SHORT';
+
+/** One SKU's row of the inventory grid (W6). */
+export interface WmsStockView {
+  /** SKU index. */
+  readonly index: number;
+  readonly sku: string;
+  readonly desc: string;
+  readonly bin: string;
+  readonly onHand: number;
+  readonly allocated: number;
+  readonly available: number;
+  /** Units on open PO lines not yet counted in. */
+  readonly onOrder: number;
+  /** Units counted in at the dock, waiting for put-away. */
+  readonly dock: number;
+  /** Units order lines are waiting for (not yet allocated; NEW orders included). */
+  readonly demand: number;
+  readonly picked: number;
+  readonly counted: number;
+  readonly variance: number;
+  readonly status: WmsStockStatus;
+}
+
+/** The inbound KPI strip (W6). */
+export interface WmsInboundKpis {
+  readonly open: number;
+  readonly inTransit: number;
+  /** In the yard or at a door. */
+  readonly atDock: number;
+  readonly doorsBusy: number;
+  readonly doorsTotal: number;
+  readonly receiversBusy: number;
+  readonly receiversTotal: number;
+  /** Good units counted in an hour, measured over the last few minutes. */
+  readonly unitsPerHour: number;
+  readonly exceptions: number;
+  /** POs closed that arrived on time, as a whole %; null before any closes. */
+  readonly onTimePct: number | null;
+}
+
+/** The inventory KPI strip (W6). */
+export interface WmsInventoryKpis {
+  readonly skus: number;
+  readonly onHand: number;
+  readonly available: number;
+  readonly onOrder: number;
+  /** SKUs LOW, OUT or SHORT. */
+  readonly low: number;
+  readonly short: number;
+  /** Cycle counts that matched, as a whole %; null before the first count. */
+  readonly accuracyPct: number | null;
+}
+
 /** Everything the WMS screens read. */
 export interface WmsView {
   /** Changes whenever the WMS steps, so the screens re-render only then. */
@@ -303,4 +502,10 @@ export interface WmsView {
   readonly nextWaveIn: number;
   /** Cents an expedite costs now (slice 7). */
   readonly expediteCost: number;
+  /** Inbound (W6): open POs first, oldest first, then closed ones, newest first. */
+  readonly pos: readonly WmsPoView[];
+  readonly inboundKpis: WmsInboundKpis;
+  /** Inventory (W6): one row per SKU, in catalog order. */
+  readonly stock: readonly WmsStockView[];
+  readonly inventoryKpis: WmsInventoryKpis;
 }

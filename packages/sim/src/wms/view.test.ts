@@ -63,3 +63,58 @@ describe('WMS view (slices 3-6)', () => {
     expect(revs).toEqual([0, 0, 0, 0, 1, 1, 1, 1, 2]);
   });
 });
+
+describe('WMS inbound and inventory view (W6)', () => {
+  it('writes inbound and inventory lines like a real WMS console', () => {
+    expect(eventText(ev({ code: 'PO CRT', order: 50001, qty: 400, of: 2 }))).toEqual({ ref: 'PO-50001', detail: '2 lines  400 units' });
+    expect(eventText(ev({ code: 'DOCK', order: 50001, qty: 2 }))).toEqual({ ref: 'PO-50001', detail: 'door D2' });
+    expect(eventText(ev({ code: 'RCV', order: 50001, line: 2, sku: 0, qty: 198, of: 200, picker: 3 }))).toEqual({ ref: 'PO-50001/L2', detail: 'GRN-0042  198/200  Rcvr 03' });
+    expect(eventText(ev({ code: 'DAMAGE', order: 50001, line: 1, sku: 8, qty: 2, of: 200 }))).toEqual({ ref: 'PO-50001/L1', detail: 'SOL-0450  2 damaged' });
+    expect(eventText(ev({ code: 'PUTAWAY', order: 50001, line: 1, sku: 8, qty: 198 }))).toEqual({ ref: 'PO-50001/L1', detail: 'SOL-0450  +198 units' });
+    expect(eventText(ev({ code: 'CYCLE CNT', sku: 10, qty: 57, of: 57 }))).toEqual({ ref: 'CHP-2030', detail: '57 units, matched' });
+    expect(eventText(ev({ code: 'CYCLE CNT', sku: 10, qty: 55, of: 57 }))).toEqual({ ref: 'CHP-2030', detail: '55 counted, system 57' });
+    expect(eventText(ev({ code: 'ADJUST', sku: 10, qty: -2 }))).toEqual({ ref: 'CHP-2030', detail: '-2 units' });
+    expect(eventText(ev({ code: 'ADJUST', sku: 10, qty: 1 }))).toEqual({ ref: 'CHP-2030', detail: '+1 units' });
+  });
+
+  it('lists POs with supplier, counts and percent received, open first; inbound events open the PO, not an order', () => {
+    const view = warehouseView(advanceMany(createWarehouse({ seed: 3 }), 20 * 60 * 4));
+    const w = view.wms;
+    expect(w.pos.length).toBeGreaterThan(3);
+    const firstClosed = w.pos.findIndex((p) => !p.open);
+    expect(firstClosed).toBeGreaterThanOrEqual(0);
+    expect(w.pos.slice(firstClosed).every((p) => !p.open)).toBe(true);
+    for (const p of w.pos) {
+      expect(p.code).toBe(`PO-${p.no}`);
+      expect(p.supplier.length).toBeGreaterThan(0);
+      expect(p.unitsExpected).toBe(p.lines.reduce((n, l) => n + l.expected, 0));
+      expect(p.pct).toBe(Math.floor((p.unitsReceived * 100) / p.unitsExpected));
+      if (!p.open) expect(p.unitsReceived + p.unitsDamaged + p.unitsShort).toBe(p.unitsExpected);
+    }
+    for (const e of w.events) {
+      if (e.code === 'RCV' || e.code === 'PO CRT') expect([e.po > 0, e.order]).toEqual([true, 0]);
+      if (e.code === 'PICK CONF') expect([e.order > 0, e.po]).toEqual([true, 0]);
+    }
+    const k = w.inboundKpis;
+    expect(k.open).toBe(w.pos.filter((p) => p.open).length);
+    expect(k.doorsTotal).toBe(T.wmsDockDoors.value);
+    expect(k.receiversTotal).toBe(T.wmsReceivers.value);
+    expect(k.onTimePct).not.toBeNull();
+  });
+
+  it('shows one inventory row per SKU with available, inbound and a status', () => {
+    const view = warehouseView(advanceMany(createWarehouse({ seed: 6 }), 12 * 60 * 4));
+    const { stock, inventoryKpis: k } = view.wms;
+    expect(stock).toHaveLength(16);
+    for (const row of stock) {
+      expect(row.available).toBe(Math.max(0, row.onHand - row.allocated));
+      const expected = row.demand > row.available ? 'SHORT' : row.available === 0 ? 'OUT' : row.available < T.wmsReorderUnits.value ? 'LOW' : 'OK';
+      expect(row.status).toBe(expected);
+    }
+    expect(k.skus).toBe(16);
+    expect(k.onHand).toBe(stock.reduce((n, r) => n + r.onHand, 0));
+    expect(k.low).toBe(stock.filter((r) => r.status !== 'OK').length);
+    expect(k.accuracyPct).not.toBeNull();
+    expect(stock.some((r) => r.counted >= 0)).toBe(true);
+  });
+});

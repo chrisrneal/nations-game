@@ -6,7 +6,7 @@ import { WAREHOUSE_TUNABLES as T } from './tunables.ts';
 import { createWms } from './wms/generate.ts';
 
 /** Current warehouse save schema. Bump it with a migration in save.ts. */
-export const WAREHOUSE_SCHEMA_VERSION = 4;
+export const WAREHOUSE_SCHEMA_VERSION = 5;
 
 export const EMPTY_STATS: Stats = { earned: 0, shipments: 0, fullShipments: 0, orders: 0, missed: 0, expresses: 0, pos: 0, received: 0, taps: 0 };
 
