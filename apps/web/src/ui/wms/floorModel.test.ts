@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import type { WmsOrderStatus, WmsOrderView, WmsPickerView, WmsPoView, WmsReceiverView, WmsView } from '@warehouse/contracts';
-import { GLIDE_MS, TRUCK_IN_MS, TRUCK_OUT_MS, WmsFloorModel, binCell, doorSpot, floorLayout, length, place, putawayRoute, receiverHome, route, slot, spread, zoneOf, type FloorLayout } from './floorModel.ts';
+import type { WmsOrderStatus, WmsOrderView, WmsPoView, WmsTaskView, WmsView, WmsWorkerView } from '@warehouse/contracts';
+import { GLIDE_MS, TRUCK_IN_MS, TRUCK_OUT_MS, WmsFloorModel, binCell, doorSpot, floorLayout, length, place, receiverHome, route, slot, spread, workerRoute, workerSpot, zoneOf, type FloorLayout } from './floorModel.ts';
 
 const SHAPE = { aisles: 4, bays: 20, doors: 2 };
 const TICK_MS = 250;
 
-function picker(id: number, over: Partial<WmsPickerView> = {}): WmsPickerView {
-  return { id, order: 0, line: 0, at: -1, aisle: 0, bay: 0, walk: 0, picked: 0, units: 0, priority: 0, ...over };
+function task(no: number, over: Partial<WmsTaskView> = {}): WmsTaskView {
+  return { no, kind: 'PICK', status: 'ACTIVE', done: 0, qty: 10, priority: 3, ...over } as WmsTaskView;
+}
+
+/** A worker as the floor reads it: a picker at the pick-and-drop point unless told otherwise. */
+function worker(id: number, over: Partial<WmsWorkerView> = {}): WmsWorkerView {
+  return { id, name: `W0${id}`, role: 'pick', state: 'idle', task: null, queue: [], done: [], at: -1, aisle: 0, bay: 0, walk: 0, door: 0, pct: 0, ...over } as WmsWorkerView;
 }
 
 function order(no: number, status: WmsOrderStatus, over: Partial<WmsOrderView> = {}): WmsOrderView {
@@ -14,8 +19,8 @@ function order(no: number, status: WmsOrderStatus, over: Partial<WmsOrderView> =
 }
 
 /** The parts of a WMS View the floor reads. */
-function view(over: { pickers?: WmsPickerView[]; orders?: WmsOrderView[]; receivers?: WmsReceiverView[]; pos?: WmsPoView[] } = {}): WmsView {
-  return { pickers: over.pickers ?? [], orders: over.orders ?? [], receivers: over.receivers ?? [], pos: over.pos ?? [], stock: [] } as unknown as WmsView;
+function view(over: { workers?: WmsWorkerView[]; orders?: WmsOrderView[]; pos?: WmsPoView[] } = {}): WmsView {
+  return { workers: over.workers ?? [], orders: over.orders ?? [], pos: over.pos ?? [], stock: [] } as unknown as WmsView;
 }
 
 function model(): { m: WmsFloorModel; l: FloorLayout } {
@@ -60,37 +65,37 @@ describe('the WMS floor layout (W7)', () => {
   });
 });
 
-describe('pickers on the WMS floor (W7)', () => {
-  it('a picker walks to its line’s bin and gets there exactly when the sim says it does', () => {
+describe('workers on the WMS floor (W7, W8)', () => {
+  it('a picker walks to its task’s bin and gets there exactly when the sim says it does', () => {
     const { m, l } = model();
-    m.ingest(view({ pickers: [picker(1)] }), 0, TICK_MS, 0, []);
-    const start = { x: m.pickers[0]?.x, y: m.pickers[0]?.y };
+    m.ingest(view({ workers: [worker(1)] }), 0, TICK_MS, 0, []);
+    const start = { x: m.workers[0]?.x, y: m.workers[0]?.y };
     expect(start).toEqual({ x: place(l, 0, 0).x + spread(1).x, y: place(l, 0, 0).y + spread(1).y });
     // 20 ticks of walking to C-07: 5 s.
-    m.ingest(view({ pickers: [picker(1, { order: 7, line: 1, at: 2 * 160 + 48, aisle: 2, bay: 7, walk: 20, units: 10, priority: 1 })] }), 4, TICK_MS, 1000, []);
+    m.ingest(view({ workers: [worker(1, { task: task(4, { priority: 1 }), at: 2 * 160 + 48, aisle: 2, bay: 7, walk: 20 })] }), 4, TICK_MS, 1000, []);
     frames(m, 1000, 3500);
-    const half = m.pickers[0];
+    const half = m.workers[0];
     expect(half?.done).toBeGreaterThan(0);
     expect(half?.done).toBeLessThan(half?.total ?? 0);
+    expect(half?.priority).toBe(1);
     frames(m, 3500, 6000);
-    expect({ x: m.pickers[0]?.x, y: m.pickers[0]?.y }).toEqual({ x: place(l, 2, 7).x + spread(1).x, y: place(l, 2, 7).y + spread(1).y });
+    expect({ x: m.workers[0]?.x, y: m.workers[0]?.y }).toEqual({ x: place(l, 2, 7).x + spread(1).x, y: place(l, 2, 7).y + spread(1).y });
   });
 
   it('the sim’s clock wins: a walk the sim shortens or ends is caught up', () => {
     const { m, l } = model();
-    m.ingest(view({ pickers: [picker(1)] }), 0, TICK_MS, 0, []);
-    m.ingest(view({ pickers: [picker(1, { order: 7, line: 1, aisle: 3, bay: 20, walk: 80 })] }), 4, TICK_MS, 0, []);
+    m.ingest(view({ workers: [worker(1)] }), 0, TICK_MS, 0, []);
+    m.ingest(view({ workers: [worker(1, { task: task(4), at: 3 * 160 + 152, aisle: 3, bay: 20, walk: 80 })] }), 4, TICK_MS, 0, []);
     frames(m, 0, 1000);
-    m.ingest(view({ pickers: [picker(1, { order: 7, line: 1, aisle: 3, bay: 20, walk: 0 })] }), 8, TICK_MS, 1000, []);
+    m.ingest(view({ workers: [worker(1, { task: task(4), at: 3 * 160 + 152, aisle: 3, bay: 20, walk: 0 })] }), 8, TICK_MS, 1000, []);
     frames(m, 1000, 1200);
-    expect(m.pickers[0]?.x).toBeCloseTo(place(l, 3, 20).x + spread(1).x, 5);
+    expect(m.workers[0]?.x).toBeCloseTo(place(l, 3, 20).x + spread(1).x, 5);
   });
 
-  it('a confirmed line sends a tote down the conveyor to the pack bench and flashes the bin', () => {
+  it('a finished pick task sends a tote down the conveyor to the pack bench and flashes the bin', () => {
     const { m, l } = model();
-    const on = picker(2, { order: 9, line: 1, aisle: 1, bay: 4, units: 5, picked: 4, priority: 2 });
-    m.ingest(view({ pickers: [on], orders: [order(9, 'PICKING')] }), 0, TICK_MS, 0, []);
-    m.ingest(view({ pickers: [picker(2, { aisle: 1, bay: 4 })], orders: [order(9, 'PICKED', { lines: [{ no: 1, status: 'PICKED', picked: 5 }] as never })] }), 4, TICK_MS, 1000, []);
+    m.ingest(view({ workers: [worker(2, { task: task(7, { priority: 2 }), at: 160 + 24, aisle: 1, bay: 4 })], orders: [order(9, 'PICKING')] }), 0, TICK_MS, 0, []);
+    m.ingest(view({ workers: [worker(2, { at: 160 + 24, aisle: 1, bay: 4, done: [task(7, { status: 'DONE', done: 5 })] })], orders: [order(9, 'PICKED')] }), 4, TICK_MS, 1000, []);
     expect(m.totes).toHaveLength(1);
     expect(m.totes[0]?.priority).toBe(2);
     expect(m.flashes).toEqual([{ aisle: 1, bay: 4, at: 1000, kind: 'pick' }]);
@@ -101,11 +106,35 @@ describe('pickers on the WMS floor (W7)', () => {
     expect({ x: m.cartons[0]?.x, y: m.cartons[0]?.y }).toEqual(slot(l.zones.pack, 0));
   });
 
-  it('a picker taken off its line (hold, reassign) sends no tote', () => {
+  it('a picker taken off its task (hold, reassign) sends no tote', () => {
     const { m } = model();
-    m.ingest(view({ pickers: [picker(1, { order: 9, line: 1, aisle: 1, bay: 4 })], orders: [order(9, 'PICKING')] }), 0, TICK_MS, 0, []);
-    m.ingest(view({ pickers: [picker(1, { aisle: 1, bay: 4 })], orders: [order(9, 'ON HOLD', { lines: [{ no: 1, status: 'ALLOCATED', picked: 0 }] as never })] }), 4, TICK_MS, 1000, []);
+    m.ingest(view({ workers: [worker(1, { task: task(7), aisle: 1, bay: 4, at: 184 })], orders: [order(9, 'PICKING')] }), 0, TICK_MS, 0, []);
+    m.ingest(view({ workers: [worker(1, { aisle: 1, bay: 4, at: 184 })], orders: [order(9, 'ON HOLD')] }), 4, TICK_MS, 1000, []);
     expect(m.totes).toHaveLength(0);
+  });
+
+  it('a receiver stands at the door of the truck it counts, then drives the pallet to its bin and the bin flashes', () => {
+    const { m, l } = model();
+    const rcv = (over: Partial<WmsWorkerView>): WmsWorkerView => worker(1, { role: 'receive', ...over });
+    m.ingest(view({ workers: [rcv({})] }), 0, TICK_MS, 0, []);
+    expect({ x: m.workers[0]?.x, y: m.workers[0]?.y }).toEqual(receiverHome(l, 1));
+    m.ingest(view({ workers: [rcv({ task: task(3, { kind: 'RECEIVE' }), door: 2, pct: 50 })] }), 4, TICK_MS, 1000, []);
+    frames(m, 1000, 2000);
+    expect(m.workers[0]?.x).toBeCloseTo(doorSpot(l, 2).x + spread(1).x * 2, 5);
+    expect(m.workers[0]?.pct).toBe(0.5);
+    expect(m.workers[0]?.kind).toBe('RECEIVE');
+    // Put away to D-12: 40 ticks of walking (10 s), out along the dock lane, down the front and along the aisle.
+    m.ingest(view({ workers: [rcv({ task: task(4, { kind: 'PUTAWAY' }), at: 3 * 160 + 88, aisle: 3, bay: 12, walk: 40 })] }), 8, TICK_MS, 2000, []);
+    const route = workerRoute(l, { dock: true, aisle: 0, bay: 0 }, { dock: false, aisle: 3, bay: 12 }, doorSpot(l, 2), workerSpot(l, { id: 1, role: 'receive', at: 568, aisle: 3, bay: 12, door: 0 }));
+    expect(m.workers[0]?.total).toBeGreaterThan(length(route) - 10);
+    frames(m, 2000, 7000);
+    expect(m.workers[0]?.done).toBeLessThan(m.workers[0]?.total ?? 0);
+    frames(m, 7000, 12_100);
+    const bin = workerSpot(l, { id: 1, role: 'receive', at: 568, aisle: 3, bay: 12, door: 0 });
+    expect(m.workers[0]?.x).toBeCloseTo(bin.x, 5);
+    expect(m.workers[0]?.y).toBeCloseTo(bin.y, 5);
+    m.ingest(view({ workers: [rcv({ at: 568, aisle: 3, bay: 12, done: [task(4, { kind: 'PUTAWAY', status: 'DONE', done: 20 })] })] }), 60, TICK_MS, 13_000, []);
+    expect(m.flashes.some((f) => f.kind === 'put' && f.aisle === 3 && f.bay === 12)).toBe(true);
   });
 });
 
@@ -134,36 +163,15 @@ describe('orders, the truck and inbound on the WMS floor (W7)', () => {
     expect(m.truckShift(4000 + TRUCK_OUT_MS + TRUCK_IN_MS + 50)).toBe(0);
   });
 
-  it('receivers walk to the door of the PO they count; a forklift reaches the bin when the sim puts the line away', () => {
+  it('a tap finds a worker (busy or idle), a carton’s order or the docked PO', () => {
     const { m, l } = model();
-    const rcv = (po: number, door: number): WmsReceiverView => ({ id: 1, po, line: po > 0 ? 1 : 0, door, received: 5, expected: 10 });
-    m.ingest(view({ receivers: [rcv(0, 0)] }), 0, TICK_MS, 0, []);
-    expect({ x: m.receivers[0]?.x, y: m.receivers[0]?.y }).toEqual(receiverHome(l, 1));
-    m.ingest(view({ receivers: [rcv(50_001, 2)] }), 4, TICK_MS, 1000, []);
-    frames(m, 1000, 2000);
-    expect(m.receivers[0]?.x).toBeCloseTo(doorSpot(l, 2).x + spread(1).x * 2, 5);
-    expect(m.receivers[0]?.pct).toBe(0.5);
-    const po = (status: 'RECEIVED' | 'STORED'): WmsPoView => ({ no: 50_001, status: 'RECEIVING', door: 2, lines: [{ no: 1, status, putAt: 48, received: 20, aisle: 3, bay: 12 }] }) as unknown as WmsPoView;
-    // Received at tick 8, in the bin at tick 48: 10 s of driving.
-    m.ingest(view({ pos: [po('RECEIVED')] }), 8, TICK_MS, 2000, []);
-    expect(m.forklifts).toHaveLength(1);
-    expect(m.forklifts[0]?.total).toBeCloseTo(length(putawayRoute(l, 2, 3, 12)), 5);
-    frames(m, 2000, 7000);
-    expect(m.forklifts[0]?.done).toBeLessThan(m.forklifts[0]?.total ?? 0);
-    frames(m, 7000, 12_100);
-    expect(m.forklifts).toHaveLength(0);
-    expect(m.flashes.some((f) => f.kind === 'put' && f.aisle === 3 && f.bay === 12)).toBe(true);
-    m.ingest(view({ pos: [po('STORED')] }), 52, TICK_MS, 13_000, []);
-    expect(m.forklifts).toHaveLength(0);
-  });
-
-  it('a tap finds the picker’s order, a carton’s order or the docked PO', () => {
-    const { m, l } = model();
-    const w = view({ pickers: [picker(1, { order: 5, line: 1, aisle: 1, bay: 6 })], orders: [order(3, 'STAGED')], pos: [{ no: 50_009, status: 'RECEIVING', door: 1, lines: [] } as unknown as WmsPoView] });
+    const w = view({ workers: [worker(1, { task: task(4), at: 200, aisle: 1, bay: 6 }), worker(2)], orders: [order(3, 'STAGED')], pos: [{ no: 50_009, status: 'RECEIVING', door: 1, lines: [] } as unknown as WmsPoView] });
     m.ingest(w, 0, TICK_MS, 0, []);
     frames(m, 0, GLIDE_MS + 50);
-    const p = m.pickers[0];
-    expect(m.hit(p?.x ?? 0, p?.y ?? 0, w)).toEqual({ order: 5 });
+    const p = m.workers[0];
+    expect(m.hit(p?.x ?? 0, p?.y ?? 0, w)).toEqual({ worker: 1 });
+    const idle = m.workers[1];
+    expect(m.hit(idle?.x ?? 0, idle?.y ?? 0, w)).toEqual({ worker: 2 });
     const s = slot(l.zones.staging, 0);
     expect(m.hit(s.x, s.y, w)).toEqual({ order: 3 });
     const d = l.doors[0];

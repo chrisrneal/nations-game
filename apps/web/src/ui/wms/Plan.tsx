@@ -1,11 +1,12 @@
 import { useEffect, useState, type ReactElement } from 'react';
-import type { WmsAction, WmsPickRule, WmsPolicy, WmsReleaseMode } from '@warehouse/contracts';
+import type { WmsAction, WmsGrowthView, WmsPickRule, WmsPolicy, WmsReleaseMode } from '@warehouse/contracts';
+import { formatCash } from '../format.ts';
 
 /** The pick orders (RULES 16, W7): what each does and what it costs. */
 export const PICK_RULES: readonly { readonly id: WmsPickRule; readonly name: string; readonly does: string; readonly cost: string }[] = [
-  { id: 'priority', name: 'Priority', does: 'Pickers take P1 lines first, then the earliest ship-by. Stock goes to the same orders first.', cost: 'Standard orders wait behind urgent ones, even when their cutoff is closer.' },
-  { id: 'cutoff', name: 'Cutoff', does: 'Pickers take the line whose ship-by is soonest, whatever its priority.', cost: 'A P1 with a later cutoff waits its turn.' },
-  { id: 'nearest', name: 'Nearest bin', does: 'Each free picker takes the line with the shortest walk from where it stands.', cost: 'Least walking, most lines an hour, but urgency is ignored: cutoffs can slip.' },
+  { id: 'priority', name: 'Priority', does: 'The WMS gives pickers P1 tasks first, then the earliest ship-by. Stock goes to the same orders first.', cost: 'Standard orders wait behind urgent ones, even when their cutoff is closer.' },
+  { id: 'cutoff', name: 'Cutoff', does: 'The WMS gives pickers the task whose ship-by is soonest, whatever its priority.', cost: 'A P1 with a later cutoff waits its turn.' },
+  { id: 'nearest', name: 'Nearest bin', does: 'The WMS gives each picker the task with the shortest walk from where it will stand.', cost: 'Least walking, most lines an hour, but urgency is ignored: cutoffs can slip.' },
 ];
 
 /** The release modes (RULES 16, W7). */
@@ -21,8 +22,8 @@ export const RELEASE_MODES: readonly { readonly id: WmsReleaseMode; readonly nam
  * and the page shows the sim's plan as soon as the View has it (a pending
  * choice shows meanwhile).
  */
-export function Plan(props: { policy: WmsPolicy; crew: number; submit: (action: WmsAction) => void }): ReactElement {
-  const { policy, crew, submit } = props;
+export function Plan(props: { policy: WmsPolicy; crew: number; doors: number; growth: WmsGrowthView; cash: number; submit: (action: WmsAction) => void }): ReactElement {
+  const { policy, crew, doors, growth, cash, submit } = props;
   const key = `${policy.pick}|${policy.release}|${policy.pickers}`;
   // A choice waits for the sim's plan to change; once it has (or after a few seconds, if refused), the sim's plan shows.
   const [pending, setPending] = useState<{ plan: WmsPolicy; from: string } | null>(null);
@@ -91,8 +92,41 @@ export function Plan(props: { policy: WmsPolicy; crew: number; submit: (action: 
             +
           </button>
         </div>
-        <p className="wms-plan-does">Your {crew} people split between picking orders and receiving trucks. Moving someone takes effect at once; a line they leave is started again by someone else.</p>
+        <p className="wms-plan-does">Your {crew} people split between picking orders and receiving and putting away trucks. Moving someone takes effect at once; a task they leave goes to someone else.</p>
         <p className="wms-plan-cost">Catch: more pickers ship faster but trucks wait longer at the doors, and the shelves can run dry.</p>
+      </section>
+      <section className="wms-plan-part" aria-labelledby="plan-grow">
+        <h3 id="plan-grow">Grow</h3>
+        <div className="wms-grow">
+          <button
+            type="button"
+            className="wms-btn"
+            disabled={growth.hireCost === null || cash < growth.hireCost}
+            onClick={() => submit({ action: 'hire', role: 'pick' })}
+            data-testid="plan-hire-pick"
+          >
+            Hire a picker
+            <span className="num">{growth.hireCost === null ? 'Full' : formatCash(growth.hireCost)}</span>
+          </button>
+          <button
+            type="button"
+            className="wms-btn"
+            disabled={growth.hireCost === null || cash < growth.hireCost}
+            onClick={() => submit({ action: 'hire', role: 'receive' })}
+            data-testid="plan-hire-receive"
+          >
+            Hire a receiver
+            <span className="num">{growth.hireCost === null ? 'Full' : formatCash(growth.hireCost)}</span>
+          </button>
+          <button type="button" className="wms-btn" disabled={growth.doorCost === null || cash < growth.doorCost} onClick={() => submit({ action: 'door' })} data-testid="plan-door">
+            Open dock door {doors + 1}
+            <span className="num">{growth.doorCost === null ? 'All open' : formatCash(growth.doorCost)}</span>
+          </button>
+        </div>
+        <p className="wms-plan-does">
+          {crew} of {growth.maxCrew} people, {doors} of {growth.maxDoors} dock doors. Shipments pay for both. A door takes one more truck an appointment slot and one more truck at once.
+        </p>
+        <p className="wms-plan-cost">Catch: each hire costs more than the last, and people only help when there is work for them.</p>
       </section>
     </div>
   );

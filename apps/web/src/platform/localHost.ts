@@ -1,4 +1,4 @@
-import type { WarehouseIntent, BoostId, UpgradeId } from '@warehouse/contracts';
+import type { WarehouseIntent } from '@warehouse/contracts';
 import type { WarehouseEngine, WarehouseUpdate, SavedWarehouse } from './engine.ts';
 import type { SaveStore } from './saves.ts';
 
@@ -17,13 +17,7 @@ export interface WarehouseHost {
   /** Continue the autosave (caught up by the wall clock), or open a new warehouse if there is none. */
   start(): Promise<'continued' | 'new'>;
   submit(intent: WarehouseIntent): Promise<void>;
-  tap(dock: number): Promise<void>;
-  buy(upgrade: UpgradeId): Promise<void>;
-  /** Start a boost (RULES 15). */
-  boost(boost: BoostId): Promise<void>;
-  /** Sell this warehouse for stars and open the next site (RULES 10). */
-  sell(): Promise<void>;
-  /** Throw this warehouse away and open a new one at the first site. */
+  /** Throw this warehouse away and open a new one. */
   newGame(): Promise<void>;
   /** The running game as a file: a name and the text to write into it. */
   exportFile(): Promise<{ name: string; text: string }>;
@@ -102,22 +96,6 @@ export class LocalHost implements WarehouseHost {
 
   async submit(intent: WarehouseIntent): Promise<void> {
     await this.options.engine.submit(intent);
-  }
-
-  tap(dock: number): Promise<void> {
-    return this.submit({ type: 'tap', payload: { dock } });
-  }
-
-  buy(upgrade: UpgradeId): Promise<void> {
-    return this.submit({ type: 'buy', payload: { upgrade } });
-  }
-
-  boost(boost: BoostId): Promise<void> {
-    return this.submit({ type: 'boost', payload: { boost } });
-  }
-
-  sell(): Promise<void> {
-    return this.submit({ type: 'sell', payload: {} });
   }
 
   async newGame(): Promise<void> {

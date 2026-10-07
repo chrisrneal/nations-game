@@ -8,11 +8,11 @@ export interface Structure {
 }
 
 /**
- * Two update paths (P7). React re-renders only when the warehouse's structure
- * changes (a truck arrives or leaves, a level changes, an upgrade becomes
- * affordable): `getStructure` returns a new object only then. Everything that
- * moves every tick (parcels, timers, cash) is written straight to the DOM by
- * frame listeners, with CSS transitions one tick long to interpolate.
+ * Two update paths (P7). React re-renders the app shell only when its
+ * structure changes (a new day, the recap): `getStructure` returns a new
+ * object only then. Everything that moves every tick (the clock, cash) is
+ * written straight to the DOM by frame listeners, and the WMS screens
+ * re-render once a WMS step (useWms).
  */
 export class WarehouseStore {
   private latest: WarehouseUpdate | null = null;
@@ -53,20 +53,7 @@ export class WarehouseStore {
   }
 }
 
-/** What React renders from. Anything that changes every tick must stay out of it. */
+/** What React renders from. Anything that changes every tick must stay out of it; the WMS screens follow the WMS's own `rev` (useWms). */
 export function structuralKey(view: WarehouseView): string {
-  return [
-    view.site.index,
-    view.stars.owned,
-    view.stars.claimable,
-    view.contract,
-    view.pay,
-    view.incomePerSec,
-    view.boostedIncomePerSec,
-    view.offlineCapMinutes,
-    view.bottleneck.kind,
-    view.docks.map((g) => `${g.truck}${g.turn > 0 ? 't' : 'b'}${g.express ? 'c' : ''}`).join(','),
-    view.upgrades.map((u) => `${u.level}${u.affordable ? 'a' : ''}${u.locked === null ? '' : 'l'}`).join(','),
-    view.boosts.map((b) => `${b.ready ? 'r' : ''}${b.left > 0 ? 'a' : ''}${b.locked === null ? '' : 'l'}${b.helps ? 'h' : ''}`).join(','),
-  ].join('|');
+  return [view.offlineCapMinutes, view.clock.day].join('|');
 }

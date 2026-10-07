@@ -1,5 +1,5 @@
 import { useState, type ReactElement } from 'react';
-import type { WmsAction, WmsLineView, WmsOrderView, WmsPickerView, WmsPriority } from '@warehouse/contracts';
+import type { WmsAction, WmsLineView, WmsOrderView, WmsPriority, WmsWorkerView } from '@warehouse/contracts';
 import { formatCash } from '../format.ts';
 
 type Submit = (action: WmsAction) => void;
@@ -31,12 +31,14 @@ export function OrderActions(props: { order: WmsOrderView; cash: number; expedit
   );
 }
 
-function pickerLabel(p: WmsPickerView): string {
-  return p.order === 0 ? 'idle' : `O-${p.order}/L${p.line}`;
+/** What a picker is on now, and how many tasks it has lined up after it (W8). */
+function pickerLabel(p: WmsWorkerView): string {
+  const now = p.task === null ? 'idle' : p.task.ref;
+  return p.queue.length > 0 ? `${now} +${p.queue.length}` : now;
 }
 
-/** A line's actions (slice 7): put a picker on it, or cancel it (a second tap confirms). */
-export function LineActions(props: { order: WmsOrderView; line: WmsLineView; pickers: readonly WmsPickerView[]; submit: Submit }): ReactElement {
+/** A line's actions (slice 7): put a picker on it now (it drops what it is on and its queue), or cancel it (a second tap confirms). */
+export function LineActions(props: { order: WmsOrderView; line: WmsLineView; pickers: readonly WmsWorkerView[]; submit: Submit }): ReactElement {
   const { order: o, line: l, submit } = props;
   const [confirm, setConfirm] = useState(false);
   const assignable = (o.status === 'ALLOCATED' || o.status === 'PICKING') && (l.status === 'ALLOCATED' || l.status === 'PICKING');
@@ -52,7 +54,7 @@ export function LineActions(props: { order: WmsOrderView; line: WmsLineView; pic
         <div className="wms-pickers" role="group" aria-label="Put a picker on this line">
           {props.pickers.map((p) => (
             <button key={p.id} type="button" className="wms-picker" aria-pressed={l.picker === p.id} onClick={() => submit({ action: 'assign', picker: p.id, order: o.no, line: l.no })}>
-              <b>P{String(p.id).padStart(2, '0')}</b>
+              <b>{p.name}</b>
               <span>{pickerLabel(p)}</span>
             </button>
           ))}

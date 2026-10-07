@@ -1,14 +1,15 @@
 import type { RngState } from './state.ts';
 
 /**
- * The warehouse management system (docs/wms-plan.md): key-account orders with
- * lines, bins, pickers and an activity log, managed by hand beside the idle
- * flow of RULES 3-5.
+ * The warehouse management system: the whole game since W8 (docs/RULES.md).
+ * Customer orders with lines, bins, a crew of workers doing the tasks the WMS
+ * creates for them, purchase orders booked into dock appointments, and an
+ * activity log.
  *
  * Integers only (P3). Quantities are whole units; codes and names (O-10234,
- * GRN-0042, A-03-2B, a country's ISO code) are formatted from these numbers by
- * the sim's WMS catalog, so State stays small and hashable. Line counts,
- * units and % complete are derived in the View, never stored.
+ * GRN-0042, A-03-2B, T-00042, a country's ISO code) are formatted from these
+ * numbers by the sim's WMS catalog, so State stays small and hashable. Line
+ * counts, units and % complete are derived in the View, never stored.
  */
 
 /** Order statuses, in the order an order moves through them, then the exceptions. */
@@ -27,7 +28,7 @@ export type WmsOrderStatus =
   | 'BACKORDER'
   | 'CANCELLED';
 
-/** CANCELLED: the player cancelled the line (slice 7); it no longer counts towards the order. */
+/** CANCELLED: the player cancelled the line; it no longer counts towards the order. */
 export type WmsLineStatus = 'OPEN' | 'ALLOCATED' | 'PICKING' | 'PICKED' | 'SHORT' | 'CANCELLED';
 
 /** 1 Expedite, 2 High, 3 Standard. */
@@ -48,12 +49,11 @@ export type WmsEventCode =
   | 'HOLD'
   | 'UNHOLD'
   | 'CUTOFF MISS'
-  | 'REPLEN'
   | 'PRIO'
   | 'ASSIGN'
   | 'CANCEL'
   | 'EXPEDITE'
-  // Inbound (W6): `order` holds the PO number, `picker` the receiver.
+  // Inbound (W6): `order` holds the PO number, `picker` the worker.
   | 'PO CRT'
   | 'ARRIVE'
   | 'PO LATE'
@@ -67,12 +67,15 @@ export type WmsEventCode =
   | 'CYCLE CNT'
   | 'ADJUST'
   // The operating plan (W7): `line` is the setting (1 pick order, 2 release, 3 crew), `qty` its new value.
-  | 'PLAN';
+  | 'PLAN'
+  // The crew and the dock (W8): `qty` is the new crew or door count, `line` the role hired (1 pick, 2 receive).
+  | 'HIRE'
+  | 'DOOR';
 
 /**
- * How idle pickers choose their next line (W7): best priority then earliest
- * ship-by (the WMS's own rule), earliest ship-by then priority, or the
- * nearest bin to where the picker stands.
+ * How the WMS orders the pick tasks it hands out (W7): best priority then
+ * earliest ship-by, earliest ship-by then priority, or the nearest bin to
+ * where the picker will stand.
  */
 export type WmsPickRule = 'priority' | 'cutoff' | 'nearest';
 
@@ -83,7 +86,7 @@ export type WmsReleaseMode = 'waves' | 'continuous' | 'manual';
 export interface WmsPolicy {
   readonly pick: WmsPickRule;
   readonly release: WmsReleaseMode;
-  /** Pickers out of the crew; the rest of the crew receive. */
+  /** Workers on picking; the rest of the crew receive and put away. */
   readonly pickers: number;
 }
 
@@ -113,8 +116,8 @@ export interface WmsOrder {
   readonly no: number;
   /** Index into the destination catalog: the customer's country. */
   readonly dest: number;
-  /** The contract level of the customer account that placed it (Local shops = 0). */
-  readonly source: number;
+  /** Index into the customer catalog: who placed it (W8). */
+  readonly customer: number;
   readonly priority: WmsPriority;
   /** Wave it was released in; 0 while not released. */
   readonly wave: number;
@@ -131,7 +134,7 @@ export interface WmsOrder {
   readonly held: WmsOrderStatus | null;
   /** Tick it shipped or was cancelled; 0 while open. */
   readonly closed: number;
-  /** The player paid to expedite it (slice 7); an order is expedited at most once. */
+  /** The player paid to expedite it; an order is expedited at most once. */
   readonly expedited: boolean;
 }
 
@@ -157,18 +160,16 @@ export interface WmsPoLine {
   readonly bin: number;
   /** Units ordered from the supplier. */
   readonly expected: number;
-  /** Good units counted in at the dock (live while a receiver works the line). */
+  /** Good units counted in at the dock (live while a worker counts the line). */
   readonly received: number;
   /** Units that arrived damaged: written off, never put away. */
   readonly damaged: number;
   /** Units the supplier did not send. */
   readonly short: number;
   readonly status: WmsPoLineStatus;
-  /** Tick the received units reach the bin; 0 while not received. */
-  readonly putAt: number;
 }
 
-/** A purchase order to a supplier (W6), raised by the WMS's reorder planning. */
+/** A purchase order to a supplier (W6), raised by the WMS's reorder planning and booked into a dock appointment (W8). */
 export interface WmsPo {
   /** Sequential PO number (shown PO-50001). */
   readonly no: number;
@@ -177,9 +178,9 @@ export interface WmsPo {
   readonly status: WmsPoStatus;
   readonly lines: readonly WmsPoLine[];
   readonly created: number;
-  /** The tick the supplier promised. */
-  readonly eta: number;
-  /** The tick the truck really arrives (drawn when the PO is raised; the screens show only `eta`). */
+  /** The dock appointment it was booked into (W8): the tick its slot starts. */
+  readonly appt: number;
+  /** The tick the truck really arrives (drawn when the PO is raised; the screens show only `appt`). */
   readonly arrive: number;
   /** Tick it arrived; 0 while in transit. */
   readonly arrived: number;
@@ -187,18 +188,8 @@ export interface WmsPo {
   readonly door: number;
   /** Tick its last line was put away; 0 while open. */
   readonly closed: number;
-  /** Its ETA passed before it arrived (PO LATE was logged). */
+  /** Its appointment passed before it arrived (PO LATE was logged). */
   readonly late: boolean;
-}
-
-export interface WmsReceiver {
-  /** 1-based (shown Rcvr 01). */
-  readonly id: number;
-  /** PO number and line it is receiving; both 0 while idle. */
-  readonly po: number;
-  readonly line: number;
-  /** Milli-units counted so far on the current line. */
-  readonly progress: number;
 }
 
 /** Inbound and inventory totals since the warehouse opened (W6). */
@@ -213,18 +204,66 @@ export interface WmsInboundStats {
   readonly countsAccurate: number;
 }
 
-export interface WmsPicker {
-  /** 1-based (shown Picker 01). */
-  readonly id: number;
-  /** Order number and line number being picked; both 0 while idle. */
-  readonly order: number;
+/** What a worker does (W8): pick orders, or receive trucks and put their stock away. */
+export type WmsRole = 'pick' | 'receive';
+
+/**
+ * A task the WMS creates (W8): pick one order line from its bin, count one
+ * PO line in at the dock, or take one received PO line to its bin.
+ */
+export type WmsTaskKind = 'PICK' | 'RECEIVE' | 'PUTAWAY';
+
+/** OPEN waiting for a worker, QUEUED in a worker's plan, ACTIVE being worked, then DONE or CANCELLED. */
+export type WmsTaskStatus = 'OPEN' | 'QUEUED' | 'ACTIVE' | 'DONE' | 'CANCELLED';
+
+export interface WmsTask {
+  /** Sequential task number (shown T-00042). */
+  readonly no: number;
+  readonly kind: WmsTaskKind;
+  /** The order (PICK) or PO (RECEIVE, PUTAWAY) number, and its line. */
+  readonly ref: number;
   readonly line: number;
-  /** Milli-units picked so far on the current line. */
+  readonly sku: number;
+  /** Where the work is: the line's bin; -1 for the dock (RECEIVE). */
+  readonly bin: number;
+  /** Units to pick, count in or put away. */
+  readonly qty: number;
+  /** Units done so far (picked, counted in, put away). */
+  readonly done: number;
+  readonly status: WmsTaskStatus;
+  /** The worker it is queued for or worked by; 0 for none. */
+  readonly worker: number;
+  readonly created: number;
+  /** Tick it went ACTIVE (0 before), and tick it was DONE or CANCELLED (0 before). */
+  readonly started: number;
+  readonly finished: number;
+}
+
+/** A worker's record since it was hired (W8), in ticks and things. */
+export interface WmsWorkerStats {
+  readonly tasks: number;
+  readonly units: number;
+  /** Ticks working at a bin or the dock, walking, and with no task. */
+  readonly busy: number;
+  readonly walking: number;
+  readonly idle: number;
+}
+
+export interface WmsWorker {
+  /** 1-based (shown W01). */
+  readonly id: number;
+  readonly role: WmsRole;
+  /** Number of the task it is working on; 0 when it has none. */
+  readonly task: number;
+  /** Numbers of the tasks the WMS has lined up for it next, in order (W8). */
+  readonly queue: readonly number[];
+  /** Progress on the active task: milli-units picked or counted, or ticks spent putting away. */
   readonly progress: number;
-  /** The bin it stands at, or walks to (W7); -1 at the pick-and-drop point by the conveyor. */
+  /** The bin it stands at or walks to; -1 at the dock and pick-and-drop point by the conveyor (W7). */
   readonly at: number;
-  /** Ticks of walking left before it reaches `at` and starts picking (W7). */
+  /** Ticks of walking left before it reaches `at` and starts work (W7). */
   readonly walk: number;
+  readonly stats: WmsWorkerStats;
 }
 
 /** One line of the activity log. The message is built by the View from these fields. */
@@ -236,11 +275,11 @@ export interface WmsEvent {
   readonly line: number;
   /** SKU index it refers to; -1 for none. */
   readonly sku: number;
-  /** Units involved (picked, allocated, short, replenished), or the wave or priority it names; 0 for none. */
+  /** Units involved (picked, allocated, short, received), or the wave or priority it names; 0 for none. */
   readonly qty: number;
   /** Out of how many (PICK CONF 24/24); 0 for none. */
   readonly of: number;
-  /** Picker id (receiver id for an inbound code); 0 for none. */
+  /** Worker id; 0 for none. */
   readonly picker: number;
 }
 
@@ -255,6 +294,20 @@ export interface WmsStats {
   readonly unitsOrdered: number;
   readonly unitsShipped: number;
   readonly cutoffMisses: number;
+  /** Cents shipments have paid, and cents spent (expedites, hires, doors) (W8). */
+  readonly earned: number;
+  readonly spent: number;
+}
+
+/** One warehouse day's totals (W8): the day number (1 = the opening day) and what it did. */
+export interface WmsDayStats {
+  readonly day: number;
+  readonly shipped: number;
+  readonly otif: number;
+  readonly earned: number;
+  readonly linesPicked: number;
+  readonly posReceived: number;
+  readonly unitsReceived: number;
 }
 
 /** One destination country's record, in the order of the destination catalog. */
@@ -267,40 +320,50 @@ export interface WmsDestStats {
 
 /** The WMS inside State: hashed, saved and replayed like everything else (S5, S9). */
 export interface WmsState {
-  /** Its own seeded stream, so the WMS never shifts the idle game's draws. */
+  /** Its seeded stream: every draw the warehouse makes. */
   readonly rng: RngState;
   readonly nextOrderNo: number;
   readonly nextWave: number;
-  /** Ticks of the next automatic wave, new order and replenishment run. */
+  /** Ticks of the next automatic wave, new order and reorder planning run. */
   readonly nextWaveAt: number;
   readonly nextOrderAt: number;
   readonly nextReplenAt: number;
   readonly orders: readonly WmsOrder[];
   readonly inventory: readonly WmsStock[];
-  readonly pickers: readonly WmsPicker[];
+  /** The crew (W8): pickers and receivers, in id order. */
+  readonly workers: readonly WmsWorker[];
+  /** Open, queued and active tasks, then the latest done and cancelled (W8). */
+  readonly tasks: readonly WmsTask[];
+  readonly nextTaskNo: number;
   /** The latest events, oldest first, at most `wmsEventsKept`. */
   readonly events: readonly WmsEvent[];
   readonly stats: WmsStats;
+  /** Today's totals, and yesterday's once a day has ended (W8). */
+  readonly today: WmsDayStats;
+  readonly yesterday: WmsDayStats | null;
   readonly dests: readonly WmsDestStats[];
   /** Lines confirmed in each of the last few rate buckets (a ring indexed by tick), for lines per hour. */
   readonly recent: readonly number[];
-  /** Inbound (W6): purchase orders, open first then the latest closed, and the receiving crew. */
+  /** Inbound (W6): purchase orders, open first then the latest closed. */
   readonly nextPoNo: number;
   readonly pos: readonly WmsPo[];
-  readonly receivers: readonly WmsReceiver[];
+  /** Dock doors trucks are received at (W8: more can be bought). */
+  readonly doors: number;
   /** Inventory (W6): the next cycle count's tick and the SKU it counts. */
   readonly nextCountAt: number;
   readonly countCursor: number;
   readonly inbound: WmsInboundStats;
   /** Units received in each rate bucket, like `recent`. */
   readonly recentIn: readonly number[];
+  /** Cents earned in each rate bucket, like `recent` (W8). */
+  readonly recentPay: readonly number[];
   /** The player's operating plan (W7). */
   readonly policy: WmsPolicy;
 }
 
 /**
- * What the player can do in the WMS (docs/wms-plan.md slice 7), the payload of
- * a `wms` command. Orders are named by number, pickers by id, lines by number.
+ * What the player can do, the payload of a `wms` command. Orders are named
+ * by number, workers by id, lines by number.
  */
 export type WmsAction =
   | { readonly action: 'release'; readonly orders: readonly number[] }
@@ -310,7 +373,9 @@ export type WmsAction =
   | { readonly action: 'assign'; readonly picker: number; readonly order: number; readonly line: number }
   | { readonly action: 'cancelLine'; readonly order: number; readonly line: number }
   | { readonly action: 'expedite'; readonly order: number }
-  | { readonly action: 'policy'; readonly policy: WmsPolicy };
+  | { readonly action: 'policy'; readonly policy: WmsPolicy }
+  | { readonly action: 'hire'; readonly role: WmsRole }
+  | { readonly action: 'door' };
 
 export type WmsActionName = WmsAction['action'];
 
@@ -322,7 +387,7 @@ export interface WmsDestView {
   readonly name: string;
 }
 
-/** One order line, ready to show (slice 4). */
+/** One order line, ready to show. */
 export interface WmsLineView {
   readonly no: number;
   /** e.g. GRN-0042. */
@@ -335,17 +400,19 @@ export interface WmsLineView {
   readonly picked: number;
   readonly short: number;
   readonly status: WmsLineStatus;
-  /** The picker on it now (shown Picker 07); 0 for none. */
+  /** The worker picking it now; 0 for none. */
   readonly picker: number;
+  /** Its pick task's number; 0 before it has one (W8). */
+  readonly task: number;
 }
 
-/** One row of the order grid (slice 3), with its lines for the detail screen (slice 4). */
+/** One row of the order grid, with its lines for the detail screen. */
 export interface WmsOrderView {
   readonly no: number;
   /** e.g. O-10234. */
   readonly code: string;
   readonly dest: WmsDestView;
-  /** The customer account: the contract name it came from. */
+  /** The customer that placed it. */
   readonly source: string;
   readonly priority: WmsPriority;
   readonly wave: number;
@@ -370,9 +437,9 @@ export interface WmsOrderView {
   readonly lines: readonly WmsLineView[];
 }
 
-/** One line of the activity feed (slice 5), newest first. */
+/** One line of the activity feed, newest first. */
 export interface WmsEventView {
-  /** Unique within the feed: its position since the warehouse opened is not kept, so this is tick and index. */
+  /** Unique within the feed: tick, fields and a count. */
   readonly key: string;
   readonly tick: number;
   readonly code: WmsEventCode;
@@ -380,18 +447,20 @@ export interface WmsEventView {
   readonly order: number;
   /** PO number to open on a tap (W6); 0 for none. */
   readonly po: number;
-  /** e.g. O-10234/L3, PO-50001/L2, or a SKU for REPLEN and counts, or '' */
+  /** Worker to open on a tap (W8); 0 for none. */
+  readonly worker: number;
+  /** e.g. O-10234/L3, PO-50001/L2, or a SKU for counts, or '' */
   readonly ref: string;
-  /** e.g. "GRN-0042  24/24  Picker 07". */
+  /** e.g. "GRN-0042  24/24  W07". */
   readonly detail: string;
   /** Shown in red: shorts, cutoff misses, holds and cancellations. */
   readonly exception: boolean;
 }
 
-/** The KPI strip (slice 6). Percentages are whole numbers; null when nothing has shipped yet. */
+/** The outbound KPI strip. Percentages are whole numbers; null when nothing has shipped yet. */
 export interface WmsKpis {
   readonly open: number;
-  /** Lines confirmed an hour, measured over the last few minutes. */
+  /** Lines confirmed a warehouse hour (W8: a real minute), measured over the last few real minutes. */
   readonly linesPerHour: number;
   /** Units shipped as a % of units ordered on shipped orders. */
   readonly fillRatePct: number | null;
@@ -400,40 +469,67 @@ export interface WmsKpis {
   readonly pickersBusy: number;
   readonly pickersTotal: number;
   readonly shipped: number;
+  /** Cents earned a warehouse hour, measured over the last few minutes (W8). */
+  readonly earnedPerHour: number;
 }
 
-export interface WmsPickerView {
-  readonly id: number;
-  /** Order and line it works; 0 when idle. */
+/** A task, ready to show (W8). */
+export interface WmsTaskView {
+  readonly no: number;
+  /** e.g. T-00042. */
+  readonly code: string;
+  readonly kind: WmsTaskKind;
+  readonly status: WmsTaskStatus;
+  /** The order (PICK) or PO (RECEIVE, PUTAWAY) it belongs to: its number to open and its code with the line (O-10234/L2). */
   readonly order: number;
-  readonly line: number;
-  /** Bin index it stands at or walks to; -1 at the pick-and-drop point (W7). */
+  readonly po: number;
+  readonly ref: string;
+  readonly sku: string;
+  readonly desc: string;
+  /** Where: a bin code, or "Dock D2" for a receive task. */
+  readonly where: string;
+  readonly qty: number;
+  readonly done: number;
+  /** The order's priority for a pick task; 0 otherwise. */
+  readonly priority: number;
+  readonly worker: number;
+  readonly created: number;
+  readonly started: number;
+  readonly finished: number;
+}
+
+/** What a worker is doing this second (W8). */
+export type WmsWorkerState = 'idle' | 'walking' | 'working';
+
+/** A worker on the floor and on the Crew page (W8). */
+export interface WmsWorkerView {
+  readonly id: number;
+  /** e.g. W07. */
+  readonly name: string;
+  readonly role: WmsRole;
+  readonly state: WmsWorkerState;
+  /** The active task, and the ones lined up after it. */
+  readonly task: WmsTaskView | null;
+  readonly queue: readonly WmsTaskView[];
+  /** The latest tasks it finished, newest first. */
+  readonly done: readonly WmsTaskView[];
+  /** Bin index it stands at or walks to; -1 at the dock (W7). */
   readonly at: number;
-  /** Where that is on the floor (W7): aisle (0 = A) and bay (1-20; 0 the front cross aisle). */
+  /** Where that is on the floor: aisle (0 = A) and bay (1-20; 0 the front cross aisle). */
   readonly aisle: number;
   readonly bay: number;
-  /** Ticks of walking left (W7). */
+  /** Ticks of walking left. */
   readonly walk: number;
-  /** Units picked so far and units to pick on its line; 0 when idle. */
-  readonly picked: number;
-  readonly units: number;
-  /** Its order's priority; 0 when idle. */
-  readonly priority: number;
-}
-
-/** A receiver on the floor (W7): the PO line it counts in, at which dock door. */
-export interface WmsReceiverView {
-  readonly id: number;
-  /** PO and line; both 0 while idle. */
-  readonly po: number;
-  readonly line: number;
-  /** Dock door (1-based) of its PO; 0 while idle. */
+  /** The dock door of its receive task; 0 otherwise. */
   readonly door: number;
-  readonly received: number;
-  readonly expected: number;
+  /** Share of the active task done, 0-100. */
+  readonly pct: number;
+  readonly stats: WmsWorkerStats;
+  /** Share of its time working at a bin or door since hired, whole %; null before any time. */
+  readonly utilPct: number | null;
 }
 
-/** A destination country's record (slice 8). */
+/** A destination country's record. */
 export interface WmsCountryView extends WmsDestView {
   readonly shipped: number;
   readonly otif: number;
@@ -452,12 +548,11 @@ export interface WmsPoLineView {
   readonly damaged: number;
   readonly short: number;
   readonly status: WmsPoLineStatus;
-  /** The receiver on it now; 0 for none. */
+  /** The worker counting it in or putting it away now; 0 for none. */
   readonly receiver: number;
-  /** Where its bin is on the floor (W7), and the tick its units reach the bin (0 while not received). */
+  /** Where its bin is on the floor (W7). */
   readonly aisle: number;
   readonly bay: number;
-  readonly putAt: number;
 }
 
 /** One row of the inbound grid (W6), with its lines for the PO detail. */
@@ -468,7 +563,8 @@ export interface WmsPoView {
   readonly supplier: string;
   readonly status: WmsPoStatus;
   readonly created: number;
-  readonly eta: number;
+  /** Its dock appointment's tick (W8). */
+  readonly appt: number;
   readonly arrived: number;
   readonly closed: number;
   readonly late: boolean;
@@ -486,6 +582,12 @@ export interface WmsPoView {
   readonly exception: boolean;
   readonly open: boolean;
   readonly lines: readonly WmsPoLineView[];
+}
+
+/** One appointment slot of the dock schedule (W8): when it starts and the POs booked into it. */
+export interface WmsSlotView {
+  readonly at: number;
+  readonly pos: readonly { readonly no: number; readonly code: string; readonly supplier: string; readonly status: WmsPoStatus; readonly late: boolean; readonly door: number }[];
 }
 
 /** OK, LOW under the reorder point, OUT with nothing free, SHORT when order lines waiting for it need more than is free. */
@@ -526,10 +628,10 @@ export interface WmsInboundKpis {
   readonly doorsTotal: number;
   readonly receiversBusy: number;
   readonly receiversTotal: number;
-  /** Good units counted in an hour, measured over the last few minutes. */
+  /** Good units counted in a warehouse hour, measured over the last few real minutes. */
   readonly unitsPerHour: number;
   readonly exceptions: number;
-  /** POs closed that arrived on time, as a whole %; null before any closes. */
+  /** POs closed that arrived by their appointment, as a whole %; null before any closes. */
   readonly onTimePct: number | null;
 }
 
@@ -546,6 +648,29 @@ export interface WmsInventoryKpis {
   readonly accuracyPct: number | null;
 }
 
+/** The crew KPI strip (W8). */
+export interface WmsCrewKpis {
+  readonly crew: number;
+  readonly working: number;
+  readonly walking: number;
+  readonly idle: number;
+  /** Tasks waiting for a worker, by kind of worker. */
+  readonly pickOpen: number;
+  readonly receiveOpen: number;
+  /** The crew's share of time working since opening, whole %; null before any time. */
+  readonly utilPct: number | null;
+}
+
+/** What hiring and building cost, and how far they can go (W8). */
+export interface WmsGrowthView {
+  /** Cents the next worker costs; null at the most workers. */
+  readonly hireCost: number | null;
+  readonly maxCrew: number;
+  /** Cents the next dock door costs; null at the most doors. */
+  readonly doorCost: number | null;
+  readonly maxDoors: number;
+}
+
 /** Everything the WMS screens read. */
 export interface WmsView {
   /** Changes whenever the WMS steps, so the screens re-render only then. */
@@ -554,22 +679,28 @@ export interface WmsView {
   readonly orders: readonly WmsOrderView[];
   readonly events: readonly WmsEventView[];
   readonly kpis: WmsKpis;
-  readonly pickers: readonly WmsPickerView[];
+  readonly workers: readonly WmsWorkerView[];
+  readonly crewKpis: WmsCrewKpis;
   readonly countries: readonly WmsCountryView[];
   /** Ticks until the next automatic wave. */
   readonly nextWaveIn: number;
-  /** Cents an expedite costs now (slice 7). */
+  /** Cents an expedite costs. */
   readonly expediteCost: number;
-  /** Inbound (W6): open POs first, oldest first, then closed ones, newest first. */
+  /** Inbound (W6): open POs first, by appointment, then closed ones, newest first. */
   readonly pos: readonly WmsPoView[];
   readonly inboundKpis: WmsInboundKpis;
+  /** The dock schedule (W8): today's appointment slots from the current one on, with the POs booked. */
+  readonly schedule: readonly WmsSlotView[];
   /** Inventory (W6): one row per SKU, in catalog order. */
   readonly stock: readonly WmsStockView[];
   readonly inventoryKpis: WmsInventoryKpis;
   /** The operating plan (W7), and the crew it splits between picking and receiving. */
   readonly policy: WmsPolicy;
   readonly crew: number;
-  readonly receivers: readonly WmsReceiverView[];
+  readonly growth: WmsGrowthView;
   /** The floor's shape (W7): aisles, bays down each, bays of walking from one aisle to the next, dock doors. */
   readonly layout: { readonly aisles: number; readonly bays: number; readonly aisleGap: number; readonly doors: number };
+  readonly stats: WmsStats;
+  readonly today: WmsDayStats;
+  readonly yesterday: WmsDayStats | null;
 }

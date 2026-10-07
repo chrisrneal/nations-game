@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { WmsView } from '@warehouse/contracts';
+import type { ClockShape } from '../format.ts';
 import type { WarehouseStore } from '../store.ts';
 
 export interface WmsLive {
@@ -7,6 +8,9 @@ export interface WmsLive {
   readonly tick: number;
   readonly tickMs: number;
   readonly cash: number;
+  /** The warehouse clock's shape, for showing any tick as a time of day (W8), and today's number. */
+  readonly time: ClockShape;
+  readonly day: number;
 }
 
 /**
@@ -18,11 +22,15 @@ export function useWms(store: WarehouseStore): WmsLive | null {
   const [live, setLive] = useState<WmsLive | null>(null);
   useEffect(() => {
     let rev = Number.NaN;
+    // The clock's shape never changes in a game: one object, so memoised rows that take it do not re-render for it.
+    let time: ClockShape | null = null;
     return store.onFrame((update) => {
       const view = update.view;
       if (view.wms.rev === rev) return;
       rev = view.wms.rev;
-      setLive({ wms: view.wms, tick: view.tick, tickMs: view.tickMs, cash: view.cash });
+      const c = view.clock;
+      if (time === null || time.ticksPerMinute !== c.ticksPerMinute || time.startMinute !== c.startMinute) time = { ticksPerMinute: c.ticksPerMinute, startMinute: c.startMinute };
+      setLive({ wms: view.wms, tick: view.tick, tickMs: view.tickMs, cash: view.cash, time, day: c.day });
     });
   }, [store]);
   return live;

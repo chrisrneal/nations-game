@@ -1,6 +1,7 @@
 import { memo, useCallback, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
 import type { WmsOrderView } from '@warehouse/contracts';
 import { ROW_H, clock, rowSignature, rowWindow, statusTone, type Sort, type SortKey } from './grid.ts';
+import type { ClockShape } from '../format.ts';
 
 /** Where the grid was scrolled, kept by the screen so going back to it lands in the same place. */
 export interface GridScroll {
@@ -28,8 +29,8 @@ export function StatusChip(props: { status: WmsOrderView['status'] }): ReactElem
 }
 
 const Row = memo(
-  function Row(props: { order: WmsOrderView; tickMs: number; selected: boolean; onOpen: (no: number) => void }): ReactElement {
-    const { order: o, tickMs, onOpen } = props;
+  function Row(props: { order: WmsOrderView; time: ClockShape; selected: boolean; onOpen: (no: number) => void }): ReactElement {
+    const { order: o, time, onOpen } = props;
     return (
       <tr className={o.exception ? 'exc' : undefined} aria-selected={props.selected} onClick={() => onOpen(o.no)} data-order={o.no}>
         <th scope="row" className="c-no">
@@ -53,12 +54,12 @@ const Row = memo(
         <td className="c-units num">
           {o.unitsPicked}/{o.unitsOrdered}
         </td>
-        <td className={`c-time num${o.late ? ' late' : ''}`}>{clock(o.shipBy, tickMs)}</td>
-        <td className="c-time num">{clock(o.created, tickMs)}</td>
+        <td className={`c-time num${o.late ? ' late' : ''}`}>{clock(o.shipBy, time)}</td>
+        <td className="c-time num">{clock(o.created, time)}</td>
       </tr>
     );
   },
-  (a, b) => a.selected === b.selected && a.tickMs === b.tickMs && a.onOpen === b.onOpen && rowSignature(a.order) === rowSignature(b.order),
+  (a, b) => a.selected === b.selected && a.time === b.time && a.onOpen === b.onOpen && rowSignature(a.order) === rowSignature(b.order),
 );
 
 /**
@@ -70,7 +71,7 @@ const Row = memo(
  */
 export function OrderGrid(props: {
   orders: readonly WmsOrderView[];
-  tickMs: number;
+  time: ClockShape;
   sort: Sort | null;
   selected: ReadonlySet<number>;
   scroll: GridScroll;
@@ -154,7 +155,7 @@ export function OrderGrid(props: {
             </tr>
           )}
           {orders.slice(win.start, win.end).map((o) => (
-            <Row key={o.no} order={o} tickMs={props.tickMs} selected={props.selected.has(o.no)} onOpen={props.onOpen} />
+            <Row key={o.no} order={o} time={props.time} selected={props.selected.has(o.no)} onOpen={props.onOpen} />
           ))}
           {win.end < orders.length && (
             <tr className="spacer" aria-hidden="true">

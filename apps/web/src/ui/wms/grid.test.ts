@@ -60,12 +60,14 @@ describe('WMS order grid helpers (slice 3)', () => {
     expect(nextSort({ key: 'pct', dir: -1 }, 'no')).toEqual({ key: 'no', dir: 1 });
   });
 
-  it('writes WMS time and countdowns', () => {
-    expect(clock(408, 250)).toBe('T+0142');
-    expect(clock(0, 250)).toBe('T+0000');
-    expect(clock(240 * 125, 250)).toBe('T+12500');
-    expect(countdown(600, 250)).toBe('2:30');
-    expect(countdown(-130, 250)).toBe('-0:32');
+  it('writes warehouse times of day and countdowns in warehouse time (W8)', () => {
+    const time = { ticksPerMinute: 4, startMinute: 360 };
+    expect(clock(0, time)).toBe('06:00');
+    expect(clock(408, time)).toBe('07:42');
+    expect(clock(4 * 18 * 60, time)).toBe('00:00');
+    expect(countdown(600, time)).toBe('2h 30m');
+    expect(countdown(-130, time)).toBe('-32m');
+    expect(countdown(4 * 59, time)).toBe('59m');
   });
 
   it('a row changes signature only when what it shows changes', () => {
@@ -89,7 +91,7 @@ describe('grid windowing (slice 9)', () => {
 });
 
 function po(no: number, extra: Partial<WmsPoView> = {}): WmsPoView {
-  return { no, code: `PO-${no}`, supplier: 'SunGrid', status: 'IN TRANSIT', created: 0, eta: 100, arrived: 0, closed: 0, late: false, door: 0, linesTotal: 1, linesReceived: 0, unitsExpected: 200, unitsReceived: 0, unitsDamaged: 0, unitsShort: 0, pct: 0, exception: false, open: true, lines: [], ...extra };
+  return { no, code: `PO-${no}`, supplier: 'SunGrid', status: 'IN TRANSIT', created: 0, appt: 100, arrived: 0, closed: 0, late: false, door: 0, linesTotal: 1, linesReceived: 0, unitsExpected: 200, unitsReceived: 0, unitsDamaged: 0, unitsShort: 0, pct: 0, exception: false, open: true, lines: [], ...extra };
 }
 
 function sku(index: number, extra: Partial<WmsStockView> = {}): WmsStockView {
@@ -114,8 +116,8 @@ describe('inbound and inventory grids (W6)', () => {
     expect(nextSortKey(null, 'eta')).toEqual({ key: 'eta', dir: 1 });
     expect(nextSortKey({ key: 'eta', dir: 1 }, 'eta')).toEqual({ key: 'eta', dir: -1 });
     expect(nextSortKey({ key: 'eta', dir: -1 }, 'eta')).toBeNull();
-    const pos = [po(3, { eta: 5 }), po(1, { eta: 9 }), po(2, { eta: 5 })];
-    expect(sortRows(pos, (p) => p.eta, -1, (p) => p.no).map((p) => p.no)).toEqual([1, 2, 3]);
+    const pos = [po(3, { appt: 5 }), po(1, { appt: 9 }), po(2, { appt: 5 })];
+    expect(sortRows(pos, (p) => p.appt, -1, (p) => p.no).map((p) => p.no)).toEqual([1, 2, 3]);
     expect(pos.map((p) => p.no)).toEqual([3, 1, 2]);
     expect([signed(2), signed(-3), signed(0)]).toEqual(['+2', '-3', '0']);
   });

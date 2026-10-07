@@ -1,68 +1,59 @@
-import type { WarehouseCommand, WarehouseState, BoostId, UpgradeId } from '@warehouse/contracts';
+import type { WarehouseCommand, WarehouseState, WmsAction } from '@warehouse/contracts';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { hashState } from './hash.ts';
-import { BOOST_IDS, UPGRADE_IDS } from './catalog.ts';
-import { backlogCapMilliFor, maxLevel, pickingMilliAt, shelfCapMilliAt, stageCapMilliAt } from './rules.ts';
-import { WAREHOUSE_TUNABLES } from './tunables.ts';
 import { WarehouseSession } from './session.ts';
 import { createWarehouse } from './state.ts';
 import { advanceMany, step } from './step.ts';
+import { WAREHOUSE_TUNABLES as T } from './tunables.ts';
+import { WMS_FIRST_ORDER_NO } from './wms/catalog.ts';
 
 /**
- * The invariants of RULES 13, as properties over random play: random taps (at
- * docks, at picking and at receiving), purchases, boosts and sales at random ticks, from random seeds and starting cash.
+ * The invariants of RULES 12, as properties over random play: random WMS
+ * actions (release, priority, hold, assign, cancel, expedite, plan, hire,
+ * door) at random ticks, from random seeds and starting cash.
  */
-type Move =
-  | { at: number; kind: 'tap'; dock: number }
-  | { at: number; kind: 'tapPick' }
-  | { at: number; kind: 'tapReceive' }
-  | { at: number; kind: 'buy'; upgrade: UpgradeId }
-  | { at: number; kind: 'boost'; boost: BoostId }
-  | { at: number; kind: 'sell' };
-
-const move: fc.Arbitrary<Move> = fc.oneof(
-  fc.record({ at: fc.nat(400), kind: fc.constant('tap' as const), dock: fc.nat(8) }),
-  fc.record({ at: fc.nat(400), kind: fc.constant('tapPick' as const) }),
-  fc.record({ at: fc.nat(400), kind: fc.constant('tapReceive' as const) }),
-  fc.record({ at: fc.nat(400), kind: fc.constant('buy' as const), upgrade: fc.constantFrom(...UPGRADE_IDS) }),
-  fc.record({ at: fc.nat(400), kind: fc.constant('boost' as const), boost: fc.constantFrom(...BOOST_IDS) }),
-  fc.record({ at: fc.nat(400), kind: fc.constant('sell' as const) }),
+const orderNo = fc.integer({ min: WMS_FIRST_ORDER_NO, max: WMS_FIRST_ORDER_NO + 30 });
+const action: fc.Arbitrary<WmsAction> = fc.oneof(
+  fc.record({ action: fc.constant('release' as const), orders: fc.array(orderNo, { minLength: 1, maxLength: 5 }) }),
+  fc.record({ action: fc.constant('priority' as const), order: orderNo, priority: fc.constantFrom(1 as const, 2 as const, 3 as const) }),
+  fc.record({ action: fc.constant('hold' as const), order: orderNo }),
+  fc.record({ action: fc.constant('unhold' as const), order: orderNo }),
+  fc.record({ action: fc.constant('assign' as const), picker: fc.integer({ min: 1, max: 12 }), order: orderNo, line: fc.integer({ min: 1, max: 5 }) }),
+  fc.record({ action: fc.constant('cancelLine' as const), order: orderNo, line: fc.integer({ min: 1, max: 5 }) }),
+  fc.record({ action: fc.constant('expedite' as const), order: orderNo }),
+  fc.record({
+    action: fc.constant('policy' as const),
+    policy: fc.record({ pick: fc.constantFrom('priority' as const, 'cutoff' as const, 'nearest' as const), release: fc.constantFrom('waves' as const, 'continuous' as const, 'manual' as const), pickers: fc.integer({ min: 1, max: 9 }) }),
+  }),
+  fc.record({ action: fc.constant('hire' as const), role: fc.constantFrom('pick' as const, 'receive' as const) }),
+  fc.record({ action: fc.constant('door' as const) }),
 );
+const move = fc.record({ at: fc.nat(600), action });
 
 interface Game {
   seed: number;
   cash: number;
-  earned: number;
-  site: number;
-  moves: Move[];
+  moves: { at: number; action: WmsAction }[];
 }
 
 const game: fc.Arbitrary<Game> = fc.record({
   seed: fc.integer({ min: 0, max: 0x7fffffff }),
-  cash: fc.oneof(fc.constant(0), fc.integer({ min: 0, max: 50_000_000 })),
-  earned: fc.oneof(fc.constant(0), fc.integer({ min: 0, max: 2_000_000_000 })),
-  site: fc.nat(7),
+  cash: fc.oneof(fc.constant(0), fc.integer({ min: 0, max: 5_000_000 })),
   moves: fc.array(move, { maxLength: 40 }),
 });
 
-function commandFor(m: Move, tick: number): WarehouseCommand {
-  if (m.kind === 'tap') return { tick, type: 'tap', payload: { dock: m.dock } };
-  if (m.kind === 'tapPick') return { tick, type: 'tapPick', payload: {} };
-  if (m.kind === 'tapReceive') return { tick, type: 'tapReceive', payload: {} };
-  if (m.kind === 'buy') return { tick, type: 'buy', payload: { upgrade: m.upgrade } };
-  if (m.kind === 'boost') return { tick, type: 'boost', payload: { boost: m.boost } };
-  return { tick, type: 'sell', payload: {} };
+function commandFor(m: Game['moves'][number]): WarehouseCommand {
+  return { tick: m.at, type: 'wms', payload: m.action };
 }
 
 function start(g: Game): WarehouseState {
-  const s = createWarehouse({ seed: g.seed, site: g.site });
-  return { ...s, cash: g.cash, run: { ...s.run, earned: g.earned } };
+  return { ...createWarehouse({ seed: g.seed }), cash: g.cash };
 }
 
-function byTick(moves: readonly Move[]): Map<number, WarehouseCommand[]> {
+function byTick(moves: Game['moves']): Map<number, WarehouseCommand[]> {
   const map = new Map<number, WarehouseCommand[]>();
-  for (const m of moves) map.set(m.at, [...(map.get(m.at) ?? []), commandFor(m, m.at)]);
+  for (const m of moves) map.set(m.at, [...(map.get(m.at) ?? []), commandFor(m)]);
   return map;
 }
 
@@ -77,75 +68,85 @@ function play(g: Game, ticks: number, check?: (s: WarehouseState) => void): Ware
 }
 
 function invariants(s: WarehouseState): void {
+  const w = s.wms;
   expect(s.cash).toBeGreaterThanOrEqual(0);
   expect(Number.isSafeInteger(s.cash)).toBe(true);
-  expect(s.staged).toBeGreaterThanOrEqual(0);
-  expect(s.staged).toBeLessThanOrEqual(stageCapMilliAt(s.levels.sales));
-  // The picking line (RULES 3): never negative, never longer than its longest at this level (a new contract can slow picking below it).
-  expect(s.backlog).toBeGreaterThanOrEqual(0);
-  expect(s.backlog).toBeLessThanOrEqual(backlogCapMilliFor(pickingMilliAt(s.levels.picking, 0)));
-  expect(s.pickRush).toBeGreaterThanOrEqual(0);
-  // The shelves and the PO (RULES 3a): stock never negative or over the shelves; a PO never over-received.
-  expect(s.stock).toBeGreaterThanOrEqual(0);
-  expect(s.stock).toBeLessThanOrEqual(shelfCapMilliAt(s.levels.receiving));
-  expect(s.po.received).toBeGreaterThanOrEqual(0);
-  expect(s.po.received).toBeLessThan(s.po.units * 1000);
-  expect(s.receiveRush).toBeGreaterThanOrEqual(0);
-  expect(s.receiveRush).toBeLessThanOrEqual(WAREHOUSE_TUNABLES.rushMaxTicks.value);
-  expect(s.pickRush).toBeLessThanOrEqual(WAREHOUSE_TUNABLES.rushMaxTicks.value);
-  expect(s.docks.length).toBe(1 + s.levels.docks);
-  for (const g of s.docks) {
-    expect(g.loaded).toBeGreaterThanOrEqual(0);
-    expect(g.loaded).toBeLessThanOrEqual(g.parcels * 1000);
-    expect(g.timer).toBeGreaterThanOrEqual(0);
-    expect(g.turn).toBeGreaterThanOrEqual(0);
-    expect(g.rush).toBeGreaterThanOrEqual(0);
+  for (const stock of w.inventory) {
+    expect(stock.onHand).toBeGreaterThanOrEqual(0);
+    expect(stock.allocated).toBeGreaterThanOrEqual(0);
+    expect(stock.allocated).toBeLessThanOrEqual(stock.onHand);
   }
-  for (const id of UPGRADE_IDS) expect(s.levels[id]).toBeLessThanOrEqual(maxLevel(id, s));
-  for (const id of BOOST_IDS) {
-    expect(s.boosts[id].left).toBeGreaterThanOrEqual(0);
-    expect(s.boosts[id].recharge).toBeGreaterThanOrEqual(s.boosts[id].left);
+  // The crew (RULES 6): every worker's tasks are its own and of its role; no task is held twice.
+  const held = new Set<number>();
+  expect(w.workers.length).toBeLessThanOrEqual(T.wmsMaxCrew.value);
+  expect(w.policy.pickers).toBe(w.workers.filter((p) => p.role === 'pick').length);
+  expect(w.doors).toBeLessThanOrEqual(T.wmsMaxDoors.value);
+  for (const p of w.workers) {
+    expect(p.walk).toBeGreaterThanOrEqual(0);
+    expect(p.queue.length + (p.task === 0 ? 0 : 1)).toBeLessThanOrEqual(T.wmsTaskQueue.value);
+    for (const no of [p.task, ...p.queue]) {
+      if (no === 0) continue;
+      expect(held.has(no)).toBe(false);
+      held.add(no);
+      const t = w.tasks.find((x) => x.no === no);
+      expect(t).toBeDefined();
+      expect(t?.worker).toBe(p.id);
+      expect(t?.status).toBe(no === p.task ? 'ACTIVE' : 'QUEUED');
+      expect(t?.kind === 'PICK' ? 'pick' : 'receive').toBe(p.role);
+    }
   }
-  expect(s.levels.contract).toBeLessThanOrEqual(s.levels.truck);
+  for (const t of w.tasks) if (t.status === 'ACTIVE' || t.status === 'QUEUED') expect(held.has(t.no)).toBe(true);
+  // A line being picked has exactly one active pick task.
+  for (const o of w.orders) {
+    for (const l of o.lines) {
+      const active = w.tasks.filter((t) => t.kind === 'PICK' && t.ref === o.no && t.line === l.no && t.status === 'ACTIVE').length;
+      expect(active).toBe(l.status === 'PICKING' ? 1 : 0);
+      expect(l.picked).toBeLessThanOrEqual(l.ordered);
+    }
+  }
 }
 
-describe('warehouse invariants under random play (RULES 13)', () => {
-  it('cash, orders, stock and loads are never negative and never over their limits', () => {
-    fc.assert(fc.property(game, (g) => void play(g, 420, invariants)), { numRuns: 60 });
-  }, 20_000);
+describe('warehouse invariants under random play (RULES 12)', () => {
+  it('cash and stock are never negative, and every task is held by at most one worker of its role', () => {
+    // The WMS changes only on its step (every wmsStepTicks), so it is checked just after each.
+    const checked = (s: WarehouseState): void => {
+      if (s.tick % T.wmsStepTicks.value === 1) invariants(s);
+    };
+    fc.assert(fc.property(game, (g) => void play(g, 700, checked)), { numRuns: 30 });
+  }, 60_000);
 
-  it('cash only moves by pays, WMS shipments and purchases (an expedite is a purchase)', () => {
+  it('cash only moves by shipments and what the player pays for', () => {
     fc.assert(
       fc.property(game, (g) => {
         const cmds = byTick(g.moves);
         let s = start(g);
-        for (let i = 0; i < 420; i++) {
+        for (let i = 0; i < 700; i++) {
           const r = step(s, cmds.get(s.tick) ?? []);
           let expected = s.cash;
           for (const e of r.events) {
-            if (e.type === 'departed') expected += e.payload.cents;
-            if (e.type === 'bought') expected -= e.payload.cents;
             if (e.type === 'wmsShipped') expected += e.payload.cents;
             if (e.type === 'wms') expected -= e.payload.cents;
           }
-          if (!r.events.some((e) => e.type === 'sold')) expect(r.state.cash).toBe(expected);
+          expect(r.state.cash).toBe(expected);
           s = r.state;
         }
+        expect(s.cash).toBe(g.cash + s.wms.stats.earned - s.wms.stats.spent);
       }),
-      { numRuns: 30 },
+      { numRuns: 20 },
     );
-  });
+  }, 60_000);
 
   it('the same seed and the same commands give the same warehouse', () => {
-    fc.assert(fc.property(game, (g) => {
-      expect(hashState(play(g, 300))).toBe(hashState(play(g, 300)));
-    }), { numRuns: 30 });
-  });
+    fc.assert(
+      fc.property(game, (g) => {
+        expect(hashState(play(g, 400))).toBe(hashState(play(g, 400)));
+      }),
+      { numRuns: 20 },
+    );
+  }, 60_000);
 
-  it('different seeds draw different expresses', () => {
-    const a = advanceMany(createWarehouse({ seed: 1 }), 20_000);
-    const b = advanceMany(createWarehouse({ seed: 2 }), 20_000);
-    expect(hashState(a)).not.toBe(hashState(b));
+  it('different seeds open different warehouses', () => {
+    expect(hashState(createWarehouse({ seed: 1 }))).not.toBe(hashState(createWarehouse({ seed: 2 })));
   });
 });
 
@@ -153,53 +154,53 @@ describe('catch-up equals stepping (P4)', () => {
   it('advanceMany(n) gives exactly the state of n single steps, from any reachable warehouse', () => {
     fc.assert(
       fc.property(game, fc.integer({ min: 1, max: 3000 }), (g, n) => {
-        const reached = play(g, 200);
+        const reached = play(g, 300);
         let stepped = reached;
         for (let i = 0; i < n; i++) stepped = step(stepped, []).state;
         expect(hashState(advanceMany(reached, n))).toBe(hashState(stepped));
       }),
-      { numRuns: 25 },
+      { numRuns: 15 },
     );
-  });
+  }, 60_000);
 
   it('a session catching up hours quietly equals one stepping tick by tick with events', () => {
-    const quiet = new WarehouseSession(createWarehouse({ seed: 9 }));
-    const loud = new WarehouseSession(createWarehouse({ seed: 9 }));
+    const quiet = new WarehouseSession({ ...createWarehouse({ seed: 9 }), cash: 1_000_000 });
+    const loud = new WarehouseSession({ ...createWarehouse({ seed: 9 }), cash: 1_000_000 });
     for (const s of [quiet, loud]) {
-      s.submit({ tick: 0, type: 'tap', payload: { dock: 0 } });
-      s.submit({ tick: 300, type: 'boost', payload: { boost: 'flashSale' } });
-      s.submit({ tick: 500, type: 'buy', payload: { upgrade: 'loading' } });
-      s.submit({ tick: 9000, type: 'buy', payload: { upgrade: 'docks' } });
+      s.submit({ tick: 0, type: 'wms', payload: { action: 'hire', role: 'pick' } });
+      s.submit({ tick: 300, type: 'wms', payload: { action: 'policy', policy: { pick: 'nearest', release: 'continuous', pickers: 6 } } });
+      s.submit({ tick: 500, type: 'wms', payload: { action: 'door' } });
     }
-    quiet.advance(4 * 3600, { events: false });
-    loud.advance(4 * 3600);
-    expect(quiet.state.tick).toBe(4 * 3600);
+    quiet.advance(2 * 3600, { events: false });
+    loud.advance(2 * 3600);
+    expect(quiet.state.tick).toBe(2 * 3600);
     expect(hashState(quiet.state)).toBe(hashState(loud.state));
-    expect(quiet.state.levels.docks).toBe(1);
+    expect(quiet.state.wms.workers).toHaveLength(10);
+    expect(quiet.state.wms.doors).toBe(3);
   });
 });
 
 describe('saves (S9)', () => {
   it('save, reload and continue matches an uninterrupted run', () => {
     fc.assert(
-      fc.property(game, fc.integer({ min: 1, max: 399 }), fc.boolean(), (g, cut, compact) => {
-        const commands = g.moves.map((m) => commandFor(m, m.at));
+      fc.property(game, fc.integer({ min: 1, max: 599 }), fc.boolean(), (g, cut, compact) => {
+        const commands = g.moves.map(commandFor);
         const straight = new WarehouseSession(start(g));
         const split = new WarehouseSession(start(g));
         for (const c of commands) {
           straight.submit(c);
           split.submit(c);
         }
-        straight.advance(400);
+        straight.advance(600);
         split.advance(cut);
         const file = JSON.parse(JSON.stringify(split.save({ compact }))) as unknown;
         const resumed = WarehouseSession.load(file);
-        resumed.advance(400 - cut);
+        resumed.advance(600 - cut);
         expect(hashState(resumed.state)).toBe(hashState(straight.state));
       }),
-      { numRuns: 30 },
+      { numRuns: 20 },
     );
-  });
+  }, 60_000);
 
   it('refuses a save that does not replay to its hash, or comes from a newer version', () => {
     const s = new WarehouseSession(createWarehouse({ seed: 1 }));

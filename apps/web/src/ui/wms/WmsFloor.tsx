@@ -37,12 +37,12 @@ const FOCUS_MS = 2600;
  * The WMS floor (decision record W7): the warehouse as the WMS runs it,
  * drawn on two canvases (P7): what stands still (bands, racks and their
  * stock, doors, zones and their counts) is redrawn once a WMS step; what
- * moves (pickers, receivers, forklifts, totes, cartons, the truck) every
- * frame from a WmsFloorModel. Tapping a picker or a carton opens its order,
- * a docked trailer its PO, a bin its SKU.
+ * moves (the workers, totes, cartons, the truck) every frame from a
+ * WmsFloorModel. Tapping a worker opens its tasks, a carton its order, a
+ * docked trailer its PO, a bin its SKU.
  */
-export function WmsFloor(props: { store: WarehouseStore; onOrder: (no: number) => void; onPo: (no: number) => void }): ReactElement {
-  const { store, onOrder, onPo } = props;
+export function WmsFloor(props: { store: WarehouseStore; onWorker: (id: number) => void; onOrder: (no: number) => void; onPo: (no: number) => void }): ReactElement {
+  const { store, onWorker, onOrder, onPo } = props;
   const box = useRef<HTMLDivElement>(null);
   const live = useRef<HTMLCanvasElement>(null);
   const still = useRef<HTMLCanvasElement>(null);
@@ -69,8 +69,14 @@ export function WmsFloor(props: { store: WarehouseStore; onOrder: (no: number) =
       m.ingest(v.wms, v.tick, v.tickMs, performance.now(), shipped);
       shipped = [];
       if (live.current !== null) {
-        live.current.dataset.pickers = String(m.pickers.length);
-        live.current.dataset.walking = String(m.pickers.filter((p) => p.done < p.total).length);
+        live.current.dataset.pickers = String(m.workers.filter((p) => p.role === 'pick').length);
+        live.current.dataset.workers = String(m.workers.length);
+        live.current.dataset.walking = String(m.workers.filter((p) => p.done < p.total).length);
+        // Where the workers standing still are (id:x:y), for the phone checks to tap one.
+        live.current.dataset.standing = m.workers
+          .filter((p) => p.done >= p.total)
+          .map((p) => `${p.id}:${Math.round(p.x)}:${Math.round(p.y)}`)
+          .join(' ');
         live.current.dataset.cartons = String(m.cartons.length);
       }
     });
@@ -147,7 +153,8 @@ export function WmsFloor(props: { store: WarehouseStore; onOrder: (no: number) =
     const r = event.currentTarget.getBoundingClientRect();
     const hit = model.current?.hit(event.clientX - r.left, event.clientY - r.top, w.wms) ?? null;
     if (hit === null) return;
-    if ('order' in hit) onOrder(hit.order);
+    if ('worker' in hit) onWorker(hit.worker);
+    else if ('order' in hit) onOrder(hit.order);
     else if ('po' in hit) onPo(hit.po);
     else focus.current = { ...hit, at: performance.now() };
   };
@@ -159,7 +166,7 @@ export function WmsFloor(props: { store: WarehouseStore; onOrder: (no: number) =
         ref={live}
         className="wms-floor-canvas wms-floor-live"
         role="img"
-        aria-label="The warehouse floor as the WMS runs it: trucks at the dock doors, receivers, forklifts putting stock away, pickers walking to their bins, totes on the conveyor, and orders at packing, staging and on the truck. Tap a picker or a carton to open its order."
+        aria-label="The warehouse floor as the WMS runs it: trucks at the dock doors, receivers counting them in and taking pallets to the racks, pickers walking to their bins, totes on the conveyor, and orders at packing, staging and on the truck. Tap a worker to see their tasks, or a carton to open its order."
         onPointerDown={tap}
         data-testid="wms-floor-canvas"
       />
@@ -340,19 +347,18 @@ function drawLive(ctx: CanvasRenderingContext2D, l: FloorLayout, m: WmsFloorMode
     ctx.fillStyle = PRIORITY[t.priority] ?? PRIORITY[3];
     ctx.fillRect(t.x - 2, t.y - 1.5, 4, 3);
   }
-  for (const f of m.forklifts) {
-    ctx.fillStyle = C.forklift;
-    ctx.fillRect(f.x - 4.5, f.y - 3, 7, 6);
-    ctx.fillStyle = C.pallet;
-    ctx.fillRect(f.x + 2.5, f.y - 2.5, 4, 5);
-  }
-  for (const r of m.receivers) {
-    const working = r.po > 0;
-    person(ctx, r.x, r.y, r.id, working ? C.receiver : C.idle, null, working ? r.pct : null);
-  }
-  for (const p of m.pickers) {
+  for (const p of m.workers) {
     const walking = p.done < p.total;
-    const busy = p.order > 0;
+    const busy = p.task > 0;
+    if (p.role === 'receive') {
+      // A put-away: the worker drives the pallet to its bin.
+      if (p.kind === 'PUTAWAY') {
+        ctx.fillStyle = C.pallet;
+        ctx.fillRect(p.x + 5, p.y - 3, 5, 6);
+      }
+      person(ctx, p.x, p.y, p.id, !busy ? C.idle : p.kind === 'PUTAWAY' ? C.forklift : C.receiver, null, busy && !walking && p.kind === 'RECEIVE' ? p.pct : null);
+      continue;
+    }
     const ring = busy && p.priority > 0 && p.priority < 3 ? (PRIORITY[p.priority] ?? null) : null;
     person(ctx, p.x, p.y, p.id, !busy ? C.idle : walking ? C.walking : C.picking, ring, busy && !walking ? p.pct : null);
   }

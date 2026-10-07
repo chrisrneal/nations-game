@@ -11,7 +11,7 @@ const SKIPS: readonly (readonly [string, number])[] = [
   ['+8 hours', 480],
 ];
 
-/** Saves to a file and back, starting over, the warehouse's lifetime numbers, and the testing time skip. */
+/** Saves to a file and back, starting over, the warehouse's totals and yesterday, and the testing time skip. */
 export function SettingsSheet(props: { view: WarehouseView; host: WarehouseHost; feedback?: Feedback | undefined; onClose: () => void; onToast: (text: string) => void }): ReactElement {
   const { view, host, feedback, onClose, onToast } = props;
   const file = useRef<HTMLInputElement>(null);
@@ -45,33 +45,49 @@ export function SettingsSheet(props: { view: WarehouseView; host: WarehouseHost;
     }
   };
 
-  const life = view.life;
+  const st = view.wms.stats;
+  const y = view.wms.yesterday;
+  const pct = (part: number, whole: number): string => (whole === 0 ? '—' : `${Math.floor((part * 100) / whole)}%`);
   return (
     <Sheet title="Warehouse" onClose={onClose}>
       <dl className="stats" data-testid="stats">
         <div>
-          <dt>Earned, all warehouses</dt>
-          <dd>{formatCash(life.earned)}</dd>
+          <dt>Day</dt>
+          <dd>{view.clock.day}</dd>
         </div>
         <div>
-          <dt>Shipments</dt>
+          <dt>Earned since opening</dt>
           <dd>
-            {short(life.shipments)} ({life.shipments === 0 ? 0 : Math.round((life.fullShipments / life.shipments) * 100)}% full)
+            {formatCash(st.earned)} (spent {formatCash(st.spent)})
           </dd>
         </div>
         <div>
           <dt>Orders shipped</dt>
-          <dd>{short(life.orders)}</dd>
-        </div>
-        <div>
-          <dt>POs received</dt>
           <dd>
-            {short(life.pos)} ({short(life.received)} units)
+            {short(st.shipped)} ({pct(st.otif, st.shipped)} on time and in full)
           </dd>
         </div>
         <div>
-          <dt>Offline earnings</dt>
-          <dd>up to {view.offlineCapMinutes >= 60 ? `${view.offlineCapMinutes / 60} h` : `${view.offlineCapMinutes} min`}</dd>
+          <dt>Lines picked</dt>
+          <dd>{short(st.linesPicked)}</dd>
+        </div>
+        {y !== null && (
+          <div>
+            <dt>Yesterday (day {y.day})</dt>
+            <dd>
+              {short(y.shipped)} shipped, {pct(y.otif, y.shipped)} OTIF, {formatCash(y.earned)}, {short(y.posReceived)} POs in
+            </dd>
+          </div>
+        )}
+        <div>
+          <dt>Crew and dock doors</dt>
+          <dd>
+            {view.wms.crew} people, {view.wms.layout.doors} doors
+          </dd>
+        </div>
+        <div>
+          <dt>While the app is closed</dt>
+          <dd>runs up to {view.offlineCapMinutes >= 60 ? `${view.offlineCapMinutes / 60} h` : `${view.offlineCapMinutes} min`}</dd>
         </div>
       </dl>
       {feedback !== undefined && (

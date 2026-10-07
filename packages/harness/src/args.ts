@@ -3,7 +3,7 @@
  * flag or command is an error with a non-zero exit, never silently ignored
  * (a typo must never quietly run the default command).
  */
-export const COMMANDS = ['pacing', 'determinism', 'bench'] as const;
+export const COMMANDS = ['report', 'determinism', 'bench'] as const;
 export type HarnessCommand = (typeof COMMANDS)[number];
 
 interface FlagSpec {
@@ -15,7 +15,7 @@ interface FlagSpec {
 }
 
 const FLAGS: Record<HarnessCommand, FlagSpec> = {
-  pacing: { numbers: ['seed', 'minutes'], strings: ['out', 'set'], switches: [], positive: ['minutes'] },
+  report: { numbers: ['seed', 'seeds', 'minutes'], strings: ['out', 'set'], switches: [], positive: ['seeds', 'minutes'] },
   determinism: { numbers: ['seeds', 'ticks'], strings: [], switches: ['no-browser'] },
   bench: { numbers: ['ticks', 'runs'], strings: [], switches: ['no-browser'] },
 };
@@ -52,7 +52,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       rest.push(word);
     }
   }
-  const resolved = command ?? 'pacing';
+  const resolved = command ?? 'report';
   if (explicit !== undefined && explicit !== resolved) throw new Error(`Got both "${explicit}" and --suite ${resolved}; give one.`);
   const spec = FLAGS[resolved];
   const numbers: Record<string, number> = {};

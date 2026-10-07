@@ -1,13 +1,14 @@
-import type { WmsEvent, WmsLine, WmsOrder, WmsPo, WmsPoLine, WmsState } from '@warehouse/contracts';
+import type { WmsEvent, WmsLine, WmsOrder, WmsPo, WmsPoLine, WmsState, WmsTask, WmsWorker } from '@warehouse/contracts';
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
 
-type DeepMutable<V> = { -readonly [K in keyof V]: V[K] extends readonly (infer U)[] ? DeepMutable<U>[] : V[K] extends object ? DeepMutable<V[K]> : V[K] };
+type DeepMutable<V> = { -readonly [K in keyof V]: V[K] extends readonly (infer U)[] ? DeepMutable<U>[] : V[K] extends object | null ? DeepMutable<V[K]> : V[K] };
 export type MWms = DeepMutable<WmsState>;
 export type MOrder = DeepMutable<WmsOrder>;
 export type MLine = DeepMutable<WmsLine>;
 export type MPo = DeepMutable<WmsPo>;
 export type MPoLine = DeepMutable<WmsPoLine>;
-export type MPicker = DeepMutable<WmsState['pickers'][number]>;
+export type MWorker = DeepMutable<WmsWorker>;
+export type MTask = DeepMutable<WmsTask>;
 
 /** A copy the step may change in place (P4). Events are never changed, so they are shared. */
 export function cloneWms(w: WmsState): MWms {
@@ -16,15 +17,18 @@ export function cloneWms(w: WmsState): MWms {
     rng: { ...w.rng },
     orders: w.orders.map((o) => ({ ...o, lines: o.lines.map((l) => ({ ...l })) })),
     inventory: w.inventory.map((s) => ({ ...s })),
-    pickers: w.pickers.map((p) => ({ ...p })),
+    workers: w.workers.map((p) => ({ ...p, queue: [...p.queue], stats: { ...p.stats } })),
+    tasks: w.tasks.map((t) => ({ ...t })),
     events: [...w.events],
     stats: { ...w.stats },
+    today: { ...w.today },
+    yesterday: w.yesterday === null ? null : { ...w.yesterday },
     dests: w.dests.map((d) => ({ ...d })),
     recent: [...w.recent],
     pos: w.pos.map((po) => ({ ...po, lines: po.lines.map((l) => ({ ...l })) })),
-    receivers: w.receivers.map((r) => ({ ...r })),
     inbound: { ...w.inbound },
     recentIn: [...w.recentIn],
+    recentPay: [...w.recentPay],
     policy: { ...w.policy },
   };
 }

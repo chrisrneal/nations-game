@@ -30,12 +30,12 @@ function line(no: number, sku: number, ordered: number): WmsLine {
 }
 
 function order(no: number, lines: WmsLine[], extra: Partial<WmsOrder> = {}): WmsOrder {
-  return { no, dest: 0, source: 0, priority: 3, wave: 0, status: 'NEW', lines, shipBy: 100_000, created: 0, next: 0, late: false, held: null, closed: 0, expedited: false, ...extra };
+  return { no, dest: 0, customer: 0, priority: 3, wave: 0, status: 'NEW', lines, shipBy: 100_000, created: 0, next: 0, late: false, held: null, closed: 0, expedited: false, ...extra };
 }
 
 /** A quiet WMS: these orders and stock, no arrivals, waves or replenishment unless asked. */
 function wms(orders: WmsOrder[], onHand: Record<number, number>, extra: Partial<WmsState> = {}): MWms {
-  const base = createWms({ seed: 1, tick: 0, contract: 0 });
+  const base = createWms({ seed: 1, tick: 0 });
   const inventory: WmsStock[] = base.inventory.map((s) => ({ ...s, bin: s.sku * 37, onHand: onHand[s.sku] ?? 0, allocated: 0 }));
   return cloneWms({ ...base, orders, inventory, events: [], nextOrderAt: 1e9, nextWaveAt: 0, nextReplenAt: 1e9, ...extra });
 }
@@ -44,7 +44,7 @@ function wms(orders: WmsOrder[], onHand: Record<number, number>, extra: Partial<
 function run(w: MWms, from: number, steps: number): number {
   let tick = from;
   for (let i = 0; i < steps; i++) {
-    wmsStep(w, tick, 0);
+    wmsStep(w, tick);
     tick += STEP;
   }
   return tick;
@@ -57,7 +57,7 @@ function codes(w: MWms): string[] {
 describe('WMS waves and allocation (slice 2)', () => {
   it('the wave planner releases every NEW order together and allocates it', () => {
     const w = wms([order(10234, [line(1, 0, 10)]), order(10235, [line(1, 1, 5)])], { 0: 50, 1: 50 });
-    wmsStep(w, 0, 0);
+    wmsStep(w, 0);
     expect(w.orders.map((o) => [o.wave, o.lines[0]?.allocated])).toEqual([
       [1, 10],
       [1, 5],
@@ -70,7 +70,7 @@ describe('WMS waves and allocation (slice 2)', () => {
 
   it('short stock: a line partly allocated is ALLOC SHORT, a line with none is SHORT, an order with none is a BACKORDER', () => {
     const w = wms([order(1, [line(1, 0, 10), line(2, 1, 8)]), order(2, [line(1, 2, 6)])], { 0: 4, 1: 0, 2: 0 });
-    wmsStep(w, 0, 0);
+    wmsStep(w, 0);
     const [a, b] = w.orders as [MWms['orders'][number], MWms['orders'][number]];
     expect(a.lines.map((l) => [l.status, l.allocated, l.short])).toEqual([
       ['PICKING', 4, 6],
@@ -88,7 +88,7 @@ describe('WMS waves and allocation (slice 2)', () => {
   it('a backorder allocates once a purchase order is received and put away (W6)', () => {
     withTunables({ wmsPoLateChanceBp: 0, wmsPoLeadMinTicks: 40, wmsPoLeadMaxTicks: 40, wmsRcvShortChanceBp: 0, wmsDamageChanceBp: 0, wmsCountVarianceBp: 0, wmsShortPickChanceBp: 0 }, () => {
       const w = wms([order(1, [line(1, 2, 6)])], {}, { nextReplenAt: 2 * STEP });
-      wmsStep(w, 0, 0);
+      wmsStep(w, 0);
       expect(w.orders[0]?.status).toBe('BACKORDER');
       run(w, STEP, 150);
       expect(codes(w)).toEqual(expect.arrayContaining(['PO CRT', 'ARRIVE', 'DOCK', 'RCV', 'PUTAWAY', 'PO CLOSE']));
@@ -112,9 +112,11 @@ describe('WMS pickers (slice 2)', () => {
       ],
       { 0: 9, 1: 9, 2: 9, 3: 9 },
     );
-    w.pickers = w.pickers.slice(0, 2);
-    wmsStep(w, 0, 0);
-    expect(w.pickers.map((p) => p.order)).toEqual([2, 4]);
+    w.workers = w.workers.slice(0, 2);
+    wmsStep(w, 0);
+    expect(w.workers.map((p) => w.tasks.find((t) => t.no === p.task)?.ref)).toEqual([2, 4]);
+    // The rest are lined up next, round by round: each picker's queue holds the next most urgent.
+    expect(w.workers.map((p) => p.queue.map((no) => w.tasks.find((t) => t.no === no)?.ref))).toEqual([[3], [1]]);
     expect(w.events.filter((e) => e.code === 'PICK START').map((e) => [e.order, e.picker])).toEqual([
       [2, 1],
       [4, 2],
@@ -125,7 +127,7 @@ describe('WMS pickers (slice 2)', () => {
     const w = withTunables({ wmsShortPickChanceBp: 0, wmsWalkTicksPerBay: 0 }, () => {
       const m = wms([order(1, [line(1, 0, 13)])], { 0: 20 });
       const steps = Math.ceil((13 * 1000) / PER_STEP);
-      wmsStep(m, 0, 0);
+      wmsStep(m, 0);
       run(m, STEP, steps - 1);
       expect(m.orders[0]?.lines[0]?.status).toBe('PICKING');
       expect(m.orders[0]?.lines[0]?.picked).toBe(Math.floor(((steps - 1) * PER_STEP) / 1000));
@@ -135,7 +137,8 @@ describe('WMS pickers (slice 2)', () => {
     const l = w.orders[0]?.lines[0];
     expect([l?.status, l?.picked, l?.short]).toEqual(['PICKED', 13, 0]);
     expect(w.inventory[0]).toMatchObject({ onHand: 7, allocated: 0 });
-    expect(w.pickers[0]).toMatchObject({ order: 0, line: 0, progress: 0, at: 0 });
+    expect(w.workers[0]).toMatchObject({ task: 0, progress: 0, at: 0 });
+    expect(w.workers[0]?.stats).toMatchObject({ tasks: 1, units: 13 });
     const conf = w.events.find((e) => e.code === 'PICK CONF');
     expect(conf).toMatchObject({ order: 1, line: 1, sku: 0, qty: 13, of: 13, picker: 1 });
     expect(w.stats.linesPicked).toBe(1);
@@ -203,7 +206,7 @@ describe('WMS in the warehouse (slice 2)', () => {
     let s = createWarehouse({ seed: 4 });
     s = advanceMany(s, T.wmsFirstWaveTicks.value + 1);
     expect(s.wms.orders.every((o) => o.wave === 1)).toBe(true);
-    expect(s.wms.pickers.filter((p) => p.order > 0).length).toBeGreaterThan(0);
+    expect(s.wms.workers.filter((p) => p.role === 'pick' && p.task > 0).length).toBeGreaterThan(0);
     expect(s.wms.events.some((e) => e.code === 'PICK START')).toBe(true);
   });
 
@@ -236,26 +239,25 @@ describe('WMS in the warehouse (slice 2)', () => {
         expect(stock.onHand).toBeGreaterThanOrEqual(0);
         expect(stock.allocated).toBe(allocated[stock.sku]);
       }
-      expect(s.rng.counter).toBe(advanceMany({ ...createWarehouse({ seed }), wms: createWms({ seed: 99, tick: 0, contract: 0 }) }, 2 * 3600 * 4).rng.counter);
     }
   });
 });
 
 describe('WMS feedback loop (slice 8)', () => {
-  it('goodwill: +3 for on time and in full; down by the minutes late (capped) and the share short', () => {
+  it('goodwill: +3 for on time and in full; down by the warehouse hours late (capped) and the share short', () => {
     const o = order(1, [{ ...line(1, 0, 10), picked: 10 }], { shipBy: 1000 });
     expect(goodwillChange(o, 900, true, true, 10)).toBe(T.wmsGoodwillGain.value);
-    expect(goodwillChange(o, 1001, false, true, 10)).toBe(-T.wmsGoodwillLatePerMin.value);
-    expect(goodwillChange(o, 1000 + 3 * 240, false, true, 10)).toBe(-3 * T.wmsGoodwillLatePerMin.value);
+    expect(goodwillChange(o, 1001, false, true, 10)).toBe(-T.wmsGoodwillLatePerHour.value);
+    expect(goodwillChange(o, 1000 + 3 * 240, false, true, 10)).toBe(-3 * T.wmsGoodwillLatePerHour.value);
     expect(goodwillChange(o, 1000 + 60 * 240, false, true, 10)).toBe(-T.wmsGoodwillLateMax.value);
     expect(goodwillChange(o, 900, true, false, 6)).toBe(-Math.floor((T.wmsGoodwillShortMax.value * 4) / 10));
   });
 
-  it('a shipment pays 5% of an idle order’s pay a unit, times (50 + goodwill)%', () => {
-    expect(shipmentPay(80, 100, 50)).toBe(400);
-    expect(shipmentPay(80, 100, 100)).toBe(600);
-    expect(shipmentPay(80, 100, 0)).toBe(200);
-    expect(shipmentPay(0, 100, 100)).toBe(0);
+  it('a shipment pays $1 a unit, times (50 + goodwill)%', () => {
+    expect(shipmentPay(80, 50)).toBe(8000);
+    expect(shipmentPay(80, 100)).toBe(12_000);
+    expect(shipmentPay(80, 0)).toBe(4000);
+    expect(shipmentPay(0, 100)).toBe(0);
   });
 
   it('shipping moves the country’s goodwill and pays the warehouse; key events go to the sink', () => {
@@ -265,32 +267,25 @@ describe('WMS feedback loop (slice 8)', () => {
       let earned = 0;
       let tick = 0;
       for (let i = 0; i < 60; i++) {
-        earned += wmsStep(m, tick, 0, 100, events);
+        earned += wmsStep(m, tick, events);
         tick += STEP;
       }
-      expect(earned).toBe(shipmentPay(10, 100, T.wmsGoodwillStart.value));
+      expect(earned).toBe(shipmentPay(10, T.wmsGoodwillStart.value));
       expect(events).toEqual([expect.objectContaining({ type: 'wmsShipped', payload: expect.objectContaining({ order: 1, priority: 1, onTime: true, inFull: true, cents: earned }) })]);
       return m;
     });
     expect(w.dests[2]?.goodwill).toBe(T.wmsGoodwillStart.value + T.wmsGoodwillGain.value);
   });
 
-  it('a WMS shipment is cash and counts as earned (stars come from earnings)', () => {
-    const s = advanceMany(createWarehouse({ seed: 2 }), 15 * 60 * 4);
-    const shipped = s.wms.stats.shipped;
-    expect(shipped).toBeGreaterThan(0);
-    const events = [] as WarehouseEvent[];
-    let state = s;
-    for (let i = 0; i < 600 && !events.some((e) => e.type === 'wmsShipped'); i++) {
+  it('a shipment is cash: the warehouse’s cash is what its shipments earned', () => {
+    let state = advanceMany(createWarehouse({ seed: 2 }), 15 * 60 * 4);
+    expect(state.wms.stats.shipped).toBeGreaterThan(0);
+    expect(state.cash).toBe(state.wms.stats.earned);
+    for (let i = 0; i < 600; i++) {
       const r = step(state, []);
-      events.push(...r.events);
-      if (r.events.some((e) => e.type === 'wmsShipped')) {
-        const cents = r.events.reduce((n, e) => n + (e.type === 'wmsShipped' ? e.payload.cents : 0), 0);
-        const trucks = r.events.reduce((n, e) => n + (e.type === 'departed' ? e.payload.cents : 0), 0);
-        expect(r.state.run.earned - state.run.earned).toBe(cents + trucks);
-      }
+      const cents = r.events.reduce((n, e) => n + (e.type === 'wmsShipped' ? e.payload.cents : 0), 0);
+      expect(r.state.cash - state.cash).toBe(cents);
       state = r.state;
     }
-    expect(events.some((e) => e.type === 'wmsShipped')).toBe(true);
   });
 });

@@ -1,7 +1,7 @@
 import type { RngState, WmsLine, WmsOrder, WmsPriority } from '@warehouse/contracts';
 import { randomInt } from '../rng.ts';
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
-import { WMS_DESTINATIONS, WMS_SKUS } from './catalog.ts';
+import { WMS_CUSTOMERS, WMS_DESTINATIONS, WMS_SKUS } from './catalog.ts';
 
 const BP = 10_000;
 
@@ -42,13 +42,14 @@ function rollLines(r: Roller, bins: readonly number[]): WmsLine[] {
   return lines;
 }
 
-/** A NEW order from a customer abroad: country, priority, ship-by and 1-5 lines (RULES 16). `bins` is each SKU's bin. */
-export function rollOrder(r: Roller, no: number, tick: number, contract: number, bins: readonly number[]): WmsOrder {
+/** A NEW order from a customer abroad: country, customer, priority, ship-by and 1-5 lines (RULES 4). `bins` is each SKU's bin. */
+export function rollOrder(r: Roller, no: number, tick: number, bins: readonly number[]): WmsOrder {
   const dest = r.int(0, WMS_DESTINATIONS.length - 1);
+  const customer = r.int(0, WMS_CUSTOMERS.length - 1);
   const priority = rollPriority(r);
   const shipBy = tick + rollLead(r, priority);
   const lines = rollLines(r, bins);
-  return { no, dest, source: contract, priority, wave: 0, status: 'NEW', lines, shipBy, created: tick, next: 0, late: false, held: null, closed: 0, expedited: false };
+  return { no, dest, customer, priority, wave: 0, status: 'NEW', lines, shipBy, created: tick, next: 0, late: false, held: null, closed: 0, expedited: false };
 }
 
 /** Units ordered on the lines not cancelled. */

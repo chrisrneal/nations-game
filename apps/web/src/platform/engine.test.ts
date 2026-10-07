@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import type { WarehouseIntent } from '@warehouse/contracts';
 import { WarehouseSession, advanceMany, createWarehouse, hashState } from '@warehouse/sim';
 import { WarehouseEngine, type WarehouseUpdate } from './engine.ts';
 import { FakeClock } from './testClock.ts';
+
+/** A plan change: the WMS action these tests send. */
+const PLAN: WarehouseIntent = { type: 'wms', payload: { action: 'policy', policy: { pick: 'nearest', release: 'waves', pickers: 6 } } };
+/** The offline cap (8 hours) in ticks. */
+const CAP = 8 * 14_400;
 
 function engine(): { clock: FakeClock; engine: WarehouseEngine; seen: WarehouseUpdate[] } {
   const clock = new FakeClock();
@@ -12,23 +18,24 @@ function engine(): { clock: FakeClock; engine: WarehouseEngine; seen: WarehouseU
 }
 
 describe('WarehouseEngine (the host clock, S4)', () => {
-  it('runs a new warehouse by the wall clock: the first truck leaves after 5 s', () => {
+  it('runs a new warehouse by the wall clock: orders ship and pay within five minutes', () => {
     const { clock, engine: e, seen } = engine();
     e.newGame(42);
     expect(seen.at(-1)?.view.tick).toBe(0);
-    for (let i = 0; i < 20; i++) clock.advance(250);
-    expect(seen.at(-1)?.view.tick).toBe(20);
-    expect(seen.flatMap((u) => u.events).some((ev) => ev.type === 'departed')).toBe(true);
-    expect(seen.at(-1)?.view.cash).toBe(1250);
+    for (let i = 0; i < 1200; i++) clock.advance(250);
+    expect(seen.at(-1)?.view.tick).toBe(1200);
+    const shipped = seen.flatMap((u) => u.events).filter((ev) => ev.type === 'wmsShipped');
+    expect(shipped.length).toBeGreaterThan(0);
+    expect(seen.at(-1)?.view.cash).toBe(shipped.reduce((n, ev) => n + (ev.type === 'wmsShipped' ? ev.payload.cents : 0), 0));
   });
 
   it('stamps intents for the next tick and applies them', () => {
     const { clock, engine: e, seen } = engine();
     e.newGame(1);
-    e.submit({ type: 'tap', payload: { dock: 0 } });
+    e.submit(PLAN);
     clock.advance(250);
-    expect(seen.at(-1)?.view.docks[0]?.rush).toBeGreaterThan(0);
-    expect(() => e.submit({ type: 'buy', payload: { upgrade: 'spaceport' as 'docks' } })).toThrow();
+    expect(seen.at(-1)?.view.wms.policy.pick).toBe('nearest');
+    expect(() => e.submit({ type: 'buy', payload: { upgrade: 'docks' } } as unknown as WarehouseIntent)).toThrow();
   });
 
   it('a late timer catches up exactly, animating only the last few ticks', () => {
@@ -55,7 +62,7 @@ describe('WarehouseEngine (the host clock, S4)', () => {
   it('exports and imports the same warehouse, then owes the time since', () => {
     const { clock, engine: e } = engine();
     e.newGame(8);
-    e.submit({ type: 'tap', payload: { dock: 0 } });
+    e.submit(PLAN);
     clock.advance(10_000);
     const saved = e.exportGame();
     const fingerprint = e.current()?.fingerprint;
@@ -65,7 +72,7 @@ describe('WarehouseEngine (the host clock, S4)', () => {
     const after = other.pump();
     expect(after?.view.tick).toBe(50);
     const expected = new WarehouseSession(createWarehouse({ seed: 8 }));
-    expected.submit({ tick: 0, type: 'tap', payload: { dock: 0 } });
+    expected.submit({ ...PLAN, tick: 0 });
     expected.advance(50);
     expect(after?.fingerprint).toBe(hashState(expected.state));
   });
@@ -86,38 +93,39 @@ describe('WarehouseEngine (the host clock, S4)', () => {
     e.resume();
     const last = seen.at(-1);
     expect(last?.view.tick).toBe(14_400);
-    expect(last?.recap).toMatchObject({ awayMs: 3_600_000, ranMs: 3_600_000, capMinutes: 120 });
-    expect(last?.recap?.earned).toBe(last?.view.run.earned);
-    expect(last?.recap?.shipments).toBeGreaterThan(100);
-    expect(last?.recap?.fixName.length).toBeGreaterThan(0);
+    expect(last?.recap).toMatchObject({ awayMs: 3_600_000, ranMs: 3_600_000, capMinutes: 480, days: 2 });
+    expect(last?.recap?.earned).toBe(last?.view.wms.stats.earned);
+    expect(last?.recap?.shipped).toBeGreaterThan(100);
+    expect(last?.recap?.otif).toBeLessThanOrEqual(last?.recap?.shipped ?? 0);
+    expect(last?.recap?.pos).toBeGreaterThan(10);
     expect(e.dismissRecap().recap).toBeNull();
   });
 
-  it('the offline cap stops the warehouse after 2 hours; the rest of the night is lost', () => {
+  it('the offline cap stops the warehouse after 8 hours; the rest of the absence is lost', () => {
     const { clock, engine: e, seen } = engine();
     e.newGame(5);
     e.pause();
-    clock.time += 5 * 3_600_000;
+    clock.time += 10 * 3_600_000;
     e.resume();
     const last = seen.at(-1);
-    expect(last?.view.tick).toBe(2 * 14_400);
-    expect(last?.recap).toMatchObject({ awayMs: 5 * 3_600_000, ranMs: 2 * 3_600_000 });
+    expect(last?.view.tick).toBe(CAP);
+    expect(last?.recap).toMatchObject({ awayMs: 10 * 3_600_000, ranMs: 8 * 3_600_000 });
     // The clock starts again from now, not from the end of the cap.
     clock.advance(250);
-    expect(seen.at(-1)?.view.tick).toBe(2 * 14_400 + 1);
+    expect(seen.at(-1)?.view.tick).toBe(CAP + 1);
   });
 
   it('a capped catch-up equals stepping the capped ticks (P4)', () => {
     const { clock, engine: e, seen } = engine();
     e.newGame(77);
-    e.submit({ type: 'tap', payload: { dock: 0 } });
+    e.submit(PLAN);
     clock.advance(250);
     e.pause();
     clock.time += 9 * 3_600_000;
     e.resume();
     const expected = new WarehouseSession(createWarehouse({ seed: 77 }));
-    expected.submit({ tick: 0, type: 'tap', payload: { dock: 0 } });
-    expected.advance(1 + 2 * 14_400);
+    expected.submit({ ...PLAN, tick: 0 });
+    expected.advance(1 + CAP);
     expect(seen.at(-1)?.fingerprint).toBe(hashState(expected.state));
   });
 
@@ -129,8 +137,8 @@ describe('WarehouseEngine (the host clock, S4)', () => {
     clock.time += 24 * 3_600_000;
     const other = new WarehouseEngine(clock);
     const update = other.importGame(saved);
-    expect(update.recap?.ranMs).toBe(2 * 3_600_000);
-    expect(update.view.tick).toBe(4 + 2 * 14_400);
+    expect(update.recap?.ranMs).toBe(8 * 3_600_000);
+    expect(update.view.tick).toBe(4 + CAP);
   });
 
   it('the testing skip runs the warehouse ahead exactly as catching up would, with no cap, and owes nothing after', () => {

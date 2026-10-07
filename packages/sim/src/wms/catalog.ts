@@ -79,6 +79,13 @@ export function supplierAt(index: number): WmsSupplier {
   return WMS_SUPPLIERS[index % WMS_SUPPLIERS.length] as WmsSupplier;
 }
 
+/** The customers who order (W8): each order names one. */
+export const WMS_CUSTOMERS: readonly string[] = ['Local shops', 'City grocer', 'Regional chain', 'Health network', 'Solar installers', 'Export broker', 'Online market', 'Everything store'];
+
+export function customerAt(index: number): string {
+  return WMS_CUSTOMERS[index % WMS_CUSTOMERS.length] as string;
+}
+
 /** The first PO number a warehouse issues (W6). */
 export const WMS_FIRST_PO_NO = 50_001;
 
@@ -139,6 +146,16 @@ export function travelBays(from: number, to: number): number {
   const b = binPlace(to);
   if (a.aisle === b.aisle) return Math.abs(a.bay - b.bay);
   return a.bay + b.bay + WMS_AISLE_GAP_BAYS * Math.abs(a.aisle - b.aisle);
+}
+
+/** A worker's name (W8): W01, W02, ... */
+export function workerCode(id: number): string {
+  return `W${String(id).padStart(2, '0')}`;
+}
+
+/** A task's number as shown (W8): T-00042. */
+export function taskCode(no: number): string {
+  return `T-${String(no).padStart(5, '0')}`;
 }
 
 /** Lines per hour is measured over this many buckets of `WMS_RATE_BUCKET_TICKS` (16 x 15 s = 4 minutes). */

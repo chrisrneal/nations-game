@@ -1,43 +1,44 @@
 # Roadmap
 
 ## The game
-Mobile-first installable PWA warehouse game, becoming a WMS sim (W7): the
-app opens on the warehouse management system, its live floor drawn from what
-the WMS is doing, and the player sets the WMS's plan (pick order, release,
-crew). Underneath is the idle game: customer orders
-come in and queue in a backlog, pickers take each one's unit off the shelves,
-packed orders are loaded onto trucks at your docks, and each truck pays when
-it leaves full or on its timer. Purchase orders arrive at the receiving dock
-and keep the shelves stocked. The backlog is the centre of the screen, and a
-dashboard row shows shipped, orders a minute, backlog and stock. Cash buys
-upgrades, each a trade-off that moves the bottleneck. The warehouse keeps
-running while the app is closed, up to a cap. Sell the warehouse for stars
-that permanently boost the next one, at a new site with a twist. Single
-player, offline-first, no backend. Rules: docs/RULES.md. Why it replaced the
-airport game: decision record W1 (and P1 for Nations before that).
+Mobile-first installable PWA warehouse simulator (W8): the player runs a
+warehouse through its warehouse management system. Customer orders arrive
+from countries abroad; the WMS releases them, allocates stock and creates a
+pick task for every line. Purchase orders, which the WMS raises itself when
+stock runs low, are booked into dock appointments in the warehouse day; a
+docked truck becomes receive tasks, and every line counted in a put-away
+task. The crew (pickers, and receivers who also put away) do the tasks the
+WMS lines up for them, and a tap on any worker shows their tasks and record.
+Picked orders are packed, staged, loaded and shipped; every shipment pays,
+more for countries whose goodwill is high. The player sets the WMS's plan
+(pick order, release, crew split), steps in on orders, and spends what
+shipments earn on more people and dock doors. The warehouse keeps running
+while the app is closed, up to a cap. Single player, offline-first, no
+backend. Rules: docs/RULES.md. Why the idle game was removed: decision record
+W8 (and W1, P1 before it).
 
 ## Design pillars
-1. **Idle is complete, active is faster.** Tapping a dock, picking or
-   receiving rushes it; active play earns about 2-3x idling and is never
-   required.
-2. **Every upgrade is a trade-off.** Each fixes one bottleneck and moves the
-   pressure; the screen names the bottleneck so the choice is legible.
-3. **Every session is worth it.** A 30-second check-in collects and buys
-   something; a 5-minute session plans the next unlock.
-4. **Steady novelty.** Something new to aim for at least every 5 minutes; the
-   first sale at 30-60 minutes; each site changes the best strategy.
+1. **The floor is the truth.** Everything on screen is what the sim does: the
+   workers on the floor are the WMS's workers doing their tasks, timed as the
+   sim times them, and every number traces back to an order, a PO or a task.
+2. **Every decision is a trade-off.** Each plan choice, hire or door helps one
+   thing and costs another; the screen says what each does and its catch.
+3. **Every session is worth it.** A 30-second check-in reads the day's numbers
+   and the recap; a 5-minute session changes the plan and watches it play out.
+4. **Read like a real WMS.** Dense grids, codes, a console of events, KPIs per
+   page, a dock schedule: an operator would recognise it.
 5. **Exact and offline.** Same seed and commands give the same warehouse;
    catching up offline equals stepping through it.
 
-## Architecture (kept from Nations and the airport, decision records P1 and W1)
+## Architecture (kept from Nations, the airport and the idle warehouse, decision records P1, W1 and W8)
 1. Pure sim core: `step(state, commands) -> state + events` (S1, D6).
-2. Commands are the only mutation: `tap`, `tapPick`, `tapReceive`, `buy`,
-   `boost`, `sell` (S2, P5).
+2. Commands are the only mutation: `wms` actions (release, priority, hold,
+   unhold, assign, cancelLine, expedite, policy, hire, door) (S2, P5, W8).
 3. Host interface: the UI submits and subscribes; LocalHost runs the sim in a Web
    Worker (S3).
-4. The host owns the clock; catch-up and offline earnings are "run N ticks fast"
-   (S4, P4).
-5. Determinism: seeded RNG in State, integer maths (cents, milli-units),
+4. The host owns the clock; catch-up is "run N ticks fast", up to the offline
+   cap (S4, P4).
+5. Determinism: seeded RNG in State, integer maths (cents, whole units, ticks),
    state-hash test in Node and Chromium on every build (S5, P3).
 6. The UI reads a View (S6, P5).
 7. Saves are snapshot plus command log, versioned with migrations, in IndexedDB,
@@ -47,22 +48,20 @@ vite-plugin-pwa, Vitest + fast-check, playwright-core for the phone check.
 
 ## Phone UX budget (checked by apps/web/e2e/phone-check.ts)
 Portrait and one-handed; primary actions in the bottom third; touch targets at
-least 44 px; no horizontal scroll at 360 px; safe areas respected. The main
-screen is the WMS (W7): cash and income at the top, the WMS's tabs (the live
-floor, inbound, outbound, stock, the plan) in the middle with the activity
-console under them, Docks, Upgrades and Sell in the thumb zone. The docks
-screen holds the idle floor (receiving, the picking backlog, packing), the
-trucks filling and the boosts. 60 fps with the
-CPU slowed 4x: animation by canvas, CSS and direct DOM writes, not React
-re-renders (P7). Number formatting for big values. Satisfying feedback: loads
-filling, departures, cash pops.
+least 44 px; no horizontal scroll at 360 px; safe areas respected. The screen
+is the WMS (W8): the warehouse clock, cash and today's earnings at the top, a
+KPI strip, the page in the middle (Floor, In, Out, Stock, Crew, Plan) with
+the activity console under it, and the page tabs in the thumb zone. 60 fps
+with the CPU slowed 4x: the floor by canvas, everything else by direct DOM
+writes or one React render a WMS step (P7). Number formatting for big values.
 
-## Balance harness
-`npm run harness -- pacing` runs a greedy bot (taps, buys the best value) and an
-idle bot (never taps, checks in every 15 minutes) and reports the time to each
-milestone against the targets in RULES 11. Invariants every build: cash,
-orders and stock never negative, determinism across engines, catch-up equals
-stepping, save-reload-continue.
+## The harness
+`npm run harness -- report` runs an untouched warehouse with the default plan
+on several seeds and reports OTIF, fill, money an hour and how busy the
+pickers and receivers are, against the targets in RULES 11. Invariants every
+build: cash and stock never negative, every task held by at most one worker
+of its role, determinism across engines, catch-up equals stepping,
+save-reload-continue.
 
 ## History
 - **Nations** (to 2026-09-30): commit `67d1d92`.
@@ -73,14 +72,20 @@ stepping, save-reload-continue.
   stock and purchase orders and the dashboard (W1), in one pull request (W2).
 - **The WMS** (2026-10-07): a warehouse management system beside the idle flow
   (W5), with inbound and inventory (W6); then the WMS became home, its floor
-  animated from the WMS, with a plan the player sets (W7).
+  animated from the WMS, with a plan the player sets (W7). Commit `b34368a`
+  is the last with the idle game.
+- **The WMS simulator** (2026-10-07): the idle game removed; tasks for every
+  worker, a Crew page, dock appointments in a warehouse day, hiring and doors
+  (W8).
 
 ## Next (not planned until the owner picks)
 - Play it on a real phone and say what feels slow or confusing (docs/GAPS.md
   lists what only a person can check).
-- Ideas that fit the warehouse: worker characters you hire by name, order
-  types that need different stock, a weekly sales event. Each needs a decision
-  record.
+- Ideas that fit the simulator: demand that grows with goodwill (more
+  customers as service improves), automation to buy (conveyors, a sorter,
+  pick-to-light that changes the task times), shifts and breaks for the crew,
+  dock hours that close receiving at night, workers' skills. Each needs a
+  decision record.
 
 ## Later (not planned)
-Achievements, more sites, cloud save. Any of these needs a decision record.
+Achievements, more warehouses, cloud save. Any of these needs a decision record.

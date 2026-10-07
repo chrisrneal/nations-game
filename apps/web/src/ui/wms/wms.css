@@ -71,7 +71,7 @@
 
 .wms-filter {
   flex: none;
-  min-height: 40px;
+  min-height: var(--tap);
   padding: 0 0.65rem;
   border-radius: 999px;
   border: 1px solid var(--wms-rule);
@@ -129,7 +129,7 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  height: 40px;
+  height: 45px;
   padding: 0;
   background: var(--wms-head);
   color: var(--muted);
@@ -1052,7 +1052,7 @@
   color: var(--wms-green);
 }
 
-/* ---- the WMS as home (W7): money bar, live floor, plan, thumb actions ---- */
+/* ---- the WMS as home (W7, W8): clock and money bar, live floor, plan, tabs under the thumb ---- */
 .wms-home .wms-feed {
   padding-bottom: 0;
 }
@@ -1065,17 +1065,6 @@
   padding: max(0.3rem, env(safe-area-inset-top)) 0.6rem 0.3rem;
   border-bottom: 1px solid var(--wms-rule);
   background: var(--bg);
-}
-
-.home-site {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 700;
 }
 
 .home-money {
@@ -1096,28 +1085,6 @@
   color: var(--accent);
   font-size: 0.8rem;
   font-weight: 700;
-}
-
-.home-income.income-boosted {
-  color: var(--gold);
-}
-
-.home-actions {
-  flex: none;
-  display: flex;
-  gap: 0.5rem;
-  padding: 0.45rem 0.6rem max(0.5rem, env(safe-area-inset-bottom));
-  border-top: 1px solid var(--wms-rule);
-  background: var(--bg);
-}
-
-.home-actions > .btn-primary {
-  flex: 2;
-}
-
-.home-actions > .btn {
-  flex: 1;
-  min-height: 50px;
 }
 
 .wms-plan-chip {
@@ -1262,4 +1229,371 @@
 
 .wms-crew-people .rc {
   background: var(--warn);
+}
+
+/* ---- W8: the clock, the tabs under the thumb, the crew and their tasks, the dock schedule, growing ---- */
+.home-clock {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.home-day {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.home-time {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.wms-nav {
+  flex: none;
+  padding: 0.35rem 0.5rem max(0.4rem, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--wms-rule);
+  background: var(--bg);
+}
+
+.wms-nav .wms-tabs button {
+  min-height: 48px;
+  font-size: 0.8rem;
+}
+
+.crew-list,
+.task-list,
+.dock-schedule,
+.slot-pos {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.crew-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.crew-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 60px;
+  padding: 0.35rem 0.6rem;
+  border: none;
+  border-bottom: 1px solid var(--wms-rule);
+  background: var(--wms-row);
+  color: var(--fg);
+  text-align: left;
+}
+
+.crew-list li:nth-child(even) .crew-row {
+  background: var(--wms-row-alt);
+}
+
+.crew-badge {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--wms-bg);
+}
+
+.crew-badge.role-pick {
+  background: var(--wms-green);
+}
+
+.crew-badge.role-receive {
+  background: var(--warn);
+}
+
+.crew-idle .crew-badge {
+  opacity: 0.55;
+}
+
+.crew-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.78rem;
+}
+
+.crew-line {
+  display: flex;
+  gap: 0.45rem;
+  align-items: baseline;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.crew-role {
+  font-weight: 700;
+}
+
+.crew-state {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.state-working {
+  color: var(--wms-green);
+}
+
+.state-walking {
+  color: var(--wms-blue);
+}
+
+.state-idle {
+  color: var(--wms-grey);
+}
+
+.crew-task {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.crew-task-ref,
+.crew-task-where {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.crew-task .num {
+  margin-left: auto;
+}
+
+.crew-bar {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--wms-rule);
+  overflow: hidden;
+}
+
+.crew-bar i {
+  display: block;
+  height: 100%;
+  background: var(--wms-green);
+  transform-origin: left center;
+  transition: transform 0.3s linear;
+}
+
+.crew-stats {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 3.2rem;
+  font-size: 0.68rem;
+}
+
+.crew-stats b {
+  font-size: 0.95rem;
+}
+
+.task-kind {
+  flex: none;
+  padding: 0 0.3rem;
+  border-radius: 4px;
+  font-family: system-ui, sans-serif;
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--wms-bg);
+}
+
+.task-kind.task-pick {
+  background: var(--wms-blue);
+}
+
+.task-kind.task-receive {
+  background: var(--warn);
+}
+
+.task-kind.task-putaway {
+  background: #fff06a;
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
+}
+
+.task-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--wms-rule);
+  border-radius: 8px;
+  background: var(--wms-row);
+  color: var(--fg);
+  text-align: left;
+  font-size: 0.78rem;
+}
+
+.task-card.task-active {
+  border-color: var(--wms-green);
+}
+
+.task-card.task-done {
+  opacity: 0.75;
+}
+
+.task-head,
+.task-body {
+  display: flex;
+  gap: 0.45rem;
+  align-items: baseline;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.task-ref {
+  font-family: var(--mono);
+}
+
+.task-code {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+}
+
+.task-sku {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono);
+}
+
+.task-where {
+  font-family: var(--mono);
+  color: var(--wms-amber);
+}
+
+.task-when {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+}
+
+.dock-schedule {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dock-schedule > li {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.3rem 0.6rem;
+  border-bottom: 1px solid var(--wms-rule);
+}
+
+.slot-time {
+  flex: none;
+  width: 4.2rem;
+  padding-top: 0.75rem;
+  text-align: left;
+  font-weight: 800;
+}
+
+.slot-pos {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.slot-pos button {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 0.5rem;
+  border: 1px solid var(--wms-rule);
+  border-radius: 8px;
+  background: var(--wms-row);
+  color: var(--fg);
+  font-size: 0.78rem;
+  text-align: left;
+}
+
+.slot-pos button.late {
+  border-color: var(--wms-red);
+}
+
+.slot-pos b {
+  font-family: var(--mono);
+}
+
+.slot-supplier {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.wms-grow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.wms-grow .wms-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.15rem;
+  min-height: 52px;
+  font-family: system-ui, sans-serif;
+  text-align: left;
+}
+
+.wms-grow .wms-btn .num {
+  color: var(--wms-green);
+}
+
+.wms-grow .wms-btn:last-child {
+  grid-column: 1 / -1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crew-bar i {
+    transition: none;
+  }
 }

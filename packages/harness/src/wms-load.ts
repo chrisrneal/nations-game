@@ -27,7 +27,7 @@ export function wmsUnderLoad(): WarehouseState {
     orders.push({
       no: w.nextOrderNo + i,
       dest: i % 15,
-      source: base.levels.contract,
+      customer: i % 8,
       priority: ((i % 10) === 0 ? 1 : i % 4 === 0 ? 2 : 3) as 1 | 2 | 3,
       wave: 0,
       status: 'NEW',
@@ -49,7 +49,9 @@ export function wmsUnderLoad(): WarehouseState {
       nextWaveAt: base.tick + 8,
       orders,
       inventory: w.inventory.map((s) => ({ ...s, onHand: 100_000, allocated: 0 })),
-      pickers: w.pickers.map((p) => ({ ...p, order: 0, line: 0, progress: 0 })),
+      // The pickers start free (their orders are replaced); the receivers carry on with the trucks.
+      workers: w.workers.map((p) => (p.role === 'pick' ? { ...p, task: 0, queue: [], progress: 0, walk: 0 } : p)),
+      tasks: w.tasks.filter((t) => t.kind !== 'PICK'),
     },
   };
 }
