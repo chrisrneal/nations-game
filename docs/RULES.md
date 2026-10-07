@@ -445,6 +445,8 @@ disagree.
 | `wmsReorderUnits` | 40 | 0 | 500 | WMS: a SKU with fewer units available than this is replenished. |
 | `wmsReplenUnits` | 120 | 10 | 1000 | WMS: units a replenishment adds to a SKU. |
 | `wmsGoodwillStart` | 50 | 0 | 100 | WMS: goodwill (0-100) every destination country starts at. |
+| `wmsExpediteCostOrders` | 30 | 5 | 200 | WMS: an expedite costs the pay of this many orders at today's pay (about $30 at the start): real money, but small next to a truck. |
+| `wmsExpediteLeadTicks` | 1200 | 0 | 7200 | WMS: an expedited order goes P1 and onto a later, faster truck: this much is added to its ship-by (5 min). |
 
 ## 13. Invariants
 

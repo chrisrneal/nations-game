@@ -73,12 +73,6 @@ export function SettingsSheet(props: { view: WarehouseView; host: WarehouseHost;
           <dt>Offline earnings</dt>
           <dd>up to {view.offlineCapMinutes >= 60 ? `${view.offlineCapMinutes / 60} h` : `${view.offlineCapMinutes} min`}</dd>
         </div>
-        <div>
-          <dt>WMS (debug)</dt>
-          <dd data-testid="wms-debug">
-            {view.wms.orders} orders, {view.wms.lines} lines, {short(view.wms.units)} units, {view.wms.skus} SKUs, {view.wms.pickers} pickers
-          </dd>
-        </div>
       </dl>
       {feedback !== undefined && (
         <div className="switches">

@@ -108,7 +108,13 @@ WMS catalog, so State stays compact and hashable.
    24 h catch-up 117 ms -> about 300 ms in Node (budget 2 s on a phone).
 3. **Order grid screen.** Dense rows, sticky Order # column and header, status
    chips, progress bars, sort, filter chips, live rows without scroll jumps.
-   STATUS: TODO
+   STATUS: DONE. The sim builds `view.wms` (`WmsView`, `wmsView` in
+   `packages/sim/src/wms/view.ts`: rows with lines, events newest first with
+   text, KPIs, pickers, countries, `rev`). UI in `apps/web/src/ui/wms/`:
+   `WmsScreen.tsx` (full-screen, opened by the WMS button in the bottom bar,
+   `sheet === 'wms'` in App), `OrderGrid.tsx` (memoised rows keyed by
+   `rowSignature`), `grid.ts` (filters, sort, tones, clock), `useWms.ts`
+   (re-renders once per WMS step), `wms.css`. `e2e/wms-shots.ts` screenshots.
 4. **Order detail.** Header summary, lines grid, shorts in red, the order's own
    history; back keeps scroll and filter. STATUS: TODO
 5. **Activity feed.** Collapsible bottom console, newest first, tap to open the

@@ -56,5 +56,12 @@ export type {
   WmsStats,
   WmsState,
   WmsStock,
-  WmsSummaryView,
+  WmsCountryView,
+  WmsDestView,
+  WmsEventView,
+  WmsKpis,
+  WmsLineView,
+  WmsOrderView,
+  WmsPickerView,
+  WmsView,
 } from './wms.ts';

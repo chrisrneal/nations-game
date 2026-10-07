@@ -1346,6 +1346,21 @@ p {
   flex: 2;
 }
 
+.btn-wms {
+  flex: 1;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  letter-spacing: 0.05em;
+}
+
+.btn-wms .count:empty {
+  display: none;
+}
+
+.count-alert {
+  background: #ff6b6b;
+  color: #2a0505;
+}
+
 .btn-sell {
   flex: 1;
   background: var(--gold);

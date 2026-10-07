@@ -10,9 +10,10 @@ import type { WarehouseStore } from './store.ts';
  * countdown, the boosts, and the Upgrades button (primary actions in the
  * bottom third).
  */
-export function BottomBar(props: { view: WarehouseView; store: WarehouseStore; onUpgrades: () => void; onSell: () => void; onBoost: (id: BoostId) => void }): ReactElement {
-  const { view, store, onUpgrades, onSell, onBoost } = props;
+export function BottomBar(props: { view: WarehouseView; store: WarehouseStore; onUpgrades: () => void; onSell: () => void; onBoost: (id: BoostId) => void; onWms: () => void }): ReactElement {
+  const { view, store, onUpgrades, onSell, onBoost, onWms } = props;
   const eta = useRef<HTMLSpanElement>(null);
+  const wmsBadge = useRef<HTMLSpanElement>(null);
   const goal = nextGoal(view);
   const affordable = view.upgrades.filter((u) => u.affordable).length;
   useLayoutEffect(
@@ -23,6 +24,18 @@ export function BottomBar(props: { view: WarehouseView; store: WarehouseStore; o
         eta.current.textContent = s === null ? '' : s === 0 ? 'ready' : `in ${formatDuration(s)}`;
       }),
     [store, goal],
+  );
+  useLayoutEffect(
+    () =>
+      store.onFrame((update) => {
+        const el = wmsBadge.current;
+        if (el === null) return;
+        const { exceptions, open } = update.view.wms.kpis;
+        const text = exceptions > 0 ? `${exceptions}!` : String(open);
+        if (el.textContent !== text) el.textContent = text;
+        el.classList.toggle('count-alert', exceptions > 0);
+      }),
+    [store],
   );
   return (
     <footer className="bottom">
@@ -38,6 +51,10 @@ export function BottomBar(props: { view: WarehouseView; store: WarehouseStore; o
       )}
       <BoostBar boosts={view.boosts} tickMs={view.tickMs} store={store} onBoost={onBoost} />
       <div className="actions">
+        <button type="button" className="btn btn-wide btn-wms" onClick={onWms} data-testid="open-wms" aria-label="WMS: orders, picking and the activity log">
+          WMS
+          <span ref={wmsBadge} className="count" />
+        </button>
         <button type="button" className="btn btn-primary btn-wide" onClick={onUpgrades} data-testid="open-upgrades">
           Upgrades
           {affordable > 0 && (

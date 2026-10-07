@@ -140,6 +140,8 @@ export const WAREHOUSE_TUNABLES = {
   wmsReorderUnits: { value: 40, min: 0, max: 500, note: 'WMS: a SKU with fewer units available than this is replenished.' },
   wmsReplenUnits: { value: 120, min: 10, max: 1000, note: 'WMS: units a replenishment adds to a SKU.' },
   wmsGoodwillStart: { value: 50, min: 0, max: 100, note: 'WMS: goodwill (0-100) every destination country starts at.' },
+  wmsExpediteCostOrders: { value: 30, min: 5, max: 200, note: 'WMS: an expedite costs the pay of this many orders at today\'s pay (about $30 at the start): real money, but small next to a truck.' },
+  wmsExpediteLeadTicks: { value: 1200, min: 0, max: 7200, note: 'WMS: an expedited order goes P1 and onto a later, faster truck: this much is added to its ship-by (5 min).' },
 } as const satisfies Readonly<Record<string, Tunable>>;
 
 export type WarehouseTunableId = keyof typeof WAREHOUSE_TUNABLES;

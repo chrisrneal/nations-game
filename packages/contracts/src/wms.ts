@@ -170,12 +170,118 @@ export interface WmsState {
   readonly recent: readonly number[];
 }
 
-/** Debug counts for the WMS (slice 1); the grid screens replace it with richer views. */
-export interface WmsSummaryView {
-  readonly orders: number;
-  readonly lines: number;
-  readonly units: number;
-  readonly skus: number;
-  readonly pickers: number;
-  readonly events: number;
+/** A destination country as the screens show it. */
+export interface WmsDestView {
+  /** ISO 3166-1 alpha-3, e.g. DEU. */
+  readonly iso: string;
+  readonly flag: string;
+  readonly name: string;
+}
+
+/** One order line, ready to show (slice 4). */
+export interface WmsLineView {
+  readonly no: number;
+  /** e.g. GRN-0042. */
+  readonly sku: string;
+  readonly desc: string;
+  /** e.g. A-03-2B. */
+  readonly bin: string;
+  readonly ordered: number;
+  readonly allocated: number;
+  readonly picked: number;
+  readonly short: number;
+  readonly status: WmsLineStatus;
+  /** The picker on it now (shown Picker 07); 0 for none. */
+  readonly picker: number;
+}
+
+/** One row of the order grid (slice 3), with its lines for the detail screen (slice 4). */
+export interface WmsOrderView {
+  readonly no: number;
+  /** e.g. O-10234. */
+  readonly code: string;
+  readonly dest: WmsDestView;
+  /** The customer account: the contract name it came from. */
+  readonly source: string;
+  readonly priority: WmsPriority;
+  readonly wave: number;
+  readonly status: WmsOrderStatus;
+  readonly linesTotal: number;
+  /** Lines done picking (picked, or confirmed short). */
+  readonly linesPicked: number;
+  readonly unitsOrdered: number;
+  readonly unitsPicked: number;
+  readonly shortUnits: number;
+  /** Units picked as a whole percentage of units ordered, rounded down. */
+  readonly pct: number;
+  readonly shipBy: number;
+  readonly created: number;
+  readonly closed: number;
+  readonly late: boolean;
+  /** An exception: SHORT, ON HOLD, BACKORDER, short units, or late. */
+  readonly exception: boolean;
+  /** NEW orders may be released, open orders held, held orders released from hold (slice 7). */
+  readonly open: boolean;
+  readonly lines: readonly WmsLineView[];
+}
+
+/** One line of the activity feed (slice 5), newest first. */
+export interface WmsEventView {
+  /** Unique within the feed: its position since the warehouse opened is not kept, so this is tick and index. */
+  readonly key: string;
+  readonly tick: number;
+  readonly code: WmsEventCode;
+  /** Order number to open on a tap; 0 for none. */
+  readonly order: number;
+  /** e.g. O-10234/L3, or a SKU for REPLEN, or '' */
+  readonly ref: string;
+  /** e.g. "GRN-0042  24/24  Picker 07". */
+  readonly detail: string;
+  /** Shown in red: shorts, cutoff misses, holds and cancellations. */
+  readonly exception: boolean;
+}
+
+/** The KPI strip (slice 6). Percentages are whole numbers; null when nothing has shipped yet. */
+export interface WmsKpis {
+  readonly open: number;
+  /** Lines confirmed an hour, measured over the last few minutes. */
+  readonly linesPerHour: number;
+  /** Units shipped as a % of units ordered on shipped orders. */
+  readonly fillRatePct: number | null;
+  readonly otifPct: number | null;
+  readonly exceptions: number;
+  readonly pickersBusy: number;
+  readonly pickersTotal: number;
+  readonly shipped: number;
+}
+
+export interface WmsPickerView {
+  readonly id: number;
+  /** Order and line it works; 0 when idle. */
+  readonly order: number;
+  readonly line: number;
+}
+
+/** A destination country's record (slice 8). */
+export interface WmsCountryView extends WmsDestView {
+  readonly shipped: number;
+  readonly otif: number;
+  readonly otifPct: number | null;
+  readonly goodwill: number;
+}
+
+/** Everything the WMS screens read. */
+export interface WmsView {
+  /** Changes whenever the WMS steps, so the screens re-render only then. */
+  readonly rev: number;
+  /** Open orders first in order number, then closed ones, newest first. */
+  readonly orders: readonly WmsOrderView[];
+  readonly events: readonly WmsEventView[];
+  readonly kpis: WmsKpis;
+  readonly pickers: readonly WmsPickerView[];
+  readonly countries: readonly WmsCountryView[];
+  /** Ticks until the next automatic wave. */
+  readonly nextWaveIn: number;
+  /** Cents an expedite costs now (slice 7). */
+  readonly expediteCost: number;
 }
