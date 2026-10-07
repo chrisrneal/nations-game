@@ -1,10 +1,10 @@
 /**
  * Screenshots of the WMS screens (docs/wms-plan.md) on the 360 x 740 budget
- * phone: the home's live floor (W7) after five minutes, a picker's order
- * opened from the floor, the plan, the order grid, scrolled sideways, filtered to
- * exceptions, and (when they exist) an order's detail and the activity feed;
- * the countries, the inbound grid and a PO, the inventory grid (W6), and
- * the docks screen.
+ * phone: the home's live floor (W7) after five minutes, a worker's tasks
+ * opened by a tap on the floor and from the Crew page (W8), the plan with
+ * hiring, the order grid, scrolled sideways, filtered to exceptions, and
+ * (when they exist) an order's detail and the activity feed; the countries,
+ * the inbound grid, the dock schedule and a PO, and the inventory grid (W6).
  * Also reports whether the page scrolls sideways. Run `npm run build` first,
  * then `npx tsx e2e/wms-shots.ts [outDir]` from apps/web.
  */
@@ -57,13 +57,48 @@ async function main(): Promise<void> {
     await shot(page, out, 'home');
     await page.waitForTimeout(1700);
     await shot(page, out, 'home-later');
+    // A tap on a worker standing on the floor opens their tasks (W8).
+    // Workers start walking at any moment, so each standing one is tried in turn.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const standing = (await page.getByTestId('wms-floor-canvas').getAttribute('data-standing')) ?? '';
+      const spot = standing.split(' ').filter((x) => x.length > 0)[attempt];
+      if (spot === undefined) break;
+      const [, x, y] = spot.split(':').map(Number);
+      const box = await page.getByTestId('wms-floor-canvas').boundingBox();
+      await page.touchscreen.tap((box?.x ?? 0) + (x ?? 0), (box?.y ?? 0) + (y ?? 0));
+      const opened = await page
+        .getByTestId('wms-worker')
+        .waitFor({ timeout: 1000 })
+        .then(() => true)
+        .catch(() => false);
+      if (opened) {
+        await page.waitForTimeout(300);
+        await shot(page, out, 'worker-from-floor');
+        await page.getByTestId('wms-worker-back').tap();
+        break;
+      }
+    }
+    await page.getByTestId('wms-tab-crew').tap();
+    await page.getByTestId('crew-list').waitFor();
+    await shot(page, out, 'crew');
+    await page.getByTestId('crew-worker-1').tap();
+    await page.getByTestId('wms-worker').waitFor();
+    await shot(page, out, 'worker');
+    await page.getByTestId('wms-worker-back').tap();
+    await page.getByTestId('crew-worker-8').tap();
+    await page.waitForTimeout(300);
+    await shot(page, out, 'worker-receiver');
+    await page.getByTestId('wms-worker-back').tap();
     await page.getByTestId('wms-tab-plan').tap();
     await page.getByTestId('wms-plan').waitFor();
     await shot(page, out, 'plan');
     await page.getByTestId('plan-pick-nearest').tap();
     await page.getByTestId('plan-crew-more').tap();
+    await page.getByTestId('plan-hire-pick').tap();
     await page.waitForTimeout(1500);
     await shot(page, out, 'plan-changed');
+    await page.getByTestId('plan-door').scrollIntoViewIfNeeded();
+    await shot(page, out, 'plan-grow');
     await page.getByTestId('wms-tab-floor').tap();
     await page.waitForTimeout(1500);
     await shot(page, out, 'home-plan');
@@ -119,6 +154,10 @@ async function main(): Promise<void> {
       await shot(page, out, 'po-detail');
       await page.getByTestId('wms-po-back').tap();
     }
+    await page.getByTestId('wms-po-schedule').tap();
+    await page.waitForTimeout(400);
+    await shot(page, out, 'schedule');
+    await page.getByTestId('wms-po-filter-all').tap();
     await page.getByTestId('wms-tab-inventory').tap();
     await page.getByTestId('wms-inventory').waitFor();
     await page.waitForTimeout(400);
@@ -134,12 +173,6 @@ async function main(): Promise<void> {
       await shot(page, out, 'feed');
       await feed.tap();
     }
-    await page.getByTestId('open-docks').tap();
-    await page.getByTestId('dock-0').waitFor();
-    await page.waitForTimeout(800);
-    await shot(page, out, 'docks');
-    await page.getByTestId('open-wms').tap();
-    await page.getByTestId('wms-floor').waitFor();
     await context.close();
   } finally {
     server.kill();

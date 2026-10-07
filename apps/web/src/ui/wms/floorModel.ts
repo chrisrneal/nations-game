@@ -1,16 +1,16 @@
-import type { WmsOrderStatus, WmsView } from '@warehouse/contracts';
+import type { WmsOrderStatus, WmsRole, WmsTaskKind, WmsView, WmsWorkerView } from '@warehouse/contracts';
 import { formatCash } from '../format.ts';
 
 /**
- * The WMS floor (decision record W7, RULES 16): the warehouse drawn from what
- * the WMS is doing, not from scenery. Every picker on screen is a real WMS
- * picker walking the route the sim times (out of its aisle to the front cross
- * aisle, across, and in), picking at the bin of its line, and when it
- * confirms a line the tote rides the conveyor to packing. Orders past picking
- * sit at the pack bench, the packed area, the staging lanes and the truck as
- * their status says, and leave on the truck when they ship. Inbound trucks
- * dock at the real doors, the real receivers count them in, and a forklift
- * takes each received line to its bin, arriving when the sim puts it away.
+ * The WMS floor (decision records W7 and W8, RULES 10): the warehouse drawn
+ * from what the WMS is doing, not from scenery. Every worker on screen is a
+ * real WMS worker doing its task: pickers walk the route the sim times (out
+ * of the aisle to the front cross aisle, across, and in) and pick at the bin
+ * of their task, and when one confirms a line its tote rides the conveyor to
+ * packing; receivers count lines in at the door of their truck, then drive
+ * each received line to its bin on a pallet (a put-away task). Orders past
+ * picking sit at the pack bench, the packed area, the staging lanes and the
+ * truck as their status says, and leave on the truck when they ship.
  *
  * Pure bookkeeping on the View and a clock passed in, so it is tested in
  * Node; WmsFloor.tsx measures the box and draws it on a canvas (P7).
@@ -228,29 +228,23 @@ function arrived(m: Mover): boolean {
   return m.done >= m.total;
 }
 
-export interface PickerDot extends Mover {
+/** A worker on the floor (W8): where it stands or walks to, and what its task is. */
+export interface WorkerDot extends Mover {
   readonly id: number;
-  /** Where it stands or walks to. */
+  role: WmsRole;
+  /** The active task's number and kind; 0 and null when it has none. */
+  task: number;
+  kind: WmsTaskKind | null;
+  /** At the dock (bin -1), else at aisle and bay. */
+  dock: boolean;
   aisle: number;
   bay: number;
-  order: number;
-  line: number;
-  priority: number;
-  /** Share of its line picked, 0-1. */
-  pct: number;
-}
-
-export interface ReceiverDot extends Mover {
-  readonly id: number;
-  po: number;
+  /** The door of its receive task; 0 otherwise. */
   door: number;
+  /** A pick task's order priority; 0 otherwise. */
+  priority: number;
+  /** Share of its task done, 0-1. */
   pct: number;
-}
-
-export interface Forklift extends Mover {
-  readonly key: string;
-  readonly aisle: number;
-  readonly bay: number;
 }
 
 export interface Tote extends Mover {
@@ -292,15 +286,53 @@ export interface Pop {
 export const GLIDE_MS = 520;
 /** Totes ride the conveyor this fast, px a second. */
 const TOTE_SPEED = 170;
-/** A receiver walks to or from a door in this long, ms. */
-const RECEIVER_MS = 700;
-/** A picker retargeted without a walk (a new floor, a reassignment) gets there this fast, ms. */
+/** A worker retargeted without a walk (a new floor, a reassignment, along the dock) gets there this fast, ms. */
 const SNAP_MS = 450;
 /** The truck pulls out and the next backs in, ms each. */
 export const TRUCK_OUT_MS = 900;
 export const TRUCK_IN_MS = 700;
 export const FLASH_MS = 600;
 export const POP_MS = 1200;
+
+/** Where a worker stands (W8): at its bin, at the door of the truck it counts, or (idle at the dock) on the dock lane; pickers wait at the pick-and-drop point. */
+export function workerSpot(l: FloorLayout, pv: Pick<WmsWorkerView, 'id' | 'role' | 'at' | 'aisle' | 'bay' | 'door'>): Point {
+  const off = spread(pv.id);
+  if (pv.at < 0 && pv.role === 'receive') {
+    if (pv.door > 0) {
+      const d = doorSpot(l, pv.door);
+      return { x: d.x + off.x * 2, y: d.y + off.y };
+    }
+    return receiverHome(l, pv.id);
+  }
+  const p = place(l, pv.aisle, pv.bay);
+  return { x: p.x + off.x, y: p.y + off.y };
+}
+
+interface Spot {
+  readonly dock: boolean;
+  readonly aisle: number;
+  readonly bay: number;
+}
+
+/**
+ * A worker's way between two spots (W8): along the racks as the sim times it
+ * (`route`), or between the dock and a bin: along the dock lane to the front
+ * of the aisle, down the front cross aisle and along the aisle (a put-away),
+ * or the same way back.
+ */
+export function workerRoute(l: FloorLayout, from: Spot, to: Spot, start: Point, end: Point): Point[] {
+  if (from.dock && to.dock) return [start, end];
+  if (!from.dock && !to.dock) {
+    const path = route(l, from, to);
+    return [start, ...path.slice(1, -1), end];
+  }
+  if (from.dock) {
+    const front = place(l, to.aisle, 0);
+    return [start, { x: front.x, y: l.dockLane }, front, end];
+  }
+  const front = place(l, from.aisle, 0);
+  return [start, front, { x: front.x, y: l.dockLane }, end];
+}
 
 /** Small offsets so people at the same spot stand side by side. */
 export function spread(id: number): Point {
@@ -314,9 +346,7 @@ export function spread(id: number): Point {
  */
 export class WmsFloorModel {
   layout: FloorLayout | null = null;
-  pickers: PickerDot[] = [];
-  receivers: ReceiverDot[] = [];
-  forklifts: Forklift[] = [];
+  workers: WorkerDot[] = [];
   totes: Tote[] = [];
   cartons: Carton[] = [];
   flashes: Flash[] = [];
@@ -335,9 +365,7 @@ export class WmsFloorModel {
     this.layout = l;
     this.still += 1;
     // Everything snaps to the new layout at the next View.
-    this.pickers = [];
-    this.receivers = [];
-    this.forklifts = [];
+    this.workers = [];
     this.totes = [];
     this.cartons = [];
     if (this.last !== null) this.ingest(this.last, this.lastTick, this.lastTickMs, this.lastNow, []);
@@ -357,87 +385,48 @@ export class WmsFloorModel {
     this.lastNow = now;
     this.still += 1;
     if (l === null) return;
-    this.ingestPickers(l, w, tickMs, now);
-    this.ingestReceivers(l, w, now);
-    this.ingestPutaway(l, w, tick, tickMs, now);
+    this.ingestWorkers(l, w, tickMs, now);
     this.ingestCartons(l, w, now, shipped);
   }
 
-  private ingestPickers(l: FloorLayout, w: WmsView, tickMs: number, now: number): void {
-    const before = new Map(this.pickers.map((p) => [p.id, p]));
-    const lines = new Map<string, { status: string; picked: number }>();
-    for (const o of w.orders) for (const line of o.lines) lines.set(`${o.no}/${line.no}`, line);
-    this.pickers = w.pickers.map((pv) => {
-      const off = spread(pv.id);
-      const target = place(l, pv.aisle, pv.bay);
+  private ingestWorkers(l: FloorLayout, w: WmsView, tickMs: number, now: number): void {
+    const before = new Map(this.workers.map((p) => [p.id, p]));
+    this.workers = w.workers.map((pv) => {
+      const target = workerSpot(l, pv);
       const was = before.get(pv.id);
-      const pct = pv.units > 0 ? Math.min(1, pv.picked / pv.units) : 0;
-      if (was === undefined) {
-        const m = mover([{ x: target.x + off.x, y: target.y + off.y }], now, 0);
-        return { ...m, id: pv.id, aisle: pv.aisle, bay: pv.bay, order: pv.order, line: pv.line, priority: pv.priority, pct };
-      }
-      // The line it was on is done: its tote goes to the conveyor.
-      if (was.order > 0 && (was.order !== pv.order || was.line !== pv.line)) {
-        const done = lines.get(`${was.order}/${was.line}`);
-        if (done !== undefined && (done.status === 'PICKED' || done.status === 'SHORT') && done.picked > 0) {
+      const facts = {
+        role: pv.role,
+        task: pv.task?.no ?? 0,
+        kind: pv.task?.kind ?? null,
+        dock: pv.at < 0,
+        aisle: pv.aisle,
+        bay: pv.bay,
+        door: pv.door,
+        priority: pv.task?.priority ?? 0,
+        pct: pv.pct / 100,
+      };
+      if (was === undefined) return { ...mover([target], now, 0), id: pv.id, ...facts };
+      // The task it was on is done: a picked line's tote goes to the conveyor; a put-away lands in its bin.
+      if (was.task > 0 && was.task !== facts.task) {
+        const done = pv.done.find((t) => t.no === was.task);
+        if (done !== undefined && was.kind === 'PICK' && done.done > 0) {
           const path = toteRoute(l, was.aisle, was.bay);
           this.totes.push({ ...mover(path, now, (length(path) / TOTE_SPEED) * 1000), priority: was.priority });
           this.flashes.push({ aisle: was.aisle, bay: was.bay, at: now, kind: 'pick' });
-        }
+        } else if (done !== undefined && was.kind === 'PUTAWAY') this.flashes.push({ aisle: was.aisle, bay: was.bay, at: now, kind: 'put' });
       }
-      if (was.aisle !== pv.aisle || was.bay !== pv.bay) {
-        const path = route(l, { aisle: was.aisle, bay: was.bay }, { aisle: pv.aisle, bay: pv.bay }).map((p) => ({ x: p.x + off.x, y: p.y + off.y }));
-        path[0] = { x: was.x, y: was.y };
+      const end = was.path[was.path.length - 1] ?? target;
+      if (end.x !== target.x || end.y !== target.y) {
+        const path = workerRoute(l, { dock: was.dock, aisle: was.aisle, bay: was.bay }, { dock: facts.dock, aisle: facts.aisle, bay: facts.bay }, { x: was.x, y: was.y }, target);
         const ms = this.reduced ? 0 : pv.walk > 0 ? pv.walk * tickMs : SNAP_MS;
         Object.assign(was, mover(path, now, ms));
       } else if (!arrived(was)) {
         // The sim's clock wins: still walking, due when it says; arrived, there now.
         was.arriveAt = pv.walk > 0 ? now + pv.walk * tickMs : Math.min(was.arriveAt, now + 120);
       }
-      was.aisle = pv.aisle;
-      was.bay = pv.bay;
-      was.order = pv.order;
-      was.line = pv.line;
-      was.priority = pv.priority;
-      was.pct = pct;
+      Object.assign(was, facts);
       return was;
     });
-  }
-
-  private ingestReceivers(l: FloorLayout, w: WmsView, now: number): void {
-    const before = new Map(this.receivers.map((r) => [r.id, r]));
-    this.receivers = w.receivers.map((rv) => {
-      const off = spread(rv.id);
-      const spot = rv.po > 0 && rv.door > 0 ? doorSpot(l, rv.door) : receiverHome(l, rv.id);
-      const target = rv.po > 0 && rv.door > 0 ? { x: spot.x + off.x * 2, y: spot.y + off.y } : spot;
-      const pct = rv.expected > 0 ? Math.min(1, rv.received / rv.expected) : 0;
-      const was = before.get(rv.id);
-      if (was === undefined) return { ...mover([target], now, 0), id: rv.id, po: rv.po, door: rv.door, pct };
-      if (was.door !== rv.door || was.po !== rv.po) {
-        const end = was.path[was.path.length - 1] ?? target;
-        if (end.x !== target.x || end.y !== target.y) Object.assign(was, mover([{ x: was.x, y: was.y }, target], now, this.reduced ? 0 : RECEIVER_MS));
-      }
-      was.po = rv.po;
-      was.door = rv.door;
-      was.pct = pct;
-      return was;
-    });
-  }
-
-  private ingestPutaway(l: FloorLayout, w: WmsView, tick: number, tickMs: number, now: number): void {
-    const live = new Set<string>();
-    for (const po of w.pos) {
-      for (const line of po.lines) {
-        if (line.status !== 'RECEIVED' || line.putAt <= tick || po.door === 0 || line.received === 0) continue;
-        const key = `${po.no}/${line.no}`;
-        live.add(key);
-        if (this.forklifts.some((f) => f.key === key)) continue;
-        const path = putawayRoute(l, po.door, line.aisle, line.bay);
-        this.forklifts.push({ ...mover(path, now, this.reduced ? 0 : (line.putAt - tick) * tickMs), key, aisle: line.aisle, bay: line.bay });
-      }
-    }
-    // A line put away (or gone) whose forklift is still on its way: it is there now.
-    for (const f of this.forklifts) if (!live.has(f.key)) f.arriveAt = Math.min(f.arriveAt, now);
   }
 
   private ingestCartons(l: FloorLayout, w: WmsView, now: number, shipped: readonly { order: number; cents: number }[]): void {
@@ -495,15 +484,8 @@ export class WmsFloorModel {
   advance(now: number, dt: number): void {
     // The truck leaves once every order loaded on it has shipped (each ships on its own, a few seconds apart).
     if (this.truckOut === 0 && this.cartons.some((c) => c.leaving) && !this.cartons.some((c) => c.zone === 'truck' && !c.leaving)) this.truckOut = now;
-    for (const p of this.pickers) move(p, now, dt);
-    for (const r of this.receivers) move(r, now, dt);
+    for (const p of this.workers) move(p, now, dt);
     for (const t of this.totes) move(t, now, dt);
-    for (const f of this.forklifts) {
-      const was = arrived(f);
-      move(f, now, dt);
-      if (!was && arrived(f)) this.flashes.push({ aisle: f.aisle, bay: f.bay, at: now, kind: 'put' });
-    }
-    this.forklifts = this.forklifts.filter((f) => !arrived(f));
     this.totes = this.totes.filter((t) => !arrived(t));
     for (const c of this.cartons) {
       const k = Math.min(1, Math.max(0, (now - c.t0) / GLIDE_MS));
@@ -520,12 +502,14 @@ export class WmsFloorModel {
     this.pops = this.pops.filter((p) => now - p.at < POP_MS);
   }
 
-  /** What is under a tap at (x, y): a picker or carton's order, a docked trailer's PO, or a bin. */
-  hit(x: number, y: number, w: WmsView): { order: number } | { po: number } | { aisle: number; bay: number } | null {
+  /** What is under a tap at (x, y): a worker (the nearest), a carton's order, a docked trailer's PO, or a bin. */
+  hit(x: number, y: number, w: WmsView): { worker: number } | { order: number } | { po: number } | { aisle: number; bay: number } | null {
     const l = this.layout;
     if (l === null) return null;
     const near = (px: number, py: number, r: number): boolean => Math.hypot(px - x, py - y) <= r;
-    for (const p of this.pickers) if (p.order > 0 && near(p.x, p.y, 14)) return { order: p.order };
+    let nearest: WorkerDot | null = null;
+    for (const p of this.workers) if (near(p.x, p.y, 16) && (nearest === null || Math.hypot(p.x - x, p.y - y) < Math.hypot(nearest.x - x, nearest.y - y))) nearest = p;
+    if (nearest !== null) return { worker: nearest.id };
     for (const c of this.cartons) if (!c.leaving && near(c.x, c.y, 10)) return { order: c.order };
     for (const po of w.pos) {
       if (po.status !== 'RECEIVING' || po.door === 0) continue;

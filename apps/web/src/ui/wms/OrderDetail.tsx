@@ -3,6 +3,7 @@ import type { WmsEventView, WmsLineView, WmsOrderView } from '@warehouse/contrac
 import { clock, countdown } from './grid.ts';
 import { payFactor } from './Countries.tsx';
 import { StatusChip } from './OrderGrid.tsx';
+import type { ClockShape } from '../format.ts';
 
 const PRIORITY_NAMES = ['', 'Expedite', 'High', 'Standard'] as const;
 
@@ -35,21 +36,21 @@ function LineRow(props: { line: WmsLineView; selected: boolean; onSelect: (no: n
       </td>
       <td className="c-lstatus">
         <span className={`lstatus lstatus-${l.status.toLowerCase()}`}>{l.status}</span>
-        {l.picker > 0 && <span className="muted"> P{String(l.picker).padStart(2, '0')}</span>}
+        {l.picker > 0 && <span className="muted"> W{String(l.picker).padStart(2, '0')}</span>}
       </td>
     </tr>
   );
 }
 
 /** Activity lines, newest first: a few lines of the WMS console. Tapping one opens its order or PO. */
-export function EventLines(props: { events: readonly WmsEventView[]; tickMs: number; onOpen?: (event: WmsEventView) => void }): ReactElement {
+export function EventLines(props: { events: readonly WmsEventView[]; time: ClockShape; onOpen?: (event: WmsEventView) => void }): ReactElement {
   const { onOpen } = props;
   return (
     <ol className="wms-log">
       {props.events.map((e) => (
         <li key={e.key} className={e.exception ? 'exc' : undefined}>
           <button type="button" disabled={onOpen === undefined || (e.order === 0 && e.po === 0)} onClick={() => onOpen?.(e)}>
-            <span className="t">{clock(e.tick, props.tickMs)}</span>
+            <span className="t">{clock(e.tick, props.time)}</span>
             <span className="code">{e.code}</span>
             <span className="ref">{e.ref}</span>
             <span className="detail">{e.detail}</span>
@@ -70,7 +71,7 @@ export function OrderDetail(props: {
   order: WmsOrderView | undefined;
   events: readonly WmsEventView[];
   tick: number;
-  tickMs: number;
+  time: ClockShape;
   /** The destination country's goodwill (slice 8), or null if unknown. */
   goodwill: number | null;
   onBack: () => void;
@@ -79,7 +80,7 @@ export function OrderDetail(props: {
   lineActions?: (line: WmsLineView) => ReactNode;
   children?: ReactNode;
 }): ReactElement {
-  const { order: o, tickMs } = props;
+  const { order: o, time } = props;
   const chosen = o?.lines.find((l) => l.no === props.selectedLine);
   return (
     <div className="wms-detail" data-testid="wms-detail">
@@ -112,10 +113,10 @@ export function OrderDetail(props: {
             </Field>
             <Field label="Wave">{o.wave === 0 ? '—' : `W-${String(o.wave).padStart(4, '0')}`}</Field>
             <Field label="Ship-by" className={o.late ? 'late' : undefined}>
-              {clock(o.shipBy, tickMs)} {o.open && <span className="muted">({countdown(o.shipBy - props.tick, tickMs)})</span>}
+              {clock(o.shipBy, time)} {o.open && <span className="muted">({countdown(o.shipBy - props.tick, time)})</span>}
               {o.late && ' LATE'}
             </Field>
-            <Field label="Created">{clock(o.created, tickMs)}</Field>
+            <Field label="Created">{clock(o.created, time)}</Field>
             <Field label="Lines">
               {o.linesPicked}/{o.linesTotal}
             </Field>
@@ -154,7 +155,7 @@ export function OrderDetail(props: {
           </div>
           {chosen !== undefined && props.lineActions?.(chosen)}
           <h4 className="wms-subhead">Activity</h4>
-          {props.events.length > 0 && <EventLines events={props.events} tickMs={tickMs} />}
+          {props.events.length > 0 && <EventLines events={props.events} time={time} />}
           <p className="wms-note">The log keeps the latest 200 events of the whole WMS; older ones for this order have scrolled out.</p>
         </div>
       )}

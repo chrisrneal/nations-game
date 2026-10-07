@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import type { WmsEventView } from '@warehouse/contracts';
 import { clock } from './grid.ts';
 import { EventLines } from './OrderDetail.tsx';
+import type { ClockShape } from '../format.ts';
 
 /**
  * The activity feed (docs/wms-plan.md slice 5): a console docked at the bottom
@@ -9,8 +10,8 @@ import { EventLines } from './OrderDetail.tsx';
  * newest first, exceptions in red. Tapping an event opens its order, or its
  * purchase order on the inbound page (W6).
  */
-export function ActivityFeed(props: { events: readonly WmsEventView[]; tickMs: number; open: boolean; onToggle: () => void; onOpen: (event: WmsEventView) => void }): ReactElement {
-  const { events, tickMs, open } = props;
+export function ActivityFeed(props: { events: readonly WmsEventView[]; time: ClockShape; open: boolean; onToggle: () => void; onOpen: (event: WmsEventView) => void }): ReactElement {
+  const { events, time, open } = props;
   const latest = events[0];
   const exceptions = events.filter((e) => e.exception).length;
   return (
@@ -23,13 +24,13 @@ export function ActivityFeed(props: { events: readonly WmsEventView[]; tickMs: n
         {exceptions > 0 && <span className="wms-feed-exc">{exceptions}!</span>}
         {!open && latest !== undefined && (
           <span className={`wms-feed-latest${latest.exception ? ' exc' : ''}`}>
-            {clock(latest.tick, tickMs)} {latest.code} {latest.ref}
+            {clock(latest.tick, time)} {latest.code} {latest.ref}
           </span>
         )}
       </button>
       {open && (
         <div className="wms-feed-list" data-testid="wms-feed">
-          {events.length === 0 ? <p className="wms-empty">No activity yet.</p> : <EventLines events={events} tickMs={tickMs} onOpen={props.onOpen} />}
+          {events.length === 0 ? <p className="wms-empty">No activity yet.</p> : <EventLines events={events} time={time} onOpen={props.onOpen} />}
         </div>
       )}
     </section>

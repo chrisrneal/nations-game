@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCash, formatDuration, formatEffect, formatRate, short } from './format.ts';
+import { clockAt, formatCash, formatDuration, short, tickTime, timeOfDay } from './format.ts';
 
 describe('number formatting', () => {
   it('shortens big numbers to a few characters, rounding down', () => {
@@ -20,20 +20,21 @@ describe('number formatting', () => {
     expect(formatCash(340_000_000)).toBe('$3.4M');
   });
 
-  it('shows durations and rates', () => {
+  it('shows durations', () => {
     expect(formatDuration(45)).toBe('45s');
     expect(formatDuration(130)).toBe('2m 10s');
     expect(formatDuration(3900)).toBe('1h 5m');
-    expect(formatRate(1600)).toBe('1.6/s');
-    expect(formatRate(1_234_000_000)).toBe('1.2M/s');
   });
 
-  it('shows upgrade effects in their units', () => {
-    expect(formatEffect('count', 2000)).toBe('2 docks');
-    expect(formatEffect('parcels', 15_000)).toBe('15 parcels');
-    expect(formatEffect('cents', 160_000)).toBe('$1.60');
-    expect(formatEffect('seconds', 4500)).toBe('4.50s');
-    expect(formatEffect('minutes', 120_000)).toBe('2h');
-    expect(formatEffect('minutes', 30_000)).toBe('30m');
+  it('shows the warehouse clock (W8): a minute of the day a second, from 06:00 on day 1', () => {
+    const c = { ticksPerMinute: 4, startMinute: 360 };
+    expect(timeOfDay(0)).toBe('00:00');
+    expect(timeOfDay(870)).toBe('14:30');
+    expect(clockAt(0, c)).toEqual({ day: 1, minute: 360 });
+    expect(clockAt(4 * 60, c)).toEqual({ day: 1, minute: 420 });
+    expect(clockAt(4 * 18 * 60, c)).toEqual({ day: 2, minute: 0 });
+    expect(tickTime(4 * 90, c)).toBe('07:30');
+    expect(tickTime(4 * 18 * 60, c, 1)).toBe('D2 00:00');
+    expect(tickTime(4 * 18 * 60, c, 2)).toBe('00:00');
   });
 });

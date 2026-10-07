@@ -1,3 +1,4 @@
+import { clockAt, timeOfDay, type ClockShape } from '../format.ts';
 import type { WmsOrderStatus, WmsOrderView, WmsPoStatus, WmsPoView, WmsStockStatus, WmsStockView } from '@warehouse/contracts';
 
 /** The filter chips above the order grid. */
@@ -117,16 +118,16 @@ function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-/** A tick as WMS time since opening, minutes and seconds run together: tick 408 at 250 ms is T+0142. */
-export function clock(tick: number, tickMs: number): string {
-  const s = Math.max(0, Math.floor((tick * tickMs) / 1000));
-  return `T+${pad2(Math.floor(s / 60))}${pad2(s % 60)}`;
+/** A tick as the warehouse's time of day (W8): 14:30. */
+export function clock(tick: number, time: ClockShape): string {
+  return timeOfDay(clockAt(tick, time).minute);
 }
 
-/** Time left to a tick as m:ss, or -m:ss once it has passed. */
-export function countdown(ticks: number, tickMs: number): string {
-  const s = Math.floor((Math.abs(ticks) * tickMs) / 1000);
-  return `${ticks < 0 ? '-' : ''}${Math.floor(s / 60)}:${pad2(s % 60)}`;
+/** Warehouse time left to a tick, as 35m or 2h 05m, or -35m once it has passed (W8). */
+export function countdown(ticks: number, time: ClockShape): string {
+  const m = Math.floor(Math.abs(ticks) / time.ticksPerMinute);
+  const text = m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${pad2(m % 60)}m`;
+  return `${ticks < 0 ? '-' : ''}${text}`;
 }
 
 /** The parts of a row that change what it shows; a row re-renders only when this does. */
@@ -136,7 +137,7 @@ export function rowSignature(o: WmsOrderView): string {
 
 /** The grid's row height and header height in CSS px; wms.css sets the same (slice 9). */
 export const ROW_H = 36;
-export const HEAD_H = 40;
+export const HEAD_H = 45;
 
 /**
  * Which rows to render (slice 9): the ones on screen plus a margin either
@@ -150,14 +151,15 @@ export function rowWindow(scrollTop: number, viewHeight: number, total: number, 
   return { start: Math.max(0, start), end: Math.min(total, start + shown) };
 }
 
-/** The WMS's pages: the live floor and the plan (W7), and what comes in, what goes out and what is on the shelves (W6). */
-export type WmsPage = 'floor' | 'inbound' | 'outbound' | 'inventory' | 'plan';
+/** The WMS's pages: the live floor and the plan (W7), what comes in, what goes out and what is on the shelves (W6), and the crew (W8). */
+export type WmsPage = 'floor' | 'inbound' | 'outbound' | 'inventory' | 'crew' | 'plan';
 
 export const PAGES: readonly { readonly id: WmsPage; readonly label: string }[] = [
   { id: 'floor', label: 'Floor' },
   { id: 'inbound', label: 'In' },
   { id: 'outbound', label: 'Out' },
   { id: 'inventory', label: 'Stock' },
+  { id: 'crew', label: 'Crew' },
   { id: 'plan', label: 'Plan' },
 ];
 

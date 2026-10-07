@@ -34,8 +34,8 @@ describe('LocalHost (S3)', () => {
     const clock = new FakeClock();
     const first = setup(store, clock);
     await first.host.start();
-    await first.host.buy('loading');
-    for (let i = 0; i < 40; i++) clock.advance(250);
+    await first.host.submit({ type: 'wms', payload: { action: 'policy', policy: { pick: 'nearest', release: 'continuous', pickers: 6 } } });
+    for (let i = 0; i < 400; i++) clock.advance(250);
     await first.host.away();
     const saved = first.seen.at(-1);
     clock.time += 30_000;
@@ -43,7 +43,8 @@ describe('LocalHost (S3)', () => {
     expect(await second.host.start()).toBe('continued');
     const resumed = second.seen.at(-1);
     expect(resumed?.view.tick).toBe((saved?.view.tick ?? 0) + 120);
-    expect(resumed?.view.run.shipments).toBeGreaterThan(saved?.view.run.shipments ?? 0);
+    expect(resumed?.view.wms.policy.pick).toBe('nearest');
+    expect(resumed?.view.wms.stats.linesPicked).toBeGreaterThan(saved?.view.wms.stats.linesPicked ?? 0);
   });
 
   it('exports a file that resumes the same warehouse on a device with no saves', async () => {

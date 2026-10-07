@@ -1,11 +1,11 @@
-import type { WarehouseEvent, WarehouseIntent, WarehouseSaveFile, WarehouseState, WarehouseView, Bottleneck, Stats } from '@warehouse/contracts';
-import { WAREHOUSE_TUNABLES, WarehouseSession, UPGRADE_TEXT, warehouseView, createWarehouse, estimate, hashState, offlineCapTicks, offlineMinutesFor } from '@warehouse/sim';
+import type { WarehouseEvent, WarehouseIntent, WarehouseSaveFile, WarehouseState, WarehouseView } from '@warehouse/contracts';
+import { WAREHOUSE_TUNABLES, WarehouseSession, warehouseView, createWarehouse, hashState, offlineCapTicks } from '@warehouse/sim';
 import { LIVE_EVENT_TICKS, RECAP_MIN_AWAY_MS, capped, ticksDue } from './clock.ts';
 
 /**
- * What happened while the player was away (RULES 9): numbers for the
- * interface's three-line recap. Derived by the host from the stats before and
- * after the catch-up; never saved.
+ * What happened while the player was away (RULES 11): numbers for the
+ * interface's three-line recap. Derived by the host from the WMS totals
+ * before and after the catch-up; never saved.
  */
 export interface AwayRecap {
   /** Wall-clock time away. */
@@ -15,19 +15,19 @@ export interface AwayRecap {
   readonly capMinutes: number;
   /** The testing time skip ran it, not an absence. */
   readonly skipped: boolean;
+  /** Cents shipments paid. */
   readonly earned: number;
-  readonly shipments: number;
-  readonly fullShipments: number;
-  /** Whole orders shipped, and cancelled because the backlog was too long. */
-  readonly orders: number;
+  /** Orders shipped, and how many of them on time and in full. */
+  readonly shipped: number;
+  readonly otif: number;
+  /** Orders whose cutoff passed. */
   readonly missed: number;
-  readonly expresses: number;
+  readonly linesPicked: number;
   /** Purchase orders received, and their units. */
   readonly pos: number;
   readonly received: number;
-  readonly bottleneck: Bottleneck;
-  /** Name of the upgrade that fixes the bottleneck. */
-  readonly fixName: string;
+  /** Warehouse days that began while away. */
+  readonly days: number;
 }
 
 /** What the host pushes to the interface on every tick it steps. */
@@ -41,40 +41,23 @@ export interface WarehouseUpdate {
   readonly recap: AwayRecap | null;
 }
 
-function diff(after: Stats, before: Stats): Stats {
-  return {
-    earned: after.earned - before.earned,
-    shipments: after.shipments - before.shipments,
-    fullShipments: after.fullShipments - before.fullShipments,
-    orders: after.orders - before.orders,
-    missed: after.missed - before.missed,
-    expresses: after.expresses - before.expresses,
-    pos: after.pos - before.pos,
-    received: after.received - before.received,
-    taps: after.taps - before.taps,
-  };
-}
-
-/** The recap for a catch-up from `before` to `after`. Lifetime stats, so a sale in between still counts. */
+/** The recap for a catch-up from `before` to `after`, from the WMS's totals since opening. */
 export function awayRecap(before: WarehouseState, after: WarehouseState, awayMs: number, ranMs: number, skipped = false): AwayRecap {
-  const d = diff(after.life, before.life);
-  const { bottleneck } = estimate(after);
-  const fix = bottleneck.fix[0];
+  const a = after.wms;
+  const b = before.wms;
   return {
     awayMs,
     ranMs,
-    capMinutes: offlineMinutesFor(after.levels.night, after.stars),
+    capMinutes: WAREHOUSE_TUNABLES.offlineCapMinutes.value,
     skipped,
-    earned: d.earned,
-    shipments: d.shipments,
-    fullShipments: d.fullShipments,
-    orders: d.orders,
-    missed: Math.floor(d.missed / 1000),
-    expresses: d.expresses,
-    pos: d.pos,
-    received: d.received,
-    bottleneck,
-    fixName: fix === undefined ? '' : UPGRADE_TEXT[fix].name,
+    earned: a.stats.earned - b.stats.earned,
+    shipped: a.stats.shipped - b.stats.shipped,
+    otif: a.stats.otif - b.stats.otif,
+    missed: a.stats.cutoffMisses - b.stats.cutoffMisses,
+    linesPicked: a.stats.linesPicked - b.stats.linesPicked,
+    pos: a.inbound.posClosed - b.inbound.posClosed,
+    received: a.inbound.unitsReceived - b.inbound.unitsReceived,
+    days: a.today.day - b.today.day,
   };
 }
 
@@ -140,7 +123,7 @@ export class WarehouseEngine {
   /**
    * Steps every tick the wall clock owes and pushes an update if any were due.
    * A gap of a minute or more is an absence (the app was closed, hidden or the
-   * phone slept): it is capped by the offline cap (RULES 9), caught up quietly,
+   * phone slept): it is capped by the offline cap (RULES 11), caught up quietly,
    * and summed up in an away recap.
    */
   pump(): WarehouseUpdate | null {
@@ -152,7 +135,7 @@ export class WarehouseEngine {
     if (due.ticks * tickMs >= RECAP_MIN_AWAY_MS) {
       const before = session.state;
       const awayMs = now - this.anchor;
-      const { run, lost } = capped(due.ticks, offlineCapTicks(before));
+      const { run, lost } = capped(due.ticks, offlineCapTicks());
       session.advance(run, { events: false });
       // Time beyond the cap is lost: the warehouse closed for the night.
       this.anchor = lost > 0 ? now : due.anchor;

@@ -262,7 +262,7 @@ function poView(po: WmsPo, receiverOn: ReadonlyMap<number, number>): WmsPoView {
 }
 
 /** The inbound page (W6): POs open first (oldest first), then closed (newest first), and its KPIs. */
-function inboundView(w: WmsState, windowSec: number): { pos: WmsPoView[]; inboundKpis: WmsInboundKpis } {
+function inboundView(w: WmsState): { pos: WmsPoView[]; inboundKpis: WmsInboundKpis } {
   const receiverOn = new Map<number, number>();
   for (const t of w.tasks) if (t.kind !== 'PICK' && t.status === 'ACTIVE') receiverOn.set(lineKey(t.ref, t.line), t.worker);
   const rows = w.pos.map((po) => poView(po, receiverOn));
@@ -279,7 +279,7 @@ function inboundView(w: WmsState, windowSec: number): { pos: WmsPoView[]; inboun
     doorsTotal: w.doors,
     receiversBusy: w.workers.filter((p) => p.role === 'receive' && p.task > 0).length,
     receiversTotal: w.workers.filter((p) => p.role === 'receive').length,
-    unitsPerHour: Math.floor((recentIn * 3600) / windowSec),
+    unitsPerHour: Math.floor((recentIn * 60 * T.wmsMinuteTicks.value) / (WMS_RATE_BUCKETS * WMS_RATE_BUCKET_TICKS)),
     exceptions: open.filter((po) => po.exception).length,
     onTimePct: s.posClosed === 0 ? null : Math.floor((Math.max(0, s.posClosed - closedLate(w, s.posLate)) * 100) / s.posClosed),
   };
@@ -423,7 +423,6 @@ export function wmsView(w: WmsState, tick: number): WmsView {
   const open = rows.filter((o) => o.open);
   const closed = rows.filter((o) => !o.open).sort((a, b) => b.closed - a.closed || b.no - a.no);
   const s = w.stats;
-  const windowSec = (WMS_RATE_BUCKETS * WMS_RATE_BUCKET_TICKS * T.tickMs.value) / 1000;
   let recent = 0;
   for (const n of w.recent) recent += n;
   let recentPay = 0;
@@ -434,7 +433,7 @@ export function wmsView(w: WmsState, tick: number): WmsView {
   const pickers = w.workers.filter((p) => p.role === 'pick');
   const kpis: WmsKpis = {
     open: open.length,
-    linesPerHour: Math.floor((recent * 3600) / windowSec),
+    linesPerHour: Math.floor((recent * hourTicks) / windowTicks),
     fillRatePct: pct(s.unitsShipped, s.unitsOrdered),
     otifPct: pct(s.otif, s.shipped),
     exceptions: open.filter((o) => o.exception).length,
@@ -482,7 +481,7 @@ export function wmsView(w: WmsState, tick: number): WmsView {
     countries: w.dests.map((d, i) => ({ ...destinationAt(i), shipped: d.shipped, otif: d.otif, otifPct: pct(d.otif, d.shipped), goodwill: d.goodwill })),
     nextWaveIn: Math.max(0, w.nextWaveAt - tick),
     expediteCost: T.wmsExpediteCostCents.value,
-    ...inboundView(w, windowSec),
+    ...inboundView(w),
     schedule: scheduleView(w, tick),
     ...inventoryView(w),
     stats: w.stats,

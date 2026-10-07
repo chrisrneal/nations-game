@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
-import type { WmsAction, WmsActionName, WmsEventView, WmsPolicy } from '@warehouse/contracts';
+import type { WmsAction, WmsActionName, WmsEventView, WmsPolicy, WmsTaskView } from '@warehouse/contracts';
 import type { WarehouseHost } from '../../platform/index.ts';
-import { formatCash } from '../format.ts';
+import { formatCash, type ClockShape } from '../format.ts';
 import type { WarehouseStore } from '../store.ts';
 import { ActivityFeed } from './ActivityFeed.tsx';
+import { CrewList, WorkerDetail } from './Crew.tsx';
 import { Countries } from './Countries.tsx';
 import { LineActions, OrderActions, ReleaseBar } from './Actions.tsx';
 import { FILTERS, PAGES, countdown, filterCounts, matches, nextSort, sortOrders, type Sort, type SortKey, type WmsFilter, type WmsPage } from './grid.ts';
 import { InboundGrid, PoDetail } from './Inbound.tsx';
 import { InventoryGrid } from './Inventory.tsx';
-import { KpiStrip, floorKpis, inboundKpis, inventoryKpis, outboundKpis } from './KpiStrip.tsx';
+import { KpiStrip, crewKpis, floorKpis, inboundKpis, inventoryKpis, outboundKpis } from './KpiStrip.tsx';
 import { OrderDetail } from './OrderDetail.tsx';
 import { OrderGrid, type GridScroll } from './OrderGrid.tsx';
 import { PICK_RULES, Plan, RELEASE_MODES } from './Plan.tsx';
@@ -35,11 +36,13 @@ const DONE: Readonly<Record<WmsActionName, string>> = {
   cancelLine: 'Line cancelled',
   expedite: 'Expedited',
   policy: 'Plan changed',
+  hire: 'Hired',
+  door: 'Dock door opened',
 };
 
 /** What the "Wave in" KPI says: the countdown under timed waves, else how orders are released (W7). */
-function waveText(policy: WmsPolicy, nextWaveIn: number, tickMs: number): string {
-  return policy.release === 'waves' ? countdown(nextWaveIn, tickMs) : policy.release === 'continuous' ? 'Live' : 'Manual';
+function waveText(policy: WmsPolicy, nextWaveIn: number, time: ClockShape): string {
+  return policy.release === 'waves' ? countdown(nextWaveIn, time) : policy.release === 'continuous' ? 'Live' : 'Manual';
 }
 
 /** The plan in a line, for the floor (W7). */
@@ -50,15 +53,16 @@ function planLine(policy: WmsPolicy, crew: number): string {
 }
 
 /**
- * The warehouse management system (docs/wms-plan.md), the game's home screen
- * since W7: the live floor the WMS runs (Floor), purchase orders from
- * suppliers (In), customer orders and their countries (Out), every SKU's bin
- * (Stock), and the operating plan the player sets (Plan). The page never
- * scrolls sideways; only the grids do. Actions are commands sent through the
- * host; the sim decides, and the answer shows as a short note. `top` and
- * `bottom` are the money bar and the actions under the thumb (App).
+ * The warehouse management system (docs/wms-plan.md), the whole game since
+ * W8: the live floor the WMS runs (Floor), purchase orders and the dock
+ * schedule (In), customer orders and their countries (Out), every SKU's bin
+ * (Stock), the crew and their tasks (Crew), and the operating plan the player
+ * sets, with hiring and dock doors (Plan). The page never scrolls sideways;
+ * only the grids do. The tabs are under the thumb. Actions are commands sent
+ * through the host; the sim decides, and the answer shows as a short note.
+ * `top` is the clock and money bar (App).
  */
-export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; top?: ReactNode; bottom?: ReactNode }): ReactElement {
+export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; top?: ReactNode }): ReactElement {
   const { store, host } = props;
   const live = useWms(store);
   const [filter, setFilter] = useState<WmsFilter>('all');
@@ -69,6 +73,7 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; t
   const [page, setPage] = useState<WmsPage>('floor');
   const [countries, setCountries] = useState(false);
   const [openPo, setOpenPo] = useState<number | null>(null);
+  const [worker, setWorker] = useState<number | null>(null);
   const [choosing, setChoosing] = useState(false);
   const [chosen, setChosen] = useState<ReadonlySet<number>>(() => new Set());
   const [note, setNote] = useState<{ text: string; bad: boolean } | null>(null);
@@ -79,12 +84,13 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; t
     const onKey = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
       if (feed) setFeed(false);
+      else if (page === 'crew' && worker !== null) setWorker(null);
       else if (page === 'inbound' && openPo !== null) setOpenPo(null);
       else if (page === 'outbound' && open !== null) setOpen(null);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, openPo, page, feed]);
+  }, [open, openPo, page, feed, worker]);
   useEffect(
     () =>
       store.onFrame((update) => {
@@ -131,8 +137,22 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; t
     setPage('inbound');
     setOpenPo(no);
   }, []);
+  const openWorker = useCallback((id: number) => {
+    setPage('crew');
+    setWorker(id);
+  }, []);
+  const openTask = useCallback(
+    (t: WmsTaskView) => {
+      if (t.order > 0) openOrder(t.order);
+      else if (t.po > 0) openPurchase(t.po);
+    },
+    [openOrder, openPurchase],
+  );
   const openFromFeed = useCallback((e: WmsEventView) => {
-    if (e.po > 0) {
+    if (e.order === 0 && e.po === 0 && e.worker > 0) {
+      setPage('crew');
+      setWorker(e.worker);
+    } else if (e.po > 0) {
       setPage('inbound');
       setOpenPo(e.po);
     } else {
@@ -155,7 +175,7 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; t
   const newOrders = useMemo(() => (orders ?? []).filter((o) => o.status === 'NEW').map((o) => o.no), [orders]);
   const marked = useMemo(() => (choosing ? new Set([...chosen].filter((no) => newOrders.includes(no))) : new Set(open === null ? [] : [open])), [choosing, chosen, newOrders, open]);
   const detail = open === null ? undefined : orders?.find((o) => o.no === open);
-  const wave = live === null ? '' : waveText(live.wms.policy, live.wms.nextWaveIn, live.tickMs);
+  const wave = live === null ? '' : waveText(live.wms.policy, live.wms.nextWaveIn, live.time);
   const kpis =
     live === null
       ? []
@@ -165,20 +185,13 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; t
           ? inventoryKpis(live.wms.inventoryKpis)
           : page === 'outbound'
             ? outboundKpis(live.wms.kpis, wave)
-            : floorKpis(live.wms.kpis, live.wms.inboundKpis, wave);
+            : page === 'crew'
+              ? crewKpis(live.wms.crewKpis)
+              : floorKpis(live.wms.kpis, live.wms.inboundKpis, wave);
 
   return (
-    <div className={`wms${props.bottom === undefined ? '' : ' wms-home'}`} aria-label="Warehouse management system" data-testid="wms">
+    <div className={`wms${props.top === undefined ? '' : ' wms-home'}`} aria-label="Warehouse management system" data-testid="wms">
       {props.top}
-      <header className="wms-head">
-        <div className="wms-tabs" role="tablist" aria-label="WMS page">
-          {PAGES.map((p) => (
-            <button key={p.id} type="button" role="tab" aria-selected={page === p.id} onClick={() => setPage(p.id)} data-testid={`wms-tab-${p.id}`}>
-              {p.label}
-            </button>
-          ))}
-        </div>
-      </header>
       {live !== null && <KpiStrip items={kpis} />}
       {live === null ? (
         <p className="wms-empty">Connecting…</p>
@@ -189,29 +202,35 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; t
               <button type="button" className="wms-plan-chip" onClick={() => setPage('plan')} data-testid="wms-plan-chip">
                 <span className="muted">Plan</span> {planLine(live.wms.policy, live.wms.crew)} <span aria-hidden="true">›</span>
               </button>
-              <WmsFloor store={store} onOrder={openOrder} onPo={openPurchase} />
+              <WmsFloor store={store} onWorker={openWorker} onOrder={openOrder} onPo={openPurchase} />
             </>
           ) : page === 'plan' ? (
-            <Plan policy={live.wms.policy} crew={live.wms.crew} submit={submit} />
+            <Plan policy={live.wms.policy} crew={live.wms.crew} doors={live.wms.layout.doors} growth={live.wms.growth} cash={live.cash} submit={submit} />
+          ) : page === 'crew' ? (
+            worker !== null ? (
+              <WorkerDetail worker={live.wms.workers.find((p) => p.id === worker)} time={live.time} onBack={() => setWorker(null)} onTask={openTask} />
+            ) : (
+              <CrewList workers={live.wms.workers} onOpen={setWorker} />
+            )
           ) : page === 'inbound' ? (
             openPo !== null ? (
-              <PoDetail po={live.wms.pos.find((p) => p.no === openPo)} events={live.wms.events.filter((e) => e.po === openPo)} tick={live.tick} tickMs={live.tickMs} onBack={() => setOpenPo(null)} />
+              <PoDetail po={live.wms.pos.find((p) => p.no === openPo)} events={live.wms.events.filter((e) => e.po === openPo)} tick={live.tick} time={live.time} onBack={() => setOpenPo(null)} />
             ) : (
-              <InboundGrid pos={live.wms.pos} tickMs={live.tickMs} onOpen={setOpenPo} />
+              <InboundGrid pos={live.wms.pos} schedule={live.wms.schedule} time={live.time} day={live.day} onOpen={setOpenPo} />
             )
           ) : page === 'inventory' ? (
-            <InventoryGrid stock={live.wms.stock} tickMs={live.tickMs} />
+            <InventoryGrid stock={live.wms.stock} time={live.time} />
           ) : open !== null ? (
             <OrderDetail
               order={detail}
               events={live.wms.events.filter((e) => e.order === open)}
               tick={live.tick}
-              tickMs={live.tickMs}
+              time={live.time}
               goodwill={live.wms.countries.find((c) => c.iso === detail?.dest.iso)?.goodwill ?? null}
               onBack={() => setOpen(null)}
               selectedLine={line}
               onSelectLine={(no) => setLine((l) => (l === no ? null : no))}
-              lineActions={(l) => (detail === undefined ? null : <LineActions key={`${detail.no}/${l.no}`} order={detail} line={l} pickers={live.wms.pickers} submit={submit} />)}
+              lineActions={(l) => (detail === undefined ? null : <LineActions key={`${detail.no}/${l.no}`} order={detail} line={l} pickers={live.wms.workers.filter((p) => p.role === 'pick')} submit={submit} />)}
             >
               {detail !== undefined && <OrderActions order={detail} cash={live.cash} expediteCost={live.wms.expediteCost} submit={submit} />}
             </OrderDetail>
@@ -265,7 +284,7 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; t
               {countries ? (
                 <Countries countries={live.wms.countries} />
               ) : (
-                <OrderGrid orders={shown} tickMs={live.tickMs} sort={sort} selected={marked} scroll={scroll} onSort={onSort} onOpen={onOpen} empty={EMPTY[filter]} />
+                <OrderGrid orders={shown} time={live.time} sort={sort} selected={marked} scroll={scroll} onSort={onSort} onOpen={onOpen} empty={EMPTY[filter]} />
               )}
               {choosing && (
                 <ReleaseBar
@@ -285,10 +304,33 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; t
               )}
             </>
           )}
-          <ActivityFeed events={live.wms.events} tickMs={live.tickMs} open={feed} onToggle={() => setFeed((f) => !f)} onOpen={openFromFeed} />
+          <ActivityFeed events={live.wms.events} time={live.time} open={feed} onToggle={() => setFeed((f) => !f)} onOpen={openFromFeed} />
         </>
       )}
-      {props.bottom}
+      <nav className="wms-nav" aria-label="WMS pages">
+        <div className="wms-tabs" role="tablist">
+          {PAGES.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              role="tab"
+              aria-selected={page === p.id}
+              onClick={() => {
+                // A second tap on the page you are on goes back to its list.
+                if (p.id === page) {
+                  setOpen(null);
+                  setOpenPo(null);
+                  setWorker(null);
+                }
+                setPage(p.id);
+              }}
+              data-testid={`wms-tab-${p.id}`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </nav>
       {note !== null && (
         <div className={`wms-note-toast${note.bad ? ' bad' : ''}`} role="status">
           {note.text}

@@ -41,18 +41,16 @@ async function main(): Promise<void> {
     const page = context.pages()[0] ?? (await context.newPage());
     await page.goto(URL);
     await page.getByTestId('wms-floor').waitFor();
-    await page.getByTestId('open-docks').tap();
-    await page.getByTestId('dock-0').waitFor();
     const session = new WarehouseSession(wmsUnderLoad());
     const path = join(profile, 'load.json');
     writeFileSync(path, JSON.stringify({ format: 'warehouse-idle-save', version: 1, exportedAt: Date.now(), game: { save: session.save({ compact: true }), anchor: Date.now() } }));
     await page.getByTestId('settings').tap();
     await page.getByTestId('import-file').setInputFiles(path);
-    await page.getByTestId('dock-7').waitFor({ timeout: 10_000 });
+    await page.waitForFunction(() => Number(document.querySelector('[data-testid="wms-floor-canvas"]')?.getAttribute('data-workers') ?? 0) === 16, undefined, { timeout: 10_000 });
     await page.waitForTimeout(3000);
     const cdp = await context.newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
-    // The same warehouse's floor, for comparison: what this machine manages before the WMS opens.
+    // The same warehouse's floor, for comparison: what this machine manages before the grid opens.
     const floor = (await page.evaluate(`new Promise((resolve) => {
       let frames = 0, last = performance.now();
       const start = last;
@@ -66,7 +64,6 @@ async function main(): Promise<void> {
     })`)) as number;
     console.log(`the floor of the same warehouse, CPU slowed 4x: ${floor.toFixed(1)} fps`);
     const opened = Date.now();
-    await page.getByTestId('open-wms').tap();
     await page.getByTestId('wms-tab-outbound').tap();
     await page.locator('[data-testid="wms-grid"] tbody tr').first().waitFor();
     const openMs = Date.now() - opened;
@@ -99,7 +96,7 @@ async function main(): Promise<void> {
     }
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
     const sideways = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-    console.log(`rows in the grid: ${rows}; WMS opened in ${openMs} ms (CPU slowed 4x)`);
+    console.log(`rows in the grid: ${rows}; the order grid opened in ${openMs} ms (CPU slowed 4x)`);
     console.log(`scrolling 300 orders / 2,000 lines, CPU slowed 4x: ${fps.frames.toFixed(1)} fps, worst frame ${fps.worst.toFixed(0)} ms`);
     console.log(`page scrolls sideways: ${sideways}`);
     const failed = fps.frames < 55 || sideways;

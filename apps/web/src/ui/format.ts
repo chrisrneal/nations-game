@@ -1,5 +1,3 @@
-import type { EffectUnit } from '@warehouse/contracts';
-
 const UNITS = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi'];
 
 /**
@@ -35,27 +33,27 @@ export function formatDuration(seconds: number): string {
   return `${h}h ${Math.floor((s % 3600) / 60)}m`;
 }
 
-/** Milli-orders a second as "2.0/s", "1.2K/s". */
-export function formatRate(milliPerSec: number): string {
-  const perSec = milliPerSec / 1000;
-  return perSec < 100 ? `${(Math.floor(perSec * 10) / 10).toFixed(1)}/s` : `${short(perSec)}/s`;
+/** A minute of the day as a 24-hour clock: 0 is 00:00, 870 is 14:30. */
+export function timeOfDay(minute: number): string {
+  const m = ((Math.floor(minute) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 }
 
-/** An upgrade effect, given in milli-units of its unit. */
-export function formatEffect(unit: EffectUnit, milli: number): string {
-  const value = milli / 1000;
-  switch (unit) {
-    case 'count':
-      return `${value} ${value === 1 ? 'dock' : 'docks'}`;
-    case 'parcels':
-      return `${short(value)} parcels`;
-    case 'ordersPerSec':
-      return formatRate(milli);
-    case 'cents':
-      return formatCash(value);
-    case 'seconds':
-      return `${value.toFixed(value < 10 ? 2 : 1)}s`;
-    case 'minutes':
-      return value >= 60 ? `${value / 60}h` : `${value}m`;
-  }
+/** The warehouse clock (W8): what any tick reads as, given the clock's shape from the View. */
+export interface ClockShape {
+  readonly ticksPerMinute: number;
+  readonly startMinute: number;
+}
+
+/** The warehouse day and minute of the day a tick falls on (W8). */
+export function clockAt(tick: number, c: ClockShape): { day: number; minute: number } {
+  const minutes = c.startMinute + Math.floor(tick / c.ticksPerMinute);
+  return { day: Math.floor(minutes / 1440) + 1, minute: minutes % 1440 };
+}
+
+/** A tick as a time of day, with the day when it is not `today` ("14:30", "D3 06:00"). */
+export function tickTime(tick: number, c: ClockShape, today?: number): string {
+  const at = clockAt(tick, c);
+  const time = timeOfDay(at.minute);
+  return today === undefined || at.day === today ? time : `D${at.day} ${time}`;
 }

@@ -460,7 +460,7 @@ export interface WmsEventView {
 /** The outbound KPI strip. Percentages are whole numbers; null when nothing has shipped yet. */
 export interface WmsKpis {
   readonly open: number;
-  /** Lines confirmed an hour, measured over the last few minutes. */
+  /** Lines confirmed a warehouse hour (W8: a real minute), measured over the last few real minutes. */
   readonly linesPerHour: number;
   /** Units shipped as a % of units ordered on shipped orders. */
   readonly fillRatePct: number | null;
@@ -628,7 +628,7 @@ export interface WmsInboundKpis {
   readonly doorsTotal: number;
   readonly receiversBusy: number;
   readonly receiversTotal: number;
-  /** Good units counted in an hour, measured over the last few minutes. */
+  /** Good units counted in a warehouse hour, measured over the last few real minutes. */
   readonly unitsPerHour: number;
   readonly exceptions: number;
   /** POs closed that arrived by their appointment, as a whole %; null before any closes. */

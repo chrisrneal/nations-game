@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { WmsView } from '@warehouse/contracts';
+import type { ClockShape } from '../format.ts';
 import type { WarehouseStore } from '../store.ts';
 
 export interface WmsLive {
@@ -7,6 +8,9 @@ export interface WmsLive {
   readonly tick: number;
   readonly tickMs: number;
   readonly cash: number;
+  /** The warehouse clock's shape, for showing any tick as a time of day (W8), and today's number. */
+  readonly time: ClockShape;
+  readonly day: number;
 }
 
 /**
@@ -22,7 +26,7 @@ export function useWms(store: WarehouseStore): WmsLive | null {
       const view = update.view;
       if (view.wms.rev === rev) return;
       rev = view.wms.rev;
-      setLive({ wms: view.wms, tick: view.tick, tickMs: view.tickMs, cash: view.cash });
+      setLive({ wms: view.wms, tick: view.tick, tickMs: view.tickMs, cash: view.cash, time: view.clock, day: view.clock.day });
     });
   }, [store]);
   return live;

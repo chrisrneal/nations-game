@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
-import type { WmsInboundKpis, WmsInventoryKpis, WmsKpis } from '@warehouse/contracts';
-import { short } from '../format.ts';
+import type { WmsCrewKpis, WmsInboundKpis, WmsInventoryKpis, WmsKpis } from '@warehouse/contracts';
+import { formatCash, short } from '../format.ts';
 
 export interface Kpi {
   readonly label: string;
@@ -26,11 +26,12 @@ export function outboundKpis(k: WmsKpis, nextWave: string): Kpi[] {
   ];
 }
 
-/** The floor (W7): the next wave (or how orders are released), OTIF, lines an hour, and who is busy: pickers, doors and receivers. */
+/** The floor (W7, W8): the next wave (or how orders are released), OTIF, money a warehouse hour, lines an hour, and who is busy: pickers, doors and receivers. */
 export function floorKpis(k: WmsKpis, ik: WmsInboundKpis, nextWave: string): Kpi[] {
   return [
     { label: 'Wave in', value: nextWave, testId: 'wms-next-wave' },
     { label: 'OTIF', value: percent(k.otifPct), alert: k.otifPct !== null && k.otifPct < 90 },
+    { label: '$/hr', value: formatCash(k.earnedPerHour) },
     { label: 'Lines/hr', value: short(k.linesPerHour) },
     { label: 'Pickers', value: `${k.pickersBusy}/${k.pickersTotal}` },
     { label: 'Doors', value: `${ik.doorsBusy}/${ik.doorsTotal}`, alert: ik.atDock > ik.doorsBusy },
@@ -61,6 +62,19 @@ export function inventoryKpis(k: WmsInventoryKpis): Kpi[] {
     { label: 'Low', value: `${k.low}/${k.skus}` },
     { label: 'Short', value: String(k.short), alert: k.short > 0 },
     { label: 'Accuracy', value: percent(k.accuracyPct), alert: k.accuracyPct !== null && k.accuracyPct < 90 },
+  ];
+}
+
+/** The crew (W8): how many are working, walking and idle, the tasks waiting for a picker or a receiver, and the crew's share of time working. */
+export function crewKpis(k: WmsCrewKpis): Kpi[] {
+  return [
+    { label: 'Crew', value: String(k.crew) },
+    { label: 'Working', value: String(k.working) },
+    { label: 'Walking', value: String(k.walking) },
+    { label: 'Idle', value: String(k.idle), alert: k.idle > 0 && k.pickOpen + k.receiveOpen > 0 },
+    { label: 'Pick wait', value: String(k.pickOpen), alert: k.pickOpen > 0 },
+    { label: 'Rcv wait', value: String(k.receiveOpen), alert: k.receiveOpen > 0 },
+    { label: 'Busy', value: percent(k.utilPct) },
   ];
 }
 
