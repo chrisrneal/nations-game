@@ -14,9 +14,10 @@ export interface WmsLive {
 }
 
 /**
- * The WMS view for React, replaced only when the WMS steps (once a second),
- * so the WMS screens re-render at most once a second instead of every tick
- * (P7); unchanged rows skip even that (`rowSignature`).
+ * The WMS view for React, replaced only when the WMS has stepped since the
+ * last update (once a second at 1x, at most once an update, four times a
+ * second, at higher speeds, W9), so the WMS screens never re-render every
+ * tick (P7); unchanged rows skip even that (`rowSignature`).
  */
 export function useWms(store: WarehouseStore): WmsLive | null {
   const [live, setLive] = useState<WmsLive | null>(null);

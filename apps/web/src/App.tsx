@@ -69,7 +69,7 @@ export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedb
         host={host}
         top={
           <>
-            <HomeTop store={store} onSettings={() => setSettings(true)} />
+            <HomeTop store={store} onSettings={() => setSettings(true)} onSpeed={(speed) => void host.setSpeed(speed)} />
             <InstallBanner install={install} onToast={setToast} />
           </>
         }

@@ -66,7 +66,8 @@ export function WmsFloor(props: { store: WarehouseStore; onWorker: (id: number) 
         const r = box.current.getBoundingClientRect();
         if (r.width > 0 && r.height > 0) m.setLayout(floorLayout(r.width, r.height, v.wms.layout));
       }
-      m.ingest(v.wms, v.tick, v.tickMs, performance.now(), shipped);
+      // A tick takes less wall time at a higher speed (W9): walks are timed by it.
+      m.ingest(v.wms, v.tick, v.tickMs / Math.max(1, update.speed), performance.now(), shipped);
       shipped = [];
       if (live.current !== null) {
         live.current.dataset.pickers = String(m.workers.filter((p) => p.role === 'pick').length);

@@ -367,6 +367,10 @@ disagree.
 | `wmsPickMilliPerSec` | 750 | 200 | 4000 | WMS: milli-units a picker picks a second once at the bin (0.75). Raised from 0.65 when pickers started walking between bins (W7), so an idle WMS ships as before: about 82% OTIF and 94% on time (seeds 1-8, 2 h; was 84% and 95%). Six pickers keep up with an order every 25 s with a little to spare, so a queue forms when luck runs bad. With tasks (W8) the same: 82% OTIF, 96% on time, pickers working 69% of the time. |
 | `wmsFirstWaveTicks` | 120 | 0 | 1200 | WMS: ticks from opening to the first automatic wave (30 warehouse minutes): long enough to see NEW orders and release them by hand. |
 | `wmsWaveTicks` | 240 | 40 | 2400 | WMS: ticks between automatic waves (a warehouse hour): every NEW order not on hold is released. |
+| `wmsWaveMinTicks` | 120 | 40 | 1200 | WMS plan (W9): the shortest wave interval the Plan offers (30 warehouse minutes): orders reach the floor sooner, in smaller waves, so a P1 has less company to beat to the stock. |
+| `wmsWaveMaxTicks` | 480 | 240 | 4800 | WMS plan (W9): the longest wave interval the Plan offers (2 warehouse hours): big waves let the most urgent take the stock first, but orders wait longer to start. |
+| `wmsBalanceTicks` | 60 | 20 | 960 | WMS labour (W9): under the balance plan the WMS looks at the work waiting every this many ticks (15 warehouse minutes) and moves at most one person, so the crew does not churn. |
+| `wmsBalanceGap` | 3 | 1 | 20 | WMS labour (W9): the balance moves a person when one side has at least this many more tasks waiting a head than the other. At 3 a full queue on every picker (2 waiting a head) does not pull receivers off an empty dock by itself. |
 | `wmsOrderMinTicks` | 80 | 20 | 1200 | WMS: shortest gap before the next order arrives (20 warehouse minutes). |
 | `wmsOrderMaxTicks` | 120 | 40 | 2400 | WMS: longest gap before the next order arrives (30 warehouse minutes). |
 | `wmsMaxOpenOrders` | 40 | 10 | 300 | WMS: no new order arrives while this many are open, so a long absence cannot swamp the floor. |
