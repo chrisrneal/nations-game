@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, type PointerEvent, type ReactElement } from 'react';
 import type { WmsStockView, WmsView } from '@warehouse/contracts';
 import type { WarehouseStore } from '../store.ts';
-import { CARTON, FLASH_MS, POP_MS, WmsFloorModel, ZONES, ZONE_NAMES, binCell, floorLayout, zoneOf, type FloorLayout, type Rect } from './floorModel.ts';
+import { CARTON, FLASH_MS, POP_MS, WmsFloorModel, binCell, floorLayout, zoneOf, type FloorLayout, type Rect } from './floorModel.ts';
 
 /** Colours (the WMS's dark terminal palette, wms.css). */
 const C = {
@@ -21,6 +21,7 @@ const C = {
   idle: '#5d6b84',
   receiver: '#ff9d6c',
   forklift: '#fff06a',
+  loader: '#56d3e0',
   pallet: '#e0b073',
   tote: '#4f7fd0',
   ink: '#07101e',
@@ -48,7 +49,7 @@ export function WmsFloor(props: { store: WarehouseStore; onWorker: (id: number) 
   const still = useRef<HTMLCanvasElement>(null);
   const model = useRef<WmsFloorModel>(null);
   model.current ??= new WmsFloorModel();
-  const latest = useRef<{ wms: WmsView; tick: number } | null>(null);
+  const latest = useRef<{ wms: WmsView; tick: number; perMinute: number } | null>(null);
   const focus = useRef<{ aisle: number; bay: number; at: number } | null>(null);
 
   // Each new View: where everything is going. Shipments between Views are kept for the pay pops.
@@ -60,7 +61,7 @@ export function WmsFloor(props: { store: WarehouseStore; onWorker: (id: number) 
       const v = update.view;
       if (v.wms.rev === rev) return;
       rev = v.wms.rev;
-      latest.current = { wms: v.wms, tick: v.tick };
+      latest.current = { wms: v.wms, tick: v.tick, perMinute: v.clock.ticksPerMinute };
       const m = model.current as WmsFloorModel;
       if (m.layout === null && box.current !== null) {
         const r = box.current.getBoundingClientRect();
@@ -101,7 +102,7 @@ export function WmsFloor(props: { store: WarehouseStore; onWorker: (id: number) 
           c.getContext('2d')?.setTransform(dpr, 0, 0, dpr, 0, 0);
         }
       }
-      const shape = latest.current?.wms.layout ?? { aisles: 4, bays: 20, doors: 2 };
+      const shape = latest.current?.wms.layout ?? { aisles: 4, bays: 20, doors: 2, shipDoors: 3 };
       model.current?.setLayout(floorLayout(r.width, r.height, shape));
     };
     measure();
@@ -135,7 +136,7 @@ export function WmsFloor(props: { store: WarehouseStore; onWorker: (id: number) 
       if (m.still !== drawn) {
         drawn = m.still;
         stx.clearRect(0, 0, sv.width, sv.height);
-        drawStill(stx, l, w.wms);
+        drawStill(stx, l, w.wms, w.perMinute);
       }
       drawLive(ctx, l, m, now);
       const f = focus.current;
@@ -167,7 +168,7 @@ export function WmsFloor(props: { store: WarehouseStore; onWorker: (id: number) 
         ref={live}
         className="wms-floor-canvas wms-floor-live"
         role="img"
-        aria-label="The warehouse floor as the WMS runs it: trucks at the dock doors, receivers counting them in and taking pallets to the racks, pickers walking to their bins, totes on the conveyor, and orders at packing, staging and on the truck. Tap a worker to see their tasks, or a carton to open its order."
+        aria-label="The warehouse floor as the WMS runs it: trucks at the inbound doors, the dock crew counting them in, taking pallets to the racks and loading trailers at the outbound doors, pickers walking to their bins, totes on the conveyor, and orders at packing, in each door's lane and on its trailer. Tap a worker to see their tasks, or a carton to open its order."
         onPointerDown={tap}
         data-testid="wms-floor-canvas"
       />
@@ -196,7 +197,7 @@ function stockColour(s: WmsStockView): string {
 }
 
 /** Everything that changes only when the WMS steps: the bands, the yard and doors, the racks and their stock, the zones and their counts. */
-function drawStill(ctx: CanvasRenderingContext2D, l: FloorLayout, w: WmsView): void {
+function drawStill(ctx: CanvasRenderingContext2D, l: FloorLayout, w: WmsView, perMinute: number): void {
   ctx.fillStyle = C.floor;
   ctx.fillRect(0, 0, l.width, l.height);
   ctx.fillStyle = C.band;
@@ -277,20 +278,32 @@ function drawStill(ctx: CanvasRenderingContext2D, l: FloorLayout, w: WmsView): v
   ctx.lineTo(l.zones.pack.left + 6, l.zones.pack.top + 6);
   ctx.stroke();
   ctx.lineWidth = 1;
-  // Outbound: the four zones and how many orders are in each.
-  const counts: Record<string, number> = {};
+  // Outbound: the pack bench, packed, then each outbound door with its lane and the time its trailer leaves (W10).
+  const counts = { pack: 0, packed: 0 };
   for (const o of w.orders) {
     const z = zoneOf(o.status);
-    if (z !== null) counts[z] = (counts[z] ?? 0) + 1;
+    if (z === 'pack' || z === 'packed') counts[z] += 1;
   }
   const waiting = w.orders.filter((o) => o.status === 'NEW' || o.status === 'RELEASED' || o.status === 'ALLOCATED' || o.status === 'BACKORDER').length;
   label(ctx, 'OUTBOUND', l.conveyor + 9, l.outbound.top + 9);
   label(ctx, `${waiting} waiting to pick · ${w.orders.filter((o) => o.status === 'PICKING').length} picking`, l.width - 8, l.outbound.top + 9, C.label, 8, 'right');
-  for (const z of ZONES) {
+  for (const [z, name] of [
+    ['pack', 'PACK'],
+    ['packed', 'PACKED'],
+  ] as const) {
     const r = l.zones[z];
-    stroke(ctx, r, C.rule, z === 'truck' ? [] : [3, 3]);
-    label(ctx, `${ZONE_NAMES[z].toUpperCase()} ${counts[z] ?? 0}`, r.left + 1, r.top - 7, (counts[z] ?? 0) > 0 ? C.text : C.label, 8);
+    stroke(ctx, r, C.rule, [3, 3]);
+    label(ctx, `${name} ${counts[z]}`, r.left + 1, r.top - 7, counts[z] > 0 ? C.text : C.label, 8);
   }
+  const narrow = (l.shipCols[0]?.right ?? 0) - (l.shipCols[0]?.left ?? 0) < 52;
+  l.shipCols.forEach((c, i) => {
+    const d = w.shipDoors[i];
+    const lane = l.lanes[i] as Rect;
+    stroke(ctx, lane, C.rule, [2, 3]);
+    if (d === undefined) return;
+    const mins = Math.ceil(d.departsIn / Math.max(1, perMinute));
+    label(ctx, `${d.code} ${narrow ? '' : '▸'}${mins}m`, c.left + 1, lane.top - 7, d.staged.length + d.loaded.length > 0 ? C.text : C.label, narrow ? 7 : 8);
+  });
 }
 
 /** A person: a filled disc with their number, a ring for their order's priority, an arc for how far through the line they are. */
@@ -324,22 +337,28 @@ function drawLive(ctx: CanvasRenderingContext2D, l: FloorLayout, m: WmsFloorMode
     stroke(ctx, { left: cell.left - 3, top: cell.top - 3, right: cell.right + 3, bottom: cell.bottom + 3 }, f.kind === 'put' ? C.forklift : C.walking);
   }
   ctx.globalAlpha = 1;
-  // The truck at the outbound dock, pulling out and backing in.
-  const dock = l.zones.truck;
-  const shift = m.truckShift(now) * (l.width - dock.left + 12);
-  const trailer = { left: dock.left + 2 + shift, top: dock.top + 2, right: dock.right - 12 + shift, bottom: dock.bottom - 2 };
-  ctx.fillStyle = '#16243d';
-  ctx.fillRect(trailer.left, trailer.top, trailer.right - trailer.left, trailer.bottom - trailer.top);
-  ctx.fillStyle = C.trailer;
-  ctx.fillRect(trailer.right + 1, trailer.top + 6, 9, trailer.bottom - trailer.top - 12);
+  // Each outbound door's trailer, pulling out (down, off the floor) and the next backing in (W10), with how full it is.
+  const shifts = l.trailers.map((r, i) => m.truckShift(i + 1, now) * (r.bottom - r.top + 14));
+  l.trailers.forEach((r, i) => {
+    const dy = shifts[i] ?? 0;
+    ctx.fillStyle = '#16243d';
+    ctx.fillRect(r.left, r.top + dy, r.right - r.left, r.bottom - r.top);
+    ctx.strokeStyle = C.trailer;
+    ctx.strokeRect(r.left + 0.5, r.top + dy + 0.5, r.right - r.left - 1, r.bottom - r.top - 1);
+    const pct = (m.ship[i]?.pct ?? 0) / 100;
+    ctx.fillStyle = C.ink;
+    ctx.fillRect(r.left + 2, r.bottom + dy - 4, r.right - r.left - 4, 2);
+    ctx.fillStyle = pct >= 0.9 ? C.low : C.picking;
+    ctx.fillRect(r.left + 2, r.bottom + dy - 4, (r.right - r.left - 4) * pct, 2);
+  });
   // Cartons: the orders past picking; shipped ones ride with the truck.
   for (const c of m.cartons) {
-    const x = c.x + (c.leaving ? shift : 0);
+    const y = c.y + (c.leaving || (c.zone === 'truck' && c.door > 0) ? (shifts[c.door - 1] ?? 0) : 0);
     ctx.fillStyle = PRIORITY[c.priority] ?? PRIORITY[3];
-    ctx.fillRect(x - CARTON / 2, c.y - CARTON / 2, CARTON, CARTON);
+    ctx.fillRect(c.x - CARTON / 2, y - CARTON / 2, CARTON, CARTON);
     if (c.short) {
       ctx.strokeStyle = C.out;
-      ctx.strokeRect(x - CARTON / 2 - 0.5, c.y - CARTON / 2 - 0.5, CARTON + 1, CARTON + 1);
+      ctx.strokeRect(c.x - CARTON / 2 - 0.5, y - CARTON / 2 - 0.5, CARTON + 1, CARTON + 1);
     }
   }
   for (const t of m.totes) {
@@ -357,7 +376,12 @@ function drawLive(ctx: CanvasRenderingContext2D, l: FloorLayout, m: WmsFloorMode
         ctx.fillStyle = C.pallet;
         ctx.fillRect(p.x + 5, p.y - 3, 5, 6);
       }
-      person(ctx, p.x, p.y, p.id, !busy ? C.idle : p.kind === 'PUTAWAY' ? C.forklift : C.receiver, null, busy && !walking && p.kind === 'RECEIVE' ? p.pct : null);
+      if (p.kind === 'LOAD') {
+        ctx.fillStyle = C.pallet;
+        ctx.fillRect(p.x + 5, p.y - 3, 5, 6);
+      }
+      const fill = !busy ? C.idle : p.kind === 'PUTAWAY' ? C.forklift : p.kind === 'LOAD' ? C.loader : C.receiver;
+      person(ctx, p.x, p.y, p.id, fill, null, busy && !walking && (p.kind === 'RECEIVE' || p.kind === 'LOAD') ? p.pct : null);
       continue;
     }
     const ring = busy && p.priority > 0 && p.priority < 3 ? (PRIORITY[p.priority] ?? null) : null;

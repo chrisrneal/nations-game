@@ -166,13 +166,22 @@ export function travelBays(from: number, to: number): number {
   const db = shipDoorOf(to);
   if (da > 0 && db > 0) return Math.abs(da - db) * WMS_SHIP_DOOR_BAYS;
   if (da > 0 || db > 0) {
-    const p = binPlace(da > 0 ? to : from);
-    return p.bay + WMS_AISLE_GAP_BAYS * (WMS_AISLES - p.aisle) + (da > 0 ? da : db) * WMS_SHIP_DOOR_BAYS;
+    const bin = da > 0 ? to : from;
+    return bayOf(bin) + WMS_AISLE_GAP_BAYS * (WMS_AISLES - aisleOf(bin)) + (da > 0 ? da : db) * WMS_SHIP_DOOR_BAYS;
   }
-  const a = binPlace(from);
-  const b = binPlace(to);
-  if (a.aisle === b.aisle) return Math.abs(a.bay - b.bay);
-  return a.bay + b.bay + WMS_AISLE_GAP_BAYS * Math.abs(a.aisle - b.aisle);
+  const aa = aisleOf(from);
+  const ab = aisleOf(to);
+  if (aa === ab) return Math.abs(bayOf(from) - bayOf(to));
+  return bayOf(from) + bayOf(to) + WMS_AISLE_GAP_BAYS * Math.abs(aa - ab);
+}
+
+/** `binPlace` without the object (W10: the nearest-bin plan measures hundreds of walks a step). The pick-and-drop point (-1) is aisle A, bay 0. */
+function aisleOf(bin: number): number {
+  return bin < 0 ? 0 : Math.floor(bin / WMS_BINS_PER_AISLE) % WMS_AISLES;
+}
+
+function bayOf(bin: number): number {
+  return bin < 0 ? 0 : (Math.floor(bin / 8) % WMS_BAYS) + 1;
 }
 
 /** An outbound door's name (W10): S1, S2, ... */

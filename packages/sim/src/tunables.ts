@@ -41,7 +41,7 @@ export const WAREHOUSE_TUNABLES = {
   wmsBalanceGap: { value: 3, min: 1, max: 20, note: 'WMS labour (W9): the balance moves a person when one side has at least this many more tasks waiting a head than the other. At 3 a full queue on every picker (2 waiting a head) does not pull receivers off an empty dock by itself.' },
   wmsOrderMinTicks: { value: 24, min: 20, max: 1200, note: 'WMS: shortest gap before the next order arrives (6 warehouse minutes; 20 before W10, the busier warehouse).' },
   wmsOrderMaxTicks: { value: 40, min: 40, max: 2400, note: 'WMS: longest gap before the next order arrives (10 warehouse minutes; an order every 8 minutes on average, about 7 an hour, three times W9\'s).' },
-  wmsMaxOpenOrders: { value: 120, min: 10, max: 300, note: 'WMS: no new order arrives while this many are open, so a long absence cannot swamp the floor (120 since W10: about 16 warehouse hours of orders).' },
+  wmsMaxOpenOrders: { value: 80, min: 10, max: 300, note: 'WMS: no new order arrives while this many are open, so a long absence cannot swamp the floor (80 since W10: about 11 warehouse hours of orders; it also bounds the backlog a catch-up plans, so 8 hours away with half the pickers stays under a second in Node).' },
   wmsKeepClosedOrders: { value: 40, min: 0, max: 300, note: 'WMS: shipped and cancelled orders kept on the grid; older ones drop off.' },
   wmsPackTicks: { value: 20, min: 0, max: 240, note: 'WMS: ticks from PICKED (or SHORT) to PACKED (5 s).' },
   wmsStageTicks: { value: 20, min: 0, max: 240, note: 'WMS: ticks from PACKED to STAGED (5 s).' },

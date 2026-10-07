@@ -104,9 +104,14 @@ export function fits(load: number, units: number): boolean {
  */
 class Index {
   private loads: number[] | null = null;
+  /** Orders already looked up (W10: a backlog of hundreds of pick tasks sorts by them many times over). */
+  private readonly seen = new Map<number, MOrder | undefined>();
   constructor(private readonly w: MWms) {}
   order(no: number): MOrder | undefined {
-    return byNo(this.w.orders, no);
+    if (this.seen.has(no)) return this.seen.get(no);
+    const o = byNo(this.w.orders, no);
+    this.seen.set(no, o);
+    return o;
   }
   po(no: number): MPo | undefined {
     return byNo(this.w.pos, no);
@@ -209,6 +214,26 @@ export function releaseTask(w: MWms, t: MTask, tick: number, cancel = false): vo
   } else t.status = 'OPEN';
 }
 
+/**
+ * The crew of a role give back what they have lined up (not what they are
+ * working on), so the next step's plan is redone in full (W10): after the
+ * player makes old work more urgent or ready again (a priority, an expedite,
+ * a hold released), which the plan's look at new work would not see.
+ */
+export function requeue(w: MWms, role: WmsRole): void {
+  for (const worker of w.workers) {
+    if (worker.role !== role) continue;
+    for (const no of worker.queue) {
+      const t = findTask(w, no);
+      if (t !== undefined && t.status === 'QUEUED') {
+        t.status = 'OPEN';
+        t.worker = 0;
+      }
+    }
+    worker.queue = [];
+  }
+}
+
 /** A worker drops its active task and its queue (a reassignment, a role change): they wait for someone else. */
 export function freeWorker(w: MWms, worker: MWorker, tick: number): void {
   for (const no of [worker.task, ...worker.queue]) {
@@ -289,6 +314,28 @@ export function urgency(rule: MWms['policy']['pick'], a: Pick<MOrder, 'priority'
   return first || a.no - b.no;
 }
 
+/**
+ * The first `k` of `list` in `cmp` order, sorted (W10): what sorting it all and
+ * taking the front would give, without sorting a backlog of hundreds.
+ */
+export function best<V>(list: readonly V[], k: number, cmp: (a: V, b: V) => number): V[] {
+  if (list.length <= 2 * k + 8) return [...list].sort(cmp);
+  const top: V[] = [];
+  for (const v of list) {
+    if (top.length === k && cmp(v, top[k - 1] as V) >= 0) continue;
+    let lo = 0;
+    let hi = top.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (cmp(top[mid] as V, v) <= 0) lo = mid + 1;
+      else hi = mid;
+    }
+    top.splice(lo, 0, v);
+    if (top.length > k) top.pop();
+  }
+  return top;
+}
+
 /** Where a worker will stand once it has worked everything it holds: the bin of its last task. */
 function standsAt(w: MWms, worker: MWorker, byNo: ReadonlyMap<number, MTask>): number {
   const last = worker.queue[worker.queue.length - 1] ?? worker.task;
@@ -299,8 +346,8 @@ function standsAt(w: MWms, worker: MWorker, byNo: ReadonlyMap<number, MTask>): n
  * The WMS's task plan (RULES 6, W8), every step. Tasks whose line is gone,
  * cancelled or done are cancelled. Then, for each role, the plan is redone
  * when tasks wait for a worker and a worker of the role has room in its
- * queue, or (under priority or cutoff first) a waiting pick task is more
- * urgent than one already queued, or when a worker has nothing to do while
+ * queue, or (under priority or cutoff first) a pick task that has just come
+ * in is more urgent than one already queued, or when a worker has nothing to do while
  * another has tasks lined up: queued tasks go back to the pool and,
  * round by round, each worker of the role (lowest id first) is given one more
  * task until it holds `wmsTaskQueue` (its active task included). Pick tasks
@@ -308,44 +355,80 @@ function standsAt(w: MWms, worker: MWorker, byNo: ReadonlyMap<number, MTask>): n
  * the one with the shortest walk from where the worker will stand (the most
  * urgent breaking a tie). The dock crew's loads go first, the trailer that
  * leaves soonest first (W10); then receive and put-away tasks, oldest first.
- * A waiting load is reason to redo the dock crew's plan, as a more urgent
- * pick is the pickers'. Last, every worker with no task starts the first of
- * its queue.
+ * A load that has just come in is reason to redo the dock crew's plan, as a
+ * more urgent pick is the pickers'. Only work that came in since the last
+ * step is looked at for that (W10): everything older already lost to what is
+ * queued when the plan was last made, and a backlog holds hundreds. Last,
+ * every worker with no task starts the first of its queue.
  */
 export function planTasks(w: MWms, tick: number): void {
   let ix: Index | null = null;
-  const pools: Record<WmsRole, MTask[]> = { pick: [], receive: [] };
-  for (const t of w.tasks) {
-    if (t.status !== 'OPEN') continue;
-    ix ??= indexOf(w);
-    if (dead(ix, t)) {
-      t.status = 'CANCELLED';
-      t.finished = tick;
-    } else if (ready(ix, t)) pools[roleFor(t.kind)].push(t);
-  }
+  const since = tick - T.wmsStepTicks.value;
+  /** The role's open tasks that can start now; dead ones are cancelled on the way. Only those created since the last step when `fresh`. */
+  const sweep = (role: WmsRole, fresh: boolean): MTask[] => {
+    const pool: MTask[] = [];
+    for (const t of w.tasks) {
+      if (t.status !== 'OPEN' || roleFor(t.kind) !== role || (fresh && t.created < since)) continue;
+      ix ??= indexOf(w);
+      if (t.kind === 'PICK') {
+        // One look-up for both questions (W10: a backlog holds hundreds of waiting picks).
+        const target = pickLine(ix, t);
+        const line = target?.line.status;
+        if (target === undefined || line === 'CANCELLED' || line === 'PICKED' || line === 'SHORT' || line === 'OPEN') {
+          t.status = 'CANCELLED';
+          t.finished = tick;
+        } else if ((target.o.status === 'ALLOCATED' || target.o.status === 'PICKING') && line === 'ALLOCATED') pool.push(t);
+      } else if (dead(ix, t)) {
+        t.status = 'CANCELLED';
+        t.finished = tick;
+      } else if (ready(ix, t)) pool.push(t);
+    }
+    return pool;
+  };
   const rule = w.policy.pick;
   const depth = T.wmsTaskQueue.value;
   for (const role of ['pick', 'receive'] as const) {
-    const pool = pools[role];
     const crew = w.workers.filter((p) => p.role === role);
     // A worker with nothing to do while another has tasks lined up: the plan is redone to share them out.
     const unbalanced = crew.some((p) => p.task === 0 && p.queue.length === 0) && crew.some((p) => p.queue.length > 0);
+    const hasRoom = crew.some((p) => (p.task === 0 ? 0 : 1) + p.queue.length < depth);
+    // With no room and nothing to share out, only work that has just come in can change the plan.
+    const fresh = !hasRoom && !unbalanced;
+    let pool = sweep(role, fresh);
     if (pool.length === 0 && !unbalanced) continue;
     ix ??= indexOf(w);
     const index: Index = ix;
+    // The tasks the crew holds, found by number rather than by reading every task (W10).
     const byNo = new Map<number, MTask>();
-    for (const t of w.tasks) if (t.status === 'QUEUED' || t.status === 'ACTIVE') byNo.set(t.no, t);
+    for (const p of crew) {
+      for (const no of [p.task, ...p.queue]) {
+        const t = findTask(w, no);
+        if (t !== undefined && (t.status === 'QUEUED' || t.status === 'ACTIVE')) byNo.set(t.no, t);
+      }
+    }
+    // A pick task's urgency as one number, worked out once a plan (W10): priority then ship-by, or ship-by then priority, as `urgency` orders them.
+    const keys = new Map<number, number>();
+    const keyOf = (t: MTask): number => {
+      let k = keys.get(t.no);
+      if (k === undefined) {
+        const o = index.order(t.ref);
+        k = o === undefined ? -1 : rule === 'cutoff' ? o.shipBy * 4 + o.priority : o.priority * 2 ** 40 + o.shipBy;
+        keys.set(t.no, k);
+      }
+      return k;
+    };
     const order = (a: MTask, b: MTask): number => {
       if (a.kind === 'LOAD' || b.kind === 'LOAD') {
         if (a.kind !== b.kind) return a.kind === 'LOAD' ? -1 : 1;
         return index.departs(shipDoorOf(a.bin)) - index.departs(shipDoorOf(b.bin)) || a.created - b.created || a.no - b.no;
       }
       if (a.kind !== 'PICK' || b.kind !== 'PICK') return a.created - b.created || a.no - b.no;
-      const oa = index.order(a.ref);
-      const ob = index.order(b.ref);
-      return (oa !== undefined && ob !== undefined ? urgency(rule, oa, ob) : 0) || a.no - b.no;
+      const ka = keyOf(a);
+      const kb = keyOf(b);
+      if (ka < 0 || kb < 0) return a.no - b.no;
+      return ka - kb || a.ref - b.ref || a.no - b.no;
     };
-    const room = pool.length > 0 && crew.some((p) => (p.task === 0 ? 0 : 1) + p.queue.length < depth);
+    const room = pool.length > 0 && hasRoom;
     let preempt = false;
     if (pool.length > 0 && !room && ((role === 'pick' && rule !== 'nearest') || (role === 'receive' && pool.some((t) => t.kind === 'LOAD')))) {
       const best = pool.reduce((x, y) => (order(y, x) < 0 ? y : x));
@@ -355,6 +438,8 @@ export function planTasks(w: MWms, tick: number): void {
       }));
     }
     if (!room && !preempt && !unbalanced) continue;
+    // Redoing the plan takes every task that can start, not only the new ones.
+    if (fresh) pool = sweep(role, false);
     for (const worker of crew) {
       for (const no of worker.queue) {
         const t = byNo.get(no);
@@ -365,18 +450,23 @@ export function planTasks(w: MWms, tick: number): void {
       }
       worker.queue = [];
     }
-    pool.sort(order);
+    const nearest = role === 'pick' && rule === 'nearest';
+    // Only the best `slots` tasks can be handed out (W10: a backlog holds hundreds), so only they are sorted; nearest bin scans the pool instead.
+    let slots = 0;
+    for (const worker of crew) slots += depth - (worker.task === 0 ? 0 : 1);
+    if (!nearest) pool = best(pool, slots, order);
     for (let k = 0; k < depth && pool.length > 0; k++) {
       for (const worker of crew) {
         if (pool.length === 0) break;
         if ((worker.task === 0 ? 0 : 1) + worker.queue.length > k) continue;
         let best = 0;
-        if (role === 'pick' && rule === 'nearest') {
+        if (nearest) {
+          // The shortest walk; of equal walks, the most urgent.
           const from = standsAt(w, worker, byNo);
           let shortest = Number.POSITIVE_INFINITY;
           pool.forEach((t, i) => {
             const bays = travelBays(from, t.bin);
-            if (bays < shortest) {
+            if (bays < shortest || (bays === shortest && order(t, pool[best] as MTask) < 0)) {
               shortest = bays;
               best = i;
             }

@@ -236,7 +236,7 @@ export function PoDetail(props: { po: WmsPoView | undefined; events: readonly Wm
               </tbody>
             </table>
           </div>
-          <p className="wms-note">Receivers count each line in at the door; then the WMS gives a receiver a put-away task to take it to its bin, and only then can it be picked. Short (−) units never came; damaged (✕) units are written off.</p>
+          <p className="wms-note">The dock crew count each line in at the door; then the WMS gives one of them a put-away task to take it to its bin, and only then can it be picked. Short (−) units never came; damaged (✕) units are written off.</p>
           <h4 className="wms-subhead">Activity</h4>
           {props.events.length > 0 && <EventLines events={props.events} time={time} />}
           <p className="wms-note">The log keeps the latest 200 events of the whole WMS; older ones for this PO have scrolled out.</p>

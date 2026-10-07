@@ -9,7 +9,7 @@ type CrewFilter = 'all' | 'pick' | 'receive' | 'idle';
 const FILTERS: readonly { readonly id: CrewFilter; readonly label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'pick', label: 'Pickers' },
-  { id: 'receive', label: 'Receivers' },
+  { id: 'receive', label: 'Dock' },
   { id: 'idle', label: 'Idle' },
 ];
 
@@ -18,8 +18,8 @@ function matches(p: WmsWorkerView, f: CrewFilter): boolean {
 }
 
 const STATE_TEXT: Readonly<Record<WmsWorkerView['state'], string>> = { idle: 'Idle', walking: 'Walking', working: 'Working' };
-const ROLE_TEXT: Readonly<Record<WmsWorkerView['role'], string>> = { pick: 'Picker', receive: 'Receiver' };
-const KIND_TEXT: Readonly<Record<WmsTaskView['kind'], string>> = { PICK: 'Pick', RECEIVE: 'Receive', PUTAWAY: 'Put away' };
+const ROLE_TEXT: Readonly<Record<WmsWorkerView['role'], string>> = { pick: 'Picker', receive: 'Dock' };
+const KIND_TEXT: Readonly<Record<WmsTaskView['kind'], string>> = { PICK: 'Pick', RECEIVE: 'Receive', PUTAWAY: 'Put away', LOAD: 'Load' };
 
 /** A task in one line: what, which order or PO line, where, and how far through. */
 function TaskLine(props: { task: WmsTaskView }): ReactElement {
@@ -186,7 +186,7 @@ export function WorkerDetail(props: {
             <Field label="Working">{share(p.stats.busy, total)}</Field>
             <Field label="Walking">{share(p.stats.walking, total)}</Field>
             <Field label="Idle">{share(p.stats.idle, total)}</Field>
-            <Field label={p.state === 'walking' ? 'Walking to' : 'Where'}>{p.at < 0 ? 'Dock' : (p.task?.where ?? `Aisle ${String.fromCharCode(65 + p.aisle)}, bay ${p.bay}`)}</Field>
+            <Field label={p.state === 'walking' ? 'Walking to' : 'Where'}>{p.shipDoor > 0 ? `Door S${p.shipDoor}` : p.at < 0 ? 'Dock' : (p.task?.where ?? `Aisle ${String.fromCharCode(65 + p.aisle)}, bay ${p.bay}`)}</Field>
           </dl>
           <div className="wms-actions worker-move">
             <button
@@ -196,13 +196,13 @@ export function WorkerDetail(props: {
               onClick={() => props.submit({ action: 'role', worker: p.id, role: p.role === 'pick' ? 'receive' : 'pick' })}
               data-testid="worker-move"
             >
-              Move to {p.role === 'pick' ? 'receiving' : 'picking'}
+              Move to {p.role === 'pick' ? 'the dock' : 'picking'}
             </button>
-            <span className="muted">{props.sameRole <= 1 ? `The only ${p.role === 'pick' ? 'picker' : 'receiver'}: someone has to stay.` : 'Drops what they hold; it goes to someone else.'}</span>
+            <span className="muted">{props.sameRole <= 1 ? `The only ${p.role === 'pick' ? 'picker' : 'dock hand'}: someone has to stay.` : 'Drops what they hold; it goes to someone else.'}</span>
           </div>
           <h4 className="wms-subhead">Now</h4>
           {p.task === null ? (
-            <p className="wms-note">No task. The WMS gives {p.role === 'pick' ? 'pickers allocated order lines' : 'receivers the lines of docked trucks, then their put-aways'} as they come.</p>
+            <p className="wms-note">No task. The WMS gives {p.role === 'pick' ? 'pickers allocated order lines' : 'the dock crew staged orders to load onto trailers first, then the lines of docked trucks and their put-aways'} as they come.</p>
           ) : (
             <ol className="task-list">
               <TaskCard task={p.task} time={props.time} label={p.state === 'walking' ? 'Walking to' : 'Working'} onOpen={props.onTask} />

@@ -140,6 +140,18 @@ describe('the WMS assigns tasks (RULES 6, W8)', () => {
     expect(w.workers[0]!.queue).toEqual([]);
   });
 
+  it('raising an old waiting order to P1 lines its task up at the next step, ahead of queued P3s (W10)', () => {
+    const count = pickers(wms([])).length * DEPTH + 4;
+    const w = wms(many(count));
+    wmsStep(w, 0);
+    const waiting = w.tasks.find((t) => t.status === 'OPEN');
+    if (waiting === undefined) throw new Error('needs a waiting task');
+    run(w, STEP, 2);
+    expect(wmsAction(w, { action: 'priority', order: waiting.ref, priority: 1 }, 3 * STEP, 0).ok).toBe(true);
+    run(w, 3 * STEP, 1);
+    expect(w.tasks.find((t) => t.no === waiting.no)?.status).toMatch(/QUEUED|ACTIVE/);
+  });
+
   it('a held order’s tasks leave the queues and wait; released, they are lined up again', () => {
     const w = wms(many(4));
     w.workers = w.workers.slice(0, 1);

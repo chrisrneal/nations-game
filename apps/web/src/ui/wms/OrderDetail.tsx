@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from 'react';
-import type { WmsEventView, WmsLineView, WmsOrderView } from '@warehouse/contracts';
+import type { WmsEventView, WmsLineView, WmsOrderView, WmsShipDoorView } from '@warehouse/contracts';
 import { clock, countdown } from './grid.ts';
 import { payFactor } from './Countries.tsx';
 import { StatusChip } from './OrderGrid.tsx';
@@ -64,8 +64,9 @@ export function EventLines(props: { events: readonly WmsEventView[]; time: Clock
 /**
  * One order (docs/wms-plan.md slice 4): a header summary, its lines with
  * shorts in red, and its own activity. `children` is the order's action bar
- * and `lineActions` the chosen line's (slice 7); tapping a line chooses it. The log keeps the latest 200 events of the whole WMS, so an old
- * order's history may have scrolled out of it.
+ * and `lineActions` the chosen line's (slice 7); tapping a line chooses it. The log keeps the latest 400 events of the whole WMS, so an old
+ * order's history may have scrolled out of it. `shipDoor` is the outbound
+ * door it is staged at or loaded on (W10), with its trailer's time.
  */
 export function OrderDetail(props: {
   order: WmsOrderView | undefined;
@@ -74,6 +75,7 @@ export function OrderDetail(props: {
   time: ClockShape;
   /** The destination country's goodwill (slice 8), or null if unknown. */
   goodwill: number | null;
+  shipDoor?: WmsShipDoorView | undefined;
   onBack: () => void;
   selectedLine: number | null;
   onSelectLine: (no: number) => void;
@@ -117,6 +119,10 @@ export function OrderDetail(props: {
               {o.late && ' LATE'}
             </Field>
             <Field label="Created">{clock(o.created, time)}</Field>
+            <Field label="Door">
+              {o.door === 0 ? '—' : `S${o.door}`}
+              {o.open && props.shipDoor !== undefined && (o.status === 'STAGED' || o.status === 'LOADED') && <span className="muted"> · {o.status === 'LOADED' ? 'leaves' : 'trailer'} {clock(props.shipDoor.departs, time)}</span>}
+            </Field>
             <Field label="Lines">
               {o.linesPicked}/{o.linesTotal}
             </Field>
@@ -156,7 +162,7 @@ export function OrderDetail(props: {
           {chosen !== undefined && props.lineActions?.(chosen)}
           <h4 className="wms-subhead">Activity</h4>
           {props.events.length > 0 && <EventLines events={props.events} time={time} />}
-          <p className="wms-note">The log keeps the latest 200 events of the whole WMS; older ones for this order have scrolled out.</p>
+          <p className="wms-note">The log keeps the latest 400 events of the whole WMS; older ones for this order have scrolled out.</p>
         </div>
       )}
     </div>

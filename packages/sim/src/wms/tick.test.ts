@@ -225,7 +225,10 @@ describe('WMS order flow (slice 2)', () => {
     const staged = (no: number, sku: number) => order(no, [{ ...line(1, sku, big), allocated: big, picked: big, status: 'PICKED' }], { status: 'STAGED', door: 1 });
     const w = withTunables({ wmsStartReceivers: 2 }, () => wms([staged(1, 0), staged(2, 1)], {}, { nextWaveAt: 1e9 }));
     w.shipDoors = [{ door: 1, trailer: 1, departs: 10_000 }];
-    for (const o of w.orders) w.tasks.push({ no: w.nextTaskNo, kind: 'LOAD', ref: o.no, line: 0, sku: -1, bin: shipDoorAt(1), qty: big, done: 0, status: 'OPEN', worker: 0, created: 0, started: 0, finished: 0 }), (w.nextTaskNo += 1);
+    for (const o of w.orders) {
+      w.tasks.push({ no: w.nextTaskNo, kind: 'LOAD', ref: o.no, line: 0, sku: -1, bin: shipDoorAt(1), qty: big, done: 0, status: 'OPEN', worker: 0, created: 0, started: 0, finished: 0 });
+      w.nextTaskNo += 1;
+    }
     run(w, 0, 3);
     const active = w.tasks.filter((t) => t.status === 'ACTIVE');
     expect(active.map((t) => t.ref)).toEqual([1]);

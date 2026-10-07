@@ -2,7 +2,7 @@ import type { WmsAction, WmsOrderStatus } from '@warehouse/contracts';
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
 import { isClosed } from './catalog.ts';
 import { addDoor, addShipDoor, doorCost, fullPolicy, hire, hireCost, moveWorker, policyProblem, setPolicy, shipDoorCost } from './policy.ts';
-import { freeWorker, lineTask, loadTask, newTask, releaseTask, startTask } from './tasks.ts';
+import { freeWorker, lineTask, loadTask, newTask, releaseTask, requeue, startTask } from './tasks.ts';
 import { findOrder, log, releaseWave, type MLine, type MOrder, type MWms } from './tick.ts';
 
 export type WmsActionResult = { readonly ok: true; readonly order: number; readonly cents: number } | { readonly ok: false; readonly reason: string };
@@ -103,6 +103,7 @@ export function wmsAction(w: MWms, a: WmsAction, tick: number, cash: number): Wm
     case 'priority': {
       if (o.priority === a.priority) return fail(`Already P${a.priority}`);
       o.priority = a.priority;
+      requeue(w, 'pick');
       log(w, { tick, code: 'PRIO', order: o.no, qty: a.priority });
       return { ok: true, order: o.no, cents: 0 };
     }
@@ -123,6 +124,8 @@ export function wmsAction(w: MWms, a: WmsAction, tick: number, cash: number): Wm
       o.status = back;
       o.held = null;
       if (TIMED.has(back)) o.next = tick + delayFor(back);
+      requeue(w, 'pick');
+      requeue(w, 'receive');
       log(w, { tick, code: 'UNHOLD', order: o.no });
       return { ok: true, order: o.no, cents: 0 };
     }
@@ -173,6 +176,7 @@ export function wmsAction(w: MWms, a: WmsAction, tick: number, cash: number): Wm
       o.expedited = true;
       o.priority = 1;
       o.shipBy += T.wmsExpediteLeadTicks.value;
+      requeue(w, 'pick');
       log(w, { tick, code: 'EXPEDITE', order: o.no, qty: cost });
       return { ok: true, order: o.no, cents: cost };
     }
