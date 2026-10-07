@@ -4,9 +4,9 @@ import { hashState } from '../hash.ts';
 import { createWarehouse } from '../state.ts';
 import { advanceMany, step } from '../step.ts';
 import { WAREHOUSE_TUNABLES } from '../tunables.ts';
-import { WMS_FIRST_PO_NO, WMS_SKUS, WMS_SUPPLIERS } from './catalog.ts';
+import { WMS_FIRST_PO_NO, WMS_SKUS, WMS_SUPPLIERS, travelBays } from './catalog.ts';
 import { createWms } from './generate.ts';
-import { cycleCount, inboundUnits, planReorders, stepInbound, waitingUnits } from './inbound.ts';
+import { bookSlot, cycleCount, inboundUnits, planReorders, stepInbound, waitingUnits } from './inbound.ts';
 import { cloneWms, type MWms } from './mutable.ts';
 import { Roller } from './orders.ts';
 import { wmsStep } from './tick.ts';
@@ -33,29 +33,38 @@ const CALM = { wmsPoLateChanceBp: 0, wmsRcvShortChanceBp: 0, wmsDamageChanceBp: 
 
 /** A quiet WMS: every SKU holds `full` units unless set, no orders, no clocks firing unless asked. */
 function wms(onHand: Record<number, number> = {}, extra: Partial<WmsState> = {}, full = 1000): MWms {
-  const base = createWms({ seed: 1, tick: 0, contract: 0 });
+  const base = createWms({ seed: 1, tick: 0 });
   const inventory = base.inventory.map((s) => ({ ...s, bin: s.sku * 37, onHand: onHand[s.sku] ?? full, allocated: 0 }));
   return cloneWms({ ...base, orders: [], inventory, events: [], nextOrderAt: 1e9, nextWaveAt: 1e9, nextReplenAt: 1e9, nextCountAt: 1e9, ...extra });
 }
 
 function poLine(no: number, sku: number, expected: number, extra: Partial<WmsPoLine> = {}): WmsPoLine {
-  return { no, sku, bin: sku * 37, expected, received: 0, damaged: 0, short: 0, status: 'OPEN', putAt: 0, ...extra };
+  return { no, sku, bin: sku * 37, expected, received: 0, damaged: 0, short: 0, status: 'OPEN', ...extra };
 }
 
 function po(no: number, lines: WmsPoLine[], extra: Partial<WmsPo> = {}): WmsPo {
-  return { no, supplier: 0, status: 'IN TRANSIT', lines, created: 0, eta: 0, arrive: 0, arrived: 0, door: 0, closed: 0, late: false, ...extra };
+  return { no, supplier: 0, status: 'IN TRANSIT', lines, created: 0, appt: 0, arrive: 0, arrived: 0, door: 0, closed: 0, late: false, ...extra };
 }
 
 function roller(w: MWms): Roller {
   return new Roller(w.rng);
 }
 
-/** Steps the inbound side alone from tick `from`, `steps` times. Returns the tick after. */
+/** Steps the inbound side alone (no workers) from tick `from`, `steps` times. Returns the tick after. */
 function run(w: MWms, from: number, steps: number): number {
-  const r = roller(w);
   let tick = from;
   for (let i = 0; i < steps; i++) {
-    stepInbound(w, r, tick);
+    stepInbound(w, tick);
+    tick += STEP;
+  }
+  return tick;
+}
+
+/** Steps the whole WMS (the workers receive and put away) from tick `from`, `steps` times. Returns the tick after. */
+function work(w: MWms, from: number, steps: number): number {
+  let tick = from;
+  for (let i = 0; i < steps; i++) {
+    wmsStep(w, tick);
     tick += STEP;
   }
   return tick;
@@ -77,9 +86,13 @@ describe('WMS reorder planning (W6)', () => {
       ]);
       for (const p of w.pos) {
         expect(p.status).toBe('IN TRANSIT');
-        expect(p.eta - 100).toBeGreaterThanOrEqual(T.wmsPoLeadMinTicks.value);
-        expect(p.eta - 100).toBeLessThanOrEqual(T.wmsPoLeadMaxTicks.value);
-        expect(p.arrive).toBe(p.eta);
+        // Booked into the first appointment slot after the lead time.
+        expect(p.appt % T.wmsApptSlotTicks.value).toBe(0);
+        expect(p.appt - 100).toBeGreaterThanOrEqual(T.wmsPoLeadMinTicks.value);
+        expect(p.appt - 100).toBeLessThan(T.wmsPoLeadMaxTicks.value + T.wmsApptSlotTicks.value);
+        // On time: up to wmsPoEarlyMaxTicks early.
+        expect(p.appt - p.arrive).toBeGreaterThanOrEqual(0);
+        expect(p.appt - p.arrive).toBeLessThanOrEqual(T.wmsPoEarlyMaxTicks.value);
       }
       expect(w.nextPoNo).toBe(WMS_FIRST_PO_NO + 2);
       expect(w.events.filter((e) => e.code === 'PO CRT').map((e) => [e.order, e.qty, e.of])).toEqual([
@@ -100,7 +113,7 @@ describe('WMS reorder planning (W6)', () => {
 
   it('nets out what order lines are waiting for, NEW orders included, but not lines of orders past picking', () => {
     const line = (sku: number, ordered: number, status: WmsLine['status'] = 'OPEN'): WmsLine => ({ no: 1, sku, bin: 0, ordered, allocated: 0, picked: 0, short: 0, status });
-    const order = (status: WmsOrder['status'], lines: WmsLine[]): WmsOrder => ({ no: 1, dest: 0, source: 0, priority: 3, wave: 0, status, lines, shipBy: 1e6, created: 0, next: 0, late: false, held: null, closed: 0, expedited: false });
+    const order = (status: WmsOrder['status'], lines: WmsLine[]): WmsOrder => ({ no: 1, dest: 0, customer: 0, priority: 3, wave: 0, status, lines, shipBy: 1e6, created: 0, next: 0, late: false, held: null, closed: 0, expedited: false });
     const w = wms({}, { orders: [order('NEW', [line(5, 30)]), order('BACKORDER', [line(5, 20, 'SHORT')]), order('PACKED', [line(5, 99, 'SHORT')])] });
     expect(waitingUnits(w)[5]).toBe(50);
     w.inventory[5]!.onHand = ROP + 49;
@@ -108,96 +121,131 @@ describe('WMS reorder planning (W6)', () => {
     expect(w.pos.flatMap((p) => p.lines).map((l) => [l.sku, l.expected])).toEqual([[5, Q + 1]]);
   });
 
-  it('a share of trucks are late: PO LATE once the ETA passes, then they arrive', () => {
+  it('books no more trucks into a slot than the warehouse has doors', () => {
+    withTunables({ ...CALM, wmsPoLeadMinTicks: 120, wmsPoLeadMaxTicks: 120 }, () => {
+      // Eight suppliers short at once, two doors: two POs a slot, in four slots.
+      const w = wms({}, {}, 0);
+      planReorders(w, roller(w), 0);
+      expect(w.pos).toHaveLength(WMS_SUPPLIERS.length);
+      const slot = T.wmsApptSlotTicks.value;
+      const at = [...new Set(w.pos.map((p) => p.appt))];
+      expect(at).toEqual([1, 2, 3, 4].map((k) => Math.ceil(120 / slot) * slot + (k - 1) * slot));
+      for (const a of at) expect(w.pos.filter((p) => p.appt === a)).toHaveLength(w.doors);
+      expect(bookSlot(w, at[0]!)).toBe(at[3]! + slot);
+    });
+  });
+
+  it('a share of trucks miss their appointment: PO LATE once it passes, then they arrive', () => {
     withTunables({ ...CALM, wmsPoLateChanceBp: 10_000 }, () => {
       const w = wms({ 4: 0 });
       planReorders(w, roller(w), 0);
       const p = w.pos[0]!;
-      expect(p.arrive - p.eta).toBeGreaterThanOrEqual(40);
-      expect(p.arrive - p.eta).toBeLessThanOrEqual(T.wmsPoLateMaxTicks.value);
+      expect(p.arrive - p.appt).toBeGreaterThanOrEqual(40);
+      expect(p.arrive - p.appt).toBeLessThanOrEqual(T.wmsPoLateMaxTicks.value);
       run(w, 0, Math.ceil(p.arrive / STEP) + 1);
       expect(p.late).toBe(true);
       expect(w.inbound.posLate).toBe(1);
       const late = w.events.find((e) => e.code === 'PO LATE');
       const arrived = w.events.find((e) => e.code === 'ARRIVE');
-      expect(late?.tick).toBeGreaterThan(p.eta);
+      expect(late?.tick).toBeGreaterThan(p.appt);
       expect(arrived?.tick).toBeGreaterThan(late?.tick ?? 0);
       expect(p.arrived).toBe(arrived?.tick);
     });
   });
 });
 
-describe('WMS receiving and put-away (W6)', () => {
-  it('a truck arrives on its ETA, docks at a free door and is received at the receiving rate', () => {
+describe('WMS receiving and put-away: tasks for the receivers (W6, W8)', () => {
+  const FLAT = { ...CALM, wmsWalkTicksPerBay: 0 } as const;
+
+  it('a truck docks at a free door, and its lines become RECEIVE tasks at the dock', () => {
     withTunables(CALM, () => {
-      const perStep = Math.floor((T.wmsReceiveMilliPerSec.value * STEP * T.tickMs.value) / 1000) / 1000;
-      const units = 10 * perStep;
-      const w = wms({}, { pos: [po(1, [poLine(1, 0, units)], { eta: 8, arrive: 8 }) as WmsPo] });
+      const w = wms({}, { pos: [po(1, [poLine(1, 0, 40), poLine(2, 1, 30)], { appt: 8, arrive: 8 }) as WmsPo] });
       run(w, 0, 3);
       const p = w.pos[0]!;
-      expect(p.status).toBe('RECEIVING');
-      expect(p.door).toBe(1);
+      expect(p).toMatchObject({ status: 'RECEIVING', door: 1, arrived: 8 });
       expect(codes(w)).toEqual(['ARRIVE', 'DOCK']);
-      expect(w.receivers[0]).toMatchObject({ po: 1, line: 1 });
-      run(w, 12, 4);
-      expect(p.lines[0]!.received).toBe(4 * perStep);
-      expect(p.lines[0]!.status).toBe('RECEIVING');
-      run(w, 28, 6);
-      expect(p.lines[0]).toMatchObject({ status: 'RECEIVED', received: units, short: 0, damaged: 0 });
-      expect(p.status).toBe('PUTAWAY');
-      expect(w.events.find((e) => e.code === 'RCV')).toMatchObject({ order: 1, line: 1, sku: 0, qty: units, of: units, picker: 1 });
+      expect(w.tasks.map((t) => [t.kind, t.ref, t.line, t.bin, t.qty, t.status])).toEqual([
+        ['RECEIVE', 1, 1, -1, 40, 'OPEN'],
+        ['RECEIVE', 1, 2, -1, 30, 'OPEN'],
+      ]);
     });
   });
 
-  it('put-away puts the units in the bin after a delay, then the PO closes', () => {
+  it('a receiver counts a line in at the receiving rate, then the WMS makes a PUTAWAY task for it', () => {
+    withTunables(FLAT, () => {
+      const perStep = Math.floor((T.wmsReceiveMilliPerSec.value * STEP * T.tickMs.value) / 1000) / 1000;
+      const units = 10 * perStep;
+      const w = wms({}, { pos: [po(1, [poLine(1, 0, units)], { appt: 0, arrive: 0 }) as WmsPo] });
+      work(w, 0, 1);
+      const receiver = w.workers.find((x) => x.role === 'receive')!;
+      expect(receiver.task).toBe(w.tasks[0]!.no);
+      expect(w.pos[0]!.lines[0]!.status).toBe('RECEIVING');
+      work(w, STEP, 4);
+      expect(w.pos[0]!.lines[0]!.received).toBe(4 * perStep);
+      work(w, 5 * STEP, 6);
+      expect(w.pos[0]!.lines[0]).toMatchObject({ status: 'RECEIVED', received: units, short: 0, damaged: 0 });
+      // The door frees at the next step.
+      work(w, 11 * STEP, 1);
+      expect(w.pos[0]!.status).toBe('PUTAWAY');
+      expect(w.events.find((e) => e.code === 'RCV')).toMatchObject({ order: 1, line: 1, sku: 0, qty: units, of: units, picker: receiver.id });
+      expect(w.tasks.map((t) => [t.kind, t.status])).toEqual([
+        ['RECEIVE', 'DONE'],
+        ['PUTAWAY', expect.stringMatching(/QUEUED|ACTIVE/)],
+      ]);
+      expect(w.tasks[1]).toMatchObject({ ref: 1, line: 1, bin: 0, qty: units });
+    });
+  });
+
+  it('a put-away walks the line to its bin and sets it down; then the units can be picked and the PO closes', () => {
     withTunables(CALM, () => {
-      const w = wms({ 0: 5 }, { pos: [po(1, [poLine(1, 0, 4)], { eta: 0, arrive: 0 }) as WmsPo] });
-      const end = run(w, 0, 2);
-      const line = w.pos[0]!.lines[0]!;
-      expect(line.status).toBe('RECEIVED');
-      expect(w.inventory[0]!.onHand).toBe(5);
-      run(w, end, T.wmsPutawayTicks.value / STEP + 1);
-      expect(line.status).toBe('STORED');
-      expect(w.inventory[0]!.onHand).toBe(9);
-      expect(w.pos[0]!.status).toBe('CLOSED');
+      const w = wms({ 9: 5 }, { pos: [po(1, [poLine(1, 9, 4)], { appt: 0, arrive: 0 }) as WmsPo] });
+      let tick = 0;
+      while (w.pos[0]!.lines[0]!.status !== 'RECEIVED') tick = work(w, tick, 1);
+      const putaway = w.tasks.find((t) => t.kind === 'PUTAWAY')!;
+      expect(w.inventory[9]!.onHand).toBe(5);
+      while (w.pos[0]!.status !== 'CLOSED') tick = work(w, tick, 1);
+      const worker = w.workers.find((x) => x.id === putaway.worker)!;
+      expect(putaway).toMatchObject({ status: 'DONE', done: 4 });
+      // The walk out to the bin (aisle A, bay 5 from the dock), then setting it down.
+      expect(putaway.finished - putaway.started).toBeGreaterThanOrEqual(travelBays(-1, 9 * 37) * T.wmsWalkTicksPerBay.value + T.wmsPutawayDropTicks.value - STEP);
+      expect(worker.at).toBe(9 * 37);
+      expect(w.inventory[9]!.onHand).toBe(9);
       expect(w.inbound).toMatchObject({ posClosed: 1, unitsReceived: 4 });
       expect(codes(w).slice(-2)).toEqual(['PUTAWAY', 'PO CLOSE']);
+      expect(w.events.find((e) => e.code === 'PUTAWAY')?.picker).toBe(worker.id);
     });
   });
 
-  it('with every door busy, a truck waits in the yard until one frees', () => {
-    withTunables({ ...CALM, wmsDockDoors: 1 }, () => {
-      const w = wms({}, { pos: [po(1, [poLine(1, 0, 8)]), po(2, [poLine(1, 1, 8)])] as WmsPo[] });
-      run(w, 0, 1);
-      expect(w.pos.map((p) => [p.status, p.door])).toEqual([
-        ['RECEIVING', 1],
-        ['ARRIVED', 0],
-      ]);
-      run(w, STEP, 3);
-      expect(w.pos.map((p) => [p.status, p.door])).toEqual([
-        ['PUTAWAY', 1],
-        ['RECEIVING', 1],
-      ]);
-    });
+  it('with every door busy, a truck waits in the yard, earliest appointment first', () => {
+    const w = wms({}, { doors: 1, pos: [po(1, [poLine(1, 0, 8)], { appt: 120 }), po(2, [poLine(1, 1, 8)], { appt: 240 }), po(3, [poLine(1, 2, 8)], { appt: 120 })] as WmsPo[] });
+    run(w, 0, 1);
+    expect(w.pos.map((p) => [p.status, p.door])).toEqual([
+      ['RECEIVING', 1],
+      ['ARRIVED', 0],
+      ['ARRIVED', 0],
+    ]);
+    w.pos[0]!.lines[0]!.status = 'STORED';
+    run(w, STEP, 1);
+    expect(w.pos.map((p) => p.status)).toEqual(['CLOSED', 'ARRIVED', 'RECEIVING']);
   });
 
-  it('receivers each take one line, oldest truck first', () => {
-    withTunables({ ...CALM, wmsReceivers: 2 }, () => {
-      const base = wms({}, { pos: [po(7, [poLine(1, 0, 99), poLine(2, 1, 99), poLine(3, 2, 99)])] as WmsPo[] });
-      const w = cloneWms({ ...base, receivers: base.receivers.slice(0, 2) });
-      run(w, 0, 1);
-      expect(w.receivers.map((r) => [r.po, r.line])).toEqual([
-        [7, 1],
-        [7, 2],
-      ]);
-      expect(w.pos[0]!.lines.map((l) => l.status)).toEqual(['RECEIVING', 'RECEIVING', 'OPEN']);
+  it('receivers share a truck’s lines, one task each, lowest id first', () => {
+    withTunables(CALM, () => {
+      const w = wms({}, { pos: [po(7, [poLine(1, 0, 99), poLine(2, 1, 99), poLine(3, 2, 99), poLine(4, 3, 99)])] as WmsPo[] });
+      work(w, 0, 1);
+      const receivers = w.workers.filter((x) => x.role === 'receive');
+      const lineOf = (no: number): number | undefined => w.tasks.find((t) => t.no === no)?.line;
+      expect(receivers.map((x) => lineOf(x.task))).toEqual([1, 2, 3]);
+      expect(receivers.map((x) => x.queue.map(lineOf))).toEqual([[4], [], []]);
+      expect(w.pos[0]!.lines.map((l) => l.status)).toEqual(['RECEIVING', 'RECEIVING', 'RECEIVING', 'OPEN']);
     });
   });
 
   it('a supplier short or damaged units: logged in red, never put away', () => {
     withTunables({ ...CALM, wmsRcvShortChanceBp: 10_000, wmsDamageChanceBp: 10_000 }, () => {
       const w = wms({ 0: 0 }, { pos: [po(1, [poLine(1, 0, 40)])] as WmsPo[] });
-      run(w, 0, 12 + T.wmsPutawayTicks.value / STEP + 1);
+      let tick = 0;
+      while (w.pos[0]!.status !== 'CLOSED') tick = work(w, tick, 1);
       const line = w.pos[0]!.lines[0]!;
       expect(line.short).toBeGreaterThanOrEqual(1);
       expect(line.short).toBeLessThanOrEqual(10);
@@ -211,10 +259,10 @@ describe('WMS receiving and put-away (W6)', () => {
   });
 
   it('closed POs beyond the keep limit drop off', () => {
-    withTunables({ ...CALM, wmsKeepClosedPos: 2, wmsPutawayTicks: 0 }, () => {
+    withTunables({ ...CALM, wmsKeepClosedPos: 2 }, () => {
       const pos = [1, 2, 3, 4].map((no) => po(no, [poLine(1, 0, 1)]));
       const w = wms({}, { pos });
-      run(w, 0, 12);
+      work(w, 0, 60);
       expect(w.pos.map((p) => [p.no, p.status])).toEqual([
         [3, 'CLOSED'],
         [4, 'CLOSED'],
@@ -278,7 +326,7 @@ describe('WMS inbound in the warehouse (W6)', () => {
   it('a new warehouse raises its first POs at its first WMS step', () => {
     const s = createWarehouse({ seed: 4 });
     expect(s.wms.pos).toEqual([]);
-    expect(s.wms.receivers).toHaveLength(T.wmsReceivers.value);
+    expect(s.wms.workers.filter((x) => x.role === 'receive')).toHaveLength(T.wmsStartReceivers.value);
     const after = advanceMany(s, STEP);
     expect(after.wms.pos.length).toBeGreaterThan(0);
     expect(after.wms.events.some((e) => e.code === 'PO CRT')).toBe(true);
@@ -298,7 +346,7 @@ describe('WMS inbound in the warehouse (W6)', () => {
     }
     const doors = w.pos.filter((p) => p.status === 'RECEIVING').map((p) => p.door);
     expect(new Set(doors).size).toBe(doors.length);
-    expect(doors.length).toBeLessThanOrEqual(T.wmsDockDoors.value);
+    expect(doors.length).toBeLessThanOrEqual(w.doors);
   });
 
   it('catching up equals stepping one tick at a time (P4)', () => {
@@ -310,7 +358,7 @@ describe('WMS inbound in the warehouse (W6)', () => {
 
   it('wmsStep runs planning, inbound and counts on their clocks', () => {
     const w = wms({ 0: 0 }, { nextReplenAt: 0, nextCountAt: 0 });
-    wmsStep(w, 0, 0);
+    wmsStep(w, 0);
     expect(w.pos).toHaveLength(1);
     expect(w.nextReplenAt).toBe(T.wmsReplenTicks.value);
     expect(w.inbound.counts).toBe(1);

@@ -8,7 +8,7 @@ import { warehouseCommandProblem } from '../commands.ts';
 import { binPlace, travelBays } from './catalog.ts';
 import { wmsAction } from './actions.ts';
 import { createWms } from './generate.ts';
-import { defaultPolicy, wmsCrew } from './policy.ts';
+import { defaultPolicy } from './policy.ts';
 import { cloneWms, walkTicks, wmsStep, type MWms } from './tick.ts';
 import { eventText, wmsView } from './view.ts';
 
@@ -32,26 +32,33 @@ function line(no: number, sku: number, ordered: number, bin = sku * 37): WmsLine
 }
 
 function order(no: number, lines: WmsLine[], extra: Partial<WmsOrder> = {}): WmsOrder {
-  return { no, dest: 0, source: 0, priority: 3, wave: 0, status: 'NEW', lines, shipBy: 100_000, created: 0, next: 0, late: false, held: null, closed: 0, expedited: false, ...extra };
+  return { no, dest: 0, customer: 0, priority: 3, wave: 0, status: 'NEW', lines, shipBy: 100_000, created: 0, next: 0, late: false, held: null, closed: 0, expedited: false, ...extra };
 }
 
 /** A quiet WMS: these orders and stock (each SKU in bin 37 x SKU), no arrivals or replenishment, the first wave due now. */
 function wms(orders: WmsOrder[], onHand: Record<number, number>, extra: Partial<WmsState> = {}): MWms {
-  const base = createWms({ seed: 1, tick: 0, contract: 0 });
+  const base = createWms({ seed: 1, tick: 0 });
   const inventory: WmsStock[] = base.inventory.map((s) => ({ ...s, bin: s.sku * 37, onHand: onHand[s.sku] ?? 0, allocated: 0 }));
   return cloneWms({ ...base, orders, inventory, events: [], nextOrderAt: 1e9, nextWaveAt: 0, nextReplenAt: 1e9, nextCountAt: 1e9, ...extra });
 }
 
+/** The order a worker is working on; 0 for none. */
+function orderOf(w: MWms, worker: MWms['workers'][number] | undefined): number {
+  return w.tasks.find((t) => t.no === worker?.task)?.ref ?? 0;
+}
+
+const CREW = T.wmsStartPickers.value + T.wmsStartReceivers.value;
+
 function run(w: MWms, from: number, steps: number): number {
   let tick = from;
   for (let i = 0; i < steps; i++) {
-    wmsStep(w, tick, 0);
+    wmsStep(w, tick);
     tick += STEP;
   }
   return tick;
 }
 
-describe('walking between bins (RULES 16, W7)', () => {
+describe('walking between bins (RULES 8, W7)', () => {
   it('bins sit in four aisles of 20 bays; the pick-and-drop point is at the front of aisle A', () => {
     expect(binPlace(0)).toEqual({ aisle: 0, bay: 1 });
     expect(binPlace(8)).toEqual({ aisle: 0, bay: 2 });
@@ -72,25 +79,29 @@ describe('walking between bins (RULES 16, W7)', () => {
   it('a picker walks to the line’s bin before it picks: the walk is in its state and the view', () => {
     const w = withTunables({ wmsShortPickChanceBp: 0, wmsWalkTicksPerBay: 2 }, () => {
       const m = wms([order(1, [line(1, 0, 4, 80)])], { 0: 10 });
-      wmsStep(m, 0, 0);
-      const p = m.pickers[0];
-      expect(p).toMatchObject({ order: 1, line: 1, at: 80, walk: walkTicks(-1, 80), progress: 0 });
+      wmsStep(m, 0);
+      const p = m.workers[0];
+      expect(p).toMatchObject({ at: 80, walk: walkTicks(-1, 80), progress: 0 });
+      expect(orderOf(m, p)).toBe(1);
       expect(walkTicks(-1, 80)).toBe(22);
-      const v = wmsView(m, 1, ['Local'], 100);
-      expect(v.pickers[0]).toMatchObject({ order: 1, at: 80, aisle: 0, bay: 11, walk: 22, picked: 0, units: 4, priority: 3 });
+      const v = wmsView(m, 1);
+      expect(v.workers[0]).toMatchObject({ state: 'walking', at: 80, aisle: 0, bay: 11, walk: 22, pct: 0 });
+      expect(v.workers[0]?.task).toMatchObject({ kind: 'PICK', order: 1, ref: 'O-1/L1', where: 'A-11-1A', qty: 4, done: 0, priority: 3 });
       // 22 ticks of walking take 6 steps (whole seconds); no unit is picked meanwhile.
       run(m, STEP, 6);
-      expect(m.pickers[0]?.walk).toBe(0);
-      expect(m.pickers[0]?.progress).toBe(0);
+      expect(m.workers[0]?.walk).toBe(0);
+      expect(m.workers[0]?.progress).toBe(0);
+      expect(m.workers[0]?.stats.walking).toBe(6 * STEP);
       run(m, 7 * STEP, 1);
-      expect(m.pickers[0]?.progress).toBeGreaterThan(0);
+      expect(m.workers[0]?.progress).toBeGreaterThan(0);
+      expect(m.workers[0]?.stats.busy).toBe(STEP);
       return m;
     });
     expect(w.orders[0]?.lines[0]?.status).toBe('PICKING');
   });
 });
 
-describe('the pick order (RULES 16, W7)', () => {
+describe('the pick order (RULES 8, W7)', () => {
   const orders = (): WmsOrder[] => [
     order(1, [line(1, 0, 5, 150)], { priority: 3, shipBy: 50 }),
     order(2, [line(1, 1, 5, 9)], { priority: 1, shipBy: 900 }),
@@ -99,10 +110,10 @@ describe('the pick order (RULES 16, W7)', () => {
   const first = (pick: 'priority' | 'cutoff' | 'nearest'): number[] => {
     const w = wms(orders(), { 0: 9, 1: 9, 2: 9 });
     w.policy = { ...w.policy, pick };
-    w.pickers = w.pickers.slice(0, 1);
-    w.pickers[0] = { ...w.pickers[0], at: 160 } as MWms['pickers'][number];
-    wmsStep(w, 0, 0);
-    return w.pickers.map((p) => p.order);
+    w.workers = w.workers.slice(0, 1);
+    w.workers[0] = { ...w.workers[0], at: 160 } as MWms['workers'][number];
+    wmsStep(w, 0);
+    return w.workers.map((p) => orderOf(w, p));
   };
 
   it('priority first takes the P1; cutoff first the earliest ship-by; nearest bin the shortest walk', () => {
@@ -113,15 +124,17 @@ describe('the pick order (RULES 16, W7)', () => {
     // From B-19 (bin 308), bin 300 is the next bay.
     const w = wms(orders(), { 0: 9, 1: 9, 2: 9 });
     w.policy = { ...w.policy, pick: 'nearest' };
-    w.pickers = w.pickers.slice(0, 1);
-    w.pickers[0] = { ...w.pickers[0], at: 308 } as MWms['pickers'][number];
-    wmsStep(w, 0, 0);
-    expect(w.pickers[0]?.order).toBe(3);
+    w.workers = w.workers.slice(0, 1);
+    w.workers[0] = { ...w.workers[0], at: 308 } as MWms['workers'][number];
+    wmsStep(w, 0);
+    expect(orderOf(w, w.workers[0])).toBe(3);
+    // Its queue goes on from where it will stand: from bin 300 (B-18), bin 9 (A-02) is 18 + 3 + 2 bays, bin 150 (A-19) 18 + 3 + 19.
+    expect(w.workers[0]?.queue.map((no) => w.tasks.find((t) => t.no === no)?.ref)).toEqual([2, 1]);
   });
 
   it('stock goes to the most urgent order first, whatever its number', () => {
     const w = wms([order(1, [line(1, 0, 6)], { priority: 3 }), order(2, [line(1, 0, 6)], { priority: 1 })], { 0: 6 });
-    wmsStep(w, 0, 0);
+    wmsStep(w, 0);
     expect(w.orders.map((o) => o.lines[0]?.allocated)).toEqual([0, 6]);
     expect(w.orders.map((o) => o.status)).toEqual(['BACKORDER', 'PICKING']);
   });
@@ -132,7 +145,7 @@ describe('the pick order (RULES 16, W7)', () => {
         const backlog = Array.from({ length: 40 }, (_, i) => order(i + 1, [line(1, i % 16, 6), line(2, (i * 7 + 3) % 16, 6)], { priority: ((i % 3) + 1) as 1 | 2 | 3 }));
         const w = wms(backlog, Object.fromEntries(Array.from({ length: 16 }, (_, k) => [k, 999])));
         w.policy = { ...w.policy, pick };
-        w.pickers = w.pickers.slice(0, 2);
+        w.workers = w.workers.slice(0, 2);
         run(w, 0, 300);
         return w.stats.linesPicked;
       });
@@ -140,66 +153,65 @@ describe('the pick order (RULES 16, W7)', () => {
   });
 });
 
-describe('release (RULES 16, W7)', () => {
+describe('release (RULES 8, W7)', () => {
   it('continuous releases each NEW order the step it arrives; manual never releases on its own', () => {
     const cont = wms([order(1, [line(1, 0, 4)])], { 0: 10 }, { nextWaveAt: 1e9 });
     cont.policy = { ...cont.policy, release: 'continuous' };
-    wmsStep(cont, 0, 0);
+    wmsStep(cont, 0);
     expect(cont.orders[0]?.wave).toBe(1);
     const manual = wms([order(1, [line(1, 0, 4)])], { 0: 10 });
     manual.policy = { ...manual.policy, release: 'manual' };
     run(manual, 0, 600);
     expect(manual.orders[0]?.status).toBe('NEW');
-    expect(wmsAction(manual, { action: 'release', orders: [1] }, 600 * STEP, 0, 100).ok).toBe(true);
+    expect(wmsAction(manual, { action: 'release', orders: [1] }, 600 * STEP, 0).ok).toBe(true);
     expect(manual.orders[0]?.status).toBe('RELEASED');
   });
 
   it('back to timed waves, the next wave is a full interval away', () => {
     const w = wms([], {}, { nextWaveAt: 0 });
     w.policy = { ...w.policy, release: 'manual' };
-    expect(wmsAction(w, { action: 'policy', policy: { ...w.policy, release: 'waves' } }, 1000, 0, 100).ok).toBe(true);
+    expect(wmsAction(w, { action: 'policy', policy: { ...w.policy, release: 'waves' } }, 1000, 0).ok).toBe(true);
     expect(w.nextWaveAt).toBe(1000 + T.wmsWaveTicks.value);
   });
 });
 
-describe('the plan as a command (RULES 16, W7)', () => {
-  it('the crew is pickers plus receivers; moving people frees the lines they leave', () => {
-    expect(wmsCrew()).toBe(T.wmsPickers.value + T.wmsReceivers.value);
+describe('the plan as a command (RULES 8, W7)', () => {
+  it('moving people between picking and receiving changes roles, highest ids first, and frees the work they leave', () => {
     const w = wms([order(1, [line(1, 0, 4), line(2, 1, 4)])], { 0: 10, 1: 10 });
-    w.pickers = w.pickers.slice(0, 2);
-    w.policy = { ...w.policy, pickers: 2 };
-    const po: WmsPo = { no: 50_001, supplier: 0, status: 'RECEIVING', lines: [{ no: 1, sku: 0, bin: 0, expected: 50, received: 12, damaged: 0, short: 0, status: 'RECEIVING', putAt: 0 }], created: 0, eta: 0, arrive: 0, arrived: 1, door: 1, closed: 0, late: false };
-    w.pos = [cloneWms({ ...createWms({ seed: 1, tick: 0, contract: 0 }), pos: [po] }).pos[0] as MWms['pos'][number]];
-    w.receivers = Array.from({ length: wmsCrew() - 2 }, (_, i) => ({ id: i + 1, po: i === wmsCrew() - 3 ? 50_001 : 0, line: i === wmsCrew() - 3 ? 1 : 0, progress: 12_000 }));
-    wmsStep(w, 0, 0);
-    expect(w.pickers.map((p) => p.order)).toEqual([1, 1]);
-    // One picker: picker 2 leaves its line, which waits again; one more receiver, none gone.
-    expect(wmsAction(w, { action: 'policy', policy: { ...w.policy, pickers: 1 } }, STEP, 0, 100).ok).toBe(true);
-    expect(w.pickers.map((p) => p.id)).toEqual([1]);
+    const po: WmsPo = { no: 50_001, supplier: 0, status: 'RECEIVING', lines: [{ no: 1, sku: 0, bin: 0, expected: 500, received: 0, damaged: 0, short: 0, status: 'OPEN' }], created: 0, appt: 0, arrive: 0, arrived: 1, door: 1, closed: 0, late: false };
+    w.pos = [cloneWms({ ...createWms({ seed: 1, tick: 0 }), pos: [po] }).pos[0] as MWms['pos'][number]];
+    w.tasks.push({ no: 99, kind: 'RECEIVE', ref: 50_001, line: 1, sku: 0, bin: -1, qty: 500, done: 0, status: 'OPEN', worker: 0, created: 0, started: 0, finished: 0 });
+    run(w, 0, 3);
+    expect(w.workers.slice(0, 2).map((p) => orderOf(w, p))).toEqual([1, 1]);
+    const counter = w.workers.find((p) => p.task === 99);
+    expect(counter?.role).toBe('receive');
+    expect(w.pos[0]?.lines[0]?.status).toBe('RECEIVING');
+    // One picker: workers 2-6 move to receiving; the line worker 2 was picking waits again.
+    expect(wmsAction(w, { action: 'policy', policy: { ...w.policy, pickers: 1 } }, 3 * STEP, 0).ok).toBe(true);
+    expect(w.workers.map((p) => p.role)).toEqual(['pick', ...Array.from({ length: CREW - 1 }, () => 'receive')]);
     expect(w.orders[0]?.lines[1]).toMatchObject({ status: 'ALLOCATED', picked: 0 });
-    expect(w.receivers.length).toBe(wmsCrew() - 1);
-    // Back to eight pickers: the last receivers leave; the line half counted in starts again.
-    expect(wmsAction(w, { action: 'policy', policy: { ...w.policy, pickers: wmsCrew() - 1 } }, 2 * STEP, 0, 100).ok).toBe(true);
-    expect(w.pickers.map((p) => p.id)).toEqual(Array.from({ length: wmsCrew() - 1 }, (_, i) => i + 1));
-    expect(w.pickers.at(-1)).toMatchObject({ order: 0, at: -1, walk: 0 });
-    expect(w.receivers.map((r) => r.id)).toEqual([1]);
+    expect(w.workers[1]).toMatchObject({ task: 0, queue: [] });
+    // Back to eight pickers: the highest-numbered receivers move (the one counting the PO line among them), so W02 stays receiving; the line starts again.
+    expect(wmsAction(w, { action: 'policy', policy: { ...w.policy, pickers: CREW - 1 } }, 4 * STEP, 0).ok).toBe(true);
+    expect(w.workers.map((p) => p.role)).toEqual(['pick', 'receive', ...Array.from({ length: CREW - 2 }, () => 'pick')]);
     expect(w.pos[0]?.lines[0]).toMatchObject({ status: 'OPEN', received: 0 });
-    expect(w.events.filter((e) => e.code === 'PLAN').map((e) => eventText(e).detail)).toEqual([`Crew: 1 picking, ${wmsCrew() - 1} receiving`, `Crew: ${wmsCrew() - 1} picking, 1 receiving`]);
+    expect(w.tasks.find((t) => t.no === 99)).toMatchObject({ status: 'OPEN', worker: 0, done: 0 });
+    expect(w.events.filter((e) => e.code === 'PLAN').map((e) => eventText(e).detail)).toEqual([`Crew: 1 picking, ${CREW - 1} receiving`, `Crew: ${CREW - 1} picking, 1 receiving`]);
   });
 
   it('refuses a plan with no one receiving or picking, an unknown rule, or no change', () => {
     const w = wms([], {});
     const p = defaultPolicy();
-    expect(wmsAction(w, { action: 'policy', policy: { ...p, pickers: 0 } }, 0, 0, 100)).toEqual({ ok: false, reason: `Pickers must be 1 to ${wmsCrew() - 1}` });
-    expect(wmsAction(w, { action: 'policy', policy: { ...p, pickers: wmsCrew() } }, 0, 0, 100).ok).toBe(false);
-    expect(wmsAction(w, { action: 'policy', policy: { ...p, pick: 'random' as never } }, 0, 0, 100).ok).toBe(false);
-    expect(wmsAction(w, { action: 'policy', policy: p }, 0, 0, 100)).toEqual({ ok: false, reason: 'No change to the plan' });
+    expect(wmsAction(w, { action: 'policy', policy: { ...p, pickers: 0 } }, 0, 0)).toEqual({ ok: false, reason: `Pickers must be 1 to ${CREW - 1}` });
+    expect(wmsAction(w, { action: 'policy', policy: { ...p, pickers: CREW } }, 0, 0).ok).toBe(false);
+    expect(wmsAction(w, { action: 'policy', policy: { ...p, pick: 'random' as never } }, 0, 0).ok).toBe(false);
+    expect(wmsAction(w, { action: 'policy', policy: p }, 0, 0)).toEqual({ ok: false, reason: 'No change to the plan' });
     expect(w.events).toEqual([]);
   });
 
   it('logs one PLAN line per setting changed, in words', () => {
     const w = wms([], {});
-    wmsAction(w, { action: 'policy', policy: { ...defaultPolicy(), pick: 'nearest', release: 'continuous' } }, 0, 0, 100);
+    wmsAction(w, { action: 'policy', policy: { ...defaultPolicy(), pick: 'nearest', release: 'continuous' } }, 0, 0);
     expect(w.events.map((e) => eventText(e).detail)).toEqual(['Pick order: Nearest bin', 'Release: Continuous']);
   });
 
@@ -212,15 +224,15 @@ describe('the plan as a command (RULES 16, W7)', () => {
     const r = step(start, [{ tick: 0, type: 'wms', payload: { action: 'policy', policy: plan } }]);
     expect(r.events).toContainEqual(expect.objectContaining({ type: 'wms', payload: { action: 'policy', order: 0, cents: 0 } }));
     expect(r.state.wms.policy).toEqual(plan);
-    expect(r.state.wms.pickers.length).toBe(7);
-    expect(r.state.wms.receivers.length).toBe(wmsCrew() - 7);
+    expect(r.state.wms.workers.filter((p) => p.role === 'pick')).toHaveLength(7);
+    expect(r.state.wms.workers.filter((p) => p.role === 'receive')).toHaveLength(CREW - 7);
     let stepped = r.state;
     for (let i = 0; i < 400; i++) stepped = step(stepped, []).state;
     expect(hashState(advanceMany(r.state, 400))).toBe(hashState(stepped));
-    const v = wmsView(stepped.wms, stepped.tick, ['Local'], 100);
+    const v = wmsView(stepped.wms, stepped.tick);
     expect(v.policy).toEqual(plan);
-    expect(v.crew).toBe(wmsCrew());
-    expect(v.layout).toEqual({ aisles: 4, bays: 20, aisleGap: 3, doors: T.wmsDockDoors.value });
-    expect(v.receivers.length).toBe(wmsCrew() - 7);
+    expect(v.crew).toBe(CREW);
+    expect(v.layout).toEqual({ aisles: 4, bays: 20, aisleGap: 3, doors: T.wmsDoors.value });
+    expect(v.workers.filter((p) => p.role === 'receive')).toHaveLength(CREW - 7);
   });
 });

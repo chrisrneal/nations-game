@@ -10,11 +10,11 @@ function ev(e: Partial<WmsEvent> & Pick<WmsEvent, 'code'>): WmsEvent {
   return { tick: 0, order: 0, line: 0, sku: -1, qty: 0, of: 0, picker: 0, ...e };
 }
 
-describe('WMS view (slices 3-6)', () => {
+describe('WMS view (RULES 10)', () => {
   it('writes activity lines like a real WMS console', () => {
-    expect(eventText(ev({ code: 'PICK CONF', order: 10234, line: 3, sku: 0, qty: 24, of: 24, picker: 7 }))).toEqual({ ref: 'O-10234/L3', detail: 'GRN-0042  24/24  Picker 07' });
+    expect(eventText(ev({ code: 'PICK CONF', order: 10234, line: 3, sku: 0, qty: 24, of: 24, picker: 7 }))).toEqual({ ref: 'O-10234/L3', detail: 'GRN-0042  24/24  W07' });
     expect(eventText(ev({ code: 'WAVE REL', order: 10240, qty: 3 }))).toEqual({ ref: 'O-10240', detail: 'W-0003' });
-    expect(eventText(ev({ code: 'REPLEN', sku: 10, qty: 120 }))).toEqual({ ref: 'CHP-2030', detail: '+120 units' });
+    expect(eventText(ev({ code: 'HIRE', picker: 10, line: 1, qty: 10 }))).toEqual({ ref: 'W10', detail: 'hired to pick, crew 10' });
     expect(eventText(ev({ code: 'ALLOC SHORT', order: 10234, line: 1, sku: 4, qty: 6, of: 10 }))).toEqual({ ref: 'O-10234/L1', detail: 'STL-0310  short 6/10' });
   });
 
@@ -43,18 +43,21 @@ describe('WMS view (slices 3-6)', () => {
     expect(w.events.length).toBe(T.wmsEventsKept.value);
     expect(w.events[0]?.tick).toBeGreaterThanOrEqual(w.events[w.events.length - 1]?.tick ?? 0);
     expect(new Set(w.events.map((e) => e.key)).size).toBe(w.events.length);
-    const busy = w.pickers.filter((p) => p.order > 0);
+    const busy = w.workers.filter((p) => p.role === 'pick' && p.task !== null);
     for (const p of busy) {
-      const line = w.orders.find((o) => o.no === p.order)?.lines.find((l) => l.no === p.line);
+      const o = w.orders.find((x) => x.no === p.task?.order);
+      const line = o?.lines.find((l) => `${o.code}/L${l.no}` === p.task?.ref);
       expect(line?.picker).toBe(p.id);
+      expect(line?.task).toBe(p.task?.no);
       expect(line?.status).toBe('PICKING');
     }
-    expect(w.kpis).toMatchObject({ open: w.orders.filter((o) => o.open).length, pickersBusy: busy.length, pickersTotal: T.wmsPickers.value });
+    expect(w.kpis).toMatchObject({ open: w.orders.filter((o) => o.open).length, pickersBusy: busy.length, pickersTotal: T.wmsStartPickers.value });
+    expect(w.kpis.earnedPerHour).toBeGreaterThan(0);
     expect(w.kpis.linesPerHour).toBeGreaterThan(0);
     expect(w.kpis.otifPct).not.toBeNull();
     expect(w.kpis.exceptions).toBe(w.orders.filter((o) => o.exception).length);
     expect(w.countries).toHaveLength(15);
-    expect(w.expediteCost).toBe(view.pay * T.wmsExpediteCostOrders.value);
+    expect(w.expediteCost).toBe(T.wmsExpediteCostCents.value);
   });
 
   it('changes rev once a WMS step, so the screens re-render once a second', () => {
@@ -68,9 +71,9 @@ describe('WMS inbound and inventory view (W6)', () => {
   it('writes inbound and inventory lines like a real WMS console', () => {
     expect(eventText(ev({ code: 'PO CRT', order: 50001, qty: 400, of: 2 }))).toEqual({ ref: 'PO-50001', detail: '2 lines  400 units' });
     expect(eventText(ev({ code: 'DOCK', order: 50001, qty: 2 }))).toEqual({ ref: 'PO-50001', detail: 'door D2' });
-    expect(eventText(ev({ code: 'RCV', order: 50001, line: 2, sku: 0, qty: 198, of: 200, picker: 3 }))).toEqual({ ref: 'PO-50001/L2', detail: 'GRN-0042  198/200  Rcvr 03' });
+    expect(eventText(ev({ code: 'RCV', order: 50001, line: 2, sku: 0, qty: 198, of: 200, picker: 3 }))).toEqual({ ref: 'PO-50001/L2', detail: 'GRN-0042  198/200  W03' });
     expect(eventText(ev({ code: 'DAMAGE', order: 50001, line: 1, sku: 8, qty: 2, of: 200 }))).toEqual({ ref: 'PO-50001/L1', detail: 'SOL-0450  2 damaged' });
-    expect(eventText(ev({ code: 'PUTAWAY', order: 50001, line: 1, sku: 8, qty: 198 }))).toEqual({ ref: 'PO-50001/L1', detail: 'SOL-0450  +198 units' });
+    expect(eventText(ev({ code: 'PUTAWAY', order: 50001, line: 1, sku: 8, qty: 198, picker: 8 }))).toEqual({ ref: 'PO-50001/L1', detail: 'SOL-0450  +198 units  W08' });
     expect(eventText(ev({ code: 'CYCLE CNT', sku: 10, qty: 57, of: 57 }))).toEqual({ ref: 'CHP-2030', detail: '57 units, matched' });
     expect(eventText(ev({ code: 'CYCLE CNT', sku: 10, qty: 55, of: 57 }))).toEqual({ ref: 'CHP-2030', detail: '55 counted, system 57' });
     expect(eventText(ev({ code: 'ADJUST', sku: 10, qty: -2 }))).toEqual({ ref: 'CHP-2030', detail: '-2 units' });
@@ -97,8 +100,8 @@ describe('WMS inbound and inventory view (W6)', () => {
     }
     const k = w.inboundKpis;
     expect(k.open).toBe(w.pos.filter((p) => p.open).length);
-    expect(k.doorsTotal).toBe(T.wmsDockDoors.value);
-    expect(k.receiversTotal).toBe(T.wmsReceivers.value);
+    expect(k.doorsTotal).toBe(T.wmsDoors.value);
+    expect(k.receiversTotal).toBe(T.wmsStartReceivers.value);
     expect(k.onTimePct).not.toBeNull();
   });
 
@@ -116,5 +119,40 @@ describe('WMS inbound and inventory view (W6)', () => {
     expect(k.low).toBe(stock.filter((r) => r.status !== 'OK').length);
     expect(k.accuracyPct).not.toBeNull();
     expect(stock.some((r) => r.counted >= 0)).toBe(true);
+  });
+});
+
+describe('WMS crew and dock schedule view (W8)', () => {
+  it('shows each worker’s active task, queue and finished work, and the crew KPIs', () => {
+    const w = warehouseView(advanceMany(createWarehouse({ seed: 7 }), 10 * 60 * 4)).wms;
+    expect(w.crewKpis.crew).toBe(w.workers.length);
+    expect(w.crewKpis.working + w.crewKpis.walking + w.crewKpis.idle).toBe(w.workers.length);
+    for (const p of w.workers) {
+      expect(p.task === null).toBe(p.state === 'idle');
+      for (const t of [...(p.task === null ? [] : [p.task]), ...p.queue, ...p.done]) {
+        expect(t.worker).toBe(p.id);
+        expect(t.code).toMatch(/^T-\d{5}$/);
+        expect(t.kind === 'PICK' ? 'pick' : 'receive').toBe(p.role);
+      }
+      for (const t of p.done) expect(t.status).toBe('DONE');
+      expect(p.done.map((t) => t.finished)).toEqual([...p.done.map((t) => t.finished)].sort((a, b) => b - a));
+      expect(p.stats.busy + p.stats.walking + p.stats.idle).toBeGreaterThan(0);
+    }
+    const receive = w.workers.find((p) => p.task?.kind === 'RECEIVE');
+    if (receive !== undefined) expect(receive.task?.where).toMatch(/^Dock D\d$/);
+    expect(w.workers.some((p) => p.done.length > 0)).toBe(true);
+  });
+
+  it('books POs into appointment slots, no more than the doors a slot', () => {
+    const view = warehouseView(advanceMany(createWarehouse({ seed: 3 }), 20 * 60 * 4));
+    const { schedule, pos } = view.wms;
+    expect(schedule.length).toBeGreaterThan(0);
+    for (const slot of schedule) {
+      expect(slot.at % T.wmsApptSlotTicks.value).toBe(0);
+      expect(slot.pos.length).toBeLessThanOrEqual(view.wms.layout.doors);
+    }
+    for (const po of pos) expect(po.appt % T.wmsApptSlotTicks.value).toBe(0);
+    const open = pos.filter((p) => p.open);
+    expect(open.map((p) => p.appt)).toEqual([...open.map((p) => p.appt)].sort((a, b) => a - b));
   });
 });

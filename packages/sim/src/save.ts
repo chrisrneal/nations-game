@@ -2,10 +2,14 @@ import type { WarehouseCommand, WarehouseSaveFile, WarehouseState } from '@wareh
 import { hashState } from './hash.ts';
 import { WAREHOUSE_SCHEMA_VERSION } from './state.ts';
 import { advanceMany, step } from './step.ts';
-import { createWms, emptyInbound } from './wms/generate.ts';
-import { defaultPolicy } from './wms/policy.ts';
+import { createWms } from './wms/generate.ts';
 
 export type Migration = (save: Record<string, unknown>) => Record<string, unknown>;
+
+/** Moves a save on one version without changing it: the versions W8 made moot. */
+function bump(to: number): Migration {
+  return (save) => ({ ...save, schemaVersion: to });
+}
 
 /**
  * Migrations keyed by the version they upgrade FROM (S9): `WAREHOUSE_MIGRATIONS[1]`
@@ -13,60 +17,32 @@ export type Migration = (save: Record<string, unknown>) => Record<string, unknow
  * (W1): airport saves are not carried over. Each one needs a test with a real
  * old save file (packages/harness/fixtures).
  *
- * - 1 to 2 (W5): the snapshot gains a WMS, generated as a new warehouse's would
- *   be (seeded from the warehouse seed and site, at the snapshot's tick and
- *   contract). Nothing else changes, so every idle number is as saved.
- * - 2 to 3 (W5, WMS slice 2): the WMS gains clocks, counters and per-order
- *   timers. A version-2 WMS never moved, so it is generated again the same
- *   way, which gives the same orders and stock with the new fields.
- * - 3 to 4 (W5, WMS slice 7): every order gains `expedited: false`; the WMS
- *   is otherwise kept exactly as saved.
- * - 4 to 5 (W6, inbound and inventory): the WMS gains purchase orders (none
- *   yet), receivers, a cycle-count clock and inbound totals, and each SKU
- *   gains `picked: 0`, `counted: -1` and `variance: 0`. Orders, stock and the
- *   log are kept exactly as saved; the next planning run raises the POs.
- * - 5 to 6 (W7, the operating plan): the WMS gains the default plan (the
- *   rules it ran by), and each picker stands at the bin of the line it is on
- *   (or the pick-and-drop point when idle) with no walk left, so a line
- *   being picked carries on as it would have.
+ * - 1 to 6: versions 2-6 added the WMS beside the idle game (W5-W7). Since
+ *   W8 drops the idle game and opens a fresh WMS, these steps only move the
+ *   version on; 6 to 7 does the work.
+ * - 6 to 7 (W8, the idle game removed): the snapshot keeps its tick and cash
+ *   and opens a fresh WMS (seeded from the old warehouse seed and site, at the
+ *   snapshot's tick) with the crew, tasks and dock appointments; the idle
+ *   flow (backlog, docks, levels, stars, boosts) is dropped. Commands other
+ *   than WMS actions are dropped from the log, and a WMS action naming an
+ *   old order is refused when it replays.
  *
  * Old rules are not kept, so a migration changes only the snapshot, and
  * `migrateWarehouseSave` replays the history since it under today's rules and
  * records the new hash. The game's own saves are compact (the snapshot is the
- * save point, no history): for those the old hash is checked first, and the
- * migrated warehouse is exactly the one that was saved.
+ * save point, no history): for those the old hash is checked first.
  */
 export const WAREHOUSE_MIGRATIONS: Readonly<Record<number, Migration>> = {
-  1: (save) => {
-    const snapshot = save.snapshot as Omit<WarehouseState, 'wms'>;
-    const wms = createWms({ seed: snapshot.rng.seed + snapshot.site, tick: snapshot.tick, contract: snapshot.levels.contract });
-    return { ...save, schemaVersion: 2, snapshot: { ...snapshot, schemaVersion: 2, wms } };
-  },
-  2: (save) => {
-    const snapshot = save.snapshot as Omit<WarehouseState, 'wms'>;
-    const wms = createWms({ seed: snapshot.rng.seed + snapshot.site, tick: snapshot.tick, contract: snapshot.levels.contract });
-    return { ...save, schemaVersion: 3, snapshot: { ...snapshot, schemaVersion: 3, wms } };
-  },
-  3: (save) => {
-    const snapshot = save.snapshot as WarehouseState;
-    const orders = snapshot.wms.orders.map((o) => ({ ...o, expedited: false }));
-    return { ...save, schemaVersion: 4, snapshot: { ...snapshot, schemaVersion: 4, wms: { ...snapshot.wms, orders } } };
-  },
-  4: (save) => {
-    const snapshot = save.snapshot as WarehouseState;
-    const inventory = snapshot.wms.inventory.map((s) => ({ ...s, picked: 0, counted: -1, variance: 0 }));
-    const wms = { ...snapshot.wms, inventory, ...emptyInbound(snapshot.tick) };
-    return { ...save, schemaVersion: 5, snapshot: { ...snapshot, schemaVersion: 5, wms } };
-  },
-  5: (save) => {
-    const snapshot = save.snapshot as WarehouseState;
-    const w = snapshot.wms;
-    const pickers = w.pickers.map((p) => {
-      const bin = p.order === 0 ? undefined : w.orders.find((o) => o.no === p.order)?.lines.find((l) => l.no === p.line)?.bin;
-      return { ...p, at: bin ?? -1, walk: 0 };
-    });
-    const wms = { ...w, pickers, policy: { ...defaultPolicy(), pickers: pickers.length } };
-    return { ...save, schemaVersion: 6, snapshot: { ...snapshot, schemaVersion: 6, wms } };
+  1: bump(2),
+  2: bump(3),
+  3: bump(4),
+  4: bump(5),
+  5: bump(6),
+  6: (save) => {
+    const old = save.snapshot as { tick: number; cash: number; site?: number; rng: { seed: number } };
+    const snapshot: WarehouseState = { schemaVersion: 7, tick: old.tick, cash: old.cash, wms: createWms({ seed: old.rng.seed + (old.site ?? 0), tick: old.tick }) };
+    const log = Array.isArray(save.commandLog) ? (save.commandLog as { type?: unknown }[]).filter((c) => c.type === 'wms') : [];
+    return { ...save, schemaVersion: 7, snapshot, commandLog: log };
   },
 };
 

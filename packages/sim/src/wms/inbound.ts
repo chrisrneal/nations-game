@@ -2,6 +2,7 @@ import type { WmsOrderStatus, WmsState } from '@warehouse/contracts';
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
 import { WMS_RATE_BUCKETS, WMS_RATE_BUCKET_TICKS, WMS_SUPPLIERS } from './catalog.ts';
 import { log, type MPo, type MPoLine, type MWms } from './mutable.ts';
+import { newTask } from './tasks.ts';
 import type { Roller } from './orders.ts';
 
 const BP = 10_000;
@@ -51,11 +52,32 @@ export function inboundUnits(w: Pick<WmsState, 'pos' | 'inventory'>): { onOrder:
   return { onOrder, dock };
 }
 
+/** POs booked into the appointment slot starting at `at`. */
+function booked(w: MWms, at: number): number {
+  let n = 0;
+  for (const po of w.pos) if (po.appt === at) n += 1;
+  return n;
+}
+
 /**
- * Reorder planning (RULES 16, W6): every SKU whose position (available, plus
+ * The dock appointment a new PO books (RULES 5, W8): the first slot of
+ * `wmsApptSlotTicks` starting at or after `earliest` with fewer POs booked
+ * than the warehouse has dock doors.
+ */
+export function bookSlot(w: MWms, earliest: number): number {
+  const slot = T.wmsApptSlotTicks.value;
+  let at = Math.ceil(earliest / slot) * slot;
+  while (booked(w, at) >= w.doors) at += slot;
+  return at;
+}
+
+/**
+ * Reorder planning (RULES 5, W6): every SKU whose position (available, plus
  * inbound, less the units order lines wait for) is under the reorder point is
  * ordered up to the reorder point plus `wmsReplenUnits`, one PO per supplier.
- * The supplier promises an ETA; a share of trucks are late, by a draw made now.
+ * Each PO books a dock appointment (W8) after the supplier's lead time; its
+ * truck comes up to `wmsPoEarlyMaxTicks` early, or with a share of trucks
+ * late, by a draw made now.
  */
 export function planReorders(w: MWms, r: Roller, tick: number): void {
   const waiting = waitingUnits(w);
@@ -67,15 +89,16 @@ export function planReorders(w: MWms, r: Roller, tick: number): void {
     const supplier = SUPPLIER_OF[stock.sku] ?? 0;
     const lines = bySupplier.get(supplier) ?? [];
     const expected = T.wmsReorderUnits.value + T.wmsReplenUnits.value - position;
-    lines.push({ no: lines.length + 1, sku: stock.sku, bin: stock.bin, expected, received: 0, damaged: 0, short: 0, status: 'OPEN', putAt: 0 });
+    lines.push({ no: lines.length + 1, sku: stock.sku, bin: stock.bin, expected, received: 0, damaged: 0, short: 0, status: 'OPEN' });
     bySupplier.set(supplier, lines);
   }
   for (const supplier of [...bySupplier.keys()].sort((a, b) => a - b)) {
     const lines = bySupplier.get(supplier) ?? [];
-    const eta = tick + r.int(T.wmsPoLeadMinTicks.value, Math.max(T.wmsPoLeadMinTicks.value, T.wmsPoLeadMaxTicks.value));
+    const appt = bookSlot(w, tick + r.int(T.wmsPoLeadMinTicks.value, Math.max(T.wmsPoLeadMinTicks.value, T.wmsPoLeadMaxTicks.value)));
     const late = r.int(0, BP - 1) < T.wmsPoLateChanceBp.value;
-    const arrive = late ? eta + r.int(40, Math.max(40, T.wmsPoLateMaxTicks.value)) : eta;
-    const po: MPo = { no: w.nextPoNo, supplier, status: 'IN TRANSIT', lines, created: tick, eta, arrive, arrived: 0, door: 0, closed: 0, late: false };
+    const offset = late ? r.int(40, Math.max(40, T.wmsPoLateMaxTicks.value)) : -r.int(0, T.wmsPoEarlyMaxTicks.value);
+    const arrive = Math.max(tick + 1, appt + offset);
+    const po: MPo = { no: w.nextPoNo, supplier, status: 'IN TRANSIT', lines, created: tick, appt, arrive, arrived: 0, door: 0, closed: 0, late: false };
     w.nextPoNo += 1;
     w.pos.push(po);
     let units = 0;
@@ -84,8 +107,8 @@ export function planReorders(w: MWms, r: Roller, tick: number): void {
   }
 }
 
-/** The receiver reached the end of the line: what really came, what was short and what was damaged (RULES 16, W6). */
-function confirmReceipt(w: MWms, r: Roller, po: MPo, line: MPoLine, receiver: number, tick: number): void {
+/** A worker reached the end of a PO line at the dock: what really came, what was short and what was damaged (RULES 5, W6). */
+export function confirmReceipt(w: MWms, r: Roller, po: MPo, line: MPoLine, worker: number, tick: number): void {
   let short = 0;
   let damaged = 0;
   if (r.int(0, BP - 1) < T.wmsRcvShortChanceBp.value) short = r.int(1, Math.max(1, Math.floor(line.expected / 4)));
@@ -94,21 +117,24 @@ function confirmReceipt(w: MWms, r: Roller, po: MPo, line: MPoLine, receiver: nu
   line.damaged = damaged;
   line.received = line.expected - short - damaged;
   line.status = 'RECEIVED';
-  line.putAt = tick + T.wmsPutawayTicks.value;
   const s = w.inbound;
   s.unitsReceived += line.received;
   s.unitsDamaged += damaged;
   s.unitsShort += short;
+  w.today.unitsReceived += line.received;
   const bucket = Math.floor(tick / WMS_RATE_BUCKET_TICKS) % WMS_RATE_BUCKETS;
   w.recentIn[bucket] = (w.recentIn[bucket] ?? 0) + line.received;
-  log(w, { tick, code: 'RCV', order: po.no, line: line.no, sku: line.sku, qty: line.received, of: line.expected, picker: receiver });
-  if (short > 0) log(w, { tick, code: 'RCV SHORT', order: po.no, line: line.no, sku: line.sku, qty: short, of: line.expected, picker: receiver });
-  if (damaged > 0) log(w, { tick, code: 'DAMAGE', order: po.no, line: line.no, sku: line.sku, qty: damaged, of: line.expected, picker: receiver });
+  log(w, { tick, code: 'RCV', order: po.no, line: line.no, sku: line.sku, qty: line.received, of: line.expected, picker: worker });
+  if (short > 0) log(w, { tick, code: 'RCV SHORT', order: po.no, line: line.no, sku: line.sku, qty: short, of: line.expected, picker: worker });
+  if (damaged > 0) log(w, { tick, code: 'DAMAGE', order: po.no, line: line.no, sku: line.sku, qty: damaged, of: line.expected, picker: worker });
 }
 
-/** Milli-units a receiver counts in one WMS step. */
-function receivePerStep(): number {
-  return Math.floor((T.wmsReceiveMilliPerSec.value * T.wmsStepTicks.value * T.tickMs.value) / 1000);
+/** A worker set a received line down in its bin (RULES 5, W8): its units can be allocated from now on. */
+export function storeLine(w: MWms, po: MPo, line: MPoLine, worker: number, tick: number): void {
+  line.status = 'STORED';
+  const stock = w.inventory[line.sku];
+  if (stock !== undefined) stock.onHand += line.received;
+  log(w, { tick, code: 'PUTAWAY', order: po.no, line: line.no, sku: line.sku, qty: line.received, picker: worker });
 }
 
 /** Drops the oldest closed POs beyond `wmsKeepClosedPos`. */
@@ -125,13 +151,14 @@ function purgePos(w: MWms): void {
 }
 
 /**
- * One inbound step (RULES 16, W6): trucks arrive (or pass their ETA and are
- * late), wait in the yard for a free dock door, are received line by line by
- * the receivers, and each received line reaches its bin `wmsPutawayTicks`
- * later. A PO frees its door once every line is counted in, and closes once
- * every line is put away.
+ * One inbound step (RULES 5, W6, W8): trucks arrive (or pass their
+ * appointment and are late); a PO frees its door once every line is counted
+ * in (PUTAWAY), and closes once every line is in its bin; then trucks in the
+ * yard dock at the free doors (earliest appointment first), which creates a
+ * RECEIVE task for every line. The workers do the counting and the
+ * put-away (tasks.ts).
  */
-export function stepInbound(w: MWms, r: Roller, tick: number): void {
+export function stepInbound(w: MWms, tick: number): void {
   for (const po of w.pos) {
     if (po.status !== 'IN TRANSIT') continue;
     if (tick >= po.arrive) {
@@ -140,18 +167,36 @@ export function stepInbound(w: MWms, r: Roller, tick: number): void {
       let units = 0;
       for (const l of po.lines) units += l.expected;
       log(w, { tick, code: 'ARRIVE', order: po.no, qty: units });
-    } else if (!po.late && tick > po.eta) {
+    }
+    if (!po.late && tick > po.appt && po.arrived === 0) {
       po.late = true;
       w.inbound.posLate += 1;
       log(w, { tick, code: 'PO LATE', order: po.no });
     }
   }
+  let closedNow = false;
+  for (const po of w.pos) {
+    if (po.status === 'RECEIVING' && po.lines.every((l) => l.status === 'RECEIVED' || l.status === 'STORED')) po.status = 'PUTAWAY';
+    if (po.status !== 'PUTAWAY' || !po.lines.every((l) => l.status === 'STORED')) continue;
+    po.status = 'CLOSED';
+    po.closed = tick;
+    w.inbound.posClosed += 1;
+    w.today.posReceived += 1;
+    let received = 0;
+    let expected = 0;
+    for (const l of po.lines) {
+      received += l.received;
+      expected += l.expected;
+    }
+    log(w, { tick, code: 'PO CLOSE', order: po.no, qty: received, of: expected });
+    closedNow = true;
+  }
   const busy = new Set<number>();
   for (const po of w.pos) if (po.status === 'RECEIVING') busy.add(po.door);
-  const yard = w.pos.filter((po) => po.status === 'ARRIVED').sort((a, b) => a.arrived - b.arrived || a.no - b.no);
+  const yard = w.pos.filter((po) => po.status === 'ARRIVED').sort((a, b) => a.appt - b.appt || a.arrived - b.arrived || a.no - b.no);
   for (const po of yard) {
     let door = 0;
-    for (let d = 1; d <= T.wmsDockDoors.value; d++) {
+    for (let d = 1; d <= w.doors; d++) {
       if (!busy.has(d)) {
         door = d;
         break;
@@ -162,69 +207,13 @@ export function stepInbound(w: MWms, r: Roller, tick: number): void {
     po.door = door;
     po.status = 'RECEIVING';
     log(w, { tick, code: 'DOCK', order: po.no, qty: door });
-  }
-  for (const po of w.pos) {
-    for (const line of po.lines) {
-      if (line.status !== 'RECEIVED' || tick < line.putAt) continue;
-      line.status = 'STORED';
-      const stock = w.inventory[line.sku];
-      if (stock !== undefined) stock.onHand += line.received;
-      if (line.received > 0) log(w, { tick, code: 'PUTAWAY', order: po.no, line: line.no, sku: line.sku, qty: line.received });
-    }
-  }
-  const step = receivePerStep();
-  for (const rc of w.receivers) {
-    if (rc.po === 0) continue;
-    const po = w.pos.find((p) => p.no === rc.po);
-    const line = po?.lines.find((l) => l.no === rc.line);
-    if (po !== undefined && line !== undefined && line.status === 'RECEIVING') {
-      rc.progress += step;
-      line.received = Math.min(line.expected, Math.floor(rc.progress / 1000));
-      if (rc.progress < line.expected * 1000) continue;
-      confirmReceipt(w, r, po, line, rc.id, tick);
-    }
-    rc.po = 0;
-    rc.line = 0;
-    rc.progress = 0;
-  }
-  const idle = w.receivers.filter((rc) => rc.po === 0);
-  if (idle.length > 0) {
-    const docked = w.pos.filter((po) => po.status === 'RECEIVING').sort((a, b) => a.arrived - b.arrived || a.no - b.no);
-    let next = 0;
-    for (const po of docked) {
-      for (const line of po.lines) {
-        const rc = idle[next];
-        if (rc === undefined) break;
-        if (line.status !== 'OPEN') continue;
-        line.status = 'RECEIVING';
-        rc.po = po.no;
-        rc.line = line.no;
-        rc.progress = 0;
-        next += 1;
-      }
-    }
-  }
-  let closedNow = false;
-  for (const po of w.pos) {
-    if (po.status === 'RECEIVING' && po.lines.every((l) => l.status === 'RECEIVED' || l.status === 'STORED')) po.status = 'PUTAWAY';
-    if (po.status !== 'PUTAWAY' || !po.lines.every((l) => l.status === 'STORED')) continue;
-    po.status = 'CLOSED';
-    po.closed = tick;
-    w.inbound.posClosed += 1;
-    let received = 0;
-    let expected = 0;
-    for (const l of po.lines) {
-      received += l.received;
-      expected += l.expected;
-    }
-    log(w, { tick, code: 'PO CLOSE', order: po.no, qty: received, of: expected });
-    closedNow = true;
+    for (const line of po.lines) newTask(w, 'RECEIVE', po.no, line.no, line.sku, -1, line.expected, tick);
   }
   if (closedNow) purgePos(w);
 }
 
 /**
- * One cycle count (RULES 16, W6): the next SKU in turn is counted. With
+ * One cycle count (RULES 5, W6): the next SKU in turn is counted. With
  * chance `wmsCountVarianceBp` the bin differs from the system by 1 to
  * `wmsCountVarianceMax` units, two times in three a loss; the count is
  * adjusted to what is there. A loss never takes allocated units.
