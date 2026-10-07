@@ -7,7 +7,8 @@ import type { WarehouseEvent, WarehouseView } from '@warehouse/contracts';
  * trucks replenish the floor pick locations from reserve as they run low;
  * orders come in at the order desk and wait on the order board; a picker
  * takes the board's oldest order down an aisle, picks a carton from a floor
- * pick location (from reserve when the floor is bare) and carries it back
+ * pick location (from reserve when the floor is bare; a multi-item order
+ * goes into a tote, one location an item, aisle by aisle) and carries it back
  * out of the aisle's left end, down past the board to the staging lanes
  * (the inbound forklifts keep to the cross aisle on the right); and a carton walks from its staging lane to the outbound
  * dock for each order a truck loads. Pure bookkeeping on numbers from the
@@ -140,8 +141,11 @@ export interface Dot {
   face: boolean;
   /** A reach truck: the floor pick location it drops at. */
   to: number;
-  /** Stock it carries, milli-units (0 once dropped). */
+  /** Stock it carries, milli-units (0 once dropped); a picker: each item's. */
   amt: number;
+  /** A picker: the order's items (more than one goes in a tote), and those not yet picked. */
+  items: number;
+  left: number;
   /** Which way it last moved across the screen: +1 right, -1 left. */
   dir: number;
   /** Queued at a station or reaching into a rack: from `start`, done at `release` (ms). */
@@ -162,6 +166,9 @@ const SERVICE_DEP = 150;
 const SERVICE_ARR = 110;
 /** Time reaching into a rack, ms. */
 const PICK_MS = 220;
+/** Multi-item orders: the share of orders that are, and their most items (from 2). One ticket on the board is one item. */
+const MULTI_SHARE = 0.35;
+const MULTI_MAX = 4;
 /** Time a forklift's forks take to set down or lift a pallet, ms. */
 const LIFT_MS = 260;
 /** Floor pick locations: a reach truck sets off when they hold less than LOW of their room, and fills them back up to FULL. */
@@ -350,6 +357,8 @@ export class FlowModel {
   private nextTruck = 0;
   /** New orders on their way to the board, as of the last frame. */
   private atDesk = 0;
+  /** Items in the next order a picker takes off the board; 0 until drawn. */
+  private nextItems = 0;
 
   /** Takes one update from the host. `now` is the animation clock in ms. */
   ingest(view: WarehouseView, events: readonly WarehouseEvent[], now: number): void {
@@ -428,7 +437,7 @@ export class FlowModel {
         this.dots[kept++] = d;
         if (d.kind === 'arr') putting += d.amt;
         else if (d.kind === 'dep') {
-          if (d.phase === 'pick' && d.leg < 3) owed += d.amt;
+          if (d.phase === 'pick') owed += d.amt * d.left;
           else if (d.phase === 'desk') desk += 1;
         } else if (d.kind === 'rep') {
           trucks += 1;
@@ -463,6 +472,7 @@ export class FlowModel {
     this.accAway = 0;
     this.accBoard = [];
     this.cleared = 0;
+    this.nextItems = 0;
     this.onFace = null;
     this.replens = 0;
     this.still += 1;
@@ -611,7 +621,8 @@ export class FlowModel {
       }
     }
     const extra = this.queue.length - this.lineDots;
-    if (extra > 2 && this.cleared < 1) this.cleared += 1;
+    // Too long a board lets its head go, a whole order at a time.
+    if (extra > 2 && this.cleared < Math.max(1, this.nextItems)) this.cleared += 1;
     this.cleared = Math.min(this.cleared, this.queue.length);
   }
 
@@ -623,16 +634,30 @@ export class FlowModel {
       const at = boardSpot(geo.board, i, n);
       toward(d, at.x, at.y, step);
     });
-    // As many as picking cleared go, as each reaches the head of the board.
+    // As many as picking cleared go, as each reaches the head of the board. A
+    // multi-item order is the head and the tickets behind it: it waits until
+    // picking has cleared them all, so the board stays the real backlog.
     while (this.cleared > 1 - 1e-6) {
       const head = this.queue[0];
       if (head === undefined) break;
       const at = boardSpot(geo.board, 0, n);
       if (Math.hypot(head.x - at.x, head.y - at.y) > PITCH * 1.5) break;
+      if (this.nextItems === 0) this.nextItems = this.orderSize();
+      const items = Math.min(this.nextItems, this.queue.length);
+      if (this.cleared < items - 1e-6) break;
+      this.nextItems = 0;
       this.queue.shift();
-      this.cleared -= 1;
+      for (let k = 1; k < items; k++) {
+        // Folded into the head's order: gone from the board this frame.
+        const t = this.queue.shift() as Dot;
+        t.phase = 'pick';
+        t.age = MAX_AGE;
+      }
+      this.cleared -= items;
       head.phase = 'pick';
       head.leg = 0;
+      head.items = items;
+      head.left = items;
       // A full floor pick location; reserve when the floor is bare.
       head.slot = this.any(this.face, 1);
       head.face = head.slot >= 0;
@@ -640,6 +665,37 @@ export class FlowModel {
       head.start = 0;
       head.release = 0;
     }
+  }
+
+  /** How many items the next order picked has: one, or a tote's worth. */
+  private orderSize(): number {
+    if ((this.jitter() + 1) / 2 >= MULTI_SHARE) return 1;
+    return 2 + Math.min(MULTI_MAX - 2, Math.floor(((this.jitter() + 1) / 2) * (MULTI_MAX - 1)));
+  }
+
+  /**
+   * A picker's next full location, not the one it just emptied: along the
+   * same aisle if it can (floor pick, else reserve when the floor is bare),
+   * else anywhere; null if the racks look bare.
+   */
+  private nextPick(d: Dot, aisle: number | undefined, geo: FlowGeometry): { readonly slot: number; readonly face: boolean } | null {
+    const tries: [Uint8Array, readonly Slot[], boolean][] = [
+      [this.face, geo.racks.face, true],
+      [this.reserve, geo.racks.reserve, false],
+    ];
+    for (const a of aisle === undefined ? [undefined] : [aisle, undefined]) {
+      for (const [cells, slots, face] of tries) {
+        const n = cells.length;
+        const start = Math.floor(((this.jitter() + 1) / 2) * n);
+        for (let k = 0; k < n; k++) {
+          const i = (start + k) % n;
+          if (cells[i] !== 1 || (face === d.face && i === d.slot)) continue;
+          if (a !== undefined && slots[i]?.aisle !== a) continue;
+          return { slot: i, face };
+        }
+      }
+    }
+    return null;
   }
 
   /** Where a stock carton goes: a bare reserve location; a bare floor pick one when reserve is full. */
@@ -659,7 +715,7 @@ export class FlowModel {
   }
 
   private fresh(kind: DotKind, tint: Tint, dock: number): Dot {
-    return { kind, tint, dock, jy: this.jitter() * 3, placed: false, x: 0, y: 0, leg: 0, phase: 'desk', slot: -1, face: false, to: -1, amt: this.perDot * 1000, dir: 1, start: 0, release: 0, alpha: 1, age: 0 };
+    return { kind, tint, dock, jy: this.jitter() * 3, placed: false, x: 0, y: 0, leg: 0, phase: 'desk', slot: -1, face: false, to: -1, amt: this.perDot * 1000, items: 1, left: 1, dir: 1, start: 0, release: 0, alpha: 1, age: 0 };
   }
 
   private add(kind: DotKind, tint: Tint, dock: number): void {
@@ -874,7 +930,9 @@ export class FlowModel {
    * A picker's trip: into the aisle beside the board, along to the location,
    * reaching in for the carton (the ticket becomes a carton, the location
    * empties), back out along the aisle to its left end and down past the
-   * board to the walkway above staging.
+   * board to the walkway above staging. A multi-item order fills a tote: on
+   * along the aisle to the next location, or out to the aisle's left end and
+   * into the next aisle, until every item is in.
    */
   private pick(d: Dot, step: number, now: number, geo: FlowGeometry): boolean {
     const r = geo.racks;
@@ -882,6 +940,7 @@ export class FlowModel {
     const aisle = slot?.aisle ?? r.aisles[0] ?? geo.afterY;
     const done = (): void => {
       d.phase = 'carry';
+      d.left = 0;
       d.leg = 0;
       d.slot = -1;
       d.start = 0;
@@ -901,6 +960,7 @@ export class FlowModel {
           d.start = now;
           d.release = now + PICK_MS;
           d.tint = 'box';
+          d.left = Math.max(0, d.left - 1);
           if (d.face) this.onFace = Math.max(0, (this.onFace ?? 0) - d.amt);
           this.hint(d.face, false, slot as Slot, now);
           this.mark(slot as Slot, 'pick', now);
@@ -911,10 +971,35 @@ export class FlowModel {
           d.leg = 4;
           d.start = 0;
           d.release = 0;
+          if (d.left > 0) {
+            // More for the tote: the next one along this aisle, else out to change aisles.
+            const next = this.nextPick(d, aisle, geo);
+            const to = next === null ? undefined : (next.face ? r.face : r.reserve)[next.slot];
+            if (next === null || to === undefined) d.left = 0;
+            else if (to.aisle === aisle) {
+              d.slot = next.slot;
+              d.face = next.face;
+              d.leg = 1;
+            } else d.leg = 6;
+          }
         }
         return true;
       case 4:
         if (toward(d, r.mouth, aisle, step)) d.leg = 5;
+        return true;
+      case 6:
+        // Out to the aisle's left end, then into the aisle of the next item.
+        if (toward(d, r.mouth, aisle, step)) {
+          const next = this.nextPick(d, undefined, geo);
+          if (next === null) {
+            d.left = 0;
+            d.leg = 5;
+          } else {
+            d.slot = next.slot;
+            d.face = next.face;
+            d.leg = 0;
+          }
+        }
         return true;
       default:
         if (toward(d, r.mouth + d.jy * 0.5, geo.walk, step)) done();

@@ -463,13 +463,22 @@ section 3). "Packing" in sections 3-8 is the staging area on screen.
   door) and wait on the order board, oldest first. A picker (a pale figure)
   takes the oldest down an aisle, reaches into a full floor pick location (a
   reserve one when the floor is bare; the ticket becomes a carton) and
-  carries it down the cross aisle. Under the board, one picker figure per two
+  carries it back out of the aisle's left end, past the board and down to
+  staging (the cross aisle is the forklifts'). About a third of the orders
+  picked are **multi-item** (2 to 4 items): the picker takes that many
+  tickets off the board at once, as picking clears them, and fills a tote,
+  reaching into a different location for each item, along the same aisle
+  where it can or out and into the next aisle. Each item is one ticket and
+  one unit of stock, so the board, the racks and staging stay exact; how
+  orders group into totes is **for show** (in the sim every order is one
+  unit, section 3). Under the board, one picker figure per two
   pickers levels (up to six), and an extra one in green while extra pickers
   work. It shows the backlog and the wait ("34 waiting · 14 s"), "held:
   staging full" or "held: racks empty" when those stop it, and is the
   pickers' tap target.
 - **Staging**: one lane per dock, marked on the floor, where picked cartons
-  wait for a truck, past any export stations. The packed count is shared out
+  wait for a truck; any export stations stand at the row's left end, where
+  the pickers come in. The packed count is shared out
   evenly between the lanes and stacked from the dock end; a carton walks from
   a dock's lane down the aisle between the docks for each order its truck
   loads.
