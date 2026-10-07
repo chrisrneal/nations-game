@@ -1159,3 +1159,83 @@ fill for a point of on time and is not a free win.
 the speed buttons and `setSpeed` leaves the old host. `wmsBalanceGap` 20
 makes balance by need do almost nothing; the `role` action and the wave
 interval can stay without harm.
+
+
+## W10 - Outbound doors with scheduled trailers, three times the orders, a dock crew that loads, a bigger crew
+**Status.** Accepted, 2026-10-07, at the owner's request ("Give me multiple
+outbound docks, and more business lots of orders lots of movement. Might
+need more staff..."). As for W3-W9, the owner asked for it directly, so this
+session wrote the record and acted as architect for the change: it updated
+docs/ROADMAP.md and rewrote the affected parts of docs/RULES.md.
+**Reading.** Three asks, read the way closest to docs/ROADMAP.md:
+1. *"Multiple outbound docks"* is outbound dock doors as real places, as the
+   inbound doors became in W8: shipping was a single truck at the end of four
+   fixed timers. Each outbound door now has a trailer that leaves on a
+   schedule, the way a carrier's trailer does; packed orders are staged at
+   the door whose trailer will take them soonest, a dock hand loads each one,
+   and every order on a trailer ships when it leaves. Three doors to start,
+   up to six, bought like inbound doors.
+2. *"More business, lots of orders, lots of movement"* is volume: orders
+   arrive every 6-10 warehouse minutes (20-30 before), about seven an hour,
+   and stock is reordered in bigger lots to keep up. Read as a fixed, higher
+   rate, not as demand that grows with goodwill: that idea (ROADMAP Next)
+   changes the game's loop and stays the owner's call.
+3. *"Might need more staff"* is a bigger crew and cheaper growth: the
+   warehouse opens with 14 pickers and 6 on the dock (6 and 3 before), can
+   hire up to 40 (16), and each hire costs x1.15 more (x1.5), from $2,000.
+   Loading is dock work: the receivers become the **dock crew** (receive,
+   put away, load), which was idle 80% of the time at W8 and now works about
+   half of it. No third role: the crew split, the balance plan and the Crew
+   page keep their two sides.
+**Decision.**
+- *State* (save schema 9): `wms.shipDoors` (door, trailer, departs) and
+  `nextTrailerNo`; orders gain `door`; stats gain `trailers`; finished tasks
+  move from `tasks` to a new `history` (performance, below). Tasks gain the
+  kind LOAD (at outbound door d, bin -10 - d). Events gain DEPART; STAGE
+  names the door and LOAD the units, door and worker; DOOR names its side.
+- *Commands*: `door` takes an optional `side` ('in', the default, as every
+  older command meant, or 'out').
+- *Rules* (RULES 4-6, 9): PICKED -> PACKED after `wmsPackTicks`, -> STAGED
+  at a door after `wmsStageTicks` (the soonest trailer with room that it can
+  still be loaded onto), LOADED by a dock hand at `wmsLoadMilliPerSec`, a load
+  starting only if it fits in `wmsTrailerUnits`; trailers leave every
+  `wmsTrailerTicks` per door, staggered, and ship what is on them. The dock
+  crew's loads go before receiving, soonest trailer first. `wmsLoadTicks`
+  and `wmsShipTicks` are gone.
+- *Saves*: version 8 gains the doors, its staged and loaded orders go back to
+  PACKED (staged again at once), finished tasks move to the history, and the
+  crew is topped up free to the new opening crew, so the owner's warehouse
+  can take the new volume. Tested with a real version-8 save.
+- *Performance* (P4's 2 s budget at three times the work): finished tasks
+  live in their own list so the plan reads only live work; orders, POs and
+  tasks are found by halving (they stay in number order); the log and
+  history are cut back in batches of 100; the plan sorts only the tasks it
+  can hand out; a re-plan for urgency looks only at work that came in since
+  the last step (a priority, an expedite or a hold released gives back what
+  is lined up instead); open orders are capped at 80 (40 before). The plan's
+  decisions are the same as before these changes on every case measured.
+**Measured** (`npm run harness -- report`, seeds 1-8, 2 h of ticks, an
+untouched warehouse): 868 orders shipped a seed (290 at W9), OTIF 84%, on
+time 95-98%, fill 96%, pickers working 61%, dock crew 48%, $717 a warehouse
+hour, about 337 trailers out at 64% full. Outbound doors as capacity: with
+two doors an untouched warehouse falls to 74% OTIF, with one to 9%; four
+ship as three do. Catch-up of 8 hours: 370-420 ms in Node for a new
+warehouse, 240-270 ms for the 40-worker benchmark, up to 0.9 s with a
+backlog of 80 open orders (half the pickers moved off; the W9 build's worst
+backlog was 0.65 s with a cap of 40). Phone check 55/55: 60 fps on the busy
+floor (40 workers, 6 outbound doors) with the CPU slowed 4x, 10 hours away
+reopens in 1.2-1.6 s.
+**Why.** The owner wants a busier floor with more to manage. Scheduled
+trailers are how outbound docks work in a real warehouse, and they make
+the doors a capacity the player can see and buy; loading as dock work gives
+the idle receivers a job and the labour split a real trade-off.
+**Cost.** A save migration that changes the owner's warehouse (orders on the
+dock re-staged, people added). Demand is still fixed, so beyond enough doors
+and people, more only shortens waits (docs/GAPS.md). The re-plan for urgency
+no longer reads old waiting work (covered by the actions that change it).
+The log and task history hold up to 100 more than their limits between
+cuts.
+**Reversing it.** `wmsOrderMinTicks` 80 and `wmsOrderMaxTicks` 120 bring
+back W9's volume; `wmsStartPickers` 6 and `wmsStartReceivers` 3 the crew;
+`wmsTrailerTicks` 60 with `wmsTrailerUnits` 2000 makes trailers leave every
+15 minutes with room for anything, close to the old timers.

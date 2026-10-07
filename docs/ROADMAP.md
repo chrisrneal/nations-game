@@ -7,13 +7,15 @@ from countries abroad; the WMS releases them, allocates stock and creates a
 pick task for every line. Purchase orders, which the WMS raises itself when
 stock runs low, are booked into dock appointments in the warehouse day; a
 docked truck becomes receive tasks, and every line counted in a put-away
-task. The crew (pickers, and receivers who also put away) do the tasks the
-WMS lines up for them, and a tap on any worker shows their tasks and record.
-Picked orders are packed, staged, loaded and shipped; every shipment pays,
-more for countries whose goodwill is high. The player sets the WMS's plan
-(pick order, release and wave interval, crew split, labour by need), moves
-people between picking and receiving, steps in on orders, and spends what
-shipments earn on more people and dock doors. The warehouse keeps running
+task. Picked orders are packed and staged at one of several outbound doors,
+loaded onto its trailer, and ship when the trailer leaves on its schedule
+(W10). The crew (pickers, and the dock crew who receive, put away and load)
+do the tasks the WMS lines up for them, and a tap on any worker shows their
+tasks and record. Every shipment pays, more for countries whose goodwill is
+high. The player sets the WMS's plan (pick order, release and wave interval,
+crew split, labour by need), moves people between picking and the dock,
+steps in on orders, and spends what shipments earn on more people, inbound
+dock doors and outbound doors. The warehouse keeps running
 while the app is closed, up to a cap. Single player, offline-first, no
 backend. Rules: docs/RULES.md. Why the idle game was removed: decision record
 W8 (and W1, P1 before it).
@@ -34,8 +36,8 @@ W8 (and W1, P1 before it).
 ## Architecture (kept from Nations, the airport and the idle warehouse, decision records P1, W1 and W8)
 1. Pure sim core: `step(state, commands) -> state + events` (S1, D6).
 2. Commands are the only mutation: `wms` actions (release, priority, hold,
-   unhold, assign, cancelLine, expedite, policy, role, hire, door) (S2, P5,
-   W8, W9).
+   unhold, assign, cancelLine, expedite, policy, role, hire, door in or out)
+   (S2, P5, W8, W9, W10).
 3. Host interface: the UI submits and subscribes; LocalHost runs the sim in a Web
    Worker (S3).
 4. The host owns the clock; catch-up is "run N ticks fast", up to the offline
@@ -61,7 +63,7 @@ writes or one React render a WMS step (P7). Number formatting for big values.
 ## The harness
 `npm run harness -- report` runs an untouched warehouse with the default plan
 on several seeds and reports OTIF, fill, money an hour and how busy the
-pickers and receivers are, against the targets in RULES 11. Invariants every
+pickers and the dock crew are, against the targets in RULES 11. Invariants every
 build: cash and stock never negative, every task held by at most one worker
 of its role, determinism across engines, catch-up equals stepping,
 save-reload-continue.
@@ -80,13 +82,16 @@ save-reload-continue.
 - **The WMS simulator** (2026-10-07): the idle game removed; tasks for every
   worker, a Crew page, dock appointments in a warehouse day, hiring and doors
   (W8); then 5 warehouse minutes a second with pause and 1x/10x, the wave
-  interval, and moving people by need, by hand or by the balance plan (W9).
+  interval, and moving people by need, by hand or by the balance plan (W9);
+  then outbound doors with scheduled trailers, three times the orders, a
+  dock crew that loads, and a crew of 20 growing to 40 (W10).
 
 ## Next (not planned until the owner picks)
 - Play it on a real phone and say what feels slow or confusing (docs/GAPS.md
   lists what only a person can check).
 - Ideas that fit the simulator: demand that grows with goodwill (more
-  customers as service improves), automation to buy (conveyors, a sorter,
+  customers as service improves; since W10 the one thing that would make a
+  fourth outbound door or a 30th worker pay for itself), automation to buy (conveyors, a sorter,
   pick-to-light that changes the task times), shifts and breaks for the crew,
   dock hours that close receiving at night, workers' skills. Each needs a
   decision record.
