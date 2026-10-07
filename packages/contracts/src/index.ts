@@ -76,6 +76,10 @@ export type {
   WmsPoStatus,
   WmsPoView,
   WmsReceiver,
+  WmsReceiverView,
+  WmsPickRule,
+  WmsPolicy,
+  WmsReleaseMode,
   WmsStockStatus,
   WmsStockView,
 } from './wms.ts';

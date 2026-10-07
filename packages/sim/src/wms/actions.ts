@@ -1,6 +1,7 @@
 import type { WmsAction, WmsOrderStatus } from '@warehouse/contracts';
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
 import { isClosed } from './catalog.ts';
+import { policyProblem, setPolicy } from './policy.ts';
 import { findOrder, log, releaseWave, startPick, type MLine, type MOrder, type MWms } from './tick.ts';
 
 export type WmsActionResult = { readonly ok: true; readonly order: number; readonly cents: number } | { readonly ok: false; readonly reason: string };
@@ -29,6 +30,7 @@ function freeLine(w: MWms, o: MOrder, line: MLine): void {
       p.order = 0;
       p.line = 0;
       p.progress = 0;
+      p.walk = 0;
     }
   }
   if (line.status === 'PICKING') {
@@ -57,11 +59,18 @@ function fail(reason: string): WmsActionResult {
 /**
  * The player's WMS actions (docs/wms-plan.md slice 7, RULES 16): release a
  * wave of chosen NEW orders, change priority, hold and release from hold,
- * put a picker on a line, cancel a line, and expedite an order for cash.
+ * put a picker on a line, cancel a line, expedite an order for cash, and
+ * set the operating plan (W7).
  * Each logs an event. `cash` is what the player has; an expedite that
  * costs more is refused.
  */
 export function wmsAction(w: MWms, a: WmsAction, tick: number, cash: number, payCents: number): WmsActionResult {
+  if (a.action === 'policy') {
+    const problem = policyProblem(a.policy);
+    if (problem !== null) return fail(problem);
+    if (!setPolicy(w, a.policy, tick)) return fail('No change to the plan');
+    return { ok: true, order: 0, cents: 0 };
+  }
   if (a.action === 'release') {
     const chosen = a.orders.map((no) => findOrder(w, no)).filter((o): o is MOrder => o !== undefined && o.status === 'NEW');
     if (chosen.length === 0) return fail('No NEW orders chosen');

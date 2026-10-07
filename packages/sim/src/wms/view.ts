@@ -18,6 +18,7 @@ import type {
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
 import { WMS_RATE_BUCKETS, WMS_RATE_BUCKET_TICKS, binCode, destinationAt, isClosed, orderCode, poCode, skuAt, supplierAt } from './catalog.ts';
 import { inboundUnits, waitingUnits } from './inbound.ts';
+import { WMS_PICK_RULES, WMS_RELEASE_MODES, wmsCrew } from './policy.ts';
 
 const EXCEPTION_STATUSES: ReadonlySet<WmsOrderStatus> = new Set(['SHORT', 'ON HOLD', 'BACKORDER']);
 const EXCEPTION_EVENTS: ReadonlySet<WmsEventCode> = new Set(['ALLOC SHORT', 'SHORT PICK', 'CUTOFF MISS', 'HOLD', 'CANCEL', 'PO LATE', 'RCV SHORT', 'DAMAGE', 'ADJUST']);
@@ -154,9 +155,21 @@ export function eventText(e: WmsEvent): { ref: string; detail: string } {
       return { ref: sku, detail: e.qty === e.of ? `${e.qty} units, matched` : `${e.qty} counted, system ${e.of}` };
     case 'ADJUST':
       return { ref: sku, detail: `${e.qty > 0 ? '+' : ''}${e.qty} units` };
+    case 'PLAN':
+      return { ref: '', detail: planText(e) };
     default:
       return { ref, detail: '' };
   }
+}
+
+/** The Plan page's names for its choices (W7), as the feed shows them. */
+export const PICK_RULE_NAMES: Readonly<Record<(typeof WMS_PICK_RULES)[number], string>> = { priority: 'Priority first', cutoff: 'Cutoff first', nearest: 'Nearest bin' };
+export const RELEASE_NAMES: Readonly<Record<(typeof WMS_RELEASE_MODES)[number], string>> = { waves: 'Timed waves', continuous: 'Continuous', manual: 'Manual' };
+
+function planText(e: WmsEvent): string {
+  if (e.line === 1) return `Pick order: ${PICK_RULE_NAMES[WMS_PICK_RULES[e.qty] ?? 'priority']}`;
+  if (e.line === 2) return `Release: ${RELEASE_NAMES[WMS_RELEASE_MODES[e.qty] ?? 'waves']}`;
+  return `Crew: ${e.qty} picking, ${e.of - e.qty} receiving`;
 }
 
 function eventViews(events: readonly WmsEvent[]): WmsEventView[] {
@@ -225,6 +238,8 @@ function poView(po: WmsPo, receiverOn: ReadonlyMap<string, number>): WmsPoView {
         short: l.short,
         status: l.status,
         receiver: receiverOn.get(`${po.no}/${l.no}`) ?? 0,
+        binNo: l.bin,
+        putAt: l.putAt,
       };
     }),
   };
@@ -276,6 +291,7 @@ function inventoryView(w: WmsState): { stock: WmsStockView[]; inventoryKpis: Wms
       sku: sku.code,
       desc: sku.desc,
       bin: binCode(s.bin),
+      binNo: s.bin,
       onHand: s.onHand,
       allocated: s.allocated,
       available,
@@ -338,7 +354,18 @@ export function wmsView(w: WmsState, tick: number, contracts: readonly string[],
     orders: [...open, ...closed],
     events: eventViews(w.events),
     kpis,
-    pickers: w.pickers.map((p) => ({ id: p.id, order: p.order, line: p.line })),
+    pickers: w.pickers.map((p) => {
+      const o = p.order === 0 ? undefined : w.orders.find((x) => x.no === p.order);
+      const l = o?.lines.find((x) => x.no === p.line);
+      return { id: p.id, order: p.order, line: p.line, at: p.at, walk: p.walk, picked: l?.picked ?? 0, units: l?.allocated ?? 0, priority: o?.priority ?? 0 };
+    }),
+    receivers: w.receivers.map((rc) => {
+      const po = rc.po === 0 ? undefined : w.pos.find((x) => x.no === rc.po);
+      const l = po?.lines.find((x) => x.no === rc.line);
+      return { id: rc.id, po: rc.po, line: rc.line, door: po?.door ?? 0, received: l?.received ?? 0, expected: l?.expected ?? 0 };
+    }),
+    policy: w.policy,
+    crew: wmsCrew(),
     countries: w.dests.map((d, i) => ({ ...destinationAt(i), shipped: d.shipped, otif: d.otif, otifPct: pct(d.otif, d.shipped), goodwill: d.goodwill })),
     nextWaveIn: Math.max(0, w.nextWaveAt - tick),
     expediteCost: payCents * T.wmsExpediteCostOrders.value,

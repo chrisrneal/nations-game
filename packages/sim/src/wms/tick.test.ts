@@ -121,8 +121,8 @@ describe('WMS pickers (slice 2)', () => {
     ]);
   });
 
-  it('a picker picks 0.65 units a second, then confirms the line and takes the stock off the shelf', () => {
-    const w = withTunables({ wmsShortPickChanceBp: 0 }, () => {
+  it('a picker at its bin picks 0.65 units a second, then confirms the line and takes the stock off the shelf', () => {
+    const w = withTunables({ wmsShortPickChanceBp: 0, wmsWalkTicksPerBay: 0 }, () => {
       const m = wms([order(1, [line(1, 0, 13)])], { 0: 20 });
       const steps = Math.ceil((13 * 1000) / PER_STEP);
       wmsStep(m, 0, 0);
@@ -135,7 +135,7 @@ describe('WMS pickers (slice 2)', () => {
     const l = w.orders[0]?.lines[0];
     expect([l?.status, l?.picked, l?.short]).toEqual(['PICKED', 13, 0]);
     expect(w.inventory[0]).toMatchObject({ onHand: 7, allocated: 0 });
-    expect(w.pickers[0]).toMatchObject({ order: 0, line: 0, progress: 0 });
+    expect(w.pickers[0]).toMatchObject({ order: 0, line: 0, progress: 0, at: 0 });
     const conf = w.events.find((e) => e.code === 'PICK CONF');
     expect(conf).toMatchObject({ order: 1, line: 1, sku: 0, qty: 13, of: 13, picker: 1 });
     expect(w.stats.linesPicked).toBe(1);

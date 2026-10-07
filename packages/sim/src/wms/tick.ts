@@ -1,7 +1,7 @@
 import type { WarehouseEvent, WmsOrder } from '@warehouse/contracts';
 import { mulDiv } from '../math.ts';
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
-import { WMS_RATE_BUCKETS, WMS_RATE_BUCKET_TICKS, destinationAt, isClosed } from './catalog.ts';
+import { WMS_RATE_BUCKETS, WMS_RATE_BUCKET_TICKS, destinationAt, isClosed, travelBays } from './catalog.ts';
 import { cycleCount, planReorders, stepInbound } from './inbound.ts';
 import { log, type MLine, type MOrder, type MPicker, type MWms } from './mutable.ts';
 import { Roller, rollOrder, unitsOf } from './orders.ts';
@@ -95,6 +95,12 @@ function workPickers(w: MWms, r: Roller, tick: number): void {
       p.order = 0;
       p.line = 0;
       p.progress = 0;
+      p.walk = 0;
+      continue;
+    }
+    // Still walking to the bin (W7): picking starts the step after it gets there.
+    if (p.walk > 0) {
+      p.walk = Math.max(0, p.walk - T.wmsStepTicks.value);
       continue;
     }
     p.progress += step;
@@ -112,30 +118,67 @@ function pickable(o: MOrder): boolean {
   return o.status === 'ALLOCATED' || o.status === 'PICKING';
 }
 
-/** Puts a picker on a line (RULES 16): the line and its order go to PICKING. */
+/** Ticks a picker standing at bin `from` takes to walk to bin `to` (RULES 16, W7). */
+export function walkTicks(from: number, to: number): number {
+  return travelBays(from, to) * T.wmsWalkTicksPerBay.value;
+}
+
+/** Puts a picker on a line (RULES 16): the line and its order go to PICKING, and the picker walks to the line's bin (W7). */
 export function startPick(w: MWms, picker: MPicker, o: MOrder, line: MLine, tick: number): void {
   picker.order = o.no;
   picker.line = line.no;
   picker.progress = 0;
+  picker.walk = walkTicks(picker.at, line.bin);
+  picker.at = line.bin;
   line.status = 'PICKING';
   o.status = 'PICKING';
   log(w, { tick, code: 'PICK START', order: o.no, line: line.no, sku: line.sku, qty: line.allocated, of: line.ordered, picker: picker.id });
 }
 
-/** Idle pickers take the waiting lines FIFO by priority, then ship-by, then order and line number. */
+interface Waiting {
+  readonly o: MOrder;
+  readonly line: MLine;
+}
+
+/** Most urgent first under the plan's pick order (W7): priority then ship-by, or ship-by then priority; then order and line number. */
+export function urgency(rule: MWms['policy']['pick'], a: Pick<MOrder, 'priority' | 'shipBy' | 'no'>, b: Pick<MOrder, 'priority' | 'shipBy' | 'no'>): number {
+  const first = rule === 'cutoff' ? a.shipBy - b.shipBy || a.priority - b.priority : a.priority - b.priority || a.shipBy - b.shipBy;
+  return first || a.no - b.no;
+}
+
+/**
+ * Idle pickers take the waiting lines (RULES 16, W7), by the plan's pick
+ * order: the most urgent line first (best priority then earliest ship-by, or
+ * earliest ship-by then priority), or, under the nearest-bin rule, each idle
+ * picker in turn takes the line with the shortest walk from where it stands,
+ * the most urgent breaking a tie.
+ */
 function assignPickers(w: MWms, tick: number): void {
   const idle = w.pickers.filter((p) => p.order === 0);
   if (idle.length === 0) return;
-  const waiting: { o: MOrder; line: MLine }[] = [];
+  const waiting: Waiting[] = [];
   for (const o of w.orders) {
     if (!pickable(o)) continue;
     for (const line of o.lines) if (line.status === 'ALLOCATED') waiting.push({ o, line });
   }
   if (waiting.length === 0) return;
-  waiting.sort((a, b) => a.o.priority - b.o.priority || a.o.shipBy - b.o.shipBy || a.o.no - b.o.no || a.line.no - b.line.no);
-  for (let i = 0; i < idle.length && i < waiting.length; i++) {
-    const { o, line } = waiting[i] as { o: MOrder; line: MLine };
-    startPick(w, idle[i] as (typeof idle)[number], o, line, tick);
+  const rule = w.policy.pick;
+  waiting.sort((a, b) => urgency(rule, a.o, b.o) || a.line.no - b.line.no);
+  for (const picker of idle) {
+    if (waiting.length === 0) return;
+    let best = 0;
+    if (rule === 'nearest') {
+      let shortest = Number.POSITIVE_INFINITY;
+      waiting.forEach((c, i) => {
+        const bays = travelBays(picker.at, c.line.bin);
+        if (bays < shortest) {
+          shortest = bays;
+          best = i;
+        }
+      });
+    }
+    const [{ o, line }] = waiting.splice(best, 1) as [Waiting];
+    startPick(w, picker, o, line, tick);
   }
 }
 
@@ -270,7 +313,10 @@ export function wmsStep(w: MWms, tick: number, contract: number, payCents = 0, e
     }
     w.nextOrderAt = tick + r.int(T.wmsOrderMinTicks.value, Math.max(T.wmsOrderMinTicks.value, T.wmsOrderMaxTicks.value));
   }
-  if (tick >= w.nextWaveAt) {
+  // Release (W7): timed waves, each order as it arrives, or only by hand.
+  const release = w.policy.release;
+  if (release === 'continuous') releaseWave(w, tick, w.orders);
+  else if (release === 'waves' && tick >= w.nextWaveAt) {
     releaseWave(w, tick, w.orders);
     w.nextWaveAt = tick + T.wmsWaveTicks.value;
   }
@@ -283,9 +329,10 @@ export function wmsStep(w: MWms, tick: number, contract: number, payCents = 0, e
     cycleCount(w, r, tick);
     w.nextCountAt = tick + T.wmsCountTicks.value;
   }
-  for (const o of w.orders) {
-    if (o.status === 'RELEASED' || o.status === 'BACKORDER' || (pickable(o) && o.lines.some(waitingForStock))) allocate(w, o, tick);
-  }
+  // The most urgent orders take the stock first (W7).
+  const needing = w.orders.filter((o) => o.status === 'RELEASED' || o.status === 'BACKORDER' || (pickable(o) && o.lines.some(waitingForStock)));
+  if (needing.length > 1) needing.sort((a, b) => urgency(w.policy.pick, a, b));
+  for (const o of needing) allocate(w, o, tick);
   workPickers(w, r, tick);
   assignPickers(w, tick);
   let closedNow = false;

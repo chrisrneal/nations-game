@@ -429,7 +429,7 @@ disagree.
 | `wmsStockCoverMaxPct` | 180 | 100 | 400 | WMS: most stock a SKU opens with, as % of the units ordered of it. |
 | `wmsEventsKept` | 200 | 50 | 1000 | WMS: activity events kept in State (the oldest drop off); bounds the save and the feed. |
 | `wmsStepTicks` | 4 | 1 | 8 | WMS: it steps once every this many ticks (1 s): timestamps a WMS shows are seconds, and 24 h of catch-up stays cheap. |
-| `wmsPickMilliPerSec` | 650 | 200 | 4000 | WMS: milli-units a picker picks a second (0.65): six pickers keep up with an order every 25 s of about 80 units with a little to spare, so a queue forms when luck runs bad. |
+| `wmsPickMilliPerSec` | 750 | 200 | 4000 | WMS: milli-units a picker picks a second once at the bin (0.75). Raised from 0.65 when pickers started walking between bins (W7), so an idle WMS ships as before: about 82% OTIF and 94% on time (seeds 1-8, 2 h; was 84% and 95%). Six pickers keep up with an order every 25 s with a little to spare, so a queue forms when luck runs bad. |
 | `wmsFirstWaveTicks` | 120 | 0 | 1200 | WMS: ticks from opening to the first automatic wave (30 s): long enough to see NEW orders and release them by hand. |
 | `wmsWaveTicks` | 240 | 40 | 2400 | WMS: ticks between automatic waves (60 s): every NEW order not on hold is released. |
 | `wmsOrderMinTicks` | 80 | 20 | 1200 | WMS: shortest gap before the next order arrives (20 s). |
@@ -441,6 +441,7 @@ disagree.
 | `wmsLoadTicks` | 20 | 0 | 240 | WMS: ticks from STAGED to LOADED (5 s). |
 | `wmsShipTicks` | 20 | 0 | 240 | WMS: ticks from LOADED to SHIPPED (5 s). |
 | `wmsShortPickChanceBp` | 300 | 0 | 2000 | WMS: chance a picker finds a bin short of what was allocated (3%): a SHORT PICK of 1 unit up to the whole line. |
+| `wmsWalkTicksPerBay` | 1 | 0 | 8 | WMS (W7): ticks a picker takes to walk past one bay (4 bays a second). A line across the warehouse is about 30 bays (8 s); between bins in one aisle a few seconds. Walking is why the nearest-bin pick order picks more lines an hour. |
 | `wmsReplenTicks` | 240 | 40 | 2400 | WMS: ticks between reorder planning runs (60 s, W6); the first runs at opening. |
 | `wmsReorderUnits` | 80 | 0 | 500 | WMS: reorder point: a SKU whose position (available + inbound - units waiting) is under this gets a PO line (W6). At 80 an idle WMS ships as it did with instant replenishment at 40 (about 81% OTIF, 96% fill); at 40 the lead time cut OTIF to 64%. |
 | `wmsReplenUnits` | 120 | 10 | 1000 | WMS: a PO line orders the SKU up to the reorder point plus this many units (W6). |
@@ -621,7 +622,7 @@ picking, stock or pacing in RULES 3-11.
   of it, rounded down, so some lines will run short; an SKU nobody ordered
   holds `wmsQtyMin`-`wmsQtyMax` units.
 - **Pickers and receivers.** `wmsPickers` (6) and `wmsReceivers` (3), all
-  idle; no purchase orders yet (the first planning run is the first step).
+  idle, the pickers at the pick-and-drop point, and the default plan (W7); no purchase orders yet (the first planning run is the first step).
 - **Log.** One ORD CRT event per order with its units; the latest
   `wmsEventsKept` (200) events are kept.
 - **The step.** The WMS steps every `wmsStepTicks` ticks (1 s), on its own
@@ -633,10 +634,15 @@ picking, stock or pacing in RULES 3-11.
   ticks (20-30 s) from a customer on the current contract, unless
   `wmsMaxOpenOrders` (40) are open. Shipped and cancelled orders beyond the
   latest `wmsKeepClosedOrders` (40) drop off the grid.
-- **Waves.** The first automatic wave is `wmsFirstWaveTicks` after opening
-  (30 s), then one every `wmsWaveTicks` (60 s): every NEW order not on hold
-  is RELEASED in one wave (WAVE REL per order) and allocated at once.
-- **Allocation.** Each open line takes what its SKU has available (on hand
+- **Waves.** Under timed waves (the default release), the first automatic
+  wave is `wmsFirstWaveTicks` after opening (30 s), then one every
+  `wmsWaveTicks` (60 s): every NEW order not on hold is RELEASED in one wave
+  (WAVE REL per order) and allocated at once. Under continuous release every
+  NEW order is released as a wave of its own the step it arrives; under
+  manual release only the player releases (W7).
+- **Allocation.** Orders are allocated most urgent first (W7: by the plan's
+  pick order, priority then ship-by under nearest bin), so a P1 released in
+  the same wave as a P3 gets the stock first. Each open line takes what its SKU has available (on hand
   minus allocated), up to what it ordered (ALLOC). A line given less is short
   by the rest (ALLOC SHORT); a line given nothing is SHORT and tries again
   every step until stock comes or its order finishes picking. An order given
@@ -682,14 +688,22 @@ picking, stock or pacing in RULES 3-11.
   available is under the reorder point, else OK. Each SKU also keeps the
   units picked out of it since opening and the net adjustment of its
   counts.
-- **Picking.** `wmsPickers` (6) pickers each pick one line at a time at
-  `wmsPickMilliPerSec` (0.65 units a second). An idle picker takes the
-  waiting allocated line with the best priority, then the earliest ship-by,
-  then the lowest order and line number (PICK START; the order is PICKING).
-  At the end of the line the picker confirms it (PICK CONF): the allocated
-  units leave the bin, but with chance `wmsShortPickChanceBp` (3%) 1 to all
-  of them were not there (SHORT PICK): the line is short by those. A line
-  with nothing picked goes back to waiting for stock.
+- **Picking.** The pickers (`wmsPickers`, 6, unless the plan moves people)
+  each pick one line at a time. An idle picker takes a waiting allocated line
+  by the plan's pick order (below; by default the best priority, then the
+  earliest ship-by, then the lowest order and line number) (PICK START; the
+  order is PICKING). It first walks to the line's bin (W7): bins sit in four
+  aisles A-D of 20 bays (bin `160a + 8(b-1) + k` is aisle `a`, bay `b`); the
+  walk is the bays between two bins in one aisle, or out to the front cross
+  aisle, across (`WMS_AISLE_GAP_BAYS`, 3 bays an aisle) and in again, at
+  `wmsWalkTicksPerBay` (1) ticks a bay, from the bin the picker stands at (a
+  new picker starts at the pick-and-drop point at the front of aisle A, bay
+  0). Picking starts the step after it arrives, at `wmsPickMilliPerSec` (0.75
+  units a second). At the end of the line the picker confirms it (PICK
+  CONF): the allocated units leave the bin, but with chance
+  `wmsShortPickChanceBp` (3%) 1 to all of them were not there (SHORT PICK):
+  the line is short by those. A line with nothing picked goes back to
+  waiting for stock. The picker stays at that bin until its next line.
 - **Packing to shipping.** When no line of an order is waiting for or under
   a picker, the order is PICKED (SHORT if any unit is short; back to
   BACKORDER if nothing at all was picked). It then moves to PACKED, STAGED,
@@ -715,10 +729,36 @@ picking, stock or pacing in RULES 3-11.
   - *Cancel a line*: a line not yet picked, on an order not yet picked, is
     CANCELLED: its allocation goes back to stock and it no longer counts.
     Cancelling every line cancels the order (CANCEL).
+  - *Plan*: see the operating plan below.
   - *Expedite*: once per order, not after its cutoff has passed, for the pay
     of `wmsExpediteCostOrders` (30) orders at today's pay: the order becomes
     P1 and moves to a later, faster truck, `wmsExpediteLeadTicks` (5 min)
     added to its ship-by (EXPEDITE).
+- **The operating plan** (W7). Decisions the WMS otherwise makes itself,
+  set by the player with a `wms` command (`policy`), one PLAN event for each
+  setting changed; a plan that changes nothing is refused:
+  - *Pick order*: **priority first** (the default: best priority, then
+    earliest ship-by), **cutoff first** (earliest ship-by, then priority) or
+    **nearest bin** (each idle picker, lowest id first, takes the waiting
+    line with the shortest walk from where it stands, the most urgent
+    breaking a tie). Allocation follows the same urgency (priority first
+    under nearest bin).
+  - *Release*: **timed waves** (the default), **continuous** or **manual**
+    (see Waves). Going back to timed waves puts the next wave a full
+    `wmsWaveTicks` away.
+  - *Crew*: the crew is `wmsPickers + wmsReceivers` (9) people; the plan
+    sets how many pick, 1 to crew - 1, and the rest receive. It takes
+    effect at once: new pickers start idle at the pick-and-drop point, new
+    receivers idle; the highest-numbered leave first, and the line each was
+    on waits again with its count undone (a PO line half counted in is
+    counted again from the start).
+  Measured on an idle WMS (seeds 1-8, 2 h; OTIF, on time, fill): the
+  default 82%, 94%, 97.4%; cutoff first 84%, 96%, 97.3%; nearest bin 81%,
+  93%, 97.1% (the pickers have slack, so less walking matters only with a
+  backlog, where it picks more lines; a test checks it); continuous release
+  84%, 97%, 97.1% (work starts sooner, but stock goes to whichever order
+  comes first); seven pickers and two receivers 85%, 98%, 97.3%; five
+  pickers 65%, 74%, 97.4%.
 - **Goodwill and pay** (slice 8). Each destination country has goodwill,
   0-100, starting at `wmsGoodwillStart` (50). A shipment pays the warehouse
   `wmsUnitPayBp` (5%) of an idle order's pay (stars and site included) for

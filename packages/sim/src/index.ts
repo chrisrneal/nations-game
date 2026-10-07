@@ -42,6 +42,7 @@ export { advanceMany, step, step as stepWarehouse, type WarehouseStepResult } fr
 export { NO_BOOST, warehouseView, estimate, runningBoosts, type BoostEffect, type Estimate } from './view.ts';
 export { WAREHOUSE_MIGRATIONS, createWarehouseSave, loadWarehouseSave, migrateWarehouseSave, replay, type LoadedWarehouse } from './save.ts';
 export { WarehouseSession, type WarehouseSubmitResult } from './session.ts';
-export { WMS_DESTINATIONS, WMS_FIRST_ORDER_NO, WMS_FIRST_PO_NO, WMS_SKUS, WMS_SUPPLIERS, binCode, destinationAt, orderCode, poCode, skuAt, supplierAt, type WmsDestination, type WmsSku, type WmsSupplier } from './wms/catalog.ts';
+export { WMS_DESTINATIONS, WMS_FIRST_ORDER_NO, WMS_FIRST_PO_NO, WMS_SKUS, WMS_SUPPLIERS, WMS_AISLES, WMS_AISLE_GAP_BAYS, WMS_BAYS, binCode, binPlace, destinationAt, orderCode, poCode, skuAt, supplierAt, travelBays, type WmsDestination, type WmsSku, type WmsSupplier } from './wms/catalog.ts';
 export { createWms, emptyInbound } from './wms/generate.ts';
-export { eventText, pickerName, receiverName, wmsView } from './wms/view.ts';
+export { WMS_PICK_RULES, WMS_RELEASE_MODES, defaultPolicy, wmsCrew } from './wms/policy.ts';
+export { PICK_RULE_NAMES, RELEASE_NAMES, eventText, pickerName, receiverName, wmsView } from './wms/view.ts';

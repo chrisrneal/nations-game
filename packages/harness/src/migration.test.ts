@@ -3,7 +3,7 @@
  * save version 1 (W1); version 2 adds the WMS (W5), version 3 its clocks
  * and counters, version 4 expedites and version 5 inbound and inventory (W6),
  * each tested with a real save the game wrote (fixtures/warehouse-save-v1.json
- * to -v4.json). A real
+ * to -v5.json). A real
  * airport save (the game this repo held before, P12's version 2) is refused
  * with a message a player can act on.
  */
@@ -17,6 +17,7 @@ const v1 = JSON.parse(readFileSync(new URL('../fixtures/warehouse-save-v1.json',
 const v2 = JSON.parse(readFileSync(new URL('../fixtures/warehouse-save-v2.json', import.meta.url), 'utf8')) as WarehouseSaveFile;
 const v3 = JSON.parse(readFileSync(new URL('../fixtures/warehouse-save-v3.json', import.meta.url), 'utf8')) as WarehouseSaveFile;
 const v4 = JSON.parse(readFileSync(new URL('../fixtures/warehouse-save-v4.json', import.meta.url), 'utf8')) as WarehouseSaveFile;
+const v5 = JSON.parse(readFileSync(new URL('../fixtures/warehouse-save-v5.json', import.meta.url), 'utf8')) as WarehouseSaveFile;
 
 /** A compact save of a warehouse that has played for a minute, as the game writes them. */
 function played(): WarehouseSaveFile {
@@ -28,18 +29,40 @@ function played(): WarehouseSaveFile {
 }
 
 describe('save migrations (S9)', () => {
-  it('the warehouse is at save version 5, with migrations from 1, 2, 3 and 4', () => {
-    expect(WAREHOUSE_SCHEMA_VERSION).toBe(5);
-    expect(Object.keys(WAREHOUSE_MIGRATIONS)).toEqual(['1', '2', '3', '4']);
+  it('the warehouse is at save version 6, with migrations from 1 to 5', () => {
+    expect(WAREHOUSE_SCHEMA_VERSION).toBe(6);
+    expect(Object.keys(WAREHOUSE_MIGRATIONS)).toEqual(['1', '2', '3', '4', '5']);
+  });
+
+  it('a real version-5 save gains the default plan; each picker stands at its line’s bin, and the WMS plays on (W7)', () => {
+    const migrated = migrateWarehouseSave(v5) as unknown as WarehouseSaveFile;
+    expect(migrated.schemaVersion).toBe(6);
+    const { wms, ...rest } = migrated.snapshot;
+    const oldRest: Record<string, unknown> = { ...v5.snapshot };
+    delete oldRest.wms;
+    expect(rest).toEqual({ ...oldRest, schemaVersion: 6 });
+    const old = v5.snapshot.wms as unknown as Record<string, unknown> & typeof wms;
+    expect(wms.policy).toEqual({ pick: 'priority', release: 'waves', pickers: old.pickers.length });
+    expect({ ...wms, pickers: [], policy: null }).toEqual({ ...old, pickers: [], policy: null });
+    const busy = old.pickers.filter((p) => p.order > 0);
+    expect(busy.length).toBeGreaterThan(0);
+    for (const p of wms.pickers) {
+      const line = old.orders.find((o) => o.no === p.order)?.lines.find((l) => l.no === p.line);
+      expect(p).toEqual({ ...old.pickers.find((x) => x.id === p.id), at: line?.bin ?? -1, walk: 0 });
+    }
+    const session = WarehouseSession.load(v5);
+    expect(hashState(session.state)).toBe(migrated.stateHash);
+    session.advance(2400);
+    expect(session.state.wms.stats.shipped).toBeGreaterThan(old.stats.shipped);
   });
 
   it('a real version-4 save keeps its orders, stock and log; the WMS gains inbound and inventory, then raises POs (W6)', () => {
     const migrated = migrateWarehouseSave(v4) as unknown as WarehouseSaveFile;
-    expect(migrated.schemaVersion).toBe(5);
+    expect(migrated.schemaVersion).toBe(6);
     const { wms, ...rest } = migrated.snapshot;
     const oldRest: Record<string, unknown> = { ...v4.snapshot };
     delete oldRest.wms;
-    expect(rest).toEqual({ ...oldRest, schemaVersion: 5 });
+    expect(rest).toEqual({ ...oldRest, schemaVersion: 6 });
     expect(wms.orders).toEqual(v4.snapshot.wms.orders);
     expect(wms.events).toEqual(v4.snapshot.wms.events);
     expect(wms.inventory).toEqual(v4.snapshot.wms.inventory.map((s) => ({ ...s, picked: 0, counted: -1, variance: 0 })));
@@ -54,9 +77,9 @@ describe('save migrations (S9)', () => {
 
   it('a real version-3 save keeps its moving WMS; every order gains expedited: false', () => {
     const migrated = migrateWarehouseSave(v3) as unknown as WarehouseSaveFile;
-    expect(migrated.schemaVersion).toBe(5);
+    expect(migrated.schemaVersion).toBe(6);
     expect(migrated.snapshot.wms.orders).toEqual(v3.snapshot.wms.orders.map((o) => ({ ...o, expedited: false })));
-    expect({ ...migrated.snapshot.wms, orders: [], inventory: [] }).toEqual({ ...v3.snapshot.wms, orders: [], inventory: [], ...emptyInbound(v3.snapshot.tick) });
+    expect({ ...migrated.snapshot.wms, orders: [], inventory: [], pickers: [], policy: null }).toEqual({ ...v3.snapshot.wms, orders: [], inventory: [], pickers: [], policy: null, ...emptyInbound(v3.snapshot.tick) });
     const session = WarehouseSession.load(v3);
     session.advance(400);
     expect(session.state.wms.stats.shipped).toBeGreaterThan(v3.snapshot.wms.stats.shipped);
@@ -70,8 +93,8 @@ describe('save migrations (S9)', () => {
     const { wms, ...rest } = migrated.snapshot;
     const oldRest: Record<string, unknown> = { ...old.snapshot };
     delete oldRest.wms;
-    expect(migrated.schemaVersion).toBe(5);
-    expect(rest).toEqual({ ...oldRest, schemaVersion: 5 });
+    expect(migrated.schemaVersion).toBe(6);
+    expect(rest).toEqual({ ...oldRest, schemaVersion: 6 });
     expect(wms).toEqual(createWms({ seed: old.snapshot.rng.seed + old.snapshot.site, tick: old.snapshot.tick, contract: old.snapshot.levels.contract }));
     expect(wms.orders.length).toBeGreaterThan(0);
     const session = WarehouseSession.load(old);
@@ -89,18 +112,18 @@ describe('save migrations (S9)', () => {
 
   it('a migration changes the snapshot, then the save is replayed under today’s rules and re-hashed', () => {
     const save = played();
-    const bumped = migrateWarehouseSave(save, { 5: (raw) => ({ ...raw, schemaVersion: 6, snapshot: { ...(raw.snapshot as object), schemaVersion: 6 } }) }, 6) as unknown as WarehouseSaveFile;
-    expect(bumped.schemaVersion).toBe(6);
-    expect(bumped.snapshot.schemaVersion).toBe(6);
-    expect(bumped.stateHash).toBe(hashState({ ...save.snapshot, schemaVersion: 6 }));
+    const bumped = migrateWarehouseSave(save, { 6: (raw) => ({ ...raw, schemaVersion: 7, snapshot: { ...(raw.snapshot as object), schemaVersion: 7 } }) }, 7) as unknown as WarehouseSaveFile;
+    expect(bumped.schemaVersion).toBe(7);
+    expect(bumped.snapshot.schemaVersion).toBe(7);
+    expect(bumped.stateHash).toBe(hashState({ ...save.snapshot, schemaVersion: 7 }));
   });
 
   it('refuses a compact old save that was tampered with, and one from a newer game', () => {
     const save = played();
-    const old = { ...save, schemaVersion: 4 };
+    const old = { ...save, schemaVersion: 5 };
     expect(() => migrateWarehouseSave({ ...old, stateHash: 'nope' })).toThrow(/does not match/);
     expect(() => migrateWarehouseSave({ ...old, snapshot: { ...save.snapshot, cash: save.snapshot.cash + 1 } })).toThrow(/does not match/);
-    expect(() => migrateWarehouseSave({ ...save, schemaVersion: 6 })).toThrow(/newer game version/);
+    expect(() => migrateWarehouseSave({ ...save, schemaVersion: 7 })).toThrow(/newer game version/);
   });
 
   it('a saved warehouse loads to the same state and keeps playing', () => {

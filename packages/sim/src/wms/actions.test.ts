@@ -80,7 +80,10 @@ describe('WMS player actions (slice 7)', () => {
     expect(rejected(events)).toBeNull();
     expect(state.wms.pickers.find((x) => x.id === picker.id)).toMatchObject({ order: target.o.no, line: target.l.no });
     const left = state.wms.orders.find((o) => o.no === picker.order)?.lines.find((l) => l.no === picker.line);
-    expect(left).toMatchObject({ status: 'ALLOCATED', picked: 0 });
+    // Its count undone; it waits again, unless an idle picker took it up in the same step.
+    expect(left).toMatchObject({ picked: 0 });
+    expect(['ALLOCATED', 'PICKING']).toContain(left?.status);
+    expect(state.wms.pickers.some((x) => x.id === picker.id && x.order === picker.order && x.line === picker.line)).toBe(false);
     expect(codes(state, target.o.no)).toEqual(expect.arrayContaining(['ASSIGN', 'PICK START']));
   });
 

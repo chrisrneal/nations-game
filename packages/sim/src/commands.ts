@@ -22,6 +22,10 @@ function wmsProblem(p: Record<string, unknown>): string | null {
       return id(p.order) && id(p.line) && id(p.picker) ? null : 'bad assignment';
     case 'cancelLine':
       return id(p.order) && id(p.line) ? null : 'bad line';
+    case 'policy': {
+      const plan = p.policy as Record<string, unknown> | null | undefined;
+      return typeof plan === 'object' && plan !== null && typeof plan.pick === 'string' && typeof plan.release === 'string' && id(plan.pickers) ? null : 'bad plan';
+    }
     default:
       return 'unknown WMS action';
   }

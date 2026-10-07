@@ -25,6 +25,7 @@ export function cloneWms(w: WmsState): MWms {
     receivers: w.receivers.map((r) => ({ ...r })),
     inbound: { ...w.inbound },
     recentIn: [...w.recentIn],
+    policy: { ...w.policy },
   };
 }
 
