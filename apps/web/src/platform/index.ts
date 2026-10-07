@@ -14,6 +14,7 @@ export type { WarehouseUpdate, AwayRecap } from './engine.ts';
 export type { InstallPrompt, InstallState } from './install.ts';
 export { createFeedback, type Cue, type Feedback, type Prefs } from './feedback.ts';
 export { AUTOSAVE_SLOT, FILE_FORMAT, type WarehouseHost } from './localHost.ts';
+export { DEFAULT_SPEED, SPEEDS } from './clock.ts';
 
 /** Starts the sim in a Web Worker and returns the Host for the interface. */
 export function createHost(): WarehouseHost {

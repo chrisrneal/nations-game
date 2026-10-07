@@ -133,7 +133,7 @@ describe('WMS sample order generator (slice 1)', () => {
       Array.from({ length: crew }, (_, i) => ({ id: i + 1, role: i < T.wmsStartPickers.value ? 'pick' : 'receive', task: 0, queue: [], progress: 0, at: -1, walk: 0, stats: { tasks: 0, units: 0, busy: 0, walking: 0, idle: 0 } })),
     );
     expect(wms.tasks).toEqual([]);
-    expect(wms.policy).toEqual({ pick: 'priority', release: 'waves', pickers: T.wmsStartPickers.value });
+    expect(wms.policy).toEqual({ pick: 'priority', release: 'waves', pickers: T.wmsStartPickers.value, waveTicks: T.wmsWaveTicks.value, labor: 'fixed' });
     expect(wms.events).toEqual(
       wms.orders.map((o) => ({ tick: 12, code: 'ORD CRT', order: o.no, line: 0, sku: -1, qty: o.lines.reduce((n, l) => n + l.ordered, 0), of: 0, picker: 0 })),
     );

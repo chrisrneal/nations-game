@@ -223,14 +223,15 @@ describe('the plan as a command (RULES 8, W7)', () => {
     const start = createWarehouse({ seed: 6 });
     const r = step(start, [{ tick: 0, type: 'wms', payload: { action: 'policy', policy: plan } }]);
     expect(r.events).toContainEqual(expect.objectContaining({ type: 'wms', payload: { action: 'policy', order: 0, cents: 0 } }));
-    expect(r.state.wms.policy).toEqual(plan);
+    // A plan naming three settings keeps the other two (W9).
+    expect(r.state.wms.policy).toEqual({ ...plan, waveTicks: T.wmsWaveTicks.value, labor: 'fixed' });
     expect(r.state.wms.workers.filter((p) => p.role === 'pick')).toHaveLength(7);
     expect(r.state.wms.workers.filter((p) => p.role === 'receive')).toHaveLength(CREW - 7);
     let stepped = r.state;
     for (let i = 0; i < 400; i++) stepped = step(stepped, []).state;
     expect(hashState(advanceMany(r.state, 400))).toBe(hashState(stepped));
     const v = wmsView(stepped.wms, stepped.tick);
-    expect(v.policy).toEqual(plan);
+    expect(v.policy).toEqual({ ...plan, waveTicks: T.wmsWaveTicks.value, labor: 'fixed' });
     expect(v.crew).toBe(CREW);
     expect(v.layout).toEqual({ aisles: 4, bays: 20, aisleGap: 3, doors: T.wmsDoors.value });
     expect(v.workers.filter((p) => p.role === 'receive')).toHaveLength(CREW - 7);

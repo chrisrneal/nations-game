@@ -3,7 +3,7 @@ import { WAREHOUSE_TUNABLES as T } from './tunables.ts';
 import { createWms } from './wms/generate.ts';
 
 /** Current warehouse save schema. Bump it with a migration in save.ts. */
-export const WAREHOUSE_SCHEMA_VERSION = 7;
+export const WAREHOUSE_SCHEMA_VERSION = 8;
 
 export interface CreateWarehouseOptions {
   readonly seed: number;

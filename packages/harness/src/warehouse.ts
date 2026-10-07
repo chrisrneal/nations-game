@@ -3,11 +3,14 @@
  * Runs in Node and, bundled, inside Chromium (browser-entry.ts), so it must not
  * touch Node APIs.
  */
-import type { WarehouseState, WmsAction, WmsPickRule, WmsReleaseMode } from '@warehouse/contracts';
+import type { WarehouseState, WmsAction, WmsLaborMode, WmsPickRule, WmsReleaseMode } from '@warehouse/contracts';
 import { WarehouseSession, advanceMany, createWarehouse, hashState, hireCost, doorCost, stepWarehouse } from '@warehouse/sim';
 
 const RULES: readonly WmsPickRule[] = ['priority', 'cutoff', 'nearest'];
 const RELEASES: readonly WmsReleaseMode[] = ['waves', 'continuous', 'manual'];
+const LABOR: readonly WmsLaborMode[] = ['fixed', 'balance'];
+/** Wave intervals the Plan offers (W9): 30 minutes, an hour, two hours. */
+const WAVES: readonly number[] = [120, 240, 480];
 
 /** The scripted player's action this tick, if any. Integer decisions only, so it is identical everywhere. */
 function scriptedAction(s: WarehouseState): WmsAction | null {
@@ -17,7 +20,11 @@ function scriptedAction(s: WarehouseState): WmsAction | null {
   const t = s.tick;
   if (t % 480 === 240) {
     const k = Math.floor(t / 480);
-    return { action: 'policy', policy: { pick: RULES[k % 3] ?? 'priority', release: RELEASES[(k >> 1) % 3] ?? 'waves', pickers: 4 + (k % 4) } };
+    return { action: 'policy', policy: { pick: RULES[k % 3] ?? 'priority', release: RELEASES[(k >> 1) % 3] ?? 'waves', pickers: 4 + (k % 4), waveTicks: WAVES[(k >> 2) % 3] ?? 240, labor: LABOR[k % 2] ?? 'fixed' } };
+  }
+  if (t % 160 === 80) {
+    const k = Math.floor(t / 160);
+    return { action: 'role', worker: k % 4 === 0 ? 0 : 1 + (k % w.workers.length), role: k % 3 === 0 ? 'receive' : 'pick' };
   }
   if (t % 240 === 120 && (hireCost(w.workers.length) ?? Number.POSITIVE_INFINITY) <= s.cash) return { action: 'hire', role: t % 480 === 120 ? 'pick' : 'receive' };
   if (t % 960 === 600 && (doorCost(w.doors) ?? Number.POSITIVE_INFINITY) <= s.cash) return { action: 'door' };
@@ -50,7 +57,8 @@ function scriptedAction(s: WarehouseState): WmsAction | null {
  * A scripted player that uses every WMS action: changes the plan every two
  * minutes, hires and opens doors when it can afford them, releases orders,
  * changes priorities, holds and releases, assigns pickers, expedites and
- * cancels lines. Some are refused (a plan with no change, nothing to release,
+ * cancels lines, moves workers between picking and receiving and switches
+ * the balance plan and the wave interval (W9). Some are refused (a plan with no change, nothing to release,
  * not enough cash), which is part of the test.
  */
 export function scriptedWarehouse(seed: number, ticks: number): WarehouseState {

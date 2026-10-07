@@ -1597,3 +1597,138 @@
     transition: none;
   }
 }
+
+/* ---- W9: the speed buttons, waves, where the work is ---- */
+.home-speed {
+  flex: none;
+  display: flex;
+  border: 1px solid var(--wms-rule);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.speed-btn {
+  min-width: var(--tap);
+  height: var(--tap);
+  padding: 0 0.3rem;
+  border: none;
+  background: var(--wms-row);
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.speed-btn + .speed-btn {
+  border-left: 1px solid var(--wms-rule);
+}
+
+.speed-btn[aria-pressed='true'] {
+  background: var(--wms-amber);
+  color: var(--wms-bg);
+}
+
+.speed-x[data-speed='0'] {
+  color: var(--muted);
+}
+
+.wms-plan-sub {
+  margin: 0.75rem 0 0.4rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.wms-btn-wide {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-top: 0.6rem;
+}
+
+.wms-btn-wide .num {
+  color: var(--wms-green);
+}
+
+.needs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid var(--wms-rule);
+}
+
+.wms-plan-part .needs {
+  padding: 0;
+  border-bottom: none;
+}
+
+.need-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--wms-rule);
+  border-radius: 8px;
+  background: var(--wms-row-alt);
+}
+
+.need-short {
+  border-color: var(--wms-green);
+}
+
+.need-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 0.78rem;
+}
+
+.need-nums {
+  color: var(--fg);
+  font-size: 0.74rem;
+}
+
+.need-row .wms-btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+.needs-verdict {
+  margin: 0.1rem 0 0;
+  font-size: 0.78rem;
+}
+
+.worker-move {
+  align-items: center;
+  border-bottom: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.worker-move .muted {
+  flex: 1;
+  min-width: 10rem;
+  font-size: 0.74rem;
+}
+
+/* The speed buttons take the middle of the bar (W9): the day sits over the time, and today's earnings under the cash. */
+.home-top .home-clock {
+  flex: none;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  line-height: 1.15;
+}
+
+.home-top .home-money {
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0;
+  line-height: 1.15;
+}

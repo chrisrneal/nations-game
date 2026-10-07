@@ -329,3 +329,17 @@ export function purgeTasks(w: MWms): void {
     return true;
   });
 }
+
+/** Tasks waiting for each side of the crew (W9): lined up but not started, or open and ready to start. */
+export function waitingByRole(w: MWms): Record<WmsRole, number> {
+  const waiting: Record<WmsRole, number> = { pick: 0, receive: 0 };
+  let ix: Index | null = null;
+  for (const t of w.tasks) {
+    if (t.status === 'QUEUED') waiting[roleFor(t.kind)] += 1;
+    else if (t.status === 'OPEN') {
+      ix ??= indexOf(w);
+      if (ready(ix, t)) waiting[roleFor(t.kind)] += 1;
+    }
+  }
+  return waiting;
+}

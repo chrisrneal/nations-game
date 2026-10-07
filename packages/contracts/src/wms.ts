@@ -70,7 +70,9 @@ export type WmsEventCode =
   | 'PLAN'
   // The crew and the dock (W8): `qty` is the new crew or door count, `line` the role hired (1 pick, 2 receive).
   | 'HIRE'
-  | 'DOOR';
+  | 'DOOR'
+  // Labour (W9): `picker` moved to `line`'s role (1 pick, 2 receive), `qty` tasks waiting there, `of` 1 when the WMS's balance moved them.
+  | 'MOVE';
 
 /**
  * How the WMS orders the pick tasks it hands out (W7): best priority then
@@ -82,12 +84,22 @@ export type WmsPickRule = 'priority' | 'cutoff' | 'nearest';
 /** How NEW orders are released to the floor (W7): in timed waves, each as it arrives, or only by hand. */
 export type WmsReleaseMode = 'waves' | 'continuous' | 'manual';
 
+/**
+ * How the crew is split between picking and receiving (W9): fixed where the
+ * player puts people, or balanced by the WMS towards the work waiting.
+ */
+export type WmsLaborMode = 'fixed' | 'balance';
+
 /** The operating plan the player sets (W7): decisions the WMS otherwise makes itself. */
 export interface WmsPolicy {
   readonly pick: WmsPickRule;
   readonly release: WmsReleaseMode;
   /** Workers on picking; the rest of the crew receive and put away. */
   readonly pickers: number;
+  /** Ticks between timed waves (W9). */
+  readonly waveTicks: number;
+  /** Whether the WMS moves people between picking and receiving by need (W9). */
+  readonly labor: WmsLaborMode;
 }
 
 /** Purchase order statuses (W6): on the road, in the yard waiting for a door, at a door being received, being put away, done. */
@@ -373,7 +385,10 @@ export type WmsAction =
   | { readonly action: 'assign'; readonly picker: number; readonly order: number; readonly line: number }
   | { readonly action: 'cancelLine'; readonly order: number; readonly line: number }
   | { readonly action: 'expedite'; readonly order: number }
-  | { readonly action: 'policy'; readonly policy: WmsPolicy }
+  /** A plan change; settings left out keep their value (W9: saves from before the wave and labour settings replay unchanged). */
+  | { readonly action: 'policy'; readonly policy: Pick<WmsPolicy, 'pick' | 'release' | 'pickers'> & Partial<WmsPolicy> }
+  /** Move a worker to a role (W9); worker 0 lets the WMS choose who: the one with least in hand. */
+  | { readonly action: 'role'; readonly worker: number; readonly role: WmsRole }
   | { readonly action: 'hire'; readonly role: WmsRole }
   | { readonly action: 'door' };
 
@@ -661,6 +676,25 @@ export interface WmsCrewKpis {
   readonly utilPct: number | null;
 }
 
+/** One side of the crew and the work waiting for it (W9). */
+export interface WmsNeed {
+  readonly people: number;
+  /** People on it with no task. */
+  readonly idle: number;
+  /** Tasks waiting for it: lined up but not started, or open and ready. */
+  readonly waiting: number;
+}
+
+/** Where the work is (W9): both sides of the crew, and the side that needs one more person, if any. */
+export interface WmsNeeds {
+  readonly pick: WmsNeed;
+  readonly receive: WmsNeed;
+  /** The side the WMS's balance would move a person to now; null when the work is even. */
+  readonly short: WmsRole | null;
+  /** Ticks until the balance next looks (it moves at most one person a look). */
+  readonly nextBalanceIn: number;
+}
+
 /** What hiring and building cost, and how far they can go (W8). */
 export interface WmsGrowthView {
   /** Cents the next worker costs; null at the most workers. */
@@ -697,6 +731,10 @@ export interface WmsView {
   /** The operating plan (W7), and the crew it splits between picking and receiving. */
   readonly policy: WmsPolicy;
   readonly crew: number;
+  /** The work waiting for each side of the crew (W9). */
+  readonly needs: WmsNeeds;
+  /** The wave intervals the Plan offers, in ticks: shortest, the default, longest (W9). */
+  readonly waveChoices: readonly number[];
   readonly growth: WmsGrowthView;
   /** The floor's shape (W7): aisles, bays down each, bays of walking from one aisle to the next, dock doors. */
   readonly layout: { readonly aisles: number; readonly bays: number; readonly aisleGap: number; readonly doors: number };

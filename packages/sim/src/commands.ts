@@ -23,9 +23,13 @@ function wmsProblem(p: Record<string, unknown>): string | null {
       return p.role === 'pick' || p.role === 'receive' ? null : 'bad role';
     case 'door':
       return null;
+    case 'role':
+      return typeof p.worker === 'number' && Number.isSafeInteger(p.worker) && p.worker >= 0 && (p.role === 'pick' || p.role === 'receive') ? null : 'bad move';
     case 'policy': {
       const plan = p.policy as Record<string, unknown> | null | undefined;
-      return typeof plan === 'object' && plan !== null && typeof plan.pick === 'string' && typeof plan.release === 'string' && id(plan.pickers) ? null : 'bad plan';
+      if (typeof plan !== 'object' || plan === null || typeof plan.pick !== 'string' || typeof plan.release !== 'string' || !id(plan.pickers)) return 'bad plan';
+      if (plan.waveTicks !== undefined && !id(plan.waveTicks)) return 'bad plan';
+      return plan.labor === undefined || typeof plan.labor === 'string' ? null : 'bad plan';
     }
     default:
       return 'unknown WMS action';

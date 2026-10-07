@@ -1,6 +1,7 @@
 import type { WarehouseCommand, WarehouseSaveFile, WarehouseState } from '@warehouse/contracts';
 import { hashState } from './hash.ts';
 import { WAREHOUSE_SCHEMA_VERSION } from './state.ts';
+import { WAREHOUSE_TUNABLES as T } from './tunables.ts';
 import { advanceMany, step } from './step.ts';
 import { createWms } from './wms/generate.ts';
 
@@ -26,6 +27,10 @@ function bump(to: number): Migration {
  *   flow (backlog, docks, levels, stars, boosts) is dropped. Commands other
  *   than WMS actions are dropped from the log, and a WMS action naming an
  *   old order is refused when it replays.
+ * - 7 to 8 (W9, waves and labour): the plan gains its wave interval (the old
+ *   fixed `wmsWaveTicks`) and the fixed labour plan, which is how version 7
+ *   ran. Older plan commands name only three settings; the sim keeps the
+ *   rest, so the log replays unchanged.
  *
  * Old rules are not kept, so a migration changes only the snapshot, and
  * `migrateWarehouseSave` replays the history since it under today's rules and
@@ -43,6 +48,11 @@ export const WAREHOUSE_MIGRATIONS: Readonly<Record<number, Migration>> = {
     const snapshot: WarehouseState = { schemaVersion: 7, tick: old.tick, cash: old.cash, wms: createWms({ seed: old.rng.seed + (old.site ?? 0), tick: old.tick }) };
     const log = Array.isArray(save.commandLog) ? (save.commandLog as { type?: unknown }[]).filter((c) => c.type === 'wms') : [];
     return { ...save, schemaVersion: 7, snapshot, commandLog: log };
+  },
+  7: (save) => {
+    const old = save.snapshot as WarehouseState;
+    const policy = { ...old.wms.policy, waveTicks: T.wmsWaveTicks.value, labor: 'fixed' as const };
+    return { ...save, schemaVersion: 8, snapshot: { ...old, schemaVersion: 8, wms: { ...old.wms, policy } } };
   },
 };
 

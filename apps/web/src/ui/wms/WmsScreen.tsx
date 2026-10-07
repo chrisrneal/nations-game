@@ -13,14 +13,15 @@ import { InventoryGrid } from './Inventory.tsx';
 import { KpiStrip, crewKpis, floorKpis, inboundKpis, inventoryKpis, outboundKpis } from './KpiStrip.tsx';
 import { OrderDetail } from './OrderDetail.tsx';
 import { OrderGrid, type GridScroll } from './OrderGrid.tsx';
-import { PICK_RULES, Plan, RELEASE_MODES } from './Plan.tsx';
+import { NeedsPanel } from './Labour.tsx';
+import { PICK_RULES, Plan, RELEASE_MODES, waveName } from './Plan.tsx';
 import { WmsFloor } from './WmsFloor.tsx';
 import { useWms } from './useWms.ts';
 import './wms.css';
 
 /** What an empty grid says, by filter (slice 9). */
 const EMPTY: Readonly<Record<WmsFilter, string>> = {
-  all: 'No orders yet. The first arrive within half a minute.',
+  all: 'No orders yet. The first arrive within half a warehouse hour.',
   open: 'Nothing open: every order has shipped.',
   picking: 'No order is being picked right now.',
   exceptions: 'No exceptions. Everything is flowing.',
@@ -38,6 +39,7 @@ const DONE: Readonly<Record<WmsActionName, string>> = {
   policy: 'Plan changed',
   hire: 'Hired',
   door: 'Dock door opened',
+  role: 'Worker moved',
 };
 
 /** What the "Wave in" KPI says: the countdown under timed waves, else how orders are released (W7). */
@@ -45,11 +47,12 @@ function waveText(policy: WmsPolicy, nextWaveIn: number, time: ClockShape): stri
   return policy.release === 'waves' ? countdown(nextWaveIn, time) : policy.release === 'continuous' ? 'Live' : 'Manual';
 }
 
-/** The plan in a line, for the floor (W7). */
-function planLine(policy: WmsPolicy, crew: number): string {
+/** The plan in a line, for the floor (W7, W9). */
+function planLine(policy: WmsPolicy, crew: number, time: ClockShape): string {
   const pick = PICK_RULES.find((r) => r.id === policy.pick)?.name ?? '';
   const release = RELEASE_MODES.find((r) => r.id === policy.release)?.name ?? '';
-  return `${pick} · ${release} · ${policy.pickers} pick / ${crew - policy.pickers} receive`;
+  const every = policy.release === 'waves' ? ` ${waveName(policy.waveTicks, time)}` : '';
+  return `${pick} · ${release}${every} · ${policy.pickers} pick / ${crew - policy.pickers} receive${policy.labor === 'balance' ? ' · balance' : ''}`;
 }
 
 /**
@@ -200,17 +203,37 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; t
           {page === 'floor' ? (
             <>
               <button type="button" className="wms-plan-chip" onClick={() => setPage('plan')} data-testid="wms-plan-chip">
-                <span className="muted">Plan</span> {planLine(live.wms.policy, live.wms.crew)} <span aria-hidden="true">›</span>
+                <span className="muted">Plan</span> {planLine(live.wms.policy, live.wms.crew, live.time)} <span aria-hidden="true">›</span>
               </button>
               <WmsFloor store={store} onWorker={openWorker} onOrder={openOrder} onPo={openPurchase} />
             </>
           ) : page === 'plan' ? (
-            <Plan policy={live.wms.policy} crew={live.wms.crew} doors={live.wms.layout.doors} growth={live.wms.growth} cash={live.cash} submit={submit} />
+            <Plan
+              policy={live.wms.policy}
+              crew={live.wms.crew}
+              doors={live.wms.layout.doors}
+              growth={live.wms.growth}
+              cash={live.cash}
+              needs={live.wms.needs}
+              waveChoices={live.wms.waveChoices}
+              newOrders={newOrders}
+              time={live.time}
+              submit={submit}
+            />
           ) : page === 'crew' ? (
             worker !== null ? (
-              <WorkerDetail worker={live.wms.workers.find((p) => p.id === worker)} time={live.time} onBack={() => setWorker(null)} onTask={openTask} />
+              <WorkerDetail
+                worker={live.wms.workers.find((p) => p.id === worker)}
+                time={live.time}
+                sameRole={live.wms.workers.filter((p) => p.role === live.wms.workers.find((q) => q.id === worker)?.role).length}
+                onBack={() => setWorker(null)}
+                onTask={openTask}
+                submit={submit}
+              />
             ) : (
-              <CrewList workers={live.wms.workers} onOpen={setWorker} />
+              <CrewList workers={live.wms.workers} onOpen={setWorker}>
+                <NeedsPanel needs={live.wms.needs} labor={live.wms.policy.labor} time={live.time} submit={submit} />
+              </CrewList>
             )
           ) : page === 'inbound' ? (
             openPo !== null ? (

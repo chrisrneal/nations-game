@@ -1,6 +1,6 @@
 import type { WarehouseEvent, WarehouseIntent, WarehouseSaveFile, WarehouseState, WarehouseView } from '@warehouse/contracts';
 import { WAREHOUSE_TUNABLES, WarehouseSession, warehouseView, createWarehouse, hashState, offlineCapTicks } from '@warehouse/sim';
-import { LIVE_EVENT_TICKS, RECAP_MIN_AWAY_MS, capped, ticksDue } from './clock.ts';
+import { DEFAULT_SPEED, LIVE_EVENT_TICKS, RECAP_MIN_AWAY_MS, SPEEDS, capped, msPerTick, ticksDue } from './clock.ts';
 
 /**
  * What happened while the player was away (RULES 11): numbers for the
@@ -12,7 +12,10 @@ export interface AwayRecap {
   readonly awayMs: number;
   /** How much of it the warehouse ran: less than `awayMs` when the offline cap cut it short. */
   readonly ranMs: number;
+  /** Real minutes the warehouse runs while the app is closed, at the speed it ran at (W9). */
   readonly capMinutes: number;
+  /** The same cap in warehouse days, whatever the speed (W9). */
+  readonly capDays: number;
   /** The testing time skip ran it, not an absence. */
   readonly skipped: boolean;
   /** Cents shipments paid. */
@@ -39,16 +42,19 @@ export interface WarehouseUpdate {
   readonly fingerprint: string;
   /** The latest away recap the player has not dismissed. */
   readonly recap: AwayRecap | null;
+  /** Warehouse minutes a real second (W9); 0 while paused. */
+  readonly speed: number;
 }
 
-/** The recap for a catch-up from `before` to `after`, from the WMS's totals since opening. */
-export function awayRecap(before: WarehouseState, after: WarehouseState, awayMs: number, ranMs: number, skipped = false): AwayRecap {
+/** The recap for a catch-up from `before` to `after`, from the WMS's totals since opening, at `speed` (W9). */
+export function awayRecap(before: WarehouseState, after: WarehouseState, awayMs: number, ranMs: number, skipped = false, speed = 1): AwayRecap {
   const a = after.wms;
   const b = before.wms;
   return {
     awayMs,
     ranMs,
-    capMinutes: WAREHOUSE_TUNABLES.offlineCapMinutes.value,
+    capMinutes: Math.floor(WAREHOUSE_TUNABLES.offlineCapMinutes.value / Math.max(1, speed)),
+    capDays: Math.floor(offlineCapTicks() / (WAREHOUSE_TUNABLES.wmsMinuteTicks.value * 1440)),
     skipped,
     earned: a.stats.earned - b.stats.earned,
     shipped: a.stats.shipped - b.stats.shipped,
@@ -66,6 +72,8 @@ export interface SavedWarehouse {
   readonly save: WarehouseSaveFile;
   /** Wall-clock ms at which the saved tick happened; the clock owes everything since. */
   readonly anchor: number;
+  /** The speed it ran at (W9); saves from before speeds ran at 1. */
+  readonly speed?: number;
 }
 
 export interface Timers {
@@ -84,8 +92,9 @@ const defaultTimers: Timers = {
 /**
  * One running warehouse, owned by the Web Worker. Holds the sim session and owns
  * the clock (S4): every `tickMs` it steps whatever ticks the wall clock owes,
- * so a throttled timer or a sleeping phone catches up exactly (P4). Free of
- * Worker and Comlink code so it is tested in Node.
+ * so a throttled timer or a sleeping phone catches up exactly (P4). The speed
+ * (W9) sets how much wall time a tick takes, open or closed: at 5 a tick is
+ * 50 ms, so five warehouse minutes pass a second. Free of Worker and Comlink code so it is tested in Node.
  */
 export class WarehouseEngine {
   private session: WarehouseSession | null = null;
@@ -94,7 +103,10 @@ export class WarehouseEngine {
   private listener: ((update: WarehouseUpdate) => void) | null = null;
   private recap: AwayRecap | null = null;
 
-  constructor(private readonly timers: Timers = defaultTimers) {}
+  constructor(
+    private readonly timers: Timers = defaultTimers,
+    private speed: number = DEFAULT_SPEED,
+  ) {}
 
   /** A new warehouse at the first site, running from now. */
   newGame(seed: number): WarehouseUpdate {
@@ -128,8 +140,13 @@ export class WarehouseEngine {
    */
   pump(): WarehouseUpdate | null {
     const session = this.requireSession();
-    const tickMs = WAREHOUSE_TUNABLES.tickMs.value;
     const now = this.timers.now();
+    // Paused (W9): the warehouse stands still, and owes nothing for the time.
+    if (this.speed === 0) {
+      this.anchor = now;
+      return null;
+    }
+    const tickMs = msPerTick(WAREHOUSE_TUNABLES.tickMs.value, this.speed);
     const due = ticksDue(this.anchor, now, tickMs);
     if (due.ticks === 0) return null;
     if (due.ticks * tickMs >= RECAP_MIN_AWAY_MS) {
@@ -139,11 +156,12 @@ export class WarehouseEngine {
       session.advance(run, { events: false });
       // Time beyond the cap is lost: the warehouse closed for the night.
       this.anchor = lost > 0 ? now : due.anchor;
-      this.recap = awayRecap(before, session.state, awayMs, run * tickMs);
+      this.recap = awayRecap(before, session.state, awayMs, run * tickMs, false, this.speed);
       return this.emit([]);
     }
     this.anchor = due.anchor;
-    const quiet = Math.max(0, due.ticks - LIVE_EVENT_TICKS);
+    // A pump steps `speed` ticks: the last few pumps' worth are played live, so no tap's answer is lost.
+    const quiet = Math.max(0, due.ticks - LIVE_EVENT_TICKS * this.speed);
     if (quiet > 0) session.advance(quiet, { events: false });
     const events = session.advance(due.ticks - quiet);
     return this.emit(events);
@@ -163,6 +181,19 @@ export class WarehouseEngine {
     this.pump();
     session.advance(ticks, { events: false });
     this.recap = awayRecap(before, session.state, ticks * tickMs, ticks * tickMs, true);
+    return this.emit([]);
+  }
+
+  /**
+   * Runs the warehouse at `speed` warehouse minutes a second from now (W9):
+   * the time owed at the old speed is stepped first, so a change never runs
+   * past time at the new one. 0 pauses.
+   */
+  setSpeed(speed: number): WarehouseUpdate {
+    if (!SPEEDS.includes(speed)) throw new Error(`Unknown speed ${speed}`);
+    if (this.session !== null) this.pump();
+    this.speed = speed;
+    this.anchor = this.timers.now();
     return this.emit([]);
   }
 
@@ -187,16 +218,20 @@ export class WarehouseEngine {
 
   /** A compact save: the current state becomes the snapshot. */
   exportGame(): SavedWarehouse {
-    return { save: this.requireSession().save({ compact: true }), anchor: this.anchor };
+    return { save: this.requireSession().save({ compact: true }), anchor: this.anchor, speed: this.speed };
   }
 
-  /** Resume a save (its hash is verified), catching up to now by the wall clock. */
+  /** Resume a save (its hash is verified), catching up to now by the wall clock at the speed it ran at. */
   importGame(saved: SavedWarehouse): WarehouseUpdate {
     this.session = WarehouseSession.load(saved.save);
     this.anchor = saved.anchor;
     this.recap = null;
+    this.speed = saved.speed !== undefined && SPEEDS.includes(saved.speed) ? saved.speed : 1;
     this.startClock();
-    return this.pump() ?? this.emit([]);
+    this.pump();
+    // A save from before speeds caught up at 1; it runs on at today's default.
+    if (saved.speed === undefined) this.speed = DEFAULT_SPEED;
+    return this.emit([]);
   }
 
   private startClock(): void {
@@ -217,7 +252,7 @@ export class WarehouseEngine {
 
   private update(events: readonly WarehouseEvent[]): WarehouseUpdate {
     const state = this.requireSession().state;
-    return { view: warehouseView(state), events, fingerprint: hashState(state), recap: this.recap };
+    return { view: warehouseView(state), events, fingerprint: hashState(state), recap: this.recap, speed: this.speed };
   }
 
   private requireSession(): WarehouseSession {

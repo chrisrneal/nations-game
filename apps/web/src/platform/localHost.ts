@@ -4,7 +4,7 @@ import type { SaveStore } from './saves.ts';
 
 /** The save slot written automatically. */
 export const AUTOSAVE_SLOT = 'autosave';
-/** Autosave every this many ticks while running (10 s), as well as when the app is hidden. */
+/** Autosave every this many ticks while running (10 s at 1 warehouse minute a second, and as often in real time at any speed), as well as when the app is hidden. */
 export const AUTOSAVE_EVERY_TICKS = 40;
 
 /**
@@ -31,6 +31,8 @@ export interface WarehouseHost {
   dismissRecap(): Promise<void>;
   /** Testing cheat: run the warehouse this many minutes ahead at once, with a recap. */
   skip(minutes: number): Promise<void>;
+  /** Run the warehouse at this many warehouse minutes a second, 0 to pause (W9); kept with the save. */
+  setSpeed(speed: number): Promise<void>;
 }
 
 /** Marker and version of an exported save file. */
@@ -40,7 +42,7 @@ export const FILE_VERSION = 1;
 type Async<T> = T | Promise<T>;
 /** The engine as LocalHost sees it: in-process in tests, a Comlink Remote in the app. */
 export type EngineApi = {
-  [K in 'newGame' | 'submit' | 'subscribe' | 'current' | 'pump' | 'pause' | 'resume' | 'exportGame' | 'importGame' | 'dismissRecap' | 'skip']: (
+  [K in 'newGame' | 'submit' | 'subscribe' | 'current' | 'pump' | 'pause' | 'resume' | 'exportGame' | 'importGame' | 'dismissRecap' | 'skip' | 'setSpeed']: (
     ...args: Parameters<WarehouseEngine[K]>
   ) => Async<ReturnType<WarehouseEngine[K]>>;
 };
@@ -152,6 +154,12 @@ export class LocalHost implements WarehouseHost {
     await this.autosave();
   }
 
+  async setSpeed(speed: number): Promise<void> {
+    await this.ready;
+    this.publish(await this.options.engine.setSpeed(speed));
+    await this.autosave();
+  }
+
   /** Write the autosave slot now, if a warehouse is running. */
   async autosave(): Promise<void> {
     if ((await this.options.engine.current()) === null) return;
@@ -171,7 +179,7 @@ export class LocalHost implements WarehouseHost {
 
   private receive(update: WarehouseUpdate): void {
     this.publish(update);
-    if (update.view.tick - this.lastAutosaveTick >= AUTOSAVE_EVERY_TICKS) {
+    if (update.view.tick - this.lastAutosaveTick >= AUTOSAVE_EVERY_TICKS * Math.max(1, update.speed)) {
       this.lastAutosaveTick = update.view.tick;
       void this.autosave().catch((error: unknown) => console.warn('Autosave failed', error));
     }

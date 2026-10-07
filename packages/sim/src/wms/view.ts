@@ -24,12 +24,13 @@ import type {
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
 import { WMS_AISLES, WMS_AISLE_GAP_BAYS, WMS_BAYS, WMS_RATE_BUCKETS, WMS_RATE_BUCKET_TICKS, binCode, binPlace, customerAt, destinationAt, isClosed, orderCode, poCode, skuAt, supplierAt, taskCode, workerCode } from './catalog.ts';
 import { inboundUnits, waitingUnits } from './inbound.ts';
-import { WMS_PICK_RULES, WMS_RELEASE_MODES, doorCost, hireCost } from './policy.ts';
+import type { MWms } from './mutable.ts';
+import { WMS_LABOR_MODES, WMS_PICK_RULES, WMS_RELEASE_MODES, crewNeeds, doorCost, hireCost, waveChoices } from './policy.ts';
 
 const EXCEPTION_STATUSES: ReadonlySet<WmsOrderStatus> = new Set(['SHORT', 'ON HOLD', 'BACKORDER']);
 const EXCEPTION_EVENTS: ReadonlySet<WmsEventCode> = new Set(['ALLOC SHORT', 'SHORT PICK', 'CUTOFF MISS', 'HOLD', 'CANCEL', 'PO LATE', 'RCV SHORT', 'DAMAGE', 'ADJUST']);
 /** Events whose `picker` field names a worker (W8). */
-const WORKER_EVENTS: ReadonlySet<WmsEventCode> = new Set(['PICK START', 'PICK CONF', 'SHORT PICK', 'ASSIGN', 'RCV', 'RCV SHORT', 'DAMAGE', 'PUTAWAY', 'HIRE']);
+const WORKER_EVENTS: ReadonlySet<WmsEventCode> = new Set(['PICK START', 'PICK CONF', 'SHORT PICK', 'ASSIGN', 'RCV', 'RCV SHORT', 'DAMAGE', 'PUTAWAY', 'HIRE', 'MOVE']);
 /** Events whose `order` field is a PO number (W6). */
 const INBOUND_EVENTS: ReadonlySet<WmsEventCode> = new Set(['PO CRT', 'ARRIVE', 'PO LATE', 'DOCK', 'RCV', 'RCV SHORT', 'DAMAGE', 'PUTAWAY', 'PO CLOSE']);
 
@@ -165,6 +166,8 @@ export function eventText(e: WmsEvent): { ref: string; detail: string } {
       return { ref: workerCode(e.picker), detail: `hired to ${e.line === 1 ? 'pick' : 'receive'}, crew ${e.qty}` };
     case 'DOOR':
       return { ref: `D${e.qty}`, detail: `dock door ${e.qty} open` };
+    case 'MOVE':
+      return { ref: workerCode(e.picker), detail: `to ${e.line === 1 ? 'picking' : 'receiving'}, ${e.qty} ${e.qty === 1 ? 'task' : 'tasks'} waiting${e.of === 1 ? ' (balance)' : ''}` };
     default:
       return { ref, detail: '' };
   }
@@ -173,10 +176,13 @@ export function eventText(e: WmsEvent): { ref: string; detail: string } {
 /** The Plan page's names for its choices (W7), as the feed shows them. */
 export const PICK_RULE_NAMES: Readonly<Record<(typeof WMS_PICK_RULES)[number], string>> = { priority: 'Priority first', cutoff: 'Cutoff first', nearest: 'Nearest bin' };
 export const RELEASE_NAMES: Readonly<Record<(typeof WMS_RELEASE_MODES)[number], string>> = { waves: 'Timed waves', continuous: 'Continuous', manual: 'Manual' };
+export const LABOR_NAMES: Readonly<Record<(typeof WMS_LABOR_MODES)[number], string>> = { fixed: 'Fixed', balance: 'Balance by need' };
 
 function planText(e: WmsEvent): string {
   if (e.line === 1) return `Pick order: ${PICK_RULE_NAMES[WMS_PICK_RULES[e.qty] ?? 'priority']}`;
   if (e.line === 2) return `Release: ${RELEASE_NAMES[WMS_RELEASE_MODES[e.qty] ?? 'waves']}`;
+  if (e.line === 4) return `Waves every ${Math.floor(e.qty / T.wmsMinuteTicks.value)} min`;
+  if (e.line === 5) return `Labour: ${LABOR_NAMES[WMS_LABOR_MODES[e.qty] ?? 'fixed']}`;
   return `Crew: ${e.qty} picking, ${e.of - e.qty} receiving`;
 }
 
@@ -476,6 +482,9 @@ export function wmsView(w: WmsState, tick: number): WmsView {
     crewKpis,
     policy: w.policy,
     crew: w.workers.length,
+    // Read only: the needs are counted, nothing is changed.
+    needs: crewNeeds(w as unknown as MWms, tick),
+    waveChoices: waveChoices(),
     growth: { hireCost: hireCost(w.workers.length), maxCrew: T.wmsMaxCrew.value, doorCost: doorCost(w.doors), maxDoors: T.wmsMaxDoors.value },
     layout: { aisles: WMS_AISLES, bays: WMS_BAYS, aisleGap: WMS_AISLE_GAP_BAYS, doors: w.doors },
     countries: w.dests.map((d, i) => ({ ...destinationAt(i), shipped: d.shipped, otif: d.otif, otifPct: pct(d.otif, d.shipped), goodwill: d.goodwill })),

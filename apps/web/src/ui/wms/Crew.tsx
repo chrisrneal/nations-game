@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactElement, type ReactNode } from 'react';
-import type { WmsTaskView, WmsWorkerView } from '@warehouse/contracts';
+import type { WmsAction, WmsTaskView, WmsWorkerView } from '@warehouse/contracts';
 import { short, type ClockShape } from '../format.ts';
 import { clock } from './grid.ts';
 
@@ -69,12 +69,13 @@ function WorkerRow(props: { worker: WmsWorkerView; onOpen: (id: number) => void 
  * WMS has lined up for them and how much work they have done. A tap opens a
  * worker's tasks.
  */
-export function CrewList(props: { workers: readonly WmsWorkerView[]; onOpen: (id: number) => void }): ReactElement {
+export function CrewList(props: { workers: readonly WmsWorkerView[]; onOpen: (id: number) => void; children?: ReactNode }): ReactElement {
   const [filter, setFilter] = useState<CrewFilter>('all');
   const counts = useMemo(() => Object.fromEntries(FILTERS.map((f) => [f.id, props.workers.filter((p) => matches(p, f.id)).length])) as Record<CrewFilter, number>, [props.workers]);
   const shown = props.workers.filter((p) => matches(p, filter));
   return (
     <>
+      {props.children}
       <div className="wms-filters" role="tablist" aria-label="Filter the crew">
         {FILTERS.map((f) => (
           <button key={f.id} type="button" role="tab" aria-selected={filter === f.id} className="wms-filter" onClick={() => setFilter(f.id)} data-testid={`crew-filter-${f.id}`}>
@@ -149,7 +150,15 @@ function TaskCard(props: { task: WmsTaskView; time: ClockShape; label: string; o
  * for them next, the ones they finished last, and their record since they
  * were hired. Tapping a task opens its order or PO.
  */
-export function WorkerDetail(props: { worker: WmsWorkerView | undefined; time: ClockShape; onBack: () => void; onTask: (task: WmsTaskView) => void }): ReactElement {
+export function WorkerDetail(props: {
+  worker: WmsWorkerView | undefined;
+  time: ClockShape;
+  /** Others on the same side: the last one cannot move (W9). */
+  sameRole: number;
+  onBack: () => void;
+  onTask: (task: WmsTaskView) => void;
+  submit: (action: WmsAction) => void;
+}): ReactElement {
   const p = props.worker;
   const total = p === undefined ? 0 : p.stats.busy + p.stats.walking + p.stats.idle;
   return (
@@ -179,6 +188,18 @@ export function WorkerDetail(props: { worker: WmsWorkerView | undefined; time: C
             <Field label="Idle">{share(p.stats.idle, total)}</Field>
             <Field label={p.state === 'walking' ? 'Walking to' : 'Where'}>{p.at < 0 ? 'Dock' : (p.task?.where ?? `Aisle ${String.fromCharCode(65 + p.aisle)}, bay ${p.bay}`)}</Field>
           </dl>
+          <div className="wms-actions worker-move">
+            <button
+              type="button"
+              className="wms-btn"
+              disabled={props.sameRole <= 1}
+              onClick={() => props.submit({ action: 'role', worker: p.id, role: p.role === 'pick' ? 'receive' : 'pick' })}
+              data-testid="worker-move"
+            >
+              Move to {p.role === 'pick' ? 'receiving' : 'picking'}
+            </button>
+            <span className="muted">{props.sameRole <= 1 ? `The only ${p.role === 'pick' ? 'picker' : 'receiver'}: someone has to stay.` : 'Drops what they hold; it goes to someone else.'}</span>
+          </div>
           <h4 className="wms-subhead">Now</h4>
           {p.task === null ? (
             <p className="wms-note">No task. The WMS gives {p.role === 'pick' ? 'pickers allocated order lines' : 'receivers the lines of docked trucks, then their put-aways'} as they come.</p>

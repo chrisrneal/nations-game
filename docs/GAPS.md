@@ -44,3 +44,8 @@ worker on picking, and the WMS is the whole game.
 - W8, a worker's page lists the latest 8 finished tasks, and only those the WMS still keeps (`wmsTasksKept`, 150 across the crew): a busy crew's oldest work scrolls out. The record (tasks, units, time) is kept since hiring. Lane S.
 - W8, appointments are 24 hours a day: no dock hours, so trucks come at night too. Lanes S, D.
 - W8, the KPI strips show rates per warehouse hour (a real minute): lines an hour now read about 8-10 where they read 480-600 before W8. Same work, different clock. Lane U.
+- W9, balance by need counts tasks only: a truck waiting in the yard for a door, or stock about to run out, does not pull people to receiving until its lines are docked. On an idle warehouse balance trades about a point of fill for a point of on time. Lanes S, H.
+- W9, at 5x and 10x the WMS screens re-render up to four times a second (once an update that carries a WMS step) instead of once; the floor still reads 60 fps with the CPU slowed 4x here, but the order grid fling (`e2e/wms-perf.ts`) was not re-measured at speed. Recheck on a real phone. Lane U.
+- W9, the offline cap is the same ticks at any speed, so in real time it shrinks with the speed: 8 hours at 1x, 1 h 36 m at 5x, 48 m at 10x (20 warehouse days each). A phone left overnight at 5x stops after 1 h 36 m. Owner decision if a longer real-time cap is wanted (it costs catch-up time on reopening). Lanes P, S.
+- W9, the testing time skip (+5 min, +1 hour, +8 hours) is still time at 1x whatever the speed: "+1 hour" runs 60 warehouse hours. Lane U.
+- W9, the speed is a host setting outside the sim, so it is not in the command log or the state hash: a replay of a save does not know how fast it was played (it does not need to). Lane P.

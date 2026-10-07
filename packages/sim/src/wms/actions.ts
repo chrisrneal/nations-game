@@ -1,7 +1,7 @@
 import type { WmsAction, WmsOrderStatus } from '@warehouse/contracts';
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
 import { isClosed } from './catalog.ts';
-import { addDoor, doorCost, hire, hireCost, policyProblem, setPolicy } from './policy.ts';
+import { addDoor, doorCost, fullPolicy, hire, hireCost, moveWorker, policyProblem, setPolicy } from './policy.ts';
 import { freeWorker, lineTask, newTask, releaseTask, startTask } from './tasks.ts';
 import { findOrder, log, releaseWave, type MLine, type MOrder, type MWms } from './tick.ts';
 
@@ -55,15 +55,23 @@ function fail(reason: string): WmsActionResult {
  * The player's actions (RULES 8): release a wave of chosen NEW orders,
  * change priority, hold and release from hold, put a picker on a line,
  * cancel a line, expedite an order for cash, set the operating plan (W7),
- * hire a worker and open a dock door (W8). Each logs an event. `cash` is what
+ * hire a worker and open a dock door (W8), move a worker between picking
+ * and receiving (W9). Each logs an event. `cash` is what
  * the player has; anything that costs more is refused.
  */
 export function wmsAction(w: MWms, a: WmsAction, tick: number, cash: number): WmsActionResult {
   switch (a.action) {
     case 'policy': {
-      const problem = policyProblem(a.policy, w.workers.length);
+      const plan = fullPolicy(a.policy, w.policy);
+      const problem = policyProblem(plan, w.workers.length);
       if (problem !== null) return fail(problem);
-      if (!setPolicy(w, a.policy, tick)) return fail('No change to the plan');
+      if (!setPolicy(w, plan, tick)) return fail('No change to the plan');
+      return { ok: true, order: 0, cents: 0 };
+    }
+    case 'role': {
+      if (a.role !== 'pick' && a.role !== 'receive') return fail('Unknown role');
+      const problem = moveWorker(w, a.worker, a.role, tick);
+      if (problem !== null) return fail(problem);
       return { ok: true, order: 0, cents: 0 };
     }
     case 'release': {

@@ -4,8 +4,8 @@ import { AUTOSAVE_EVERY_TICKS, AUTOSAVE_SLOT, LocalHost } from './localHost.ts';
 import { MemorySaveStore } from './saves.ts';
 import { FakeClock } from './testClock.ts';
 
-function setup(store = new MemorySaveStore(), clock = new FakeClock()) {
-  const engine = new WarehouseEngine(clock);
+function setup(store = new MemorySaveStore(), clock = new FakeClock(), speed = 1) {
+  const engine = new WarehouseEngine(clock, speed);
   const host = new LocalHost({ engine, store, now: () => clock.time, newSeed: () => 9 });
   const seen: WarehouseUpdate[] = [];
   host.subscribe((u) => seen.push(u));
@@ -27,6 +27,19 @@ describe('LocalHost (S3)', () => {
     for (let i = 0; i < AUTOSAVE_EVERY_TICKS; i++) clock.advance(250);
     await settle();
     expect((await store.get(AUTOSAVE_SLOT))?.tick).toBe(AUTOSAVE_EVERY_TICKS);
+  });
+
+  it('at 5 warehouse minutes a second it still autosaves every 10 real seconds, and keeps the speed with the save (W9)', async () => {
+    const { host, store, clock } = setup(undefined, undefined, 5);
+    await host.start();
+    for (let i = 0; i < AUTOSAVE_EVERY_TICKS - 1; i++) clock.advance(250);
+    await settle();
+    expect((await store.get(AUTOSAVE_SLOT))?.tick).toBe(0);
+    clock.advance(250);
+    await settle();
+    expect((await store.get(AUTOSAVE_SLOT))?.tick).toBe(AUTOSAVE_EVERY_TICKS * 5);
+    await host.setSpeed(10);
+    expect((await store.get(AUTOSAVE_SLOT))?.game.speed).toBe(10);
   });
 
   it('a reopened app continues the autosave, caught up by the wall clock', async () => {

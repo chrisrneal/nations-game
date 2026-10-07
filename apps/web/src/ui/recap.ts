@@ -14,7 +14,7 @@ export function recapLines(r: AwayRecap): [string, string, string] {
   const first = r.skipped
     ? `You skipped ${ran} ahead${days}.`
     : r.ranMs < r.awayMs
-      ? `You were away ${away}. The warehouse ran for ${ran}${days}, then stopped: it runs at most ${formatDuration(r.capMinutes * 60)} while the app is closed.`
+      ? `You were away ${away}. The warehouse ran for ${ran}${days}, then stopped: while the app is closed it runs at most ${plural(r.capDays, 'warehouse day', 'warehouse days')}, ${formatDuration(r.capMinutes * 60)} at this speed.`
       : `You were away ${away}, and the warehouse kept running${days}.`;
   const otif = r.shipped === 0 ? 0 : Math.floor((r.otif * 100) / r.shipped);
   const second = r.shipped === 0 ? 'No orders shipped while you were away.' : `It shipped ${plural(r.shipped, 'order', 'orders')}, ${otif}% on time and in full, for ${formatCash(r.earned)}.`;

@@ -23,24 +23,31 @@ of each one's work, and a tap on any worker shows their tasks. Picked orders
 are packed, staged, loaded and shipped; every shipment pays, more for
 customers whose goodwill is high, and goodwill rises with orders shipped on
 time and in full (OTIF) and falls with late and short ones. You set the
-operating plan (the pick order, how orders are released, how many people pick
-and how many receive), step in on single orders (priority, hold, expedite,
+operating plan (the pick order, how orders are released and how often the
+waves go, how many people pick and how many receive, and whether the WMS
+moves people to where the work is), move single workers between picking and
+receiving, step in on single orders (priority, hold, expedite,
 cancel a line, put a picker on a line), and spend what shipments earn on more
 people and more dock doors. The warehouse keeps running while the app is
 closed, up to a cap. Single player, offline-first, no backend.
 
 ## 2. Time, units and the warehouse clock
 
-- One tick is `tickMs` = 250 ms of wall clock: 4 ticks a second. The sim counts
-  ticks and never reads a clock; the host decides when ticks happen (S4).
-- The WMS steps once every `wmsStepTicks` (4) ticks: once a second.
+- One tick is `tickMs` = 250 ms of wall clock at 1x: 4 ticks a second. The sim
+  counts ticks and never reads a clock; the host decides when ticks happen (S4).
+- The WMS steps once every `wmsStepTicks` (4) ticks: once a warehouse minute.
 - **The warehouse clock** (W8): a warehouse minute passes every
-  `wmsMinuteTicks` (4) ticks, so a warehouse hour is a real minute and a
-  warehouse day is 24 real minutes. A new warehouse opens on day 1 at
+  `wmsMinuteTicks` (4) ticks. A new warehouse opens on day 1 at
   `wmsDayStartMinute` (06:00). Every time on screen (ship-by, appointments,
   the log) is a time of this clock; the day changes at midnight, when today's
   totals become yesterday's (a `newDay` event). Rates (lines, units and cash
   an hour) are per warehouse hour.
+- **Speed** (W9, a host setting, not a sim rule): the host runs the warehouse
+  at 1, 5 or 10 warehouse minutes a real second, or pauses it; a new game runs
+  at 5, so a warehouse hour is 12 real seconds and a day under 5 real
+  minutes. Speed changes only how much wall time a tick takes (50 ms at 5):
+  the same ticks give the same warehouse at any speed. The speed is kept with
+  the save, and the warehouse runs at it while the app is closed too.
 - Money is integer **cents**. The interface shows dollars (`$1.2K`, `$3.4M`).
 - Stock and order quantities are whole **units**.
 - Cash never exceeds `cashCapCents` (the safe is full); nothing in normal play
@@ -87,9 +94,9 @@ closed, up to a cap. Single player, offline-first, no backend.
   Shipped and cancelled orders beyond the latest `wmsKeepClosedOrders` (40)
   drop off the grid.
 - **Release.** Under timed waves (the default), the first wave is
-  `wmsFirstWaveTicks` after opening, then one every `wmsWaveTicks` (a
-  warehouse hour): every NEW order not on hold is RELEASED in one wave (WAVE
-  REL per order). Under continuous release every NEW order is released as a
+  `wmsFirstWaveTicks` after opening, then one every wave interval of the plan
+  (section 8; `wmsWaveTicks`, a warehouse hour, to start): every NEW order not
+  on hold is RELEASED in one wave (WAVE REL per order). Under continuous release every NEW order is released as a
   wave of its own the step it arrives; under manual release only the player
   releases.
 - **Allocation.** Orders are allocated most urgent first by the plan's pick
@@ -176,6 +183,14 @@ closed, up to a cap. Single player, offline-first, no backend.
 - **Roles.** Each worker picks or receives. Pickers do PICK tasks; receivers
   do RECEIVE and PUTAWAY tasks. The plan's crew split sets how many pick
   (section 8).
+- **The balance plan** (W9). Under the plan's *balance by need* labour, every
+  `wmsBalanceTicks` (15 warehouse minutes), after the workers have worked and
+  before the task plan, the WMS counts the tasks waiting for each side (lined
+  up but not started, or open and ready to start) and the people on it. If
+  one side has at least `wmsBalanceGap` (3) more tasks waiting a head than the
+  other, and the other has two people or more, one person moves to it: one
+  with no task first, then whoever has least lined up, the highest number on
+  a tie (MOVE, marked balance). At most one person moves a look.
 - **The task plan.** Every step, after the workers have worked, tasks whose
   line is gone, cancelled or done are cancelled. Then, for each role, the
   plan is redone when tasks wait for a worker and a worker of the role has
@@ -243,6 +258,11 @@ A `wms` command; each logs an event, and a refused one says why.
   `wmsExpediteCostCents` ($40): the order becomes P1 and moves to a later,
   faster truck, `wmsExpediteLeadTicks` (5 warehouse hours) added to its
   ship-by (EXPEDITE).
+- *Move a worker* (W9): a chosen worker, or the one the WMS picks (worker 0:
+  no task first, then least lined up), moves to picking or receiving. It
+  drops its tasks, which wait for someone else (a line half done starts
+  again), and the plan's split follows (MOVE, with the tasks waiting where it
+  went). Each side keeps at least one person.
 - *Hire* and *open a door*: section 9.
 - **The operating plan** (W7), one PLAN event for each setting changed; a plan
   that changes nothing is refused:
@@ -251,8 +271,14 @@ A `wms` command; each logs an event, and a refused one says why.
     **nearest bin** (section 6). Allocation follows the same urgency (priority
     first under nearest bin).
   - *Release*: **timed waves** (the default), **continuous** or **manual**
-    (section 4). Going back to timed waves puts the next wave a full
-    `wmsWaveTicks` away.
+    (section 4). Going back to timed waves puts the next wave a full wave
+    interval away.
+  - *Wave interval* (W9): `wmsWaveMinTicks` (30 warehouse minutes),
+    `wmsWaveTicks` (an hour, the default) or `wmsWaveMaxTicks` (2 hours). A
+    shorter interval brings the next wave forward to at most that far away; a
+    longer one leaves the next wave where it is.
+  - *Labour* (W9): **fixed** (the default: people stay where the split and
+    the moves put them) or **balance by need** (section 6).
   - *Crew*: how many of the crew pick, 1 to crew - 1; the rest receive. It
     takes effect at once: the highest-numbered receivers move to picking, or
     the highest-numbered pickers to receiving, each dropping its tasks.
@@ -271,8 +297,8 @@ A `wms` command; each logs an event, and a refused one says why.
 
 ## 10. The screens (what the WMS shows)
 
-- **The bar on top:** the warehouse clock (day and time), cash, today's
-  earnings, settings.
+- **The bar on top:** the warehouse clock (day and time), pause and the speed
+  (W9: a tap steps 1x, 5x, 10x), cash, today's earnings, settings.
 - **The tabs**, in the bottom third: Floor, In, Out, Stock, Crew, Plan, with a
   KPI strip under the bar for the page on show and the activity console over
   the tabs (newest first; tapping a line opens its order, PO or worker).
@@ -306,23 +332,31 @@ A `wms` command; each logs an event, and a refused one says why.
   lined up next, tasks done and their share of time working. A worker's page:
   their record (tasks, units, working, walking and idle time, where they are),
   the task they work now, the tasks the WMS has lined up next in order, and
-  the tasks they finished lately; tapping a task opens its order or PO.
-- **Plan:** the pick order, release and crew split, each with what it does and
-  its catch; hiring and dock doors with their prices.
+  the tasks they finished lately; tapping a task opens its order or PO. Over
+  the list, where the work is (W9): each side's people, idle people and tasks
+  waiting (and a head), the side that is behind lit, and "+ 1 here" to move
+  someone over; a worker's page has "Move to receiving" (or picking).
+- **Plan:** the pick order, release (with the wave interval and "Release a
+  wave now"), the crew split and the labour plan with where the work is (W9),
+  each with what it does and its catch; hiring and dock doors with their
+  prices.
 
 ## 11. Away, the offline cap, the recap; the report targets
 
 - Closing the app does not stop the warehouse. When it reopens, the host steps
-  every tick the wall clock owes, up to `offlineCapMinutes` (8 hours); time
-  beyond the cap is lost. Catch-up is the same sim stepping the same ticks,
+  every tick the wall clock owes at the speed it ran at, up to the ticks of
+  `offlineCapMinutes` (8 hours at 1x: 20 warehouse days, which is 1 h 36 m of
+  real time at 5x); time beyond the cap is lost, and a paused warehouse owes
+  nothing (W9). Catch-up is the same sim stepping the same ticks,
   only faster; the result is exactly what stepping one tick at a time would
   give (tested).
 - After an absence of at least 60 s (host setting), a recap of three lines
-  shows once: how long you were away (and whether the cap stopped it, and how
-  many warehouse days went by); orders shipped, the share OTIF and what they
+  shows once: how long you were away (and whether the cap stopped it, in
+  warehouse days and in real time at the speed, and how many warehouse days
+  went by); orders shipped, the share OTIF and what they
   earned; POs that came in, and orders that missed their cutoff, if any.
-- A testing time skip in Settings (+5 min, +1 hour, +8 hours) runs the
-  warehouse ahead at once, exactly as a catch-up does but with no cap, and
+- A testing time skip in Settings (+5 min, +1 hour, +8 hours, of time at 1x
+  whatever the speed) runs the warehouse ahead at once, exactly as a catch-up does but with no cap, and
   shows the same recap (a host cheat for playtesting; docs/GAPS.md).
 - **The report** (`npm run harness -- report`; packages/harness/src/report.test.ts
   holds the targets on every build): an untouched warehouse with the default
@@ -349,7 +383,7 @@ disagree.
 | `cashCapCents` | 9000000000000000 | 9000000000000000 | 9000000000000000 | Engine limit: the safe-integer ceiling. The safe is full. |
 | `startingCashCents` | 0 | 0 | 100000 | Cash a new warehouse opens with: nothing; the first shipments pay for the first hire. |
 | `offlineCapMinutes` | 480 | 30 | 1440 | The warehouse runs while the app is closed for at most this long (8 h, a shift and a night): the catch-up is the same sim stepped fast (P4), so the cap bounds how long reopening takes. |
-| `wmsMinuteTicks` | 4 | 1 | 60 | WMS clock (W8): ticks to a warehouse minute (one a real second), so a warehouse day is 24 real minutes and the dock schedule, cutoffs and appointments read as times of day. |
+| `wmsMinuteTicks` | 4 | 1 | 60 | WMS clock (W8): ticks to a warehouse minute (one a real second at 1x, five at the default 5x, W9), so a warehouse day is 24 real minutes at 1x and the dock schedule, cutoffs and appointments read as times of day. |
 | `wmsDayStartMinute` | 360 | 0 | 1439 | WMS clock: the minute of the day a new warehouse opens at (06:00, day 1). |
 | `wmsSampleOrdersMin` | 10 | 5 | 30 | WMS: fewest sample orders a new warehouse opens with (docs/wms-plan.md slice 1). |
 | `wmsSampleOrdersMax` | 15 | 5 | 40 | WMS: most sample orders a new warehouse opens with: enough to fill a phone screen of the order grid. |
@@ -367,6 +401,10 @@ disagree.
 | `wmsPickMilliPerSec` | 750 | 200 | 4000 | WMS: milli-units a picker picks a second once at the bin (0.75). Raised from 0.65 when pickers started walking between bins (W7), so an idle WMS ships as before: about 82% OTIF and 94% on time (seeds 1-8, 2 h; was 84% and 95%). Six pickers keep up with an order every 25 s with a little to spare, so a queue forms when luck runs bad. With tasks (W8) the same: 82% OTIF, 96% on time, pickers working 69% of the time. |
 | `wmsFirstWaveTicks` | 120 | 0 | 1200 | WMS: ticks from opening to the first automatic wave (30 warehouse minutes): long enough to see NEW orders and release them by hand. |
 | `wmsWaveTicks` | 240 | 40 | 2400 | WMS: ticks between automatic waves (a warehouse hour): every NEW order not on hold is released. |
+| `wmsWaveMinTicks` | 120 | 40 | 1200 | WMS plan (W9): the shortest wave interval the Plan offers (30 warehouse minutes): orders reach the floor sooner, in smaller waves, so a P1 has less company to beat to the stock. |
+| `wmsWaveMaxTicks` | 480 | 240 | 4800 | WMS plan (W9): the longest wave interval the Plan offers (2 warehouse hours): big waves let the most urgent take the stock first, but orders wait longer to start. |
+| `wmsBalanceTicks` | 60 | 20 | 960 | WMS labour (W9): under the balance plan the WMS looks at the work waiting every this many ticks (15 warehouse minutes) and moves at most one person, so the crew does not churn. |
+| `wmsBalanceGap` | 3 | 1 | 20 | WMS labour (W9): the balance moves a person when one side has at least this many more tasks waiting a head than the other. At 3 a full queue on every picker (2 waiting a head) does not pull receivers off an empty dock by itself. |
 | `wmsOrderMinTicks` | 80 | 20 | 1200 | WMS: shortest gap before the next order arrives (20 warehouse minutes). |
 | `wmsOrderMaxTicks` | 120 | 40 | 2400 | WMS: longest gap before the next order arrives (30 warehouse minutes). |
 | `wmsMaxOpenOrders` | 40 | 10 | 300 | WMS: no new order arrives while this many are open, so a long absence cannot swamp the floor. |
@@ -423,7 +461,8 @@ Checked by property tests on every build:
   than on hand; a line never picks more than it ordered.
 - Every queued or active task is held by exactly one worker, of the task's
   role, and no worker holds more than `wmsTaskQueue` tasks; a line being
-  picked has exactly one active pick task.
+  picked has exactly one active pick task. Each side of the crew keeps at
+  least one person, and the plan's pickers is the number on picking.
 - Cash only changes by shipments (up) and what the player pays for (down: an
   expedite, a hire, a door), and cash = opening cash + earned - spent.
 - The same seed and the same commands always give the same state hash, in Node
@@ -431,6 +470,8 @@ Checked by property tests on every build:
 - Catching up N ticks at once gives exactly the state that stepping N single
   ticks gives.
 - A save reloads to the same state hash and continues identically.
-- Saves are version 7 (W8). Versions 1-6 (the idle game with the WMS beside
-  it) migrate to a fresh WMS at the save's tick, keeping its cash; an airport
-  save is refused with a message saying so.
+- Saves are version 8 (W9). Version 7 gains the plan's wave interval (an
+  hour) and fixed labour, which is how it ran, and its history replays
+  exactly; versions 1-6 (the idle game with the WMS beside it) migrate to a
+  fresh WMS at the save's tick, keeping its cash; an airport save is refused
+  with a message saying so.

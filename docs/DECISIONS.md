@@ -1079,3 +1079,83 @@ opening crew (20%), which the Plan's crew split and hiring are for.
 beside it. Within this design: `wmsTaskQueue` 1 gives a task only when a
 worker is free; `wmsPutawayDropTicks` 0 and `wmsWalkTicksPerBay` 0 make
 put-away and walking instant.
+
+
+## W9 - Speed in the host, waves and labour in the plan: the warehouse runs 5 minutes a second, and the player moves people by need
+**Status.** Accepted, 2026-10-07, at the owner's request ("Speed up the sim,
+let it run 5 mins a second but also would like to see controls for waving or
+to reallocate labor based on needs"). As for W3-W8, the owner asked for it
+directly, so this session wrote the record and updated docs/ROADMAP.md's
+list of commands and plan choices to match.
+**Reading.** Two asks, read the way closest to docs/ROADMAP.md:
+1. *"5 mins a second"* is the warehouse clock: five warehouse minutes pass
+   each real second (W8 ran one). Read as a speed the host sets, not a new
+   sim clock, and offered with pause, 1x and 10x so the player can slow down
+   to watch, with 5x the default. "Speed up" also covers time away: the
+   warehouse runs at the chosen speed while the app is closed.
+2. *"Controls for waving or to reallocate labor based on needs"* is two
+   things a WMS supervisor does: run waves (how often they go, and one now),
+   and move people between picking and receiving according to the work
+   waiting. Both the hand control (move one person, chosen or picked by the
+   WMS) and an automatic one (the WMS balances by need) are given, since
+   "based on needs" reads as either.
+**Decision.**
+- *Speed* (host, apps/web/src/platform). `SPEEDS` 0, 1, 5, 10 warehouse
+  minutes a second, `DEFAULT_SPEED` 5; a tick takes `tickMs / speed` of wall
+  time (50 ms at 5), so the sim, its tunables and every test are untouched
+  and the same ticks give the same warehouse (S4, P4). A change of speed
+  first steps the time owed at the old speed. 0 pauses: nothing is owed for
+  paused time. The speed is saved with the autosave and the export file
+  (`SavedWarehouse.speed`); a save without one caught up at 1, then runs at
+  5. Updates carry the speed so the floor times its walks by the real tick.
+  Live events cover the last `LIVE_EVENT_TICKS x speed` ticks, so the step
+  that answers a tap is never caught up quietly, and the autosave runs every
+  10 real seconds at any speed. A pause button and a speed button (1x, 5x,
+  10x) sit in the top bar.
+- *Away time* runs at the speed, up to the same offline cap in ticks (8 hours
+  at 1x, 20 warehouse days), so catch-up stays inside the phone budget at any
+  speed; at 5x the cap is 1 h 36 m of real time, and the recap says it in
+  warehouse days and in real time.
+- *Waves* (sim). The plan gains `waveTicks`, one of `wmsWaveMinTicks` (30
+  min), `wmsWaveTicks` (1 h) and `wmsWaveMaxTicks` (2 h); a shorter interval
+  brings the next wave forward. Plan offers "Release a wave now" (the
+  existing `release` action with every NEW order).
+- *Labour* (sim). A new `role` action moves a worker (or, as worker 0,
+  whoever the WMS picks: no task first, then least lined up) to picking or
+  receiving; it drops its tasks and the plan's split follows (a MOVE event).
+  The plan gains `labor`, fixed (the old behaviour) or balance by need: every
+  `wmsBalanceTicks` (15 warehouse minutes) the WMS moves one person to the
+  side with at least `wmsBalanceGap` (3) more tasks waiting a head, each side
+  keeping one. The View gains `needs` (each side's people, idle and tasks
+  waiting, the side that is short, the next look) and `waveChoices`; the
+  Plan and Crew pages show "where the work is" with "+ 1 here", and a
+  worker's page has "Move to receiving" (or picking).
+- *Saves* are schema 8: version 7 gains waveTicks 240 and labor fixed. A plan
+  command naming only the three W7 settings keeps the other two, so a
+  version-7 history replays exactly (tested with a real version-7 save).
+**Measured** (an untouched warehouse, seeds 1-8, 2 h of ticks; OTIF, on time,
+fill): default 82%, 96%, 96.6% (unchanged: the report passes as at W8);
+balance by need 81.5%, 97.3%, 95.3% (people move to picking, so orders
+ship sooner but stock lands later); waves every 30 min 81.4%, 95.8%, 96.4%;
+every 2 h 77.5%, 89.4%, 96.8%. Balance gap 2-6 and cadence 15-60 min all sit
+within a point and a half of each other on an idle warehouse. Phone check
+52/52 at 360 x 740 (the floor at 60 fps with the CPU slowed 4x at 5x speed;
+10 hours away reopens in about 1 s).
+**Why.** At one warehouse minute a second a warehouse day took 24 real
+minutes, too slow to see a plan play out in a 5-minute session (pillar 3).
+Doing the speed in the host keeps the sim deterministic and every balance
+number and test as they were. Waves and labour moves are the levers a WMS
+supervisor pulls hour to hour; showing the work waiting each side makes the
+labour trade-off readable (pillar 2), and the balance plan is the
+automation of the same rule.
+**Cost.** The WMS screens re-render up to four times a second at 5x and 10x
+(once a WMS step that an update carries) instead of once. The offline cap
+in real time shrinks with the speed (1 h 36 m at 5x). Moving a worker drops
+what it holds (a half-picked line starts again), as the crew split already
+did. A save migration. The default plan is unchanged, so an untouched
+warehouse plays exactly as before; balance by need trades about a point of
+fill for a point of on time and is not a free win.
+**Reversing it.** `DEFAULT_SPEED` 1 brings back a minute a second; removing
+the speed buttons and `setSpeed` leaves the old host. `wmsBalanceGap` 20
+makes balance by need do almost nothing; the `role` action and the wave
+interval can stay without harm.

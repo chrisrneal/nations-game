@@ -15,8 +15,36 @@ Nations log is at commit `67d1d92`.
 - [x] WMS Inbound, Outbound and Inventory pages (W6, wms-plan slice 10)
 - [x] The WMS is home: a live floor drawn from the WMS, and the plan (W7, wms-plan slice 11)
 - [x] The WMS is the game: tasks for every worker, a Crew page, dock appointments, the idle game removed (W8, wms-plan slice 12)
+- [x] Speed (5 warehouse minutes a second, pause, 1x, 10x), wave interval, moving people by need (W9)
 
 ## Session log
+
+### 2026-10-07 - Speed, waves and labour by need (lanes C, S, H, U, P, D; owner request, W9)
+**What changed.** The warehouse now runs at **5 warehouse minutes a second**
+(a day in under 5 real minutes). Two buttons in the top bar: pause, and the
+speed (tap: 10x, 1x, back to 5x). The warehouse keeps that speed while the
+app is closed, up to the same cap (20 warehouse days, which is 1 h 36 m of
+real time at 5x); the recap says so. **Plan** gains the wave interval (30
+min, 1 h, 2 h), a "Release a wave now" button, and a **Labour** choice:
+*Fixed* (as before) or *Balance by need*, where every 15 warehouse minutes
+the WMS moves one person to the side with more work waiting. Plan and Crew
+show **where the work is**: people, idle and tasks waiting on each side, the
+side that is behind lit, and "+ 1 here" to move someone across. A worker's
+page has "Move to receiving" (or picking). Saves are schema 8 (a real
+version-7 save migrates and replays exactly).
+**Checks.** `npm test` and `npm run check` pass (new: 11 labour and wave sim
+tests, 5 speed tests on the host clock, an autosave-at-speed test, the
+version-7 migration with a real save, the speed button). `npm run harness
+-- report`: unchanged, 82% OTIF, 97% fill (the default plan plays as
+before). Balance by need over seeds 1-8: on time 97% (was 96%), fill 95%
+(was 97%): a trade-off, not a free win. Phone check 52/52 at 360 x 740 (new:
+pause, the speed steps, waves and labour in three taps; the floor 60 fps
+with the CPU slowed 4x at 5x; 10 hours away reopens in about 1 s).
+**How to see it.** Open the app: the clock now moves 5 minutes a second.
+Tap ❚❚ to pause, the 5× button to change speed. Plan › Wave every and
+Labour; Crew shows where the work is at the top.
+**What is left.** Balance by need looks only at tasks, not at trucks waiting
+in the yard; the testing time skip is still in time at 1x (docs/GAPS.md).
 
 ### 2026-10-07 - The WMS is the whole game: workers' tasks, dock appointments, the idle game removed (lanes C, S, H, U, P, D; owner request, W8)
 **What changed.** The idle game is gone: no docks screen, trucks, taps,

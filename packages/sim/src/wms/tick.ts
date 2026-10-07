@@ -6,6 +6,7 @@ import { WMS_RATE_BUCKETS, WMS_RATE_BUCKET_TICKS, destinationAt, isClosed } from
 import { confirmReceipt, cycleCount, planReorders, stepInbound, storeLine } from './inbound.ts';
 import { log, type MLine, type MOrder, type MTask, type MWms, type MWorker } from './mutable.ts';
 import { Roller, rollOrder, unitsOf } from './orders.ts';
+import { balanceCrew } from './policy.ts';
 import { finishTask, findTask, newTask, pickTarget, planTasks, poTarget, purgeTasks, startNext, urgency } from './tasks.ts';
 
 export { cloneWms, log, type MLine, type MOrder, type MWms } from './mutable.ts';
@@ -290,7 +291,7 @@ export function emptyDay(day: number): MWms['today'] {
  * planning raises POs and books their dock appointments, inbound trucks
  * arrive and dock (receive tasks), a cycle count may run, released and
  * backordered lines are allocated (pick tasks), every worker works its task,
- * the WMS lines up the next tasks, finished orders pack, stage, load and
+ * the balance plan may move a person (W9), the WMS lines up the next tasks, finished orders pack, stage, load and
  * ship, and cutoffs pass. Returns the cents shipments earned. Shipments,
  * cutoff misses and a new day go to `events` when it is given.
  */
@@ -324,7 +325,7 @@ export function wmsStep(w: MWms, tick: number, events: WarehouseEvent[] | null =
   if (release === 'continuous') releaseWave(w, tick, w.orders);
   else if (release === 'waves' && tick >= w.nextWaveAt) {
     releaseWave(w, tick, w.orders);
-    w.nextWaveAt = tick + T.wmsWaveTicks.value;
+    w.nextWaveAt = tick + w.policy.waveTicks;
   }
   if (tick >= w.nextReplenAt) {
     planReorders(w, r, tick);
@@ -340,6 +341,8 @@ export function wmsStep(w: MWms, tick: number, events: WarehouseEvent[] | null =
   if (needing.length > 1) needing.sort((a, b) => urgency(w.policy.pick, a, b));
   for (const o of needing) allocate(w, o, tick);
   for (const worker of w.workers) workWorker(w, r, worker, tick);
+  // The balance plan (W9) may move one person to where the work waits, before the tasks are shared out.
+  balanceCrew(w, tick);
   planTasks(w, tick);
   let closedNow = false;
   for (const o of w.orders) {
