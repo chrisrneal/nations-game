@@ -296,6 +296,8 @@ export interface PickingView {
   readonly waitTicks: number;
   /** Stations that slow picking (export paperwork, customs), as a multiplier in basis points. */
   readonly slowBp: number;
+  /** Milli-items in an order at today's contract (RULES 3b): each item is a pick and a unit of stock. */
+  readonly itemsMilli: number;
 }
 
 /** The receiving dock and the shelves (RULES 3a). */

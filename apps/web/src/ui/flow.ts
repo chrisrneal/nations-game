@@ -146,6 +146,8 @@ export interface Dot {
   /** A picker: the order's items (more than one goes in a tote), and those not yet picked. */
   items: number;
   left: number;
+  /** A tote's locations already picked: floor pick `i`, reserve `-1 - i`. */
+  visited: number[];
   /** Which way it last moved across the screen: +1 right, -1 left. */
   dir: number;
   /** Queued at a station or reaching into a rack: from `start`, done at `release` (ms). */
@@ -166,9 +168,8 @@ const SERVICE_DEP = 150;
 const SERVICE_ARR = 110;
 /** Time reaching into a rack, ms. */
 const PICK_MS = 220;
-/** Multi-item orders: the share of orders that are, and their most items (from 2). One ticket on the board is one item. */
-const MULTI_SHARE = 0.35;
-const MULTI_MAX = 4;
+/** Multi-item orders (RULES 3b): a tote holds 2 up to this many items, more when the real average needs it. */
+const TOTE_MAX = 4;
 /** Time a forklift's forks take to set down or lift a pallet, ms. */
 const LIFT_MS = 260;
 /** Floor pick locations: a reach truck sets off when they hold less than LOW of their room, and fills them back up to FULL. */
@@ -357,8 +358,8 @@ export class FlowModel {
   private nextTruck = 0;
   /** New orders on their way to the board, as of the last frame. */
   private atDesk = 0;
-  /** Items in the next order a picker takes off the board; 0 until drawn. */
-  private nextItems = 0;
+  /** Items in an order on average, the real figure (RULES 3b). */
+  private items = 1;
 
   /** Takes one update from the host. `now` is the animation clock in ms. */
   ingest(view: WarehouseView, events: readonly WarehouseEvent[], now: number): void {
@@ -367,6 +368,7 @@ export class FlowModel {
     this.still += 1;
     this.staging = view.staging.cap === 0 ? 0 : Math.min(1, view.staging.staged / view.staging.cap);
     this.stock = view.receiving.stock;
+    this.items = Math.max(1, (view.picking.itemsMilli ?? 1000) / 1000);
     this.shelfCap = view.receiving.shelfCap;
     this.shelves = view.receiving.shelfCap === 0 ? 0 : Math.min(1, view.receiving.stock / view.receiving.shelfCap);
     this.loads = view.docks.map((g) => ({ share: g.turn > 0 ? null : Math.min(1, g.loaded / Math.max(1, g.parcels * 1000)), parcels: g.parcels, express: g.express }));
@@ -399,7 +401,13 @@ export class FlowModel {
     const was = prev.receiving.po;
     const po = view.receiving.po;
     const received = po.id === was.id ? Math.max(0, po.received - was.received) : Math.max(0, was.units * 1000 - was.received) + po.received;
-    this.accIn = this.spawn(this.accIn + received, unit, () => this.add('arr', 'box', -1));
+    // A forklift carries an average order's items, so bigger orders do not crowd the aisles (RULES 3b).
+    const pallet = Math.round(unit * this.items);
+    this.accIn = this.spawn(this.accIn + received, pallet, () => {
+      this.add('arr', 'box', -1);
+      const d = this.dots[this.dots.length - 1];
+      if (d?.kind === 'arr') d.amt = pallet;
+    });
 
     const departed = new Map<number, number>();
     for (const e of events) {
@@ -423,7 +431,7 @@ export class FlowModel {
     this.walkBoard(dt, geo);
     // What the racks are owed or missing, counted on the way: stock still on a forklift, picks not yet taken, pallets in the air.
     let putting = 0;
-    let owed = this.cleared * this.perDot * 1000;
+    let owed = this.cleared * this.perDot * 1000 * this.items;
     let waiting = 0;
     let lifted = 0;
     let trucks = 0;
@@ -472,7 +480,6 @@ export class FlowModel {
     this.accAway = 0;
     this.accBoard = [];
     this.cleared = 0;
-    this.nextItems = 0;
     this.onFace = null;
     this.replens = 0;
     this.still += 1;
@@ -621,8 +628,7 @@ export class FlowModel {
       }
     }
     const extra = this.queue.length - this.lineDots;
-    // Too long a board lets its head go, a whole order at a time.
-    if (extra > 2 && this.cleared < Math.max(1, this.nextItems)) this.cleared += 1;
+    if (extra > 2 && this.cleared < 1) this.cleared += 1;
     this.cleared = Math.min(this.cleared, this.queue.length);
   }
 
@@ -634,26 +640,16 @@ export class FlowModel {
       const at = boardSpot(geo.board, i, n);
       toward(d, at.x, at.y, step);
     });
-    // As many as picking cleared go, as each reaches the head of the board. A
-    // multi-item order is the head and the tickets behind it: it waits until
-    // picking has cleared them all, so the board stays the real backlog.
+    // As many as picking cleared go, as each reaches the head of the board,
+    // each an order of one item or a tote's worth (RULES 3b).
     while (this.cleared > 1 - 1e-6) {
       const head = this.queue[0];
       if (head === undefined) break;
       const at = boardSpot(geo.board, 0, n);
       if (Math.hypot(head.x - at.x, head.y - at.y) > PITCH * 1.5) break;
-      if (this.nextItems === 0) this.nextItems = this.orderSize();
-      const items = Math.min(this.nextItems, this.queue.length);
-      if (this.cleared < items - 1e-6) break;
-      this.nextItems = 0;
       this.queue.shift();
-      for (let k = 1; k < items; k++) {
-        // Folded into the head's order: gone from the board this frame.
-        const t = this.queue.shift() as Dot;
-        t.phase = 'pick';
-        t.age = MAX_AGE;
-      }
-      this.cleared -= items;
+      this.cleared -= 1;
+      const items = this.orderSize();
       head.phase = 'pick';
       head.leg = 0;
       head.items = items;
@@ -667,10 +663,16 @@ export class FlowModel {
     }
   }
 
-  /** How many items the next order picked has: one, or a tote's worth. */
+  /**
+   * How many items the next order picked has: one, or a tote of 2 to `top`,
+   * drawn so the mix averages the real items per order.
+   */
   private orderSize(): number {
-    if ((this.jitter() + 1) / 2 >= MULTI_SHARE) return 1;
-    return 2 + Math.min(MULTI_MAX - 2, Math.floor(((this.jitter() + 1) / 2) * (MULTI_MAX - 1)));
+    const mean = this.items;
+    const top = Math.max(TOTE_MAX, Math.ceil(mean * 2));
+    const share = Math.min(1, Math.max(0, (mean - 1) / ((2 + top) / 2 - 1)));
+    if ((this.jitter() + 1) / 2 >= share) return 1;
+    return 2 + Math.min(top - 2, Math.floor(((this.jitter() + 1) / 2) * (top - 1)));
   }
 
   /**
@@ -689,7 +691,7 @@ export class FlowModel {
         const start = Math.floor(((this.jitter() + 1) / 2) * n);
         for (let k = 0; k < n; k++) {
           const i = (start + k) % n;
-          if (cells[i] !== 1 || (face === d.face && i === d.slot)) continue;
+          if (cells[i] !== 1 || (face === d.face && i === d.slot) || d.visited.includes(face ? i : -1 - i)) continue;
           if (a !== undefined && slots[i]?.aisle !== a) continue;
           return { slot: i, face };
         }
@@ -715,7 +717,7 @@ export class FlowModel {
   }
 
   private fresh(kind: DotKind, tint: Tint, dock: number): Dot {
-    return { kind, tint, dock, jy: this.jitter() * 3, placed: false, x: 0, y: 0, leg: 0, phase: 'desk', slot: -1, face: false, to: -1, amt: this.perDot * 1000, items: 1, left: 1, dir: 1, start: 0, release: 0, alpha: 1, age: 0 };
+    return { kind, tint, dock, jy: this.jitter() * 3, placed: false, x: 0, y: 0, leg: 0, phase: 'desk', slot: -1, face: false, to: -1, amt: this.perDot * 1000, items: 1, left: 1, visited: [], dir: 1, start: 0, release: 0, alpha: 1, age: 0 };
   }
 
   private add(kind: DotKind, tint: Tint, dock: number): void {
@@ -961,6 +963,7 @@ export class FlowModel {
           d.release = now + PICK_MS;
           d.tint = 'box';
           d.left = Math.max(0, d.left - 1);
+          if (d.left > 0) d.visited.push(d.face ? d.slot : -1 - d.slot);
           if (d.face) this.onFace = Math.max(0, (this.onFace ?? 0) - d.amt);
           this.hint(d.face, false, slot as Slot, now);
           this.mark(slot as Slot, 'pick', now);

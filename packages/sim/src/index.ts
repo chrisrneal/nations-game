@@ -29,6 +29,7 @@ export {
   parcelsAt,
   poUnitsFor,
   receiveMilliAt,
+  itemsMilliAt,
   shelfCapMilliAt,
   starsFor,
   upgradeCost,

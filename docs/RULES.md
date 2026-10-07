@@ -10,13 +10,14 @@ renamed.
 ## 1. The game in one paragraph
 
 You run a warehouse. Customer **orders** come in and wait in the **backlog**
-until a picker takes the item off the shelves; packed orders wait in
+until a picker takes its items off the shelves (bigger customers send
+bigger orders, section 3b); packed orders wait in
 **packing** for a truck. Each **dock** holds one truck; loaders fill it at the
 dock's loading rate. When the truck is full, or its departure timer runs out,
 it leaves and pays for every order on board, with a bonus if it left full.
 The dock then swaps in the next truck. Meanwhile **purchase orders (POs)**
 arrive at the **receiving** dock, and receivers put their units away on the
-**shelves**: every order picked takes one unit, so empty shelves stop the
+**shelves**: every item picked takes one unit, so empty shelves stop the
 pickers. You spend cash on upgrades, each of which fixes one bottleneck and
 usually moves the pressure somewhere else. The warehouse keeps running while
 the app is closed, up to a cap. When it has earned enough you can sell it for
@@ -33,8 +34,9 @@ one bottleneck for a minute, then recharge.
 - One tick is `tickMs` = 250 ms of wall clock: 4 ticks a second. The sim counts
   ticks and never reads a clock; the host decides when ticks happen (S4).
 - Money is integer **cents**. The interface shows dollars (`$1.2K`, `$3.4M`).
-- Orders and stock are integer **milli-units** (1 order = 1 unit of stock =
-  1000), so slow rates accumulate exactly. A truck pays for whole orders only.
+- Orders, items and stock are integer **milli-units** (1 order = 1000
+  milli-orders; 1 item = 1 unit of stock = 1000), so slow rates accumulate
+  exactly. A truck pays for whole orders only.
 - Rates are per tick in the code. This document quotes them per second.
 - Growth is in basis points (10000 = x1.0). "Grows by g per level" means
   `value(n) = floor(value(n-1) x g / 10000)`, applied n times from the base, so
@@ -51,14 +53,17 @@ screen shows (section 14).
 
 - Orders arrive at `A = orderBase x orderGrowth^salesLevel` per second (1.6/s
   at level 0, +35% a level, from the More sales upgrade) and join the backlog.
-- Pickers pick `S = pickingBase x pickingGrowth^pickingLevel` per second
-  (2.4/s at level 0, +50% a level, from More pickers), times `exportCheck`
+- Pickers pick `pickingBase x pickingGrowth^pickingLevel` items a second
+  (2.88/s at level 0, +50% a level, from More pickers), times `exportCheck`
   (x0.95) for each export station the contract adds: export paperwork from
   Cross-border (contract 5), customs checks from Overseas (contract 6). A
   tapped picking area, or All hands, sends extra pickers: `rushLoad` (2.5x) as
-  fast (section 6).
-- **Each order picked takes one unit of stock** off the shelves (section 3a).
-  Picking takes `min(rate, backlog, stock, packing room)` a tick.
+  fast (section 6). In orders, that is `S` = items a second / items per
+  order (section 3b): 2.4 orders a second at level 0 with Local shops.
+- **Each order picked takes one unit of stock per item** off the shelves
+  (sections 3a, 3b). Picking takes `min(rate, backlog, stock / items per
+  order, packing room)` orders a tick, and the stock they take is rounded up
+  to a whole milli-unit.
 - Customers will not wait behind a backlog longer than `backlogWait` (30 s) of
   picking: the backlog holds at most `L = S x backlogWait` (the rate before
   extra pickers). Orders beyond that are **cancelled** (counted as missed for
@@ -73,19 +78,31 @@ screen shows (section 14).
 
 - One PO at a time stands at the receiving dock. Receivers put its units away
   onto the shelves at `R = receiveBase x receiveGrowth^receivingLevel` per
-  second (2.4/s at level 0, +50% a level, from the Receiving bay upgrade). A
+  second (2.88/s at level 0, +50% a level, from the Receiving bay upgrade). A
   tapped receiving lane, or All hands, sends extra hands: `rushLoad` (2.5x).
-- The shelves hold `shelfCapBase x shelfCapGrowth^receivingLevel` units (120
+- The shelves hold `shelfCapBase x shelfCapGrowth^receivingLevel` units (144
   at level 0, +50% a level). Full shelves hold the PO at the dock.
 - A PO holds `ceil(R x poTicks)` units, `poTicks` (20 s) of put-away at the
-  rate when it arrives (48 units at level 0). When its last unit is put away
+  rate when it arrives (58 units at level 0). When its last unit is put away
   it counts as received and the next PO is at the dock at once, taking the
   rest of that tick's put-away. A bigger bay makes the next PO bigger, not the
   one being unloaded.
 - POs are free: the stock belongs to your customers, and you are paid per
   order shipped. They are what keeps the pickers working.
-- A new warehouse opens with `startingStock` units on the shelves (60) and PO 1
+- A new warehouse opens with `startingStock` units on the shelves (72) and PO 1
   at the dock. PO numbers keep counting across sites.
+
+## 3b. Items per order: bigger customers send bigger orders
+
+- An order is `items = itemsBase + itemsPerContract x contractLevel` items on
+  average (1.2 at Local shops, +0.15 a contract level: 1.95 at Cross-border,
+  2.55 at Everything store). Each item is one pick and one unit of stock.
+- So a better contract pays 60% more an order, but each order takes longer
+  to pick and more stock: in orders, picking and receiving slow by
+  `items(n) / items(n+1)` (x0.89 from Local shops to Web shop). That is the
+  catch of Better contracts beside its truck lock and the export stations.
+- The sim works with the average (milli-items, P3); the floor shows it as a
+  mix of one-item orders and totes of several (section 14).
 
 ## 4. Docks and trucks
 
@@ -165,7 +182,7 @@ upgrade fixes one bottleneck and none is strictly better than the others:
 | More sales | +35% orders and +35% packing space | only pays while picking, stock and the docks keep up: more orders make the backlog longer | $30 | x2.0 | 40 |
 | More pickers | +50% picking speed, and so +50% backlog customers will wait behind | only pays while orders are queuing | $25 | x1.8 | 40 |
 | Receiving bay | +50% put-away, +50% shelf space, +50% PO size | only pays while the shelves run low | $20 | x1.8 | 40 |
-| Better contracts | +60% pay per order | contract level n needs truck level n or more; from Cross-border each new export station slows picking 5% | $750 | x4.0 | 9 |
+| Better contracts | +60% pay per order | bigger orders: +0.15 items an order a level, so picking and stock go less far (section 3b); contract level n needs truck level n or more; from Cross-border each new export station slows picking 5% | $750 | x4.0 | 9 |
 | Yard crew | -12% swap time | worth most with small trucks that fill fast | $60 | x2.2 | 20 |
 | Night shift | doubles how long the warehouse runs while you are away (2 h, 4 h, 8 h, 16 h, 24 h) | earns nothing while you are playing | $500 | x10 | 4 |
 
@@ -281,14 +298,14 @@ minutes, and sells at the first check-in where the sale adds half again. Both
 use every boost that is ready: the greedy bot at once, the idle bot as it
 leaves each check-in.
 
-| Target | Measured (seeds 1-5, W1) |
+| Target | Measured (seeds 1-5, W4) |
 | --- | --- |
 | First upgrade within 10 s | 3 s |
 | First new dock within 2 minutes | 19-29 s |
-| Something new (a dock, truck, contract or sale) at least every 5 minutes before the first sale | longest wait 4.3-4.4 min |
-| First sale at roughly 30-60 minutes (greedy) | 35.3-35.6 min, 3 stars (38.2-38.5 without boosts) |
-| First sale for an idle player (no taps, check-ins every 15 min) | about 2 h 30 min, 3 stars (2 h 45 min to 3 h without boosts; reported, no target) |
-| Active income about 2-3x idle at the same levels (tapping; measured at the levels the greedy bot reaches without boosts) | 2.1-2.7x (2.4-2.7x at the levels it reaches with boosts, reported) |
+| Something new (a dock, truck, contract or sale) at least every 5 minutes before the first sale | longest wait 4.3 min |
+| First sale at roughly 30-60 minutes (greedy) | 36.0-36.3 min, 3 stars (38.9-39.2 without boosts) |
+| First sale for an idle player (no taps, check-ins every 15 min) | about 2 h 30 min, 3 stars (2 h 45 min without boosts; reported, no target) |
+| Active income about 2-3x idle at the same levels (tapping; measured at the levels the greedy bot reaches without boosts) | 2.1-3.2x (2.3-2.9x at the levels it reaches with boosts, reported) |
 | A 30-second check-in buys at least one upgrade | 100% of idle check-ins |
 | A 5-minute session reaches its next unlock | 10 of 10 idle check-ins at the first warehouse, every seed (target 80%) |
 | Income estimate within 20% of measured idle income | within 4% |
@@ -306,18 +323,20 @@ disagree.
 | `cashCapCents` | 9000000000000000 | 9000000000000000 | 9000000000000000 | Engine limit: the safe-integer ceiling. The safe is full. |
 | `startingCashCents` | 0 | 0 | 10000 | Cash a new warehouse opens with. |
 | `startingStaged` | 10 | 0 | 40 | Orders packed and staged at opening, so the first truck fills at once. |
-| `startingStock` | 60 | 0 | 200 | Units on the shelves at opening: half the first shelves. |
+| `startingStock` | 72 | 0 | 240 | Units on the shelves at opening: half the first shelves. |
 | `orderBaseMilliPerTick` | 400 | 200 | 1000 | Milli-orders a tick at sales level 0 (1.6 a second). |
 | `orderGrowthBp` | 13500 | 12000 | 15000 | Orders per sales level (+35%). |
 | `stagingCapBase` | 40 | 20 | 100 | Packed orders the staging area holds at sales level 0. |
 | `stagingCapGrowthBp` | 13500 | 12000 | 15000 | Staging space per sales level; matches orders so it holds the same seconds of them. |
-| `pickingBaseMilliPerTick` | 600 | 400 | 1500 | Milli-orders picked a tick at level 0 (2.4 a second): ahead of level-0 orders, so the first minutes have no backlog. |
+| `pickingBaseMilliPerTick` | 720 | 400 | 1800 | Milli-items picked a tick at level 0 (2.88 a second: 2.4 Local shops orders of 1.2 items): ahead of level-0 orders, so the first minutes have no backlog. |
 | `pickingGrowthBp` | 15000 | 12500 | 16000 | Picking per pickers level (+50%): ahead of sales's +35%, so pickers hired keep up for a while. |
+| `itemsBaseMilli` | 1200 | 1000 | 2000 | Milli-items in an order at contract level 0 (1.2: most Local shops orders are one item, some a tote of several). |
+| `itemsPerContractMilli` | 150 | 0 | 600 | Extra milli-items an order per contract level (+0.15; at +0.2 or more the wait for contract 6 passed 5 minutes): bigger customers send bigger orders, the catch that keeps +60% pay a trade-off. 0 turns the rule off. |
 | `backlogWaitTicks` | 120 | 40 | 240 | The longest wait customers accept (30 s of picking): the backlog holds this many ticks of picking; beyond it new orders are cancelled. |
 | `exportCheckBp` | 9500 | 6000 | 10000 | Picking speed for each export station (export paperwork, customs): x0.95 each. The catch of the big contracts. |
-| `receiveBaseMilliPerTick` | 600 | 300 | 1500 | Milli-units put away a tick at receiving level 0 (2.4 a second), level with picking: at 2 a second the first bay came before the second dock (2.5 minutes). |
+| `receiveBaseMilliPerTick` | 720 | 300 | 1800 | Milli-units put away a tick at receiving level 0 (2.88 a second), level with picking: at the old 2 orders a second the first bay came before the second dock (2.5 minutes). |
 | `receiveGrowthBp` | 15000 | 12500 | 16000 | Put-away per receiving level (+50%), like picking: ahead of sales, so a bay bought keeps up for a while. |
-| `shelfCapBase` | 120 | 40 | 400 | Units the shelves hold at receiving level 0 (about a minute of orders): a buffer for flash sales. |
+| `shelfCapBase` | 144 | 40 | 480 | Units the shelves hold at receiving level 0 (about a minute of orders): a buffer for flash sales. |
 | `shelfCapGrowthBp` | 15000 | 12500 | 16000 | Shelf space per receiving level; matches put-away so the shelves hold the same seconds of it. |
 | `poTicks` | 80 | 20 | 240 | A purchase order is this many ticks of put-away (20 s), so a new PO reaches the dock every 20 s or so. |
 | `maxDocks` | 8 | 4 | 12 | Most docks: 8 fit a phone screen in two rows of four. |
@@ -464,14 +483,14 @@ section 3). "Packing" in sections 3-8 is the staging area on screen.
   takes the oldest down an aisle, reaches into a full floor pick location (a
   reserve one when the floor is bare; the ticket becomes a carton) and
   carries it back out of the aisle's left end, past the board and down to
-  staging (the cross aisle is the forklifts'). About a third of the orders
-  picked are **multi-item** (2 to 4 items): the picker takes that many
-  tickets off the board at once, as picking clears them, and fills a tote,
-  reaching into a different location for each item, along the same aisle
-  where it can or out and into the next aisle. Each item is one ticket and
-  one unit of stock, so the board, the racks and staging stay exact; how
-  orders group into totes is **for show** (in the sim every order is one
-  unit, section 3). Under the board, one picker figure per two
+  staging (the cross aisle is the forklifts'). Orders of several items
+  (section 3b) go in a **tote**: the picker reaches into a different
+  location for each item, along the same aisle where it can or out and into
+  the next aisle, and the tote fills as it goes. Each ticket is an order; its
+  size is drawn so the mix averages the real items per order (at Local
+  shops, one order in ten is a tote of 2 to 4 items; by Overseas over 40%
+  are), so the racks empty at the real rate. Which orders are big is **for
+  show** (the sim works with the average). Under the board, one picker figure per two
   pickers levels (up to six), and an extra one in green while extra pickers
   work. It shows the backlog and the wait ("34 waiting · 14 s"), "held:
   staging full" or "held: racks empty" when those stop it, and is the

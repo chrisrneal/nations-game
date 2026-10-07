@@ -782,3 +782,45 @@ and 6 or more stars would replay differently. The game's own saves are compact
 **Reversing it.** Remove perks.ts and its calls (openWarehouse, boostTicks,
 rollExpress, offlineCapTicks), the tunables and the stars sheet; State is
 untouched, so no migration.
+
+## W4 - Bigger customers send bigger orders: items per order grow with contracts
+**Status.** Accepted, 2026-10-07, at the owner's request ("Some orders should
+have many items and require multi picks to tote", then "Go" when asked whether
+big orders should become a real rule rather than only a picture). As for W3,
+the owner asked for it directly, so this session wrote the record.
+**Decision.** An order is `items = itemsBase + itemsPerContract x contract`
+items on average (RULES 3b): 1.2 at Local shops, +0.15 a contract level. Each
+item is one pick and one unit of stock: pickers pick items a second, and
+picking takes `ceil(orders x items)` milli-units of stock. The sim keeps the
+average in milli-items (P3) and turns it into orders where the rest of the
+rules need orders (`pickingMilliAt`, the estimate's receiving rate), so the
+backlog, staging, loading, the estimate and the bottleneck are unchanged in
+form. No State, command or save change: items come from the contract level.
+The View gains `picking.itemsMilli`. Picking and receiving bases, the shelves
+and the opening stock were raised 20% (2.4 to 2.88 a second, 120 to 144
+units, 60 to 72) so a Local shops warehouse picks and stocks exactly the
+orders it did. On the floor (RULES 14) each ticket is now one order; its size
+is drawn so the mix averages the real figure, and a big order is picked into
+a tote, one rack location an item. This replaces #59's display-only totes,
+which grouped one-item tickets.
+**Why on contracts.** Better contracts was the one upgrade with little catch
+before Cross-border (+60% pay, a truck lock). Now each contract also costs
+picking and stock per order, the trade-off pillar 2 asks for, and the
+customer names already say who sends bigger orders (Local shops against an
+Everything store). Putting it on contracts rather than on a site keeps the
+first warehouse's opening as it was and changes every run's middle.
+**Measured** (`npm run harness -- pacing`, seeds 1-5): every RULES 11 target
+holds. First sale 36.0-36.3 min with 3 stars (was 35.3-35.6), longest wait
+4.3 min, tapping 2.1-3.2x idle (was 2.1-2.7: with picking tighter, extra
+pickers are worth more), estimate within 4%. At +0.2 an item a level or more,
+the wait for contract 6 passed 5 minutes on seed 1 (5.0-5.8 min), so the step
+is +0.15.
+**Cost.** The rules for picking changed: a save with a command log from
+before this change would replay differently (the game's own saves are
+compact, as in W3). Tapping now reaches 3.16x idle on one seed, near the top
+of its 1.8-3.2 band. Stock rounds up per tick, so a few milli-units a tick are
+lost to rounding at most.
+**Reversing it.** Set `itemsPerContractMilli` to 0 and `itemsBaseMilli` to
+1000 with the old picking and receiving bases (600), shelves (120) and stock
+(60): every rule is then as before.
+

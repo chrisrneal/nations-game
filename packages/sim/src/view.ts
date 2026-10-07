@@ -108,9 +108,9 @@ export function estimate(state: WarehouseState, boost: BoostEffect = NO_BOOST): 
   const fill = parcels / load;
   const cycle = Math.min(fill, timer) + turn;
   const capacity = (d.docks * Math.min(parcels, load * timer)) / cycle;
-  // Picking takes orders from the backlog, a unit of stock each; receiving refills the shelves (RULES 3, 3a).
+  // Picking takes orders from the backlog, a unit of stock an item; receiving refills the shelves (RULES 3, 3a, 3b), in orders' worth.
   const picking = perSecond(d.pickingMilli);
-  const receiving = perSecond(d.receiveMilli);
+  const receiving = perSecond(mulDiv(d.receiveMilli, 1000, d.itemsMilli));
   const floor = Math.min(picking, receiving);
 
   let throughput: number;
@@ -262,6 +262,7 @@ function pickingView(state: WarehouseState, d: ReturnType<typeof derive>, boost:
     rushed: fast,
     waitTicks: rate === 0 ? 0 : Math.ceil(state.backlog / rate),
     slowBp: pickingSlowBpAt(state.levels.contract),
+    itemsMilli: d.itemsMilli,
   };
 }
 
