@@ -9,9 +9,27 @@ passengers, security). The Nations log is at commit `67d1d92`.
 - [x] Airport pivot slices 1-8 (docs/ROADMAP.md, History)
 - [x] Warehouse pivot (W1), one pull request (W2)
 - [x] Star perks (W3)
-- [ ] WMS, nine slices (W5, docs/wms-plan.md): slice 1 done
+- [ ] WMS, nine slices (W5, docs/wms-plan.md): slices 1-3 done
 
 ## Session log
+
+### 2026-10-07 - WMS slices 2-3: orders move, and the order grid (lanes C, S, H, U, D; owner request, W5)
+**What changed.** The WMS now runs (RULES 16): a new order every 20-30 s,
+an automatic wave each minute (the first after 30 s), allocation from stock
+with shorts and backorders, replenishment, six pickers picking lines by
+priority then ship-by, the odd short pick, then pack, stage, load and ship,
+with cutoff misses and OTIF counted. A WMS button in the bottom bar opens
+the order grid: dense monospace rows, a sticky header and Order # column,
+flags, colour-coded status chips, lines and percent picked with a bar, more
+columns by scrolling sideways inside the grid, sort by any header, and
+filters (All, Open, Picking, Exceptions, Shipped). Save schema 3.
+**Checks.** `npm test` (457) and `npm run check` pass; 24 h catch-up takes
+about 300 ms in Node (was 117 ms; budget 2 s on a phone); no sideways page
+scroll at 360 px on the grid (`apps/web/e2e/wms-shots.ts`).
+**How to see it.** Tap WMS (bottom left). The badge shows open orders, or
+a red count of exceptions.
+**What is left.** Slices 4-9: order detail, activity feed, KPI strip,
+player actions, the feedback loop and polish.
 
 ### 2026-10-07 - WMS slice 1: orders, lines, stock and pickers in State (lanes C, S, H, U, D; owner request, W5)
 **What changed.** The start of a warehouse management system (docs/wms-plan.md,
