@@ -29,7 +29,7 @@ import {
   upgradeCost,
 } from './rules.ts';
 import { WAREHOUSE_TUNABLES as T } from './tunables.ts';
-import { wmsSummary } from './wms/view.ts';
+import { wmsView } from './wms/view.ts';
 
 const BP = 10_000;
 
@@ -324,6 +324,6 @@ export function warehouseView(state: WarehouseState): WarehouseView {
     offlineCapMinutes: offlineMinutesFor(state.levels.night, state.stars),
     run: state.run,
     life: state.life,
-    wms: wmsSummary(state.wms),
+    wms: wmsView(state.wms, state.tick, CONTRACTS, mulDiv(d.payCents, d.payMulBp, BP)),
   };
 }

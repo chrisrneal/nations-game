@@ -128,7 +128,7 @@ describe('WMS sample order generator (slice 1)', () => {
     const wms = createWms({ seed: 3, tick: 12, contract: 0 });
     expect(wms.pickers).toEqual(Array.from({ length: T.wmsPickers.value }, (_, i) => ({ id: i + 1, order: 0, line: 0, progress: 0 })));
     expect(wms.events).toEqual(
-      wms.orders.map((o) => ({ tick: 12, code: 'ORD CRT', order: o.no, line: 0, qty: o.lines.reduce((n, l) => n + l.ordered, 0), picker: 0 })),
+      wms.orders.map((o) => ({ tick: 12, code: 'ORD CRT', order: o.no, line: 0, sku: -1, qty: o.lines.reduce((n, l) => n + l.ordered, 0), of: 0, picker: 0 })),
     );
   });
 

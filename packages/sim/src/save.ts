@@ -15,6 +15,9 @@ export type Migration = (save: Record<string, unknown>) => Record<string, unknow
  * - 1 to 2 (W5): the snapshot gains a WMS, generated as a new warehouse's would
  *   be (seeded from the warehouse seed and site, at the snapshot's tick and
  *   contract). Nothing else changes, so every idle number is as saved.
+ * - 2 to 3 (W5, WMS slice 2): the WMS gains clocks, counters and per-order
+ *   timers. A version-2 WMS never moved, so it is generated again the same
+ *   way, which gives the same orders and stock with the new fields.
  *
  * Old rules are not kept, so a migration changes only the snapshot, and
  * `migrateWarehouseSave` replays the history since it under today's rules and
@@ -27,6 +30,11 @@ export const WAREHOUSE_MIGRATIONS: Readonly<Record<number, Migration>> = {
     const snapshot = save.snapshot as Omit<WarehouseState, 'wms'>;
     const wms = createWms({ seed: snapshot.rng.seed + snapshot.site, tick: snapshot.tick, contract: snapshot.levels.contract });
     return { ...save, schemaVersion: 2, snapshot: { ...snapshot, schemaVersion: 2, wms } };
+  },
+  2: (save) => {
+    const snapshot = save.snapshot as Omit<WarehouseState, 'wms'>;
+    const wms = createWms({ seed: snapshot.rng.seed + snapshot.site, tick: snapshot.tick, contract: snapshot.levels.contract });
+    return { ...save, schemaVersion: 3, snapshot: { ...snapshot, schemaVersion: 3, wms } };
   },
 };
 

@@ -99,10 +99,22 @@ WMS catalog, so State stays compact and hashable.
    then ship-by), allocation, shorts, cutoff misses, activity events (last
    200), new orders arriving over time. Unit-test the transitions. Keep
    24 h catch-up inside the phone budget (`npm run harness -- bench`).
-   STATUS: TODO
+   STATUS: DONE. `wmsStep` in `packages/sim/src/wms/tick.ts`, called from
+   `tickInPlace` every `wmsStepTicks` (4 ticks = 1 s); helpers `releaseWave`,
+   `startPick`, `findOrder`, `log`, `cloneWms` are exported for the commands
+   of slice 7. Orders gained `next`, `late`, `held`, `closed`; events gained
+   `sku` and `of`; the WMS gained clocks, `stats`, `dests` (with `goodwill`)
+   and `recent` (lines per 15 s bucket). Save schema 3. Rules: RULES 16.
+   24 h catch-up 117 ms -> about 300 ms in Node (budget 2 s on a phone).
 3. **Order grid screen.** Dense rows, sticky Order # column and header, status
    chips, progress bars, sort, filter chips, live rows without scroll jumps.
-   STATUS: TODO
+   STATUS: DONE. The sim builds `view.wms` (`WmsView`, `wmsView` in
+   `packages/sim/src/wms/view.ts`: rows with lines, events newest first with
+   text, KPIs, pickers, countries, `rev`). UI in `apps/web/src/ui/wms/`:
+   `WmsScreen.tsx` (full-screen, opened by the WMS button in the bottom bar,
+   `sheet === 'wms'` in App), `OrderGrid.tsx` (memoised rows keyed by
+   `rowSignature`), `grid.ts` (filters, sort, tones, clock), `useWms.ts`
+   (re-renders once per WMS step), `wms.css`. `e2e/wms-shots.ts` screenshots.
 4. **Order detail.** Header summary, lines grid, shorts in red, the order's own
    history; back keeps scroll and filter. STATUS: TODO
 5. **Activity feed.** Collapsible bottom console, newest first, tap to open the

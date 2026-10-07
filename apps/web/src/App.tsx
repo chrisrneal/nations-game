@@ -13,6 +13,7 @@ import { StarsSheet } from './ui/StarsSheet.tsx';
 import { WarehouseStore } from './ui/store.ts';
 import { TopBar } from './ui/TopBar.tsx';
 import { UpgradeSheet } from './ui/UpgradeSheet.tsx';
+import { WmsScreen } from './ui/wms/WmsScreen.tsx';
 
 /** Names of the stations on the floor (RULES 14). */
 function checkpointNames(view: WarehouseView): Set<string> {
@@ -35,7 +36,7 @@ function unlockText(upgrade: UpgradeId, level: number, view: WarehouseView, befo
   }
 }
 
-type SheetName = 'upgrades' | 'settings' | 'sell' | 'stars' | null;
+type SheetName = 'upgrades' | 'settings' | 'sell' | 'stars' | 'wms' | null;
 
 /** The warehouse screen (docs/ROADMAP.md, phone UX): money and the dashboard on top, the floor (inbound dock, racks, the picking backlog at its heart, staging) and the outbound docks in the middle, actions under the thumb. */
 export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedback?: Feedback }): ReactElement {
@@ -138,7 +139,8 @@ export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedb
             Array.from({ length: Math.max(0, 2 * STANDS_PER_ROW - view.docks.length - 1) }, (_, i) => <EmptyStand key={i} number={view.docks.length + 2 + i} />)}
         </Pier>
       </Floor>
-      <BottomBar view={view} store={store} onUpgrades={() => setSheet('upgrades')} onSell={() => setSheet('sell')} onBoost={boost} />
+      <BottomBar view={view} store={store} onUpgrades={() => setSheet('upgrades')} onSell={() => setSheet('sell')} onBoost={boost} onWms={() => setSheet('wms')} />
+      {sheet === 'wms' && <WmsScreen store={store} onClose={close} />}
       {sheet === 'upgrades' && <UpgradeSheet view={view} store={store} onBuy={buy} onSell={() => setSheet('sell')} onClose={close} />}
       {sheet === 'sell' && (
         <SellSheet
