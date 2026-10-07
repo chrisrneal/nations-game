@@ -319,3 +319,341 @@
   text-decoration: line-through;
   border: 1px solid #2a3346;
 }
+
+/* ---- order detail (slice 4) ---- */
+.wms-detail {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.wms-detail-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--wms-rule);
+  background: var(--wms-head);
+}
+
+.wms-detail-title {
+  margin: 0;
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 1rem;
+}
+
+.wms-detail-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 1rem;
+}
+
+.wms-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin: 0;
+  background: var(--wms-rule);
+  border-bottom: 1px solid var(--wms-rule);
+}
+
+.wms-summary > div {
+  background: var(--wms-row);
+  padding: 0.3rem 0.5rem;
+  min-width: 0;
+}
+
+.wms-summary dt {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.wms-summary dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wms-progress {
+  height: 3px;
+  background: var(--wms-rule);
+}
+
+.wms-progress i {
+  display: block;
+  height: 100%;
+  background: var(--wms-green);
+  transform-origin: left center;
+  transition: transform 1s linear;
+}
+
+.wms-lines {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.wms-lines table {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 100%;
+  font-size: 0.76rem;
+}
+
+.wms-lines th,
+.wms-lines td {
+  height: var(--row-h);
+  padding: 0 0.35rem;
+  white-space: nowrap;
+  text-align: left;
+  border-bottom: 1px solid var(--wms-rule);
+  font-weight: 400;
+}
+
+.wms-lines thead th {
+  height: 28px;
+  background: var(--wms-head);
+  color: var(--muted);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.wms-lines thead th.num {
+  text-align: right;
+}
+
+.wms-lines tbody tr:nth-child(even) {
+  background: var(--wms-row-alt);
+}
+
+.wms-lines .c-line {
+  position: sticky;
+  left: 0;
+  background: var(--wms-head);
+  min-width: 1.6rem;
+  font-family: var(--mono);
+}
+
+.wms-lines .c-sku,
+.wms-lines .c-bin {
+  font-family: var(--mono);
+}
+
+.wms-lines .c-sku {
+  line-height: 1.15;
+}
+
+.wms-lines .c-desc {
+  display: block;
+  max-width: 7.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: system-ui, sans-serif;
+  font-size: 0.64rem;
+  color: var(--muted);
+}
+
+.wms-note {
+  margin: 0.4rem 0.5rem;
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+
+.wms-lines tr.short td,
+.wms-lines tr.short th {
+  color: var(--wms-red);
+}
+
+.wms-lines tr.short {
+  background: #2a1114 !important;
+}
+
+.short-qty {
+  font-weight: 700;
+}
+
+.lstatus {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.lstatus-open {
+  color: var(--wms-grey);
+}
+
+.lstatus-allocated {
+  color: var(--wms-blue);
+}
+
+.lstatus-picking {
+  color: var(--wms-amber);
+}
+
+.lstatus-picked {
+  color: var(--wms-green);
+}
+
+.lstatus-short {
+  color: var(--wms-red);
+}
+
+.wms-subhead {
+  margin: 0.6rem 0.5rem 0.2rem;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+/* ---- the console: activity lines, newest first ---- */
+.wms-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+}
+
+.wms-log li {
+  border-bottom: 1px solid #142036;
+}
+
+.wms-log button {
+  display: grid;
+  grid-template-columns: 3.5rem 5.9rem 1fr;
+  grid-template-areas: 't code ref' '. detail detail';
+  column-gap: 0.35rem;
+  align-items: baseline;
+  width: 100%;
+  min-height: 34px;
+  padding: 0.2rem 0.5rem;
+  border: none;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+}
+
+.wms-log button:disabled {
+  opacity: 1;
+  color: var(--fg);
+}
+
+.wms-log .t {
+  grid-area: t;
+  color: var(--muted);
+}
+
+.wms-log .ref {
+  grid-area: ref;
+}
+
+.wms-log .detail {
+  grid-area: detail;
+}
+
+.wms-log .code {
+  grid-area: code;
+  color: var(--wms-blue);
+  font-weight: 700;
+}
+
+.wms-log .ref,
+.wms-log .detail {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wms-log .detail {
+  white-space: pre;
+  color: var(--muted);
+}
+
+.wms-log .exc .code,
+.wms-log .exc .detail,
+.wms-log .exc .ref {
+  color: var(--wms-red);
+}
+
+/* ---- the activity feed: a console docked at the bottom (slice 5) ---- */
+.wms-feed {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--wms-rule);
+  background: #050a13;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.wms-feed-open {
+  height: 52%;
+}
+
+.wms-feed-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 0.6rem;
+  border: none;
+  background: var(--wms-head);
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  text-align: left;
+}
+
+.wms-feed-caret {
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+
+.wms-feed-label {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.wms-feed-exc {
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--wms-red);
+  color: #2a0505;
+  font-weight: 700;
+}
+
+.wms-feed-latest {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+}
+
+.wms-feed-latest.exc {
+  color: var(--wms-red);
+}
+
+.wms-feed-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.wms-log .detail:empty {
+  display: none;
+}

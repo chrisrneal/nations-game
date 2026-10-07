@@ -116,9 +116,14 @@ WMS catalog, so State stays compact and hashable.
    `rowSignature`), `grid.ts` (filters, sort, tones, clock), `useWms.ts`
    (re-renders once per WMS step), `wms.css`. `e2e/wms-shots.ts` screenshots.
 4. **Order detail.** Header summary, lines grid, shorts in red, the order's own
-   history; back keeps scroll and filter. STATUS: TODO
+   history; back keeps scroll and filter. STATUS: DONE. `OrderDetail.tsx`:
+   summary, lines (description under the SKU so Status fits 360 px), the
+   order's events (`EventLines`, shared with the feed). `WmsScreen` keeps
+   filter, sort and the grid's scroll (`GridScroll`) while detail is open.
 5. **Activity feed.** Collapsible bottom console, newest first, tap to open the
-   order, exceptions in red. STATUS: TODO
+   order, exceptions in red. STATUS: DONE. `ActivityFeed.tsx`, docked under
+   the grid and the detail; collapsed it shows the latest event and the
+   count of exceptions in the log; open, 52% of the screen.
 6. **KPI strip.** Open orders, lines/hr, fill rate, OTIF, exceptions, pickers
    busy/total. STATUS: TODO
 7. **Player actions.** Release a wave, change priority, hold/unhold, reassign a

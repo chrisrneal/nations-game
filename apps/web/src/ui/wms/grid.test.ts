@@ -30,13 +30,7 @@ function row(no: number, extra: Partial<WmsOrderView> = {}): WmsOrderView {
 
 describe('WMS order grid helpers (slice 3)', () => {
   it('filters: open, picking, exceptions and shipped', () => {
-    const orders = [
-      row(1),
-      row(2, { status: 'PICKING' }),
-      row(3, { status: 'BACKORDER', exception: true }),
-      row(4, { status: 'SHIPPED', open: false }),
-      row(5, { status: 'CANCELLED', open: false }),
-    ];
+    const orders = [row(1), row(2, { status: 'PICKING' }), row(3, { status: 'BACKORDER', exception: true }), row(4, { status: 'SHIPPED', open: false }), row(5, { status: 'CANCELLED', open: false })];
     expect(filterCounts(orders)).toEqual({ all: 5, open: 3, picking: 1, exceptions: 1, shipped: 1 });
     expect(orders.filter((o) => matches(o, 'open')).map((o) => o.no)).toEqual([1, 2, 3]);
   });
