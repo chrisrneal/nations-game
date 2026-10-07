@@ -4,6 +4,7 @@ import { WAREHOUSE_SCHEMA_VERSION } from './state.ts';
 import { WAREHOUSE_TUNABLES as T } from './tunables.ts';
 import { advanceMany, step } from './step.ts';
 import { createWms } from './wms/generate.ts';
+import { newWorker, openingShipDoors } from './wms/policy.ts';
 
 export type Migration = (save: Record<string, unknown>) => Record<string, unknown>;
 
@@ -32,6 +33,13 @@ function bump(to: number): Migration {
  *   ran. Older plan commands name only three settings; the sim keeps the
  *   rest, so the log replays unchanged.
  *
+ * - 8 to 9 (W10, outbound doors and a busier warehouse): the warehouse gains
+ *   its opening outbound doors, their first trailers leaving over the next
+ *   hour; orders staged or loaded under the old timers go back to PACKED and
+ *   are staged at a door at once; every order names its door (none yet); the
+ *   crew is topped up to the new opening crew (pickers, then the dock), free,
+ *   since three times the orders come in; finished tasks move to the history.
+ *
  * Old rules are not kept, so a migration changes only the snapshot, and
  * `migrateWarehouseSave` replays the history since it under today's rules and
  * records the new hash. The game's own saves are compact (the snapshot is the
@@ -53,6 +61,37 @@ export const WAREHOUSE_MIGRATIONS: Readonly<Record<number, Migration>> = {
     const old = save.snapshot as WarehouseState;
     const policy = { ...old.wms.policy, waveTicks: T.wmsWaveTicks.value, labor: 'fixed' as const };
     return { ...save, schemaVersion: 8, snapshot: { ...old, schemaVersion: 8, wms: { ...old.wms, policy } } };
+  },
+  8: (save) => {
+    const old = save.snapshot as WarehouseState;
+    const w = old.wms;
+    const tick = old.tick;
+    const moved = (status: string | null): boolean => status === 'STAGED' || status === 'LOADED';
+    const orders = w.orders.map((o) => ({
+      ...o,
+      door: 0,
+      status: moved(o.status) ? ('PACKED' as const) : o.status,
+      held: moved(o.held) ? ('PACKED' as const) : o.held,
+      next: moved(o.status) ? tick : o.next,
+    }));
+    const workers = [...w.workers];
+    let id = workers.reduce((max, p) => Math.max(max, p.id), 0);
+    const count = (role: 'pick' | 'receive'): number => workers.filter((p) => p.role === role).length;
+    while (count('pick') < T.wmsStartPickers.value) workers.push(newWorker((id += 1), 'pick'));
+    while (count('receive') < T.wmsStartReceivers.value) workers.push(newWorker((id += 1), 'receive'));
+    const live = (t: { status: string }): boolean => t.status === 'OPEN' || t.status === 'QUEUED' || t.status === 'ACTIVE';
+    const wms = {
+      ...w,
+      tasks: w.tasks.filter(live),
+      history: w.tasks.filter((t) => !live(t)),
+      orders,
+      workers,
+      policy: { ...w.policy, pickers: count('pick') },
+      stats: { ...w.stats, trailers: 0 },
+      shipDoors: openingShipDoors(tick),
+      nextTrailerNo: T.wmsShipDoors.value + 1,
+    };
+    return { ...save, schemaVersion: 9, snapshot: { ...old, schemaVersion: 9, wms } };
   },
 };
 

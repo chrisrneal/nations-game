@@ -88,6 +88,43 @@ describe('WMS player actions (RULES 8)', () => {
     expect(codes(state, p.order)).toEqual(expect.arrayContaining(['HOLD', 'UNHOLD']));
   });
 
+  it('a hold on a staged order takes its load off the dock; released, it is loaded again (W10)', () => {
+    let s = advanceMany(createWarehouse({ seed: 21 }), 400);
+    const loading = (st: WarehouseState) => st.wms.tasks.find((t) => t.kind === 'LOAD' && t.status === 'ACTIVE');
+    for (let i = 0; i < 400 && loading(s) === undefined; i++) s = advanceMany(s, 4);
+    const t = loading(s);
+    if (t === undefined) throw new Error('needs a load under way');
+    s = act(s, { action: 'hold', order: t.ref }).state;
+    expect(s.wms.orders.find((o) => o.no === t.ref)).toMatchObject({ status: 'ON HOLD', held: 'STAGED' });
+    expect(s.wms.tasks.find((x) => x.no === t.no)).toMatchObject({ status: 'OPEN', worker: 0, done: 0 });
+    expect(s.wms.workers.find((p) => p.id === t.worker)?.task).not.toBe(t.no);
+    s = advanceMany(s, 40);
+    expect(s.wms.tasks.find((x) => x.no === t.no)?.status).toBe('OPEN');
+    s = act(s, { action: 'unhold', order: t.ref }).state;
+    expect(s.wms.orders.find((o) => o.no === t.ref)?.status).toBe('STAGED');
+    for (let i = 0; i < 400 && s.wms.orders.find((o) => o.no === t.ref)?.status === 'STAGED'; i++) s = advanceMany(s, 4);
+    expect(['LOADED', 'SHIPPED']).toContain(s.wms.orders.find((o) => o.no === t.ref)?.status);
+  });
+
+  it('a held order on a trailer stays behind when the trailer leaves, and goes with the next once released (W10)', () => {
+    let s = advanceMany(createWarehouse({ seed: 22 }), 400);
+    const loaded = (st: WarehouseState) => st.wms.orders.find((o) => o.status === 'LOADED');
+    for (let i = 0; i < 400 && loaded(s) === undefined; i++) s = advanceMany(s, 4);
+    const o = loaded(s);
+    if (o === undefined) throw new Error('needs a loaded order');
+    s = act(s, { action: 'hold', order: o.no }).state;
+    const door = s.wms.shipDoors[o.door - 1];
+    if (door === undefined) throw new Error('order without a door');
+    s = advanceMany(s, door.departs - s.tick + 4);
+    expect(s.wms.orders.find((x) => x.no === o.no)).toMatchObject({ status: 'ON HOLD', held: 'LOADED' });
+    s = act(s, { action: 'unhold', order: o.no }).state;
+    expect(s.wms.orders.find((x) => x.no === o.no)?.status).toBe('LOADED');
+    const next = s.wms.shipDoors[o.door - 1]?.departs ?? 0;
+    s = advanceMany(s, next - s.tick + 4);
+    const shipped = s.wms.orders.find((x) => x.no === o.no);
+    expect(shipped).toMatchObject({ status: 'SHIPPED', closed: next });
+  });
+
   it('puts a picker on a chosen line; the line it left waits again', () => {
     const s = busy();
     const picker = busyPicker(s);
@@ -145,6 +182,8 @@ describe('WMS player actions (RULES 8)', () => {
     expect(warehouseCommandProblem({ tick: 0, type: 'wms', payload: { action: 'fly' } })).toBe('unknown WMS action');
     expect(warehouseCommandProblem({ tick: 0, type: 'wms', payload: { action: 'assign', order: 1, line: 1, picker: 0 } })).toBe('bad assignment');
     expect(warehouseCommandProblem({ tick: 0, type: 'wms', payload: { action: 'hire', role: 'boss' } })).toBe('bad role');
+    expect(warehouseCommandProblem({ tick: 0, type: 'wms', payload: { action: 'door', side: 'out' } })).toBeNull();
+    expect(warehouseCommandProblem({ tick: 0, type: 'wms', payload: { action: 'door', side: 'up' } })).toBe('bad side');
     expect(warehouseCommandProblem({ tick: 0, type: 'tap', payload: { dock: 0 } })).toBe('unknown command');
   });
 
@@ -153,6 +192,6 @@ describe('WMS player actions (RULES 8)', () => {
     const receiver = s.wms.workers.find((p) => p.role === 'receive');
     const target = s.wms.orders.flatMap((o) => o.lines.filter((l) => l.status === 'ALLOCATED').map((l) => ({ o, l })))[0];
     if (receiver === undefined || target === undefined) throw new Error('needs a receiver and a waiting line');
-    expect(rejected(act(s, { action: 'assign', picker: receiver.id, order: target.o.no, line: target.l.no }).events)).toBe('That worker is receiving');
+    expect(rejected(act(s, { action: 'assign', picker: receiver.id, order: target.o.no, line: target.l.no }).events)).toBe('That worker is on the dock');
   });
 });

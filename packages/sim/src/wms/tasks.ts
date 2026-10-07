@@ -1,16 +1,17 @@
 import type { WmsRole, WmsTaskKind } from '@warehouse/contracts';
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
-import { travelBays } from './catalog.ts';
-import { log, type MLine, type MOrder, type MPo, type MPoLine, type MTask, type MWms, type MWorker } from './mutable.ts';
+import { byNo, shipDoorOf, travelBays } from './catalog.ts';
+import { WMS_TRIM_SLACK, log, type MLine, type MOrder, type MPo, type MPoLine, type MTask, type MWms, type MWorker } from './mutable.ts';
 
 /**
  * Tasks and the crew (RULES 6, decision record W8). The WMS turns work into
  * tasks: a PICK task for every order line it allocates, a RECEIVE task for
- * every line of a PO that docks, and a PUTAWAY task for every line counted
- * in. Each second it lines up the next tasks for every worker of the right
- * role (pickers pick; receivers receive and put away), by the plan's pick
- * order, and each worker walks to its task and works it. Every worker keeps
- * a record of its tasks, units and time.
+ * every line of a PO that docks, a PUTAWAY task for every line counted in,
+ * and a LOAD task for every order staged at an outbound door (W10). Each
+ * second it lines up the next tasks for every worker of the right role
+ * (pickers pick; the dock crew receive, put away and load), by the plan's
+ * pick order, and each worker walks to its task and works it. Every worker
+ * keeps a record of its tasks, units and time.
  */
 
 /** Live tasks: not yet finished. */
@@ -33,19 +34,19 @@ export function newTask(w: MWms, kind: WmsTaskKind, ref: number, line: number, s
 
 export function findTask(w: MWms, no: number): MTask | undefined {
   if (no === 0) return undefined;
-  return w.tasks.find((t) => t.no === no);
+  return byNo(w.tasks, no);
 }
 
 /** A pick task's order and line. */
 export function pickTarget(w: MWms, t: Pick<MTask, 'ref' | 'line'>): { o: MOrder; line: MLine } | undefined {
-  const o = w.orders.find((x) => x.no === t.ref);
+  const o = byNo(w.orders, t.ref);
   const line = o?.lines.find((l) => l.no === t.line);
   return o === undefined || line === undefined ? undefined : { o, line };
 }
 
 /** A receive or put-away task's PO and line. */
 export function poTarget(w: MWms, t: Pick<MTask, 'ref' | 'line'>): { po: MPo; line: MPoLine } | undefined {
-  const po = w.pos.find((x) => x.no === t.ref);
+  const po = byNo(w.pos, t.ref);
   const line = po?.lines.find((l) => l.no === t.line);
   return po === undefined || line === undefined ? undefined : { po, line };
 }
@@ -55,34 +56,94 @@ export function lineTask(w: MWms, order: number, line: number): MTask | undefine
   return w.tasks.find((t) => t.kind === 'PICK' && t.ref === order && t.line === line && isLive(t));
 }
 
-/** Orders and POs by number, so a plan looks each task's line up once (W8). */
-interface Index {
-  readonly orders: ReadonlyMap<number, MOrder>;
-  readonly pos: ReadonlyMap<number, MPo>;
+/** The live load task of an order (W10), if it has one. */
+export function loadTask(w: MWms, order: number): MTask | undefined {
+  return w.tasks.find((t) => t.kind === 'LOAD' && t.ref === order && isLive(t));
+}
+
+/** Units an order ships: what was picked on its lines (W10: what a trailer carries). */
+export function shipUnits(o: Pick<MOrder, 'lines'>): number {
+  let units = 0;
+  for (const line of o.lines) units += line.picked;
+  return units;
+}
+
+/** Whether an order is on its door's trailer (W10): loaded, or loaded and then put on hold. */
+export function onTrailer(o: Pick<MOrder, 'status' | 'held'>): boolean {
+  return o.status === 'LOADED' || (o.status === 'ON HOLD' && o.held === 'LOADED');
+}
+
+/**
+ * Units each outbound door's trailer is taken up by (W10), indexed by door:
+ * the orders on it and the loads under way to it. A load starts only if it
+ * fits, so a trailer never holds more than `wmsTrailerUnits` (an order bigger
+ * than a whole trailer goes on an empty one).
+ */
+export function trailerLoads(w: MWms): number[] {
+  const load = Array.from({ length: w.shipDoors.length + 1 }, () => 0);
+  for (const o of w.orders) if (o.door > 0 && onTrailer(o)) load[o.door] = (load[o.door] ?? 0) + shipUnits(o);
+  for (const worker of w.workers) {
+    const t = findTask(w, worker.task);
+    if (t?.kind === 'LOAD') {
+      const door = shipDoorOf(t.bin);
+      load[door] = (load[door] ?? 0) + t.qty;
+    }
+  }
+  return load;
+}
+
+/** Whether `units` more fit on a trailer already taken up by `load` (W10). */
+export function fits(load: number, units: number): boolean {
+  return load === 0 || load + units <= T.wmsTrailerUnits.value;
+}
+
+/**
+ * Lookups for a plan (W8): orders and POs by number (kept in number order, so
+ * found by halving), and each trailer's load (W10), worked out once and only
+ * when a load task needs it.
+ */
+class Index {
+  private loads: number[] | null = null;
+  constructor(private readonly w: MWms) {}
+  order(no: number): MOrder | undefined {
+    return byNo(this.w.orders, no);
+  }
+  po(no: number): MPo | undefined {
+    return byNo(this.w.pos, no);
+  }
+  get load(): number[] {
+    this.loads ??= trailerLoads(this.w);
+    return this.loads;
+  }
+  /** The tick outbound door `door`'s trailer leaves. */
+  departs(door: number): number {
+    return this.w.shipDoors[door - 1]?.departs ?? 0;
+  }
 }
 
 function indexOf(w: MWms): Index {
-  const orders = new Map<number, MOrder>();
-  for (const o of w.orders) orders.set(o.no, o);
-  const pos = new Map<number, MPo>();
-  for (const po of w.pos) pos.set(po.no, po);
-  return { orders, pos };
+  return new Index(w);
 }
 
 function pickLine(ix: Index, t: Pick<MTask, 'ref' | 'line'>): { o: MOrder; line: MLine } | undefined {
-  const o = ix.orders.get(t.ref);
+  const o = ix.order(t.ref);
   const line = o?.lines.find((l) => l.no === t.line);
   return o === undefined || line === undefined ? undefined : { o, line };
 }
 
 function poLine(ix: Index, t: Pick<MTask, 'ref' | 'line'>): { po: MPo; line: MPoLine } | undefined {
-  const po = ix.pos.get(t.ref);
+  const po = ix.po(t.ref);
   const line = po?.lines.find((l) => l.no === t.line);
   return po === undefined || line === undefined ? undefined : { po, line };
 }
 
-/** Whether a task not yet started can be started now: its line is still waiting for exactly this work. */
+/** Whether a task not yet started can be started now: its line is still waiting for exactly this work, and a load fits on its trailer (W10). */
 function ready(ix: Index, t: MTask): boolean {
+  if (t.kind === 'LOAD') {
+    const o = ix.order(t.ref);
+    const door = shipDoorOf(t.bin);
+    return o !== undefined && o.status === 'STAGED' && o.door === door && fits(ix.load[door] ?? 0, t.qty);
+  }
   if (t.kind === 'PICK') {
     const target = pickLine(ix, t);
     return target !== undefined && (target.o.status === 'ALLOCATED' || target.o.status === 'PICKING') && target.line.status === 'ALLOCATED';
@@ -92,8 +153,12 @@ function ready(ix: Index, t: MTask): boolean {
   return t.kind === 'RECEIVE' ? target.po.status === 'RECEIVING' && target.line.status === 'OPEN' : target.line.status === 'RECEIVED';
 }
 
-/** A task that can never be started: its line was cancelled, picked or is gone. */
+/** A task that can never be started: its line was cancelled, picked or is gone; its order is loaded or gone (W10). */
 function dead(ix: Index, t: MTask): boolean {
+  if (t.kind === 'LOAD') {
+    const o = ix.order(t.ref);
+    return o === undefined || !(o.status === 'STAGED' || (o.status === 'ON HOLD' && o.held === 'STAGED'));
+  }
   if (t.kind === 'PICK') {
     const target = pickLine(ix, t);
     return target === undefined || target.line.status === 'CANCELLED' || target.line.status === 'PICKED' || target.line.status === 'SHORT' || target.line.status === 'OPEN';
@@ -161,7 +226,7 @@ export function walkTicks(from: number, to: number): number {
   return travelBays(from, to) * T.wmsWalkTicksPerBay.value;
 }
 
-/** Starts a task (RULES 6): the worker walks to its bin, or to the dock to receive; a pick line and its order go to PICKING. */
+/** Starts a task (RULES 6): the worker walks to its bin, to the dock to receive, or to its outbound door to load (W10); a pick line and its order go to PICKING. */
 export function startTask(w: MWms, worker: MWorker, t: MTask, tick: number): void {
   const i = worker.queue.indexOf(t.no);
   if (i >= 0) worker.queue.splice(i, 1);
@@ -193,8 +258,14 @@ export function startNext(w: MWms, worker: MWorker, tick: number, index?: Index)
     const t = findTask(w, worker.queue[0] as number);
     worker.queue.shift();
     if (t === undefined || t.status !== 'QUEUED') continue;
-    if (ready(ix, t)) startTask(w, worker, t, tick);
-    else {
+    if (ready(ix, t)) {
+      startTask(w, worker, t, tick);
+      // A load under way takes its room on the trailer at once (W10).
+      if (t.kind === 'LOAD') {
+        const door = shipDoorOf(t.bin);
+        ix.load[door] = (ix.load[door] ?? 0) + t.qty;
+      }
+    } else {
       t.status = 'OPEN';
       t.worker = 0;
     }
@@ -235,8 +306,11 @@ function standsAt(w: MWms, worker: MWorker, byNo: ReadonlyMap<number, MTask>): n
  * task until it holds `wmsTaskQueue` (its active task included). Pick tasks
  * go most urgent first under the plan's pick order, or, under nearest bin,
  * the one with the shortest walk from where the worker will stand (the most
- * urgent breaking a tie). Receive and put-away tasks go oldest first. Last,
- * every worker with no task starts the first of its queue.
+ * urgent breaking a tie). The dock crew's loads go first, the trailer that
+ * leaves soonest first (W10); then receive and put-away tasks, oldest first.
+ * A waiting load is reason to redo the dock crew's plan, as a more urgent
+ * pick is the pickers'. Last, every worker with no task starts the first of
+ * its queue.
  */
 export function planTasks(w: MWms, tick: number): void {
   let ix: Index | null = null;
@@ -262,14 +336,18 @@ export function planTasks(w: MWms, tick: number): void {
     const byNo = new Map<number, MTask>();
     for (const t of w.tasks) if (t.status === 'QUEUED' || t.status === 'ACTIVE') byNo.set(t.no, t);
     const order = (a: MTask, b: MTask): number => {
+      if (a.kind === 'LOAD' || b.kind === 'LOAD') {
+        if (a.kind !== b.kind) return a.kind === 'LOAD' ? -1 : 1;
+        return index.departs(shipDoorOf(a.bin)) - index.departs(shipDoorOf(b.bin)) || a.created - b.created || a.no - b.no;
+      }
       if (a.kind !== 'PICK' || b.kind !== 'PICK') return a.created - b.created || a.no - b.no;
-      const oa = index.orders.get(a.ref);
-      const ob = index.orders.get(b.ref);
+      const oa = index.order(a.ref);
+      const ob = index.order(b.ref);
       return (oa !== undefined && ob !== undefined ? urgency(rule, oa, ob) : 0) || a.no - b.no;
     };
     const room = pool.length > 0 && crew.some((p) => (p.task === 0 ? 0 : 1) + p.queue.length < depth);
     let preempt = false;
-    if (pool.length > 0 && !room && role === 'pick' && rule !== 'nearest') {
+    if (pool.length > 0 && !room && ((role === 'pick' && rule !== 'nearest') || (role === 'receive' && pool.some((t) => t.kind === 'LOAD')))) {
       const best = pool.reduce((x, y) => (order(y, x) < 0 ? y : x));
       preempt = crew.some((p) => p.queue.some((no) => {
         const q = byNo.get(no);
@@ -315,19 +393,21 @@ export function planTasks(w: MWms, tick: number): void {
   for (const worker of w.workers) if (worker.task === 0 && worker.queue.length > 0) startNext(w, worker, tick, ix ?? undefined);
 }
 
-/** Drops the oldest finished tasks beyond `wmsTasksKept`. */
-export function purgeTasks(w: MWms): void {
-  let finished = 0;
-  for (const t of w.tasks) if (!isLive(t)) finished += 1;
-  let drop = finished - T.wmsTasksKept.value;
-  if (drop <= 0) return;
-  w.tasks = w.tasks.filter((t) => {
-    if (drop > 0 && !isLive(t)) {
-      drop -= 1;
-      return false;
-    }
-    return true;
-  });
+/**
+ * Moves finished tasks to the history (W10), after each step and command,
+ * keeping the latest `wmsTasksKept` (cut back once `WMS_TRIM_SLACK` more have
+ * finished): the live tasks stay few, so the plan never reads the hundreds a
+ * busy crew has done.
+ */
+export function sweepTasks(w: MWms): void {
+  if (w.tasks.every(isLive)) return;
+  const live: MTask[] = [];
+  for (const t of w.tasks) {
+    if (isLive(t)) live.push(t);
+    else w.history.push(t);
+  }
+  w.tasks = live;
+  if (w.history.length > T.wmsTasksKept.value + WMS_TRIM_SLACK) w.history.splice(0, w.history.length - T.wmsTasksKept.value);
 }
 
 /** Tasks waiting for each side of the crew (W9): lined up but not started, or open and ready to start. */

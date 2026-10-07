@@ -2,7 +2,7 @@ import type { WarehouseCommand, WarehouseEvent, WarehouseState } from '@warehous
 import { warehouseCommandProblem } from './commands.ts';
 import { WAREHOUSE_TUNABLES as T } from './tunables.ts';
 import { wmsAction } from './wms/actions.ts';
-import { cloneWms, wmsStep, type MWms } from './wms/tick.ts';
+import { cloneWms, sweepTasks, trimLog, wmsStep, type MWms } from './wms/tick.ts';
 
 /** The step works on a private copy it may change in place (P4). */
 interface MState {
@@ -40,6 +40,8 @@ function apply(m: MState, command: WarehouseCommand, events: Sink): void {
     return;
   }
   const result = wmsAction(m.wms, command.payload, m.tick, m.cash);
+  sweepTasks(m.wms);
+  trimLog(m.wms);
   if (!result.ok) {
     events?.push({ tick: m.tick, type: 'rejected', payload: { command: 'wms', reason: result.reason } });
     return;

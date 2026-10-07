@@ -1,12 +1,13 @@
 /**
  * The WMS report (RULES 11, decision record W8): what an untouched warehouse
  * does over a few hours on several seeds, with the default plan: orders
- * shipped, on time and in full, fill, money, POs and their appointments, and
- * how busy the pickers and receivers are. It replaced the idle game's pacing
- * bots; its checks are the RULES 11 targets.
+ * shipped, on time and in full, fill, money, POs and their appointments, the
+ * trailers that left the outbound doors (W10), and how busy the pickers and
+ * the dock crew are. It replaced the idle game's pacing bots; its checks are
+ * the RULES 11 targets.
  */
 import type { WarehouseState } from '@warehouse/contracts';
-import { advanceMany, createWarehouse } from '@warehouse/sim';
+import { WAREHOUSE_TUNABLES as T, advanceMany, createWarehouse } from '@warehouse/sim';
 
 export interface SeedReport {
   readonly seed: number;
@@ -22,6 +23,9 @@ export interface SeedReport {
   readonly pickUtilPct: number;
   readonly receiveUtilPct: number;
   readonly tasksDone: number;
+  /** Trailers that left the outbound doors, and their load as a whole % of what they hold (W10). */
+  readonly trailers: number;
+  readonly trailerFillPct: number;
 }
 
 export interface ReportCheck {
@@ -70,6 +74,8 @@ export function reportSeed(seed: number, minutes: number): SeedReport {
     pickUtilPct: util(s, 'pick'),
     receiveUtilPct: util(s, 'receive'),
     tasksDone: s.wms.workers.reduce((n, p) => n + p.stats.tasks, 0),
+    trailers: st.trailers,
+    trailerFillPct: pct(st.unitsShipped, st.trailers * T.wmsTrailerUnits.value),
   };
 }
 
@@ -86,14 +92,14 @@ export function runReport(options: { readonly seeds?: number; readonly firstSeed
   const fill = mean(seeds.map((r) => r.fillPct));
   const pick = mean(seeds.map((r) => r.pickUtilPct));
   const receive = mean(seeds.map((r) => r.receiveUtilPct));
-  const firstHire = 50_000;
+  const firstHire = T.wmsHireCostCents.value;
   const earned = mean(seeds.map((r) => r.earnedPerHour));
   const checks: ReportCheck[] = [
     { name: 'On time and in full', target: '75-95%', value: `${otif}%`, pass: otif >= 75 && otif <= 95 },
     { name: 'Fill rate', target: '95% or more', value: `${fill}%`, pass: fill >= 95 },
     { name: 'Pickers working (not walking or idle)', target: '50-90%', value: `${pick}%`, pass: pick >= 50 && pick <= 90 },
-    { name: 'Receivers working', target: '5-80%', value: `${receive}%`, pass: receive >= 5 && receive <= 80 },
-    { name: 'Minutes of shipments to pay for the first hire', target: '2-10', value: (firstHire / Math.max(1, earned)).toFixed(1), pass: firstHire / Math.max(1, earned) >= 2 && firstHire / Math.max(1, earned) <= 10 },
+    { name: 'Dock crew working', target: '5-80%', value: `${receive}%`, pass: receive >= 5 && receive <= 80 },
+    { name: 'Warehouse hours of shipments to pay for the first hire', target: '2-10', value: (firstHire / Math.max(1, earned)).toFixed(1), pass: firstHire / Math.max(1, earned) >= 2 && firstHire / Math.max(1, earned) <= 10 },
   ];
   return { minutes, seeds, checks, pass: checks.every((c) => c.pass) };
 }
@@ -101,14 +107,14 @@ export function runReport(options: { readonly seeds?: number; readonly firstSeed
 export function formatReport(r: WmsReport): string {
   const rows = r.seeds.map(
     (s) =>
-      `| ${s.seed} | ${s.shipped} | ${s.otifPct}% | ${s.onTimePct}% | ${s.fillPct}% | $${(s.earnedPerHour / 100).toFixed(0)} | ${s.posClosed} | ${s.posLatePct}% | ${s.pickUtilPct}% | ${s.receiveUtilPct}% | ${s.tasksDone} |`,
+      `| ${s.seed} | ${s.shipped} | ${s.otifPct}% | ${s.onTimePct}% | ${s.fillPct}% | $${(s.earnedPerHour / 100).toFixed(0)} | ${s.posClosed} | ${s.posLatePct}% | ${s.pickUtilPct}% | ${s.receiveUtilPct}% | ${s.tasksDone} | ${s.trailers} | ${s.trailerFillPct}% |`,
   );
   const checks = r.checks.map((c) => `| ${c.name} | ${c.target} | ${c.value} | ${c.pass ? 'PASS' : 'FAIL'} |`);
   return [
     `# WMS report: an untouched warehouse, ${r.minutes} minutes (${r.minutes} warehouse hours), default plan`,
     '',
-    '| Seed | Shipped | OTIF | On time | Fill | $ a warehouse hour | POs in | POs late | Pickers working | Receivers working | Tasks done |',
-    '|---|---|---|---|---|---|---|---|---|---|---|',
+    '| Seed | Shipped | OTIF | On time | Fill | $ a warehouse hour | POs in | POs late | Pickers working | Dock working | Tasks done | Trailers | Trailer fill |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|---|',
     ...rows,
     '',
     '| Check (RULES 11) | Target | Mean | |',

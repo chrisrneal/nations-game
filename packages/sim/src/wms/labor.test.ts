@@ -13,9 +13,12 @@ import { eventText, wmsView } from './view.ts';
 
 /**
  * Labour and waves (decision record W9): moving a worker between picking and
- * receiving, the balance plan that moves people to where the work waits, and
+ * the dock, the balance plan that moves people to where the work waits, and
  * the wave interval.
  */
+
+/** Orders enough that the opening pickers (W10: fourteen) have more than a full queue each. */
+const BUSY = 30;
 
 const T = WAREHOUSE_TUNABLES;
 const STEP = T.wmsStepTicks.value;
@@ -26,7 +29,7 @@ function line(no: number, sku: number, ordered: number): WmsLine {
 }
 
 function order(no: number, lines: WmsLine[]): WmsOrder {
-  return { no, dest: 0, customer: 0, priority: 3, wave: 0, status: 'NEW', lines, shipBy: 100_000, created: 0, next: 0, late: false, held: null, closed: 0, expedited: false };
+  return { no, dest: 0, customer: 0, priority: 3, wave: 0, status: 'NEW', lines, shipBy: 100_000, created: 0, next: 0, late: false, held: null, closed: 0, expedited: false, door: 0 };
 }
 
 /** A quiet WMS with `orders` orders of four 20-unit lines each and plenty of stock, all released at the first step; no trucks. */
@@ -52,12 +55,12 @@ describe('where the work is (W9)', () => {
   });
 
   it('counts the tasks lined up but not started, and the open ones ready to start', () => {
-    const w = busy(10);
+    const w = busy(BUSY);
     wmsStep(w, 0);
     const needs = crewNeeds(w, STEP);
     const pickers = w.workers.filter((p) => p.role === 'pick');
     expect(needs.pick.people).toBe(pickers.length);
-    expect(needs.pick.waiting).toBe(40 - pickers.filter((p) => p.task > 0).length);
+    expect(needs.pick.waiting).toBe(4 * BUSY - pickers.filter((p) => p.task > 0).length);
     expect(needs.receive).toEqual({ people: w.workers.length - pickers.length, idle: w.workers.length - pickers.length, waiting: 0 });
     expect(needs.short).toBe('pick');
     expect(needs.nextBalanceIn).toBe(BALANCE - STEP);
@@ -67,7 +70,7 @@ describe('where the work is (W9)', () => {
 
 describe('moving a worker (W9)', () => {
   it('moves the worker named: its tasks wait for someone else, the split follows, and MOVE is logged with the work waiting', () => {
-    const w = busy(10);
+    const w = busy(BUSY);
     wmsStep(w, 0);
     const picker = w.workers.find((p) => p.role === 'pick' && p.queue.length > 0);
     if (picker === undefined) throw new Error('no busy picker');
@@ -82,11 +85,11 @@ describe('moving a worker (W9)', () => {
     expect(w.policy.pickers).toBe(T.wmsStartPickers.value - 1);
     const e = w.events.at(-1);
     expect(e).toMatchObject({ code: 'MOVE', picker: picker.id, line: 2, qty: waiting, of: 0 });
-    if (e !== undefined) expect(eventText(e).detail).toBe(`to receiving, ${waiting} tasks waiting`);
+    if (e !== undefined) expect(eventText(e).detail).toBe(`to the dock, ${waiting} tasks waiting`);
   });
 
   it('worker 0 lets the WMS choose: someone with nothing in hand first, the highest number on a tie', () => {
-    const w = busy(10);
+    const w = busy(BUSY);
     wmsStep(w, 0);
     expect(wmsAction(w, { action: 'role', worker: 0, role: 'pick' }, STEP, 0).ok).toBe(true);
     const crew = T.wmsStartPickers.value + T.wmsStartReceivers.value;
@@ -100,7 +103,7 @@ describe('moving a worker (W9)', () => {
     expect(wmsAction(w, { action: 'role', worker: 99, role: 'pick' }, 0, 0)).toEqual({ ok: false, reason: 'No such worker' });
     const receivers = w.workers.filter((p) => p.role === 'receive');
     for (const p of receivers.slice(1)) expect(wmsAction(w, { action: 'role', worker: p.id, role: 'pick' }, 0, 0).ok).toBe(true);
-    expect(wmsAction(w, { action: 'role', worker: 0, role: 'pick' }, 0, 0)).toEqual({ ok: false, reason: 'Someone has to keep receiving' });
+    expect(wmsAction(w, { action: 'role', worker: 0, role: 'pick' }, 0, 0)).toEqual({ ok: false, reason: 'Someone has to stay on the dock' });
   });
 
   it('is a command like any WMS action, shape-checked from outside', () => {
@@ -115,8 +118,8 @@ describe('moving a worker (W9)', () => {
 
 describe('the balance plan (W9)', () => {
   it('moves one person a look to the side that is behind, and none under the fixed plan', () => {
-    const fixed = busy(10);
-    const balanced = busy(10);
+    const fixed = busy(BUSY);
+    const balanced = busy(BUSY);
     balanced.policy = { ...balanced.policy, labor: 'balance' };
     for (let tick = 0; tick <= BALANCE; tick += STEP) {
       wmsStep(fixed, tick);
@@ -135,11 +138,15 @@ describe('the balance plan (W9)', () => {
   });
 
   it('moves people back when the dock gets busy, and never takes the last person off a side', () => {
-    const w = busy(40);
+    const w = busy(4 * BUSY);
     w.policy = { ...w.policy, labor: 'balance' };
     let tick = 0;
-    for (; tick < BALANCE * 12; tick += STEP) wmsStep(w, tick);
-    expect(w.workers.filter((p) => p.role === 'receive')).toHaveLength(1);
+    const dock = (): number => w.workers.filter((p) => p.role === 'receive').length;
+    for (; tick < BALANCE * 40 && dock() > 1; tick += STEP) {
+      wmsStep(w, tick);
+      expect(dock()).toBeGreaterThanOrEqual(1);
+    }
+    expect(dock()).toBe(1);
     // A big truck docks: its lines are work only receivers can do.
     w.nextReplenAt = tick;
     for (let i = 0; i < 1200 && !w.events.some((e) => e.code === 'MOVE' && e.line === 2); i++, tick += STEP) {

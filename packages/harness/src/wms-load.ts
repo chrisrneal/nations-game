@@ -39,6 +39,7 @@ export function wmsUnderLoad(): WarehouseState {
       held: null,
       closed: 0,
       expedited: false,
+      door: 0,
     });
   }
   return {
@@ -51,7 +52,7 @@ export function wmsUnderLoad(): WarehouseState {
       inventory: w.inventory.map((s) => ({ ...s, onHand: 100_000, allocated: 0 })),
       // The pickers start free (their orders are replaced); the receivers carry on with the trucks.
       workers: w.workers.map((p) => (p.role === 'pick' ? { ...p, task: 0, queue: [], progress: 0, walk: 0 } : p)),
-      tasks: w.tasks.filter((t) => t.kind !== 'PICK'),
+      tasks: w.tasks.filter((t) => t.kind === 'RECEIVE' || t.kind === 'PUTAWAY'),
     },
   };
 }

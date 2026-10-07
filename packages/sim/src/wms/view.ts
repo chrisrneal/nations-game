@@ -11,6 +11,7 @@ import type {
   WmsPo,
   WmsPoView,
   WmsCrewKpis,
+  WmsShipDoorView,
   WmsSlotView,
   WmsState,
   WmsStockStatus,
@@ -22,15 +23,35 @@ import type {
   WmsWorkerView,
 } from '@warehouse/contracts';
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
-import { WMS_AISLES, WMS_AISLE_GAP_BAYS, WMS_BAYS, WMS_RATE_BUCKETS, WMS_RATE_BUCKET_TICKS, binCode, binPlace, customerAt, destinationAt, isClosed, orderCode, poCode, skuAt, supplierAt, taskCode, workerCode } from './catalog.ts';
+import {
+  WMS_AISLES,
+  WMS_AISLE_GAP_BAYS,
+  WMS_BAYS,
+  WMS_RATE_BUCKETS,
+  WMS_RATE_BUCKET_TICKS,
+  binCode,
+  binPlace,
+  customerAt,
+  destinationAt,
+  isClosed,
+  orderCode,
+  poCode,
+  shipDoorCode,
+  shipDoorOf,
+  skuAt,
+  supplierAt,
+  taskCode,
+  trailerCode,
+  workerCode,
+} from './catalog.ts';
 import { inboundUnits, waitingUnits } from './inbound.ts';
 import type { MWms } from './mutable.ts';
-import { WMS_LABOR_MODES, WMS_PICK_RULES, WMS_RELEASE_MODES, crewNeeds, doorCost, hireCost, waveChoices } from './policy.ts';
+import { WMS_LABOR_MODES, WMS_PICK_RULES, WMS_RELEASE_MODES, crewNeeds, doorCost, hireCost, shipDoorCost, waveChoices } from './policy.ts';
 
 const EXCEPTION_STATUSES: ReadonlySet<WmsOrderStatus> = new Set(['SHORT', 'ON HOLD', 'BACKORDER']);
 const EXCEPTION_EVENTS: ReadonlySet<WmsEventCode> = new Set(['ALLOC SHORT', 'SHORT PICK', 'CUTOFF MISS', 'HOLD', 'CANCEL', 'PO LATE', 'RCV SHORT', 'DAMAGE', 'ADJUST']);
 /** Events whose `picker` field names a worker (W8). */
-const WORKER_EVENTS: ReadonlySet<WmsEventCode> = new Set(['PICK START', 'PICK CONF', 'SHORT PICK', 'ASSIGN', 'RCV', 'RCV SHORT', 'DAMAGE', 'PUTAWAY', 'HIRE', 'MOVE']);
+const WORKER_EVENTS: ReadonlySet<WmsEventCode> = new Set(['PICK START', 'PICK CONF', 'SHORT PICK', 'ASSIGN', 'RCV', 'RCV SHORT', 'DAMAGE', 'PUTAWAY', 'HIRE', 'MOVE', 'LOAD']);
 /** Events whose `order` field is a PO number (W6). */
 const INBOUND_EVENTS: ReadonlySet<WmsEventCode> = new Set(['PO CRT', 'ARRIVE', 'PO LATE', 'DOCK', 'RCV', 'RCV SHORT', 'DAMAGE', 'PUTAWAY', 'PO CLOSE']);
 
@@ -100,6 +121,7 @@ function orderView(o: WmsOrder, pickerOn: ReadonlyMap<number, number>, taskOn: R
     exception: !closed && (EXCEPTION_STATUSES.has(o.status) || shortUnits > 0 || o.late),
     open: !closed,
     expedited: o.expedited,
+    door: o.door,
     lines: lineViews(o, pickerOn, taskOn),
   };
 }
@@ -128,6 +150,12 @@ export function eventText(e: WmsEvent): { ref: string; detail: string } {
       return { ref, detail: `${sku}  short ${e.qty}/${e.of}${who}` };
     case 'SHIP':
       return { ref, detail: `${e.qty}/${e.of} units` };
+    case 'STAGE':
+      return { ref, detail: e.qty > 0 ? `lane ${shipDoorCode(e.qty)}` : '' };
+    case 'LOAD':
+      return { ref, detail: e.qty > 0 ? `${e.qty} units on ${shipDoorCode(e.of)}${who}` : '' };
+    case 'DEPART':
+      return { ref: shipDoorCode(e.line), detail: `trailer out, ${e.of} ${e.of === 1 ? 'order' : 'orders'}  ${e.qty} units` };
     case 'CUTOFF MISS':
       return { ref, detail: 'ship-by passed' };
     case 'PRIO':
@@ -163,11 +191,11 @@ export function eventText(e: WmsEvent): { ref: string; detail: string } {
     case 'PLAN':
       return { ref: '', detail: planText(e) };
     case 'HIRE':
-      return { ref: workerCode(e.picker), detail: `hired to ${e.line === 1 ? 'pick' : 'receive'}, crew ${e.qty}` };
+      return { ref: workerCode(e.picker), detail: `hired to ${e.line === 1 ? 'pick' : 'the dock'}, crew ${e.qty}` };
     case 'DOOR':
-      return { ref: `D${e.qty}`, detail: `dock door ${e.qty} open` };
+      return e.line === 2 ? { ref: shipDoorCode(e.qty), detail: `outbound door ${e.qty} open` } : { ref: `D${e.qty}`, detail: `dock door ${e.qty} open` };
     case 'MOVE':
-      return { ref: workerCode(e.picker), detail: `to ${e.line === 1 ? 'picking' : 'receiving'}, ${e.qty} ${e.qty === 1 ? 'task' : 'tasks'} waiting${e.of === 1 ? ' (balance)' : ''}` };
+      return { ref: workerCode(e.picker), detail: `to ${e.line === 1 ? 'picking' : 'the dock'}, ${e.qty} ${e.qty === 1 ? 'task' : 'tasks'} waiting${e.of === 1 ? ' (balance)' : ''}` };
     default:
       return { ref, detail: '' };
   }
@@ -183,7 +211,7 @@ function planText(e: WmsEvent): string {
   if (e.line === 2) return `Release: ${RELEASE_NAMES[WMS_RELEASE_MODES[e.qty] ?? 'waves']}`;
   if (e.line === 4) return `Waves every ${Math.floor(e.qty / T.wmsMinuteTicks.value)} min`;
   if (e.line === 5) return `Labour: ${LABOR_NAMES[WMS_LABOR_MODES[e.qty] ?? 'fixed']}`;
-  return `Crew: ${e.qty} picking, ${e.of - e.qty} receiving`;
+  return `Crew: ${e.qty} picking, ${e.of - e.qty} on the dock`;
 }
 
 function eventViews(events: readonly WmsEvent[]): WmsEventView[] {
@@ -346,25 +374,33 @@ function inventoryView(w: WmsState): { stock: WmsStockView[]; inventoryKpis: Wms
   return { stock, inventoryKpis };
 }
 
-/** A task, ready to show (W8). `orders` gives a pick task its priority; `doors` a receive task its door. */
+/** Where a task is worked, as shown: a bin, an inbound door, or an outbound door (W10). */
+function taskWhere(t: WmsTask, door: number): string {
+  if (t.kind === 'LOAD') return `Door ${shipDoorCode(shipDoorOf(t.bin))}`;
+  if (t.kind === 'RECEIVE') return door > 0 ? `Dock D${door}` : 'Dock';
+  return binCode(t.bin);
+}
+
+/** A task, ready to show (W8). `orders` gives a pick or load task its priority; `doors` a receive task its door. */
 function taskView(t: WmsTask, orders: ReadonlyMap<number, WmsOrder>, doors: ReadonlyMap<number, number>): WmsTaskView {
-  const sku = skuAt(t.sku);
-  const pick = t.kind === 'PICK';
-  const door = pick ? 0 : (doors.get(t.ref) ?? 0);
+  const load = t.kind === 'LOAD';
+  const sku = load ? { code: 'ORDER', desc: `${t.qty} units onto ${shipDoorCode(shipDoorOf(t.bin))}` } : skuAt(t.sku);
+  const forOrder = t.kind === 'PICK' || load;
+  const door = forOrder ? 0 : (doors.get(t.ref) ?? 0);
   return {
     no: t.no,
     code: taskCode(t.no),
     kind: t.kind,
     status: t.status,
-    order: pick ? t.ref : 0,
-    po: pick ? 0 : t.ref,
-    ref: `${pick ? orderCode(t.ref) : poCode(t.ref)}/L${t.line}`,
+    order: forOrder ? t.ref : 0,
+    po: forOrder ? 0 : t.ref,
+    ref: load ? orderCode(t.ref) : `${forOrder ? orderCode(t.ref) : poCode(t.ref)}/L${t.line}`,
     sku: sku.code,
     desc: sku.desc,
-    where: t.kind === 'RECEIVE' ? (door > 0 ? `Dock D${door}` : 'Dock') : binCode(t.bin),
+    where: taskWhere(t, door),
     qty: t.qty,
     done: t.done,
-    priority: pick ? (orders.get(t.ref)?.priority ?? 0) : 0,
+    priority: forOrder ? (orders.get(t.ref)?.priority ?? 0) : 0,
     worker: t.worker,
     created: t.created,
     started: t.started,
@@ -393,10 +429,54 @@ function workerView(p: WmsWorker, tasks: ReadonlyMap<number, WmsTask>, done: rea
     ...binPlace(p.at),
     walk: p.walk,
     door: active?.kind === 'RECEIVE' ? (doors.get(active.ref) ?? 0) : 0,
+    shipDoor: shipDoorOf(p.at),
     pct: task === null || task.qty === 0 ? 0 : Math.min(100, Math.floor((task.done * 100) / task.qty)),
     stats: p.stats,
     utilPct: pct(p.stats.busy, time),
   };
+}
+
+/** The outbound doors (W10): each trailer, when it leaves, what is loaded on it and what is staged waiting for it. */
+function shipDoorsView(w: WmsState, tick: number): WmsShipDoorView[] {
+  const loaders = new Map<number, number>();
+  for (const p of w.workers) {
+    const door = shipDoorOf(p.at);
+    if (door > 0 && p.task > 0 && p.walk === 0) loaders.set(door, (loaders.get(door) ?? 0) + 1);
+  }
+  const cap = T.wmsTrailerUnits.value;
+  return w.shipDoors.map((d) => {
+    const loaded: number[] = [];
+    const staged: number[] = [];
+    let loadedUnits = 0;
+    let stagedUnits = 0;
+    for (const o of w.orders) {
+      if (o.door !== d.door) continue;
+      const status = o.status === 'ON HOLD' ? o.held : o.status;
+      let units = 0;
+      for (const l of o.lines) units += l.picked;
+      if (status === 'LOADED') {
+        loaded.push(o.no);
+        loadedUnits += units;
+      } else if (status === 'STAGED') {
+        staged.push(o.no);
+        stagedUnits += units;
+      }
+    }
+    return {
+      door: d.door,
+      code: shipDoorCode(d.door),
+      trailer: trailerCode(d.trailer),
+      departs: d.departs,
+      departsIn: Math.max(0, d.departs - tick),
+      capacity: cap,
+      loaded,
+      loadedUnits,
+      staged,
+      stagedUnits,
+      pct: Math.min(100, Math.floor((loadedUnits * 100) / cap)),
+      loaders: loaders.get(d.door) ?? 0,
+    };
+  });
 }
 
 /** The dock schedule (W8): the appointment slots from the one now under way to the end of the day, with the POs booked into each. */
@@ -455,7 +535,7 @@ export function wmsView(w: WmsState, tick: number): WmsView {
   const doors = new Map<number, number>();
   for (const po of w.pos) if (po.door > 0) doors.set(po.no, po.door);
   const toView = (t: WmsTask): WmsTaskView => taskView(t, orders, doors);
-  const done = w.tasks.filter((t) => t.status === 'DONE').sort((a, b) => b.finished - a.finished || b.no - a.no);
+  const done = w.history.filter((t) => t.status === 'DONE').sort((a, b) => b.finished - a.finished || b.no - a.no);
   const workers = w.workers.map((p) => workerView(p, tasks, done, doors, toView));
   let busy = 0;
   let time = 0;
@@ -476,7 +556,7 @@ export function wmsView(w: WmsState, tick: number): WmsView {
   return {
     rev: Math.floor((tick - 1) / T.wmsStepTicks.value),
     orders: [...open, ...closed],
-    events: eventViews(w.events),
+    events: eventViews(w.events.length > T.wmsEventsKept.value ? w.events.slice(-T.wmsEventsKept.value) : w.events),
     kpis,
     workers,
     crewKpis,
@@ -485,8 +565,16 @@ export function wmsView(w: WmsState, tick: number): WmsView {
     // Read only: the needs are counted, nothing is changed.
     needs: crewNeeds(w as unknown as MWms, tick),
     waveChoices: waveChoices(),
-    growth: { hireCost: hireCost(w.workers.length), maxCrew: T.wmsMaxCrew.value, doorCost: doorCost(w.doors), maxDoors: T.wmsMaxDoors.value },
-    layout: { aisles: WMS_AISLES, bays: WMS_BAYS, aisleGap: WMS_AISLE_GAP_BAYS, doors: w.doors },
+    growth: {
+      hireCost: hireCost(w.workers.length),
+      maxCrew: T.wmsMaxCrew.value,
+      doorCost: doorCost(w.doors),
+      maxDoors: T.wmsMaxDoors.value,
+      shipDoorCost: shipDoorCost(w.shipDoors.length),
+      maxShipDoors: T.wmsMaxShipDoors.value,
+    },
+    shipDoors: shipDoorsView(w, tick),
+    layout: { aisles: WMS_AISLES, bays: WMS_BAYS, aisleGap: WMS_AISLE_GAP_BAYS, doors: w.doors, shipDoors: w.shipDoors.length },
     countries: w.dests.map((d, i) => ({ ...destinationAt(i), shipped: d.shipped, otif: d.otif, otifPct: pct(d.otif, d.shipped), goodwill: d.goodwill })),
     nextWaveIn: Math.max(0, w.nextWaveAt - tick),
     expediteCost: T.wmsExpediteCostCents.value,

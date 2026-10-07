@@ -11,23 +11,23 @@ import { WMS_FIRST_ORDER_NO } from './wms/catalog.ts';
 /**
  * The invariants of RULES 12, as properties over random play: random WMS
  * actions (release, priority, hold, assign, cancel, expedite, plan, hire,
- * door) at random ticks, from random seeds and starting cash.
+ * door in and out) at random ticks, from random seeds and starting cash.
  */
-const orderNo = fc.integer({ min: WMS_FIRST_ORDER_NO, max: WMS_FIRST_ORDER_NO + 30 });
+const orderNo = fc.integer({ min: WMS_FIRST_ORDER_NO, max: WMS_FIRST_ORDER_NO + 45 });
 const action: fc.Arbitrary<WmsAction> = fc.oneof(
   fc.record({ action: fc.constant('release' as const), orders: fc.array(orderNo, { minLength: 1, maxLength: 5 }) }),
   fc.record({ action: fc.constant('priority' as const), order: orderNo, priority: fc.constantFrom(1 as const, 2 as const, 3 as const) }),
   fc.record({ action: fc.constant('hold' as const), order: orderNo }),
   fc.record({ action: fc.constant('unhold' as const), order: orderNo }),
-  fc.record({ action: fc.constant('assign' as const), picker: fc.integer({ min: 1, max: 12 }), order: orderNo, line: fc.integer({ min: 1, max: 5 }) }),
+  fc.record({ action: fc.constant('assign' as const), picker: fc.integer({ min: 1, max: 24 }), order: orderNo, line: fc.integer({ min: 1, max: 5 }) }),
   fc.record({ action: fc.constant('cancelLine' as const), order: orderNo, line: fc.integer({ min: 1, max: 5 }) }),
   fc.record({ action: fc.constant('expedite' as const), order: orderNo }),
   fc.record({
     action: fc.constant('policy' as const),
-    policy: fc.record({ pick: fc.constantFrom('priority' as const, 'cutoff' as const, 'nearest' as const), release: fc.constantFrom('waves' as const, 'continuous' as const, 'manual' as const), pickers: fc.integer({ min: 1, max: 9 }) }),
+    policy: fc.record({ pick: fc.constantFrom('priority' as const, 'cutoff' as const, 'nearest' as const), release: fc.constantFrom('waves' as const, 'continuous' as const, 'manual' as const), pickers: fc.integer({ min: 1, max: 20 }) }),
   }),
   fc.record({ action: fc.constant('hire' as const), role: fc.constantFrom('pick' as const, 'receive' as const) }),
-  fc.record({ action: fc.constant('door' as const) }),
+  fc.constantFrom({ action: 'door' as const }, { action: 'door' as const, side: 'out' as const }),
 );
 const move = fc.record({ at: fc.nat(600), action });
 
@@ -81,6 +81,10 @@ function invariants(s: WarehouseState): void {
   expect(w.workers.length).toBeLessThanOrEqual(T.wmsMaxCrew.value);
   expect(w.policy.pickers).toBe(w.workers.filter((p) => p.role === 'pick').length);
   expect(w.doors).toBeLessThanOrEqual(T.wmsMaxDoors.value);
+  expect(w.shipDoors.length).toBeLessThanOrEqual(T.wmsMaxShipDoors.value);
+  // Only live tasks are in `tasks`; finished ones are in the history (W10).
+  for (const t of w.tasks) expect(['OPEN', 'QUEUED', 'ACTIVE']).toContain(t.status);
+  for (const t of w.history) expect(['DONE', 'CANCELLED']).toContain(t.status);
   for (const p of w.workers) {
     expect(p.walk).toBeGreaterThanOrEqual(0);
     expect(p.queue.length + (p.task === 0 ? 0 : 1)).toBeLessThanOrEqual(T.wmsTaskQueue.value);
@@ -96,6 +100,20 @@ function invariants(s: WarehouseState): void {
     }
   }
   for (const t of w.tasks) if (t.status === 'ACTIVE' || t.status === 'QUEUED') expect(held.has(t.no)).toBe(true);
+  // Outbound (W10): every staged or loaded order is at a door, and no trailer holds more than it can (one big order aside).
+  const onDoor = new Map<number, number[]>();
+  for (const o of w.orders) {
+    const status = o.status === 'ON HOLD' ? o.held : o.status;
+    if (status !== 'STAGED' && status !== 'LOADED') continue;
+    expect(o.door).toBeGreaterThan(0);
+    expect(o.door).toBeLessThanOrEqual(w.shipDoors.length);
+    if (status === 'LOADED') onDoor.set(o.door, [...(onDoor.get(o.door) ?? []), o.lines.reduce((n, l) => n + l.picked, 0)]);
+  }
+  for (const p of w.workers) {
+    const t = w.tasks.find((x) => x.no === p.task);
+    if (t?.kind === 'LOAD') onDoor.set(-10 - t.bin, [...(onDoor.get(-10 - t.bin) ?? []), t.qty]);
+  }
+  for (const loads of onDoor.values()) if (loads.length > 1) expect(loads.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(T.wmsTrailerUnits.value);
   // A line being picked has exactly one active pick task.
   for (const o of w.orders) {
     for (const l of o.lines) {
@@ -175,7 +193,7 @@ describe('catch-up equals stepping (P4)', () => {
     loud.advance(2 * 3600);
     expect(quiet.state.tick).toBe(2 * 3600);
     expect(hashState(quiet.state)).toBe(hashState(loud.state));
-    expect(quiet.state.wms.workers).toHaveLength(10);
+    expect(quiet.state.wms.workers).toHaveLength(T.wmsStartPickers.value + T.wmsStartReceivers.value + 1);
     expect(quiet.state.wms.doors).toBe(3);
   });
 });

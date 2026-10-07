@@ -5,6 +5,8 @@ import { createWarehouse } from './state.ts';
 import { advanceMany, step } from './step.ts';
 import { WAREHOUSE_TUNABLES as T } from './tunables.ts';
 
+const CREW = T.wmsStartPickers.value + T.wmsStartReceivers.value;
+
 function act(s: WarehouseState, payload: WmsAction): ReturnType<typeof step> {
   const command: WarehouseCommand = { tick: s.tick, type: 'wms', payload };
   return step(s, [command]);
@@ -18,8 +20,9 @@ describe('a new warehouse (RULES 3)', () => {
     expect(s.cash).toBe(T.startingCashCents.value);
     expect(s.wms.workers.filter((p) => p.role === 'pick')).toHaveLength(T.wmsStartPickers.value);
     expect(s.wms.workers.filter((p) => p.role === 'receive')).toHaveLength(T.wmsStartReceivers.value);
-    expect(s.wms.workers.map((p) => p.id)).toEqual(Array.from({ length: 9 }, (_, i) => i + 1));
+    expect(s.wms.workers.map((p) => p.id)).toEqual(Array.from({ length: CREW }, (_, i) => i + 1));
     expect(s.wms.doors).toBe(T.wmsDoors.value);
+    expect(s.wms.shipDoors.map((d) => d.door)).toEqual(Array.from({ length: T.wmsShipDoors.value }, (_, i) => i + 1));
     expect(s.wms.orders.length).toBeGreaterThanOrEqual(T.wmsSampleOrdersMin.value);
     expect(s.wms.tasks).toEqual([]);
   });
@@ -39,20 +42,20 @@ describe('commands (RULES 8)', () => {
     expect(bad.events).toContainEqual({ tick: 0, type: 'rejected', payload: { command: 'wms', reason: 'unknown command' } });
     const broke = act(s, { action: 'hire', role: 'pick' });
     expect(broke.events).toContainEqual({ tick: 0, type: 'rejected', payload: { command: 'wms', reason: 'Not enough cash' } });
-    expect(broke.state.wms.workers).toHaveLength(9);
+    expect(broke.state.wms.workers).toHaveLength(CREW);
   });
 
   it('a hire costs its price and adds a worker in that role; each further hire costs more', () => {
     const s = { ...createWarehouse({ seed: 2 }), cash: 1_000_000 };
     const one = act(s, { action: 'hire', role: 'pick' });
     expect(one.state.cash).toBe(1_000_000 - T.wmsHireCostCents.value);
-    expect(one.state.wms.workers).toHaveLength(10);
-    expect(one.state.wms.workers[9]).toMatchObject({ id: 10, role: 'pick', task: 0, at: -1 });
-    expect(one.state.wms.policy.pickers).toBe(7);
+    expect(one.state.wms.workers).toHaveLength(CREW + 1);
+    expect(one.state.wms.workers[CREW]).toMatchObject({ id: CREW + 1, role: 'pick', task: 0, at: -1 });
+    expect(one.state.wms.policy.pickers).toBe(T.wmsStartPickers.value + 1);
     expect(one.state.wms.stats.spent).toBe(T.wmsHireCostCents.value);
     const two = act(one.state, { action: 'hire', role: 'receive' });
     expect(one.state.cash - two.state.cash).toBe((T.wmsHireCostCents.value * T.wmsHireCostGrowthBp.value) / 10_000);
-    expect(two.state.wms.policy.pickers).toBe(7);
+    expect(two.state.wms.policy.pickers).toBe(T.wmsStartPickers.value + 1);
   });
 
   it('a dock door costs its price, up to the most doors', () => {
@@ -64,6 +67,20 @@ describe('commands (RULES 8)', () => {
     const full = act(s, { action: 'door' });
     expect(full.state.wms.doors).toBe(T.wmsMaxDoors.value);
     expect(full.events).toContainEqual({ tick: s.tick, type: 'rejected', payload: { command: 'wms', reason: 'No room for another door' } });
+  });
+
+  it('an outbound door costs its price, its trailer leaves a trailer interval later, up to the most (W10)', () => {
+    let s: WarehouseState = { ...createWarehouse({ seed: 2 }), cash: 1_000_000_000 };
+    const first = T.wmsShipDoors.value + 1;
+    s = act(s, { action: 'door', side: 'out' }).state;
+    expect(s.wms.shipDoors).toHaveLength(first);
+    expect(s.wms.shipDoors[first - 1]).toEqual({ door: first, trailer: first, departs: T.wmsTrailerTicks.value });
+    expect(s.wms.doors).toBe(T.wmsDoors.value);
+    expect(s.cash).toBe(1_000_000_000 - T.wmsShipDoorCostCents.value);
+    expect(s.wms.events.find((e) => e.code === 'DOOR')).toMatchObject({ line: 2, qty: first });
+    while (s.wms.shipDoors.length < T.wmsMaxShipDoors.value) s = act(s, { action: 'door', side: 'out' }).state;
+    const full = act(s, { action: 'door', side: 'out' });
+    expect(full.events).toContainEqual({ tick: s.tick, type: 'rejected', payload: { command: 'wms', reason: 'No room for another outbound door' } });
   });
 });
 
