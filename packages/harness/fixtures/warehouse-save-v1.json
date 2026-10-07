@@ -1,0 +1,88 @@
+{
+ "schemaVersion": 1,
+ "snapshot": {
+  "schemaVersion": 1,
+  "tick": 480,
+  "rng": {
+   "seed": 7,
+   "counter": 12
+  },
+  "cash": 113750,
+  "backlog": 32000,
+  "pickRush": 0,
+  "staged": 40000,
+  "stock": 144000,
+  "po": {
+   "id": 5,
+   "units": 58,
+   "received": 32000
+  },
+  "receiveRush": 0,
+  "levels": {
+   "docks": 0,
+   "truck": 0,
+   "loading": 0,
+   "sales": 0,
+   "picking": 1,
+   "receiving": 0,
+   "contract": 0,
+   "crew": 0,
+   "night": 0
+  },
+  "docks": [
+   {
+    "truck": 13,
+    "parcels": 10,
+    "loaded": 0,
+    "timer": 0,
+    "timerMax": 60,
+    "turn": 14,
+    "turnMax": 18,
+    "rush": 0,
+    "express": false
+   }
+  ],
+  "nextTruck": 14,
+  "site": 0,
+  "stars": 0,
+  "boosts": {
+   "flashSale": {
+    "left": 0,
+    "recharge": 0
+   },
+   "allHands": {
+    "left": 0,
+    "recharge": 0
+   },
+   "surge": {
+    "left": 0,
+    "recharge": 0
+   }
+  },
+  "run": {
+   "earned": 16250,
+   "shipments": 13,
+   "fullShipments": 13,
+   "orders": 130,
+   "missed": 0,
+   "expresses": 0,
+   "pos": 4,
+   "received": 232,
+   "taps": 1
+  },
+  "life": {
+   "earned": 16250,
+   "shipments": 13,
+   "fullShipments": 13,
+   "orders": 130,
+   "missed": 0,
+   "expresses": 0,
+   "pos": 4,
+   "received": 232,
+   "taps": 1
+  }
+ },
+ "commandLog": [],
+ "savedAtTick": 480,
+ "stateHash": "124426f1f3c11498"
+}
