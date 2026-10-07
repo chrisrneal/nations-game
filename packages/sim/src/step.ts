@@ -1,4 +1,4 @@
-import type { WarehouseCommand, WarehouseEvent, WarehouseState, BoostId, BoostState, DockState, Levels, PoState, RngState, Stats, UpgradeId } from '@warehouse/contracts';
+import type { WarehouseCommand, WarehouseEvent, WarehouseState, BoostId, BoostState, DockState, Levels, PoState, RngState, Stats, UpgradeId, WmsState } from '@warehouse/contracts';
 import { randomInt } from './rng.ts';
 import { BOOST_IDS, UPGRADE_IDS } from './catalog.ts';
 import { warehouseCommandProblem } from './commands.ts';
@@ -33,6 +33,8 @@ interface MState {
   boosts: Record<BoostId, Mutable<BoostState>>;
   run: MStats;
   life: MStats;
+  /** Not stepped yet (docs/wms-plan.md slice 2): shared, never changed in place. */
+  wms: WmsState;
 }
 
 function clone(s: WarehouseState): MState {
@@ -55,6 +57,7 @@ function clone(s: WarehouseState): MState {
     boosts: { flashSale: { ...s.boosts.flashSale }, allHands: { ...s.boosts.allHands }, surge: { ...s.boosts.surge } },
     run: { ...s.run },
     life: { ...s.life },
+    wms: s.wms,
   };
 }
 

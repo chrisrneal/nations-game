@@ -415,6 +415,19 @@ disagree.
 | `surgeRechargeTicks` | 3600 | 1200 | 7200 | Boost: Peak rates recharge (15 min): one per idle check-in. |
 | `surgePayBp` | 20000 | 15000 | 30000 | Boost: pay multiplier during Peak rates (2x). |
 | `surgeMinContract` | 1 | 0 | 3 | Boost: contract level before Peak rates opens (the first new contract, about minute 4). |
+| `wmsSampleOrdersMin` | 10 | 5 | 30 | WMS: fewest sample orders a new warehouse opens with (docs/wms-plan.md slice 1). |
+| `wmsSampleOrdersMax` | 15 | 5 | 40 | WMS: most sample orders a new warehouse opens with: enough to fill a phone screen of the order grid. |
+| `wmsLinesMax` | 5 | 1 | 12 | WMS: most lines an order has (1 to this many, each a different SKU). |
+| `wmsQtyMin` | 4 | 1 | 50 | WMS: fewest units on an order line. |
+| `wmsQtyMax` | 48 | 2 | 500 | WMS: most units on an order line. |
+| `wmsPickers` | 6 | 1 | 20 | WMS: pickers in the pool (Picker 01..N); each works one line at a time. |
+| `wmsCutoffMinTicks` | 2400 | 240 | 14400 | WMS: shortest time to ship-by of a Standard (P3) order (10 min); High (P2) gets 3/4 of that, Expedite (P1) half. |
+| `wmsCutoffMaxTicks` | 7200 | 480 | 28800 | WMS: longest time to ship-by of a Standard order (30 min). |
+| `wmsExpediteChanceBp` | 1000 | 0 | 5000 | WMS: chance a new order is P1 Expedite (10%). |
+| `wmsHighChanceBp` | 2500 | 0 | 5000 | WMS: chance a new order is P2 High (25%); the rest are P3 Standard. |
+| `wmsStockCoverMinPct` | 60 | 0 | 100 | WMS: least stock a SKU opens with, as % of the units ordered of it: under 100 some lines will be short. |
+| `wmsStockCoverMaxPct` | 180 | 100 | 400 | WMS: most stock a SKU opens with, as % of the units ordered of it. |
+| `wmsEventsKept` | 200 | 50 | 1000 | WMS: activity events kept in State (the oldest drop off); bounds the save and the feed. |
 
 ## 13. Invariants
 
@@ -546,3 +559,28 @@ to do and an active player a burst to plan around.
 - The headline income stays the plain estimate of section 8. While a boost
   runs, the screen also shows the boosted estimate: the same formulas with the
   boost applied, as if it ran for good.
+
+## 16. The WMS (warehouse management system)
+A layer beside the idle flow (decision record W5, plan in docs/wms-plan.md):
+key-account orders the player manages by hand. It does not change income,
+picking, stock or pacing in RULES 3-11.
+- **Opening.** Every new warehouse (and every migrated version-1 save) opens
+  a WMS seeded from the warehouse seed plus the site, on its own RNG stream.
+- **SKUs and bins.** 16 SKUs (`WMS_SKUS`), each in one bin; SKU `i` sits in
+  a bin in `[37i, 37i + 36]`, shown aisle-bay-level+position (`A-03-2B`).
+- **Sample orders.** `wmsSampleOrdersMin`-`wmsSampleOrdersMax` orders (10-15),
+  numbered from O-10234, each to a random country of 15 (`WMS_DESTINATIONS`),
+  source the current contract level, status NEW, no wave. Priority: P1
+  Expedite `wmsExpediteChanceBp` (10%), P2 High `wmsHighChanceBp` (25%), else
+  P3 Standard. Ship-by is a lead time drawn in
+  `[wmsCutoffMinTicks, wmsCutoffMaxTicks]` (10-30 min) for P3, three
+  quarters of a draw for P2, half for P1.
+- **Lines.** 1 to `wmsLinesMax` (5) lines of different SKUs, each
+  `wmsQtyMin`-`wmsQtyMax` units (4-48), status OPEN.
+- **Stock.** Each SKU ordered is stocked at a random
+  `wmsStockCoverMinPct`-`wmsStockCoverMaxPct` (60-180%) of the units ordered
+  of it, rounded down, so some lines will run short; an SKU nobody ordered
+  holds `wmsQtyMin`-`wmsQtyMax` units.
+- **Pickers.** `wmsPickers` (6), all idle.
+- **Log.** One ORD CRT event per order with its units; the latest
+  `wmsEventsKept` (200) events are kept.

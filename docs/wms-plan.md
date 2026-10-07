@@ -72,7 +72,7 @@ WMS catalog, so State stays compact and hashable.
   (index, shown `A-03-2B`), `ordered`, `allocated`, `picked`, `short` (whole
   units), `status`.
 - Order statuses: NEW, RELEASED, ALLOCATED, PICKING, PICKED, PACKED, STAGED,
-  LOADED, SHIPPED; exceptions SHORT, HOLD, BACKORDER, CANCELLED.
+  LOADED, SHIPPED; exceptions SHORT, ON HOLD, BACKORDER, CANCELLED.
 - Line statuses: OPEN, ALLOCATED, PICKING, PICKED, SHORT.
 - `WmsStock`: one SKU in one bin: `sku`, `bin`, `onHand`, `allocated`
   (available = onHand - allocated).
@@ -88,7 +88,13 @@ WMS catalog, so State stays compact and hashable.
    schema 2, migration from 1), a generator that makes 10-15 realistic sample
    orders (there are no trade/aid/project commitments in this game), debug
    counts in the View and the settings sheet. Generator unit tests.
-   STATUS: TODO
+   STATUS: DONE. Types in `packages/contracts/src/wms.ts`; catalog
+   (`WMS_SKUS`, `WMS_DESTINATIONS`, `orderCode`, `binCode`) in
+   `packages/sim/src/wms/catalog.ts`; `createWms` in `wms/generate.ts`
+   (called by `openWarehouse` and the 1-to-2 migration in `save.ts`);
+   `wmsSummary` in `wms/view.ts` is `view.wms`. Slice 2: `step.ts` holds
+   `wms` by reference in `MState` (never mutated yet) - copy it before
+   changing it in place, and step it inside `tickInPlace`. Tunables `wms*`.
 2. **Tick engine.** Status progression, picker assignment (FIFO by priority
    then ship-by), allocation, shorts, cutoff misses, activity events (last
    200), new orders arriving over time. Unit-test the transitions. Keep

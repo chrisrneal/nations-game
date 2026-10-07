@@ -1,4 +1,5 @@
 import type { RngState } from './state.ts';
+import type { WmsState, WmsSummaryView } from './wms.ts';
 
 /**
  * The warehouse game's shared vocabulary (docs/RULES.md, decision records W1
@@ -115,6 +116,8 @@ export interface WarehouseState {
   readonly run: Stats;
   /** Every warehouse, ever. */
   readonly life: Stats;
+  /** The warehouse management system's orders, stock, pickers and log (docs/wms-plan.md). */
+  readonly wms: WmsState;
 }
 
 export interface TapPayload {
@@ -342,6 +345,7 @@ export interface WarehouseView {
   readonly offlineCapMinutes: number;
   readonly run: Stats;
   readonly life: Stats;
+  readonly wms: WmsSummaryView;
 }
 
 /** A warehouse save (S9): snapshot, commands since, where to stop, and a hash to prove it. */

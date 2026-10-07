@@ -9,8 +9,27 @@ passengers, security). The Nations log is at commit `67d1d92`.
 - [x] Airport pivot slices 1-8 (docs/ROADMAP.md, History)
 - [x] Warehouse pivot (W1), one pull request (W2)
 - [x] Star perks (W3)
+- [ ] WMS, nine slices (W5, docs/wms-plan.md): slice 1 done
 
 ## Session log
+
+### 2026-10-07 - WMS slice 1: orders, lines, stock and pickers in State (lanes C, S, H, U, D; owner request, W5)
+**What changed.** The start of a warehouse management system (docs/wms-plan.md,
+decision record W5). Every warehouse now opens with 10-15 key-account orders
+to customers in 15 countries (O-10234 onward), each with 1-5 lines of SKUs
+such as GRN-0042 wheat or CHP-2030 chips in bins like A-03-2B, P1-P3
+priorities and a ship-by time, plus stock per bin (sometimes short of what
+is ordered), six idle pickers and an ORD CRT log line per order. It is all in
+State on its own seeded stream (save version 2; old saves gain a WMS and
+nothing else), and nothing moves yet. The brief was written for the retired
+Nations game, so nations became destination countries (W5).
+**Checks.** `npm test` (404; new: the generator's 10 tests and the
+version-1 save migration with a real save file) and `npm run check` pass;
+the idle game's numbers are unchanged (the pacing test holds).
+**How to see it.** Settings sheet: the "WMS (debug)" line counts orders,
+lines, units, SKUs and pickers.
+**What is left.** Slices 2-9: the tick engine, the order grid, detail,
+activity feed, KPIs, player actions, the feedback loop and polish.
 
 ### 2026-10-07 - Bigger customers send bigger orders (architect, lanes C, S, H, U, D; owner request, W4)
 **What changed.** Order size is now a real rule (RULES 3b). An order averages

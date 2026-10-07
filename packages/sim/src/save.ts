@@ -2,14 +2,19 @@ import type { WarehouseCommand, WarehouseSaveFile, WarehouseState } from '@wareh
 import { hashState } from './hash.ts';
 import { WAREHOUSE_SCHEMA_VERSION } from './state.ts';
 import { advanceMany, step } from './step.ts';
+import { createWms } from './wms/generate.ts';
 
 export type Migration = (save: Record<string, unknown>) => Record<string, unknown>;
 
 /**
  * Migrations keyed by the version they upgrade FROM (S9): `WAREHOUSE_MIGRATIONS[1]`
- * would turn a version-1 save into version 2. The warehouse starts at version 1
- * (W1): airport saves are not carried over, so there are none yet. Each new one
- * needs a test with a real old save file (packages/harness/fixtures).
+ * turns a version-1 save into version 2. The warehouse started at version 1
+ * (W1): airport saves are not carried over. Each one needs a test with a real
+ * old save file (packages/harness/fixtures).
+ *
+ * - 1 to 2 (W5): the snapshot gains a WMS, generated as a new warehouse's would
+ *   be (seeded from the warehouse seed and site, at the snapshot's tick and
+ *   contract). Nothing else changes, so every idle number is as saved.
  *
  * Old rules are not kept, so a migration changes only the snapshot, and
  * `migrateWarehouseSave` replays the history since it under today's rules and
@@ -17,7 +22,13 @@ export type Migration = (save: Record<string, unknown>) => Record<string, unknow
  * save point, no history): for those the old hash is checked first, and the
  * migrated warehouse is exactly the one that was saved.
  */
-export const WAREHOUSE_MIGRATIONS: Readonly<Record<number, Migration>> = {};
+export const WAREHOUSE_MIGRATIONS: Readonly<Record<number, Migration>> = {
+  1: (save) => {
+    const snapshot = save.snapshot as Omit<WarehouseState, 'wms'>;
+    const wms = createWms({ seed: snapshot.rng.seed + snapshot.site, tick: snapshot.tick, contract: snapshot.levels.contract });
+    return { ...save, schemaVersion: 2, snapshot: { ...snapshot, schemaVersion: 2, wms } };
+  },
+};
 
 /** Brings a parsed save up to the current schema, or throws a message a player can act on. */
 export function migrateWarehouseSave(raw: unknown, migrations: Readonly<Record<number, Migration>> = WAREHOUSE_MIGRATIONS, target = WAREHOUSE_SCHEMA_VERSION): Record<string, unknown> {

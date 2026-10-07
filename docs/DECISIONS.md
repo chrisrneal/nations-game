@@ -824,3 +824,33 @@ lost to rounding at most.
 1000 with the old picking and receiving bases (600), shelves (120) and stock
 (60): every rule is then as before.
 
+
+## W5 - A warehouse management system beside the idle flow
+**Status.** Accepted, 2026-10-07, at the owner's request (a nine-slice WMS
+brief, docs/wms-plan.md). As for W3 and W4, the owner asked for it directly,
+so this session wrote the record. The brief was written for the Nations game
+(nations, trade deals, aid, relations), retired in P1; this session read it
+for the warehouse game, the reading closest to docs/ROADMAP.md: destination
+countries for nations, customer accounts (contracts) for trade deals,
+goodwill per country for relations, cash for the expedite cost.
+**Decision.** The game gains a WMS: discrete key-account orders with lines,
+SKUs, bins, a picker pool and an activity log, shown in dense operational
+screens. It lives in State as `wms` (save schema 2; the migration from 1 adds
+a freshly generated WMS and changes nothing else), on its own seeded RNG
+stream so it never shifts the idle game's draws, and it changes only through
+commands and the step like everything else (S1, S2). The idle flow of RULES
+3-5 (milli-orders, pickers, staging, docks, pay) stays the truth for income
+and pacing and is not rewritten; the WMS is a bounded layer beside it, and
+its results reach the economy only in its slice 8, measured by the harness.
+Slice 1 (this record) adds the types, the generator (10-15 sample orders) and
+13 tunables; nothing steps yet.
+**Why.** The owner wants the game to feel like running a real distribution
+operation. Discrete orders are what a WMS shows, but the idle economy runs at
+thousands of orders a second, too many to model one by one; a bounded layer
+gives the real-WMS feel without touching the proven pacing (P9, W1, W4).
+**Cost.** A save migration; State grows by a few KB (hashed and saved);
+the step will do more work per tick from slice 2, so catch-up must stay
+inside the phone budget (S4). The WMS's orders are not the idle flow's
+orders, which a player may notice; slice 8 links the two through pay.
+**Reversing it.** Remove `wms` with a migration from 2 to 3 and delete
+packages/sim/src/wms and its screens; the idle game is untouched.
