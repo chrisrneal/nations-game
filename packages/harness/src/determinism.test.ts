@@ -1,7 +1,7 @@
 /**
  * S5 in executable form: 1,000 seeds of the warehouse, each played by a scripted
- * player for a minute of taps, purchases and sales and then caught up for an
- * hour, give identical state hashes in Node and in headless Chromium (see
+ * player for a minute of WMS actions (plans, hires, holds, assignments) and
+ * then caught up for an hour, give identical state hashes in Node and in headless Chromium (see
  * browser.ts). Skips only on a machine with no Chromium/Chrome and no CI
  * variable; in CI a missing browser is a failure, not a skip.
  */

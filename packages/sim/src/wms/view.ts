@@ -37,7 +37,12 @@ function pad(n: number, width: number): string {
   return String(n).padStart(width, '0');
 }
 
-function lineViews(o: WmsOrder, pickerOn: ReadonlyMap<string, number>, taskOn: ReadonlyMap<string, number>): WmsLineView[] {
+/** A number naming an order's (or PO's) line, for lookups: cheaper than a string key on every tick. */
+function lineKey(ref: number, line: number): number {
+  return ref * 1024 + line;
+}
+
+function lineViews(o: WmsOrder, pickerOn: ReadonlyMap<number, number>, taskOn: ReadonlyMap<number, number>): WmsLineView[] {
   return o.lines.map((l) => {
     const sku = skuAt(l.sku);
     return {
@@ -50,14 +55,14 @@ function lineViews(o: WmsOrder, pickerOn: ReadonlyMap<string, number>, taskOn: R
       picked: l.picked,
       short: l.short,
       status: l.status,
-      picker: pickerOn.get(`${o.no}/${l.no}`) ?? 0,
-      task: taskOn.get(`${o.no}/${l.no}`) ?? 0,
+      picker: pickerOn.get(lineKey(o.no, l.no)) ?? 0,
+      task: taskOn.get(lineKey(o.no, l.no)) ?? 0,
     };
   });
 }
 
 /** A row of the order grid, with its lines. */
-function orderView(o: WmsOrder, pickerOn: ReadonlyMap<string, number>, taskOn: ReadonlyMap<string, number>) {
+function orderView(o: WmsOrder, pickerOn: ReadonlyMap<number, number>, taskOn: ReadonlyMap<number, number>) {
   let unitsOrdered = 0;
   let unitsPicked = 0;
   let shortUnits = 0;
@@ -203,7 +208,7 @@ function pct(part: number, whole: number): number | null {
 }
 
 /** A row of the inbound grid (W6), with its lines. */
-function poView(po: WmsPo, receiverOn: ReadonlyMap<string, number>): WmsPoView {
+function poView(po: WmsPo, receiverOn: ReadonlyMap<number, number>): WmsPoView {
   let unitsExpected = 0;
   let unitsReceived = 0;
   let unitsDamaged = 0;
@@ -249,7 +254,7 @@ function poView(po: WmsPo, receiverOn: ReadonlyMap<string, number>): WmsPoView {
         damaged: l.damaged,
         short: l.short,
         status: l.status,
-        receiver: receiverOn.get(`${po.no}/${l.no}`) ?? 0,
+        receiver: receiverOn.get(lineKey(po.no, l.no)) ?? 0,
         ...binPlace(l.bin),
       };
     }),
@@ -258,8 +263,8 @@ function poView(po: WmsPo, receiverOn: ReadonlyMap<string, number>): WmsPoView {
 
 /** The inbound page (W6): POs open first (oldest first), then closed (newest first), and its KPIs. */
 function inboundView(w: WmsState, windowSec: number): { pos: WmsPoView[]; inboundKpis: WmsInboundKpis } {
-  const receiverOn = new Map<string, number>();
-  for (const t of w.tasks) if (t.kind !== 'PICK' && t.status === 'ACTIVE') receiverOn.set(`${t.ref}/${t.line}`, t.worker);
+  const receiverOn = new Map<number, number>();
+  for (const t of w.tasks) if (t.kind !== 'PICK' && t.status === 'ACTIVE') receiverOn.set(lineKey(t.ref, t.line), t.worker);
   const rows = w.pos.map((po) => poView(po, receiverOn));
   const open = rows.filter((po) => po.open).sort((a, b) => a.appt - b.appt || a.no - b.no);
   const closed = rows.filter((po) => !po.open).sort((a, b) => b.closed - a.closed || b.no - a.no);
@@ -406,12 +411,13 @@ function scheduleView(w: WmsState, tick: number): WmsSlotView[] {
 
 /** What the WMS screens read (docs/wms-plan.md; RULES 10). */
 export function wmsView(w: WmsState, tick: number): WmsView {
-  const pickerOn = new Map<string, number>();
-  const taskOn = new Map<string, number>();
+  const pickerOn = new Map<number, number>();
+  const taskOn = new Map<number, number>();
   for (const t of w.tasks) {
     if (t.kind !== 'PICK' || (t.status !== 'OPEN' && t.status !== 'QUEUED' && t.status !== 'ACTIVE')) continue;
-    taskOn.set(`${t.ref}/${t.line}`, t.no);
-    if (t.status === 'ACTIVE') pickerOn.set(`${t.ref}/${t.line}`, t.worker);
+    const key = lineKey(t.ref, t.line);
+    taskOn.set(key, t.no);
+    if (t.status === 'ACTIVE') pickerOn.set(key, t.worker);
   }
   const rows = w.orders.map((o) => orderView(o, pickerOn, taskOn));
   const open = rows.filter((o) => o.open);
