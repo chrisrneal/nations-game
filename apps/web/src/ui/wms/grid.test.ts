@@ -93,7 +93,7 @@ function po(no: number, extra: Partial<WmsPoView> = {}): WmsPoView {
 }
 
 function sku(index: number, extra: Partial<WmsStockView> = {}): WmsStockView {
-  return { index, sku: 'GRN-0042', desc: '', bin: 'A-01-1A', onHand: 100, allocated: 0, available: 100, onOrder: 0, dock: 0, demand: 0, picked: 0, counted: -1, variance: 0, status: 'OK', ...extra };
+  return { index, sku: 'GRN-0042', desc: '', bin: 'A-01-1A', aisle: 0, bay: 1, onHand: 100, allocated: 0, available: 100, onOrder: 0, dock: 0, demand: 0, picked: 0, counted: -1, variance: 0, status: 'OK', ...extra };
 }
 
 describe('inbound and inventory grids (W6)', () => {

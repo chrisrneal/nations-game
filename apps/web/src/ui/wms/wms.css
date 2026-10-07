@@ -994,7 +994,7 @@
 }
 
 .wms-tabs button {
-  min-height: 40px;
+  min-height: var(--tap);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1050,4 +1050,216 @@
 
 .lstatus-stored {
   color: var(--wms-green);
+}
+
+/* ---- the WMS as home (W7): money bar, live floor, plan, thumb actions ---- */
+.wms-home .wms-feed {
+  padding-bottom: 0;
+}
+
+.home-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: max(0.3rem, env(safe-area-inset-top)) 0.6rem 0.3rem;
+  border-bottom: 1px solid var(--wms-rule);
+  background: var(--bg);
+}
+
+.home-site {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.home-money {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.home-cash {
+  display: inline-block;
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-income {
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.home-income.income-boosted {
+  color: var(--gold);
+}
+
+.home-actions {
+  flex: none;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem max(0.5rem, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--wms-rule);
+  background: var(--bg);
+}
+
+.home-actions > .btn-primary {
+  flex: 2;
+}
+
+.home-actions > .btn {
+  flex: 1;
+  min-height: 50px;
+}
+
+.wms-plan-chip {
+  flex: none;
+  display: block;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 0.6rem;
+  border: none;
+  border-bottom: 1px solid var(--wms-rule);
+  background: #0a1322;
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wms-plan-chip .muted {
+  margin-right: 0.3rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+
+.wms-floor {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.wms-floor-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.wms-floor-live {
+  touch-action: manipulation;
+}
+
+.wms-plan {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.6rem 0.75rem 1rem;
+}
+
+.wms-plan-intro {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.wms-plan-part {
+  margin-bottom: 1rem;
+  padding: 0.6rem;
+  border: 1px solid var(--wms-rule);
+  border-radius: 10px;
+  background: var(--wms-row);
+}
+
+.wms-plan-part h3 {
+  margin: 0 0 0.45rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.wms-seg-wide button {
+  flex: 1;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.wms-seg button[aria-checked='true'] {
+  background: var(--fg);
+  color: var(--wms-bg);
+}
+
+.wms-plan-does {
+  margin: 0.5rem 0 0.2rem;
+  font-size: 0.82rem;
+}
+
+.wms-plan-cost {
+  margin: 0;
+  color: var(--wms-amber);
+  font-size: 0.78rem;
+}
+
+.wms-crew {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wms-crew .wms-btn {
+  min-width: var(--tap);
+  font-size: 1.2rem;
+}
+
+.wms-crew-split {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+}
+
+.wms-crew-split > span:first-child,
+.wms-crew-split > span:last-child {
+  color: var(--muted);
+}
+
+.wms-crew-split b {
+  color: var(--fg);
+  font-size: 1rem;
+}
+
+.wms-crew-people {
+  display: flex;
+  gap: 4px;
+}
+
+.wms-crew-people i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.wms-crew-people .pk {
+  background: var(--wms-green);
+}
+
+.wms-crew-people .rc {
+  background: var(--warn);
 }

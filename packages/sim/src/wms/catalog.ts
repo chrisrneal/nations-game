@@ -115,6 +115,32 @@ export function binCode(index: number): string {
   return `${aisle}-${String(bay).padStart(2, '0')}-${level}${position}`;
 }
 
+/** Aisles of bins (A-D): bin 160a-160a+159 is in aisle a. */
+export const WMS_AISLES = 4;
+export const WMS_BINS_PER_AISLE = 160;
+/** Bays down each aisle (01-20). */
+export const WMS_BAYS = 20;
+/** Bays' worth of walking from one aisle's walkway to the next along the front cross aisle (W7). */
+export const WMS_AISLE_GAP_BAYS = 3;
+
+/** Where a bin is (W7): its aisle (0 = A) and bay (1-20); -1, the pick-and-drop point, is at the front of aisle A (bay 0). */
+export function binPlace(bin: number): { readonly aisle: number; readonly bay: number } {
+  if (bin < 0) return { aisle: 0, bay: 0 };
+  return { aisle: Math.floor(bin / WMS_BINS_PER_AISLE) % WMS_AISLES, bay: (Math.floor(bin / 8) % WMS_BAYS) + 1 };
+}
+
+/**
+ * Bays a picker walks between two bins (RULES 16, W7): along the aisle if
+ * both are in it, else out to the front cross aisle, across, and in again.
+ * -1 is the pick-and-drop point at the front of aisle A.
+ */
+export function travelBays(from: number, to: number): number {
+  const a = binPlace(from);
+  const b = binPlace(to);
+  if (a.aisle === b.aisle) return Math.abs(a.bay - b.bay);
+  return a.bay + b.bay + WMS_AISLE_GAP_BAYS * Math.abs(a.aisle - b.aisle);
+}
+
 /** Lines per hour is measured over this many buckets of `WMS_RATE_BUCKET_TICKS` (16 x 15 s = 4 minutes). */
 export const WMS_RATE_BUCKETS = 16;
 export const WMS_RATE_BUCKET_TICKS = 60;

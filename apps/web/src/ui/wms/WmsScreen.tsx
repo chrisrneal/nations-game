@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
-import type { WmsAction, WmsActionName, WmsEventView } from '@warehouse/contracts';
+import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import type { WmsAction, WmsActionName, WmsEventView, WmsPolicy } from '@warehouse/contracts';
 import type { WarehouseHost } from '../../platform/index.ts';
 import { formatCash } from '../format.ts';
 import type { WarehouseStore } from '../store.ts';
@@ -9,9 +9,11 @@ import { LineActions, OrderActions, ReleaseBar } from './Actions.tsx';
 import { FILTERS, PAGES, countdown, filterCounts, matches, nextSort, sortOrders, type Sort, type SortKey, type WmsFilter, type WmsPage } from './grid.ts';
 import { InboundGrid, PoDetail } from './Inbound.tsx';
 import { InventoryGrid } from './Inventory.tsx';
-import { KpiStrip, inboundKpis, inventoryKpis, outboundKpis } from './KpiStrip.tsx';
+import { KpiStrip, floorKpis, inboundKpis, inventoryKpis, outboundKpis } from './KpiStrip.tsx';
 import { OrderDetail } from './OrderDetail.tsx';
 import { OrderGrid, type GridScroll } from './OrderGrid.tsx';
+import { PICK_RULES, Plan, RELEASE_MODES } from './Plan.tsx';
+import { WmsFloor } from './WmsFloor.tsx';
 import { useWms } from './useWms.ts';
 import './wms.css';
 
@@ -32,25 +34,39 @@ const DONE: Readonly<Record<WmsActionName, string>> = {
   assign: 'Picker assigned',
   cancelLine: 'Line cancelled',
   expedite: 'Expedited',
+  policy: 'Plan changed',
 };
 
+/** What the "Wave in" KPI says: the countdown under timed waves, else how orders are released (W7). */
+function waveText(policy: WmsPolicy, nextWaveIn: number, tickMs: number): string {
+  return policy.release === 'waves' ? countdown(nextWaveIn, tickMs) : policy.release === 'continuous' ? 'Live' : 'Manual';
+}
+
+/** The plan in a line, for the floor (W7). */
+function planLine(policy: WmsPolicy, crew: number): string {
+  const pick = PICK_RULES.find((r) => r.id === policy.pick)?.name ?? '';
+  const release = RELEASE_MODES.find((r) => r.id === policy.release)?.name ?? '';
+  return `${pick} · ${release} · ${policy.pickers} pick / ${crew - policy.pickers} receive`;
+}
+
 /**
- * The warehouse management system (docs/wms-plan.md): a full-screen,
- * terminal-style view over the warehouse, in three pages (W6): Inbound
- * (purchase orders from suppliers), Outbound (customer orders, and their
- * countries) and Inventory (every SKU's bin). The page never scrolls
- * sideways; only the grids do. Actions (slice 7) are commands sent through
- * the host; the sim decides, and the answer shows as a short note.
+ * The warehouse management system (docs/wms-plan.md), the game's home screen
+ * since W7: the live floor the WMS runs (Floor), purchase orders from
+ * suppliers (In), customer orders and their countries (Out), every SKU's bin
+ * (Stock), and the operating plan the player sets (Plan). The page never
+ * scrolls sideways; only the grids do. Actions are commands sent through the
+ * host; the sim decides, and the answer shows as a short note. `top` and
+ * `bottom` are the money bar and the actions under the thumb (App).
  */
-export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; onClose: () => void }): ReactElement {
-  const { store, host, onClose } = props;
+export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; top?: ReactNode; bottom?: ReactNode }): ReactElement {
+  const { store, host } = props;
   const live = useWms(store);
   const [filter, setFilter] = useState<WmsFilter>('all');
   const [sort, setSort] = useState<Sort | null>(null);
   const [open, setOpen] = useState<number | null>(null);
   const [line, setLine] = useState<number | null>(null);
   const [feed, setFeed] = useState(false);
-  const [page, setPage] = useState<WmsPage>('outbound');
+  const [page, setPage] = useState<WmsPage>('floor');
   const [countries, setCountries] = useState(false);
   const [openPo, setOpenPo] = useState<number | null>(null);
   const [choosing, setChoosing] = useState(false);
@@ -65,11 +81,10 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; o
       if (feed) setFeed(false);
       else if (page === 'inbound' && openPo !== null) setOpenPo(null);
       else if (page === 'outbound' && open !== null) setOpen(null);
-      else onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, open, openPo, page, feed]);
+  }, [open, openPo, page, feed]);
   useEffect(
     () =>
       store.onFrame((update) => {
@@ -105,6 +120,17 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; o
     },
     [choosing],
   );
+  const openOrder = useCallback((no: number) => {
+    setPage('outbound');
+    setCountries(false);
+    setChoosing(false);
+    setOpen(no);
+    setLine(null);
+  }, []);
+  const openPurchase = useCallback((no: number) => {
+    setPage('inbound');
+    setOpenPo(no);
+  }, []);
   const openFromFeed = useCallback((e: WmsEventView) => {
     if (e.po > 0) {
       setPage('inbound');
@@ -129,14 +155,22 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; o
   const newOrders = useMemo(() => (orders ?? []).filter((o) => o.status === 'NEW').map((o) => o.no), [orders]);
   const marked = useMemo(() => (choosing ? new Set([...chosen].filter((no) => newOrders.includes(no))) : new Set(open === null ? [] : [open])), [choosing, chosen, newOrders, open]);
   const detail = open === null ? undefined : orders?.find((o) => o.no === open);
-  const kpis = live === null ? [] : page === 'inbound' ? inboundKpis(live.wms.inboundKpis) : page === 'inventory' ? inventoryKpis(live.wms.inventoryKpis) : outboundKpis(live.wms.kpis, countdown(live.wms.nextWaveIn, live.tickMs));
+  const wave = live === null ? '' : waveText(live.wms.policy, live.wms.nextWaveIn, live.tickMs);
+  const kpis =
+    live === null
+      ? []
+      : page === 'inbound'
+        ? inboundKpis(live.wms.inboundKpis)
+        : page === 'inventory'
+          ? inventoryKpis(live.wms.inventoryKpis)
+          : page === 'outbound'
+            ? outboundKpis(live.wms.kpis, wave)
+            : floorKpis(live.wms.kpis, live.wms.inboundKpis, wave);
 
   return (
-    <div className="wms" role="dialog" aria-modal="true" aria-label="Warehouse management system" data-testid="wms">
+    <div className={`wms${props.bottom === undefined ? '' : ' wms-home'}`} aria-label="Warehouse management system" data-testid="wms">
+      {props.top}
       <header className="wms-head">
-        <button type="button" className="wms-back" onClick={onClose} aria-label="Back to the floor" data-testid="wms-close">
-          ‹ Floor
-        </button>
         <div className="wms-tabs" role="tablist" aria-label="WMS page">
           {PAGES.map((p) => (
             <button key={p.id} type="button" role="tab" aria-selected={page === p.id} onClick={() => setPage(p.id)} data-testid={`wms-tab-${p.id}`}>
@@ -150,7 +184,16 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; o
         <p className="wms-empty">Connecting…</p>
       ) : (
         <>
-          {page === 'inbound' ? (
+          {page === 'floor' ? (
+            <>
+              <button type="button" className="wms-plan-chip" onClick={() => setPage('plan')} data-testid="wms-plan-chip">
+                <span className="muted">Plan</span> {planLine(live.wms.policy, live.wms.crew)} <span aria-hidden="true">›</span>
+              </button>
+              <WmsFloor store={store} onOrder={openOrder} onPo={openPurchase} />
+            </>
+          ) : page === 'plan' ? (
+            <Plan policy={live.wms.policy} crew={live.wms.crew} submit={submit} />
+          ) : page === 'inbound' ? (
             openPo !== null ? (
               <PoDetail po={live.wms.pos.find((p) => p.no === openPo)} events={live.wms.events.filter((e) => e.po === openPo)} tick={live.tick} tickMs={live.tickMs} onBack={() => setOpenPo(null)} />
             ) : (
@@ -245,6 +288,7 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; o
           <ActivityFeed events={live.wms.events} tickMs={live.tickMs} open={feed} onToggle={() => setFeed((f) => !f)} onOpen={openFromFeed} />
         </>
       )}
+      {props.bottom}
       {note !== null && (
         <div className={`wms-note-toast${note.bad ? ' bad' : ''}`} role="status">
           {note.text}

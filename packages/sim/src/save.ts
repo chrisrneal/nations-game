@@ -3,6 +3,7 @@ import { hashState } from './hash.ts';
 import { WAREHOUSE_SCHEMA_VERSION } from './state.ts';
 import { advanceMany, step } from './step.ts';
 import { createWms, emptyInbound } from './wms/generate.ts';
+import { defaultPolicy } from './wms/policy.ts';
 
 export type Migration = (save: Record<string, unknown>) => Record<string, unknown>;
 
@@ -24,6 +25,10 @@ export type Migration = (save: Record<string, unknown>) => Record<string, unknow
  *   yet), receivers, a cycle-count clock and inbound totals, and each SKU
  *   gains `picked: 0`, `counted: -1` and `variance: 0`. Orders, stock and the
  *   log are kept exactly as saved; the next planning run raises the POs.
+ * - 5 to 6 (W7, the operating plan): the WMS gains the default plan (the
+ *   rules it ran by), and each picker stands at the bin of the line it is on
+ *   (or the pick-and-drop point when idle) with no walk left, so a line
+ *   being picked carries on as it would have.
  *
  * Old rules are not kept, so a migration changes only the snapshot, and
  * `migrateWarehouseSave` replays the history since it under today's rules and
@@ -52,6 +57,16 @@ export const WAREHOUSE_MIGRATIONS: Readonly<Record<number, Migration>> = {
     const inventory = snapshot.wms.inventory.map((s) => ({ ...s, picked: 0, counted: -1, variance: 0 }));
     const wms = { ...snapshot.wms, inventory, ...emptyInbound(snapshot.tick) };
     return { ...save, schemaVersion: 5, snapshot: { ...snapshot, schemaVersion: 5, wms } };
+  },
+  5: (save) => {
+    const snapshot = save.snapshot as WarehouseState;
+    const w = snapshot.wms;
+    const pickers = w.pickers.map((p) => {
+      const bin = p.order === 0 ? undefined : w.orders.find((o) => o.no === p.order)?.lines.find((l) => l.no === p.line)?.bin;
+      return { ...p, at: bin ?? -1, walk: 0 };
+    });
+    const wms = { ...w, pickers, policy: { ...defaultPolicy(), pickers: pickers.length } };
+    return { ...save, schemaVersion: 6, snapshot: { ...snapshot, schemaVersion: 6, wms } };
   },
 };
 

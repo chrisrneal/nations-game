@@ -173,4 +173,18 @@ WMS catalog, so State stays compact and hashable.
     `stock`, `inventoryKpis`; events gain `po`. UI: `Inbound.tsx` (PO grid,
     PO detail), `Inventory.tsx` (SKU grid), `DataGrid.tsx` (the small grid
     both use), `KpiStrip.tsx` (a strip per page). RULES 16 has the rules.
+11. **The WMS is home: a live floor and the plan** (owner request, decision
+    record W7). STATUS: DONE. Sim: pickers walk to each line's bin
+    (`travelBays`, `binPlace` in `catalog.ts`; `walkTicks` and the walk in
+    `workPickers`, `tick.ts`), allocation goes most urgent first
+    (`urgency`), and the operating plan (`wms/policy.ts`: `WMS_PICK_RULES`,
+    `WMS_RELEASE_MODES`, `wmsCrew`, `setPolicy`; the `policy` action in
+    `actions.ts`; `assignPickers` and the release in `wmsStep` read it).
+    State: `policy`, pickers' `at` and `walk` (save schema 6). View:
+    `policy`, `crew`, `receivers`, `layout`, and aisle and bay on pickers,
+    stock rows and PO lines. UI: `WmsFloor.tsx` (two canvases) over
+    `floorModel.ts` (layout, routes and every mover, tested in Node),
+    `Plan.tsx`, `Home.tsx` (the money bar and the thumb actions);
+    `WmsScreen` is the home with tabs Floor, In, Out, Stock, Plan; App's
+    `screen` switches to the Docks screen (the old floor).
 

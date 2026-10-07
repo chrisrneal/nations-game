@@ -3,6 +3,7 @@ import { mix32, seedRng } from '../rng.ts';
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
 import { WMS_BIN_SPREAD, WMS_DESTINATIONS, WMS_FIRST_ORDER_NO, WMS_FIRST_PO_NO, WMS_RATE_BUCKETS, WMS_SKUS } from './catalog.ts';
 import { Roller, rollOrder, unitsOf } from './orders.ts';
+import { defaultPolicy } from './policy.ts';
 
 /** Salts the WMS stream away from the warehouse's own RNG ("WMS!"). */
 const WMS_SALT = 0x574d5321;
@@ -10,7 +11,7 @@ const WMS_SALT = 0x574d5321;
 /**
  * A new warehouse's WMS (RULES 16): one bin per SKU, a pool of idle pickers
  * and receivers,
- * and 10-15 sample orders from customers abroad, each logged as ORD CRT. The
+ * the WMS's own operating plan (W7), and 10-15 sample orders from customers abroad, each logged as ORD CRT. The
  * game has no trade deals or other commitments to turn into orders, so every
  * order is a sample. Each SKU is stocked at a random share of what is ordered
  * of it, so some lines will run short. Seeded from `seed` on its own stream:
@@ -31,7 +32,7 @@ export function createWms(options: { readonly seed: number; readonly tick: numbe
     const onHand = units > 0 ? Math.floor((units * r.int(T.wmsStockCoverMinPct.value, T.wmsStockCoverMaxPct.value)) / 100) : r.int(T.wmsQtyMin.value, T.wmsQtyMax.value);
     return { sku, bin, onHand, allocated: 0, picked: 0, counted: -1, variance: 0 };
   });
-  const pickers: WmsPicker[] = Array.from({ length: T.wmsPickers.value }, (_, i) => ({ id: i + 1, order: 0, line: 0, progress: 0 }));
+  const pickers: WmsPicker[] = Array.from({ length: T.wmsPickers.value }, (_, i) => ({ id: i + 1, order: 0, line: 0, progress: 0, at: -1, walk: 0 }));
   const events: WmsEvent[] = orders.map((o) => ({ tick, code: 'ORD CRT', order: o.no, line: 0, sku: -1, qty: unitsOf(o), of: 0, picker: 0 }));
   const nextOrderAt = tick + r.int(T.wmsOrderMinTicks.value, Math.max(T.wmsOrderMinTicks.value, T.wmsOrderMaxTicks.value));
   return {
@@ -49,6 +50,7 @@ export function createWms(options: { readonly seed: number; readonly tick: numbe
     dests: WMS_DESTINATIONS.map(() => ({ shipped: 0, otif: 0, goodwill: T.wmsGoodwillStart.value })),
     recent: Array.from({ length: WMS_RATE_BUCKETS }, () => 0),
     ...emptyInbound(tick),
+    policy: defaultPolicy(),
   };
 }
 

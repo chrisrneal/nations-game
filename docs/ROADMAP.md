@@ -1,7 +1,10 @@
 # Roadmap
 
 ## The game
-Mobile-first installable PWA idle game. You run a warehouse: customer orders
+Mobile-first installable PWA warehouse game, becoming a WMS sim (W7): the
+app opens on the warehouse management system, its live floor drawn from what
+the WMS is doing, and the player sets the WMS's plan (pick order, release,
+crew). Underneath is the idle game: customer orders
 come in and queue in a backlog, pickers take each one's unit off the shelves,
 packed orders are loaded onto trucks at your docks, and each truck pays when
 it leaves full or on its timer. Purchase orders arrive at the receiving dock
@@ -45,9 +48,11 @@ vite-plugin-pwa, Vitest + fast-check, playwright-core for the phone check.
 ## Phone UX budget (checked by apps/web/e2e/phone-check.ts)
 Portrait and one-handed; primary actions in the bottom third; touch targets at
 least 44 px; no horizontal scroll at 360 px; safe areas respected. The main
-screen is the warehouse: cash, income per second and the dashboard at the top,
-the floor (receiving, the picking backlog, packing) and the docks with trucks
-filling in the middle, boosts and upgrades in the thumb zone. 60 fps with the
+screen is the WMS (W7): cash and income at the top, the WMS's tabs (the live
+floor, inbound, outbound, stock, the plan) in the middle with the activity
+console under them, Docks, Upgrades and Sell in the thumb zone. The docks
+screen holds the idle floor (receiving, the picking backlog, packing), the
+trucks filling and the boosts. 60 fps with the
 CPU slowed 4x: animation by canvas, CSS and direct DOM writes, not React
 re-renders (P7). Number formatting for big values. Satisfying feedback: loads
 filling, departures, cash pops.
@@ -66,6 +71,9 @@ stepping, save-reload-continue.
   Commit `5f78bce`.
 - **Warehouse Idle** (2026-10-06): the airport's engine and rules renamed, plus
   stock and purchase orders and the dashboard (W1), in one pull request (W2).
+- **The WMS** (2026-10-07): a warehouse management system beside the idle flow
+  (W5), with inbound and inventory (W6); then the WMS became home, its floor
+  animated from the WMS, with a plan the player sets (W7).
 
 ## Next (not planned until the owner picks)
 - Play it on a real phone and say what feels slow or confusing (docs/GAPS.md

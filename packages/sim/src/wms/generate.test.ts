@@ -126,7 +126,8 @@ describe('WMS sample order generator (slice 1)', () => {
 
   it('starts every picker idle and logs one ORD CRT per order with its units', () => {
     const wms = createWms({ seed: 3, tick: 12, contract: 0 });
-    expect(wms.pickers).toEqual(Array.from({ length: T.wmsPickers.value }, (_, i) => ({ id: i + 1, order: 0, line: 0, progress: 0 })));
+    expect(wms.pickers).toEqual(Array.from({ length: T.wmsPickers.value }, (_, i) => ({ id: i + 1, order: 0, line: 0, progress: 0, at: -1, walk: 0 })));
+    expect(wms.policy).toEqual({ pick: 'priority', release: 'waves', pickers: T.wmsPickers.value });
     expect(wms.events).toEqual(
       wms.orders.map((o) => ({ tick: 12, code: 'ORD CRT', order: o.no, line: 0, sku: -1, qty: o.lines.reduce((n, l) => n + l.ordered, 0), of: 0, picker: 0 })),
     );

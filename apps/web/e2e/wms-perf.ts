@@ -40,6 +40,8 @@ async function main(): Promise<void> {
     });
     const page = context.pages()[0] ?? (await context.newPage());
     await page.goto(URL);
+    await page.getByTestId('wms-floor').waitFor();
+    await page.getByTestId('open-docks').tap();
     await page.getByTestId('dock-0').waitFor();
     const session = new WarehouseSession(wmsUnderLoad());
     const path = join(profile, 'load.json');
@@ -65,6 +67,7 @@ async function main(): Promise<void> {
     console.log(`the floor of the same warehouse, CPU slowed 4x: ${floor.toFixed(1)} fps`);
     const opened = Date.now();
     await page.getByTestId('open-wms').tap();
+    await page.getByTestId('wms-tab-outbound').tap();
     await page.locator('[data-testid="wms-grid"] tbody tr').first().waitFor();
     const openMs = Date.now() - opened;
     const rows = await page.locator('[data-testid="wms-grid"] tbody tr').count();

@@ -911,3 +911,76 @@ change a door, raise a PO by hand would each be a new `wms` action).
 `stepInbound` and `cycleCount`, migrate the new fields away (5 to 6), and
 put the two tabs back in WmsScreen.
 
+
+## W7 - The WMS becomes the game: its floor is home, and the player sets its plan
+**Status.** Accepted, 2026-10-07, at the owner's request ("the pick pack
+animation should emulate what the wms is doing. It's less of an idle game
+more of a wms sim, let users start to change some of the sim's decisions.
+Wms becomes the main"). As for W3-W6, the owner asked for it directly, so
+this session wrote the record, and (as in W2) updated docs/ROADMAP.md's
+description of the main screen to match.
+**Reading.** Three asks, read the way closest to docs/ROADMAP.md: (1) the
+animation shows the WMS's own pickers, orders and trucks, not the idle
+flow's scenery; (2) the player can change decisions the WMS made by itself,
+beyond the per-order actions of slice 7; (3) the WMS is the screen the app
+opens on. The money is not moved: income still comes mostly from the idle
+flow's trucks (RULES 3-11), so the pacing targets hold. Making the WMS the
+money-maker is the obvious next step but needs a pacing pass and is the
+owner's call (docs/GAPS.md).
+**Decision.**
+- *Home.* The app opens on the WMS. A one-row money bar (stars, site, cash,
+  income, settings) sits over five tabs: **Floor** (new, the default), In,
+  Out, Stock (the three W6 pages, renamed to fit) and **Plan** (new). The
+  activity console stays docked at the bottom, and under it Docks, Upgrades
+  and Sell. The idle floor with the trucks, the boosts and the tap rushes is
+  now the **Docks** screen, one tap away and back (‹ WMS).
+- *Floor.* A canvas drawn from the WMS View only (P7, the S6 seam): the two
+  dock doors with the PO being received, the yard, the receivers counting,
+  forklifts putting each received line away (arriving when the sim puts it
+  in the bin), four aisles of 20 bays with every SKU's stock, the pickers
+  walking to and picking at their line's bin (an arc for the share picked),
+  each confirmed line's tote riding the conveyor to packing, and every order
+  past picking as a carton at the pack bench, the packed area, the staging
+  lanes and the truck, which pulls out once its orders have shipped (with
+  the pay). A tap on a picker or carton opens its order, on a docked
+  trailer its PO, on a bin its SKU. The UI may not import the sim, so the
+  View carries each picker's, stock row's and PO line's aisle and bay and
+  the floor's shape.
+- *Walking* (so the animation is the truth, and so a pick order can save
+  steps). Pickers walk to each line's bin before picking: bins sit in four
+  aisles of 20 bays, a walk is the bays along an aisle or out to the front
+  cross aisle, across (3 bays an aisle) and in, at `wmsWalkTicksPerBay` (1
+  tick a bay). Pick speed rose from 0.65 to 0.75 units a second to keep an
+  idle WMS shipping as before (82% OTIF and 94% on time against 84% and
+  95%, seeds 1-8, 2 h).
+- *The plan* (a new `policy` WMS action, PLAN in the log): **pick order**
+  (priority first, the old rule; cutoff first; nearest bin), **release**
+  (timed waves, the old rule; continuous; manual) and **crew** (the nine
+  people split between pickers and receivers, 1-8 picking). Allocation now
+  goes most urgent first under the pick order, so waves let a P1 take the
+  stock ahead of a P3 released with it: the catch of continuous release.
+  State gains `policy` and each picker `at` and `walk` (save schema 6; the
+  migration from 5 adds the default plan, sized to the saved pickers, and
+  puts each picker at its line's bin with no walk left).
+**Measured** (idle WMS, seeds 1-8, 2 h; OTIF, on time, fill): default 82%,
+94%, 97.4%; cutoff first 84%, 96%, 97.3%; nearest bin 81%, 93%, 97.1%
+(more lines than priority first with a backlog: a test); continuous 84%,
+97%, 97.1%; seven pickers 85%, 98%, 97.3%; five 65%, 74%, 97.4%. No plan
+dominates on every number, and the crew split is the sharpest lever. Every
+RULES 11 target holds. Phone check 74/74 at 360 x 740, the WMS floor at
+60 fps with the CPU slowed 4x.
+**Why.** The owner wants a WMS sim more than an idle game. A floor that
+shows the WMS (and a sim that times the walks it shows) makes every number
+on the WMS pages visible as people and boxes, and the plan hands the player
+the decisions a real WMS supervisor makes: the pick sequence, the release
+strategy and the labour split.
+**Cost.** A save migration. The WMS's rules changed for every save
+(walking, allocation order, pick speed): a save with a command log from
+before would replay differently (the game's own saves are compact). The
+home is denser than the old floor; the tabs are shorter words. The Docks
+screen, where most of the money is still made, is a tap away instead of
+being home.
+**Reversing it.** Make `screen` start at 'docks' in App.tsx to put the old
+home back. For the rules: `wmsWalkTicksPerBay` 0 and `wmsPickMilliPerSec`
+650 remove walking; the default plan is the old behaviour except
+allocation order (`needing.sort` in `wmsStep`).

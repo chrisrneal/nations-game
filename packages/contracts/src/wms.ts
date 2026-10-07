@@ -65,7 +65,27 @@ export type WmsEventCode =
   | 'PO CLOSE'
   // Inventory (W6).
   | 'CYCLE CNT'
-  | 'ADJUST';
+  | 'ADJUST'
+  // The operating plan (W7): `line` is the setting (1 pick order, 2 release, 3 crew), `qty` its new value.
+  | 'PLAN';
+
+/**
+ * How idle pickers choose their next line (W7): best priority then earliest
+ * ship-by (the WMS's own rule), earliest ship-by then priority, or the
+ * nearest bin to where the picker stands.
+ */
+export type WmsPickRule = 'priority' | 'cutoff' | 'nearest';
+
+/** How NEW orders are released to the floor (W7): in timed waves, each as it arrives, or only by hand. */
+export type WmsReleaseMode = 'waves' | 'continuous' | 'manual';
+
+/** The operating plan the player sets (W7): decisions the WMS otherwise makes itself. */
+export interface WmsPolicy {
+  readonly pick: WmsPickRule;
+  readonly release: WmsReleaseMode;
+  /** Pickers out of the crew; the rest of the crew receive. */
+  readonly pickers: number;
+}
 
 /** Purchase order statuses (W6): on the road, in the yard waiting for a door, at a door being received, being put away, done. */
 export type WmsPoStatus = 'IN TRANSIT' | 'ARRIVED' | 'RECEIVING' | 'PUTAWAY' | 'CLOSED';
@@ -201,6 +221,10 @@ export interface WmsPicker {
   readonly line: number;
   /** Milli-units picked so far on the current line. */
   readonly progress: number;
+  /** The bin it stands at, or walks to (W7); -1 at the pick-and-drop point by the conveyor. */
+  readonly at: number;
+  /** Ticks of walking left before it reaches `at` and starts picking (W7). */
+  readonly walk: number;
 }
 
 /** One line of the activity log. The message is built by the View from these fields. */
@@ -270,6 +294,8 @@ export interface WmsState {
   readonly inbound: WmsInboundStats;
   /** Units received in each rate bucket, like `recent`. */
   readonly recentIn: readonly number[];
+  /** The player's operating plan (W7). */
+  readonly policy: WmsPolicy;
 }
 
 /**
@@ -283,7 +309,8 @@ export type WmsAction =
   | { readonly action: 'unhold'; readonly order: number }
   | { readonly action: 'assign'; readonly picker: number; readonly order: number; readonly line: number }
   | { readonly action: 'cancelLine'; readonly order: number; readonly line: number }
-  | { readonly action: 'expedite'; readonly order: number };
+  | { readonly action: 'expedite'; readonly order: number }
+  | { readonly action: 'policy'; readonly policy: WmsPolicy };
 
 export type WmsActionName = WmsAction['action'];
 
@@ -380,6 +407,30 @@ export interface WmsPickerView {
   /** Order and line it works; 0 when idle. */
   readonly order: number;
   readonly line: number;
+  /** Bin index it stands at or walks to; -1 at the pick-and-drop point (W7). */
+  readonly at: number;
+  /** Where that is on the floor (W7): aisle (0 = A) and bay (1-20; 0 the front cross aisle). */
+  readonly aisle: number;
+  readonly bay: number;
+  /** Ticks of walking left (W7). */
+  readonly walk: number;
+  /** Units picked so far and units to pick on its line; 0 when idle. */
+  readonly picked: number;
+  readonly units: number;
+  /** Its order's priority; 0 when idle. */
+  readonly priority: number;
+}
+
+/** A receiver on the floor (W7): the PO line it counts in, at which dock door. */
+export interface WmsReceiverView {
+  readonly id: number;
+  /** PO and line; both 0 while idle. */
+  readonly po: number;
+  readonly line: number;
+  /** Dock door (1-based) of its PO; 0 while idle. */
+  readonly door: number;
+  readonly received: number;
+  readonly expected: number;
 }
 
 /** A destination country's record (slice 8). */
@@ -403,6 +454,10 @@ export interface WmsPoLineView {
   readonly status: WmsPoLineStatus;
   /** The receiver on it now; 0 for none. */
   readonly receiver: number;
+  /** Where its bin is on the floor (W7), and the tick its units reach the bin (0 while not received). */
+  readonly aisle: number;
+  readonly bay: number;
+  readonly putAt: number;
 }
 
 /** One row of the inbound grid (W6), with its lines for the PO detail. */
@@ -443,6 +498,9 @@ export interface WmsStockView {
   readonly sku: string;
   readonly desc: string;
   readonly bin: string;
+  /** Where its bin is on the floor (W7): aisle (0 = A) and bay (1-20). */
+  readonly aisle: number;
+  readonly bay: number;
   readonly onHand: number;
   readonly allocated: number;
   readonly available: number;
@@ -508,4 +566,10 @@ export interface WmsView {
   /** Inventory (W6): one row per SKU, in catalog order. */
   readonly stock: readonly WmsStockView[];
   readonly inventoryKpis: WmsInventoryKpis;
+  /** The operating plan (W7), and the crew it splits between picking and receiving. */
+  readonly policy: WmsPolicy;
+  readonly crew: number;
+  readonly receivers: readonly WmsReceiverView[];
+  /** The floor's shape (W7): aisles, bays down each, bays of walking from one aisle to the next, dock doors. */
+  readonly layout: { readonly aisles: number; readonly bays: number; readonly aisleGap: number; readonly doors: number };
 }
