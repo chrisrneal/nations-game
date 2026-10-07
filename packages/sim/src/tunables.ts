@@ -142,6 +142,11 @@ export const WAREHOUSE_TUNABLES = {
   wmsGoodwillStart: { value: 50, min: 0, max: 100, note: 'WMS: goodwill (0-100) every destination country starts at.' },
   wmsExpediteCostOrders: { value: 30, min: 5, max: 200, note: 'WMS: an expedite costs the pay of this many orders at today\'s pay (about $30 at the start): real money, but small next to a truck.' },
   wmsExpediteLeadTicks: { value: 1200, min: 0, max: 7200, note: 'WMS: an expedited order goes P1 and onto a later, faster truck: this much is added to its ship-by (5 min).' },
+  wmsUnitPayBp: { value: 500, min: 0, max: 5000, note: 'WMS: a shipped WMS order pays this share of an idle order\'s pay for each unit shipped (5%), times its country\'s goodwill factor: a bonus beside the trucks, small enough to leave the pacing targets in place.' },
+  wmsGoodwillGain: { value: 3, min: 0, max: 20, note: 'WMS: goodwill a country gains when its order ships on time and in full.' },
+  wmsGoodwillLatePerMin: { value: 4, min: 0, max: 50, note: 'WMS: goodwill lost for each whole minute (or part) an order ships after its cutoff.' },
+  wmsGoodwillLateMax: { value: 20, min: 0, max: 100, note: 'WMS: most goodwill one late order can cost.' },
+  wmsGoodwillShortMax: { value: 15, min: 0, max: 100, note: 'WMS: goodwill an order shipped with nothing would cost; a short order costs this times its share of units short.' },
 } as const satisfies Readonly<Record<string, Tunable>>;
 
 export type WarehouseTunableId = keyof typeof WAREHOUSE_TUNABLES;

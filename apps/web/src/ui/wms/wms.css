@@ -880,3 +880,121 @@
   background: var(--wms-red);
   color: #2a0505;
 }
+
+/* ---- pages and countries (slice 8) ---- */
+.wms-title {
+  flex: none;
+}
+
+.wms-tabs {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--wms-rule);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.wms-tabs button {
+  flex: 1;
+  min-height: 36px;
+  padding: 0 0.4rem;
+  border: none;
+  background: var(--wms-row);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.wms-tabs button[aria-selected='true'] {
+  background: var(--fg);
+  color: var(--wms-bg);
+}
+
+.wms-countries {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.wms-countries table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.78rem;
+}
+
+.wms-countries th,
+.wms-countries td {
+  height: var(--row-h);
+  padding: 0 0.45rem;
+  border-bottom: 1px solid var(--wms-rule);
+  text-align: left;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.wms-countries thead th {
+  position: sticky;
+  top: 0;
+  height: 30px;
+  background: var(--wms-head);
+  color: var(--muted);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.wms-countries thead th.num {
+  text-align: right;
+}
+
+.wms-countries tbody tr:nth-child(even) {
+  background: var(--wms-row-alt);
+}
+
+.wms-countries tbody th {
+  font-family: var(--mono);
+  font-weight: 700;
+}
+
+.wms-countries .c-name {
+  display: block;
+  font-family: system-ui, sans-serif;
+  font-weight: 400;
+  font-size: 0.62rem;
+  color: var(--muted);
+  max-width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gw {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.gw-bar {
+  width: 3.2rem;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--wms-rule);
+  overflow: hidden;
+}
+
+.gw-bar i {
+  display: block;
+  height: 100%;
+  background: var(--wms-amber);
+  transform-origin: left center;
+}
+
+.gw-bar i.low {
+  background: var(--wms-red);
+}
+
+.gw-bar i.high {
+  background: var(--wms-green);
+}

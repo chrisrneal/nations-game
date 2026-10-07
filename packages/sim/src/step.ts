@@ -324,7 +324,13 @@ function tickInPlace(m: MState, commands: readonly WarehouseCommand[], d: Derive
   const start = m.tick % n;
   for (let k = 0; k < n; k++) dockTick(m, (start + k) % n, current, events);
   boostClocks(m);
-  if (m.tick % T.wmsStepTicks.value === 0) wmsStep(m.wms, m.tick, m.levels.contract);
+  if (m.tick % T.wmsStepTicks.value === 0) {
+    const earned = wmsStep(m.wms, m.tick, m.levels.contract, mulDiv(current.payCents, current.payMulBp, BP), events);
+    if (earned > 0) {
+      m.cash = Math.min(cashCap(), m.cash + earned);
+      bump(m, 'earned', earned);
+    }
+  }
   m.tick += 1;
   return current;
 }

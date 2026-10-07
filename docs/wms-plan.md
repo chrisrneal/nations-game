@@ -140,7 +140,13 @@ WMS catalog, so State stays compact and hashable.
    the Release… mode with its bar). RULES 16 lists the rules.
 8. **Feedback loop.** OTIF and shipping results into customer goodwill per
    country and pay; OTIF per country on screen; toasts for key ships and
-   misses. STATUS: TODO
+   misses. STATUS: DONE. `ship()` in `tick.ts` pays `shipmentPay` and moves
+   goodwill by `goodwillChange`; `wmsStep` returns the cents, which the step
+   adds to cash and `earned`, and pushes `wmsShipped` and `wmsMissed`
+   events. UI: a Countries page (`Countries.tsx`, tab in the WMS header:
+   shipped, OTIF %, goodwill bar and pay factor), goodwill on the order
+   detail, and App toasts when a P1 order ships or a P1/P2 order misses its
+   cutoff. Pacing unchanged (first sale 36.2 min).
 9. **Polish.** Tap targets, dark mode, reduced motion, empty states, 300
    orders / 2,000 lines scrolling smoothly (virtualise by hand if needed).
    STATUS: TODO

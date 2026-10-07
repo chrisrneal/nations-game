@@ -4,6 +4,7 @@ import type { WarehouseHost } from '../../platform/index.ts';
 import { formatCash } from '../format.ts';
 import type { WarehouseStore } from '../store.ts';
 import { ActivityFeed } from './ActivityFeed.tsx';
+import { Countries } from './Countries.tsx';
 import { LineActions, OrderActions, ReleaseBar } from './Actions.tsx';
 import { FILTERS, countdown, filterCounts, matches, nextSort, sortOrders, type Sort, type SortKey, type WmsFilter } from './grid.ts';
 import { KpiStrip } from './KpiStrip.tsx';
@@ -36,6 +37,7 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; o
   const [open, setOpen] = useState<number | null>(null);
   const [line, setLine] = useState<number | null>(null);
   const [feed, setFeed] = useState(false);
+  const [page, setPage] = useState<'orders' | 'countries'>('orders');
   const [choosing, setChoosing] = useState(false);
   const [chosen, setChosen] = useState<ReadonlySet<number>>(() => new Set());
   const [note, setNote] = useState<{ text: string; bad: boolean } | null>(null);
@@ -88,6 +90,7 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; o
     [choosing, orders],
   );
   const openFromFeed = useCallback((no: number) => {
+    setPage('orders');
     setOpen(no);
     setLine(null);
     setFeed(false);
@@ -111,7 +114,24 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; o
         <button type="button" className="wms-back" onClick={onClose} aria-label="Back to the floor" data-testid="wms-close">
           ‹ Floor
         </button>
-        <h2 className="wms-title">WMS · Orders</h2>
+        <h2 className="wms-title">WMS</h2>
+        <div className="wms-tabs" role="tablist" aria-label="WMS page">
+          <button type="button" role="tab" aria-selected={page === 'orders'} onClick={() => setPage('orders')} data-testid="wms-tab-orders">
+            Orders
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={page === 'countries'}
+            onClick={() => {
+              setPage('countries');
+              setOpen(null);
+            }}
+            data-testid="wms-tab-countries"
+          >
+            Countries
+          </button>
+        </div>
         {live !== null && (
           <span className="wms-wave" data-testid="wms-next-wave">
             Wave in {countdown(live.wms.nextWaveIn, live.tickMs)}
@@ -123,12 +143,15 @@ export function WmsScreen(props: { store: WarehouseStore; host: WarehouseHost; o
         <p className="wms-empty">Connecting…</p>
       ) : (
         <>
-          {open !== null ? (
+          {page === 'countries' ? (
+            <Countries countries={live.wms.countries} />
+          ) : open !== null ? (
             <OrderDetail
               order={detail}
               events={live.wms.events.filter((e) => e.order === open)}
               tick={live.tick}
               tickMs={live.tickMs}
+              goodwill={live.wms.countries.find((c) => c.iso === detail?.dest.iso)?.goodwill ?? null}
               onBack={() => setOpen(null)}
               selectedLine={line}
               onSelectLine={(no) => setLine((l) => (l === no ? null : no))}

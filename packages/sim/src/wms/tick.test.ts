@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { WmsLine, WmsOrder, WmsState, WmsStock } from '@warehouse/contracts';
+import type { WarehouseEvent, WmsLine, WmsOrder, WmsState, WmsStock } from '@warehouse/contracts';
 import { hashState } from '../hash.ts';
 import { createWarehouse } from '../state.ts';
 import { advanceMany, step } from '../step.ts';
 import { WAREHOUSE_TUNABLES } from '../tunables.ts';
 import { isClosed } from './catalog.ts';
 import { createWms } from './generate.ts';
-import { cloneWms, wmsStep, type MWms } from './tick.ts';
+import { cloneWms, goodwillChange, shipmentPay, wmsStep, type MWms } from './tick.ts';
 
 const T = WAREHOUSE_TUNABLES;
 const STEP = T.wmsStepTicks.value;
@@ -234,5 +234,59 @@ describe('WMS in the warehouse (slice 2)', () => {
       }
       expect(s.rng.counter).toBe(advanceMany({ ...createWarehouse({ seed }), wms: createWms({ seed: 99, tick: 0, contract: 0 }) }, 2 * 3600 * 4).rng.counter);
     }
+  });
+});
+
+describe('WMS feedback loop (slice 8)', () => {
+  it('goodwill: +3 for on time and in full; down by the minutes late (capped) and the share short', () => {
+    const o = order(1, [{ ...line(1, 0, 10), picked: 10 }], { shipBy: 1000 });
+    expect(goodwillChange(o, 900, true, true, 10)).toBe(T.wmsGoodwillGain.value);
+    expect(goodwillChange(o, 1001, false, true, 10)).toBe(-T.wmsGoodwillLatePerMin.value);
+    expect(goodwillChange(o, 1000 + 3 * 240, false, true, 10)).toBe(-3 * T.wmsGoodwillLatePerMin.value);
+    expect(goodwillChange(o, 1000 + 60 * 240, false, true, 10)).toBe(-T.wmsGoodwillLateMax.value);
+    expect(goodwillChange(o, 900, true, false, 6)).toBe(-Math.floor((T.wmsGoodwillShortMax.value * 4) / 10));
+  });
+
+  it('a shipment pays 5% of an idle order’s pay a unit, times (50 + goodwill)%', () => {
+    expect(shipmentPay(80, 100, 50)).toBe(400);
+    expect(shipmentPay(80, 100, 100)).toBe(600);
+    expect(shipmentPay(80, 100, 0)).toBe(200);
+    expect(shipmentPay(0, 100, 100)).toBe(0);
+  });
+
+  it('shipping moves the country’s goodwill and pays the warehouse; key events go to the sink', () => {
+    const w = withTunables({ wmsShortPickChanceBp: 0 }, () => {
+      const m = wms([order(1, [line(1, 0, 10)], { dest: 2, priority: 1 })], { 0: 20 });
+      const events: WarehouseEvent[] = [];
+      let earned = 0;
+      let tick = 0;
+      for (let i = 0; i < 60; i++) {
+        earned += wmsStep(m, tick, 0, 100, events);
+        tick += STEP;
+      }
+      expect(earned).toBe(shipmentPay(10, 100, T.wmsGoodwillStart.value));
+      expect(events).toEqual([expect.objectContaining({ type: 'wmsShipped', payload: expect.objectContaining({ order: 1, priority: 1, onTime: true, inFull: true, cents: earned }) })]);
+      return m;
+    });
+    expect(w.dests[2]?.goodwill).toBe(T.wmsGoodwillStart.value + T.wmsGoodwillGain.value);
+  });
+
+  it('a WMS shipment is cash and counts as earned (stars come from earnings)', () => {
+    const s = advanceMany(createWarehouse({ seed: 2 }), 15 * 60 * 4);
+    const shipped = s.wms.stats.shipped;
+    expect(shipped).toBeGreaterThan(0);
+    const events = [] as WarehouseEvent[];
+    let state = s;
+    for (let i = 0; i < 600 && !events.some((e) => e.type === 'wmsShipped'); i++) {
+      const r = step(state, []);
+      events.push(...r.events);
+      if (r.events.some((e) => e.type === 'wmsShipped')) {
+        const cents = r.events.reduce((n, e) => n + (e.type === 'wmsShipped' ? e.payload.cents : 0), 0);
+        const trucks = r.events.reduce((n, e) => n + (e.type === 'departed' ? e.payload.cents : 0), 0);
+        expect(r.state.run.earned - state.run.earned).toBe(cents + trucks);
+      }
+      state = r.state;
+    }
+    expect(events.some((e) => e.type === 'wmsShipped')).toBe(true);
   });
 });

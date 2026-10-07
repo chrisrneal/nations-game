@@ -1,6 +1,7 @@
-import type { WmsEvent, WmsLine, WmsOrder, WmsState } from '@warehouse/contracts';
+import type { WarehouseEvent, WmsEvent, WmsLine, WmsOrder, WmsState } from '@warehouse/contracts';
+import { mulDiv } from '../math.ts';
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
-import { WMS_RATE_BUCKETS, WMS_RATE_BUCKET_TICKS, isClosed } from './catalog.ts';
+import { WMS_RATE_BUCKETS, WMS_RATE_BUCKET_TICKS, destinationAt, isClosed } from './catalog.ts';
 import { Roller, rollOrder, unitsOf } from './orders.ts';
 
 const BP = 10_000;
@@ -167,7 +168,26 @@ function assignPickers(w: MWms, tick: number): void {
   }
 }
 
-function ship(w: MWms, o: MOrder, tick: number): void {
+/** Goodwill a shipment costs or earns its country (RULES 16, slice 8): up for on time and in full, down by lateness and by the share short. */
+export function goodwillChange(o: WmsOrder, tick: number, onTime: boolean, inFull: boolean, shipped: number): number {
+  if (onTime && inFull) return T.wmsGoodwillGain.value;
+  let loss = 0;
+  if (!onTime) {
+    const minutes = Math.max(1, Math.ceil(((tick - o.shipBy) * T.tickMs.value) / 60_000));
+    loss += Math.min(T.wmsGoodwillLateMax.value, minutes * T.wmsGoodwillLatePerMin.value);
+  }
+  const ordered = unitsOf(o);
+  if (!inFull && ordered > 0) loss += Math.floor((T.wmsGoodwillShortMax.value * (ordered - shipped)) / ordered);
+  return -loss;
+}
+
+/** What a shipment pays (slice 8): a share of an idle order's pay a unit, times (50 + goodwill)% of the country's goodwill before it. */
+export function shipmentPay(shipped: number, payCents: number, goodwill: number): number {
+  return mulDiv(mulDiv(shipped * payCents, T.wmsUnitPayBp.value, BP), 50 + goodwill, 100);
+}
+
+/** Ships the order: counts, goodwill and pay. Returns the cents it earns. */
+function ship(w: MWms, o: MOrder, tick: number, payCents: number, events: WarehouseEvent[] | null): number {
   o.status = 'SHIPPED';
   o.closed = tick;
   o.next = 0;
@@ -183,38 +203,44 @@ function ship(w: MWms, o: MOrder, tick: number): void {
   s.unitsOrdered += unitsOf(o);
   s.unitsShipped += shipped;
   const dest = w.dests[o.dest];
+  let cents = 0;
   if (dest !== undefined) {
     dest.shipped += 1;
     if (onTime && inFull) dest.otif += 1;
+    cents = shipmentPay(shipped, payCents, dest.goodwill);
+    dest.goodwill = Math.max(0, Math.min(100, dest.goodwill + goodwillChange(o, tick, onTime, inFull, shipped)));
+    if (events !== null) {
+      events.push({ tick, type: 'wmsShipped', payload: { order: o.no, iso: destinationAt(o.dest).iso, priority: o.priority, cents, onTime, inFull, goodwill: dest.goodwill } });
+    }
   }
   log(w, { tick, code: 'SHIP', order: o.no, qty: shipped, of: unitsOf(o) });
+  return cents;
 }
 
-/** One timed move for an order past picking: PICKED or SHORT, PACKED, STAGED, LOADED, SHIPPED. */
-function moveOn(w: MWms, o: MOrder, tick: number): void {
-  if (o.next === 0 || tick < o.next) return;
+/** One timed move for an order past picking: PICKED or SHORT, PACKED, STAGED, LOADED, SHIPPED. Returns the cents a shipment earns. */
+function moveOn(w: MWms, o: MOrder, tick: number, payCents: number, events: WarehouseEvent[] | null): number {
+  if (o.next === 0 || tick < o.next) return 0;
   switch (o.status) {
     case 'PICKED':
     case 'SHORT':
       o.status = 'PACKED';
       o.next = tick + T.wmsStageTicks.value;
       log(w, { tick, code: 'PACK', order: o.no });
-      return;
+      return 0;
     case 'PACKED':
       o.status = 'STAGED';
       o.next = tick + T.wmsLoadTicks.value;
       log(w, { tick, code: 'STAGE', order: o.no });
-      return;
+      return 0;
     case 'STAGED':
       o.status = 'LOADED';
       o.next = tick + T.wmsShipTicks.value;
       log(w, { tick, code: 'LOAD', order: o.no });
-      return;
+      return 0;
     case 'LOADED':
-      ship(w, o, tick);
-      return;
+      return ship(w, o, tick, payCents, events);
     default:
-      return;
+      return 0;
   }
 }
 
@@ -250,8 +276,11 @@ function purge(w: MWms): void {
  * the wave planner releases NEW orders, low SKUs are replenished, released and
  * backordered lines are allocated, pickers pick and confirm, idle pickers take
  * the next line, finished orders pack, stage, load and ship, and cutoffs pass.
+ * Returns the cents shipments earned (slice 8); `payCents` is an idle order's
+ * pay now. Shipments and cutoff misses go to `events` when it is given.
  */
-export function wmsStep(w: MWms, tick: number, contract: number): void {
+export function wmsStep(w: MWms, tick: number, contract: number, payCents = 0, events: WarehouseEvent[] | null = null): number {
+  let earned = 0;
   const r = new Roller(w.rng);
   if (tick % WMS_RATE_BUCKET_TICKS < T.wmsStepTicks.value) w.recent[Math.floor(tick / WMS_RATE_BUCKET_TICKS) % WMS_RATE_BUCKETS] = 0;
   if (tick >= w.nextOrderAt) {
@@ -284,12 +313,14 @@ export function wmsStep(w: MWms, tick: number, contract: number): void {
       o.late = true;
       w.stats.cutoffMisses += 1;
       log(w, { tick, code: 'CUTOFF MISS', order: o.no });
+      events?.push({ tick, type: 'wmsMissed', payload: { order: o.no, iso: destinationAt(o.dest).iso, priority: o.priority } });
     }
     if (o.status === 'ON HOLD') continue;
     finishPicking(o, tick);
-    moveOn(w, o, tick);
+    earned += moveOn(w, o, tick, payCents, events);
     if (o.status === 'SHIPPED') closedNow = true;
   }
   if (closedNow) purge(w);
   w.rng = r.rng;
+  return earned;
 }

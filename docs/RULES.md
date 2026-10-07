@@ -447,6 +447,11 @@ disagree.
 | `wmsGoodwillStart` | 50 | 0 | 100 | WMS: goodwill (0-100) every destination country starts at. |
 | `wmsExpediteCostOrders` | 30 | 5 | 200 | WMS: an expedite costs the pay of this many orders at today's pay (about $30 at the start): real money, but small next to a truck. |
 | `wmsExpediteLeadTicks` | 1200 | 0 | 7200 | WMS: an expedited order goes P1 and onto a later, faster truck: this much is added to its ship-by (5 min). |
+| `wmsUnitPayBp` | 500 | 0 | 5000 | WMS: a shipped WMS order pays this share of an idle order's pay for each unit shipped (5%), times its country's goodwill factor: a bonus beside the trucks, small enough to leave the pacing targets in place. |
+| `wmsGoodwillGain` | 3 | 0 | 20 | WMS: goodwill a country gains when its order ships on time and in full. |
+| `wmsGoodwillLatePerMin` | 4 | 0 | 50 | WMS: goodwill lost for each whole minute (or part) an order ships after its cutoff. |
+| `wmsGoodwillLateMax` | 20 | 0 | 100 | WMS: most goodwill one late order can cost. |
+| `wmsGoodwillShortMax` | 15 | 0 | 100 | WMS: goodwill an order shipped with nothing would cost; a short order costs this times its share of units short. |
 
 ## 13. Invariants
 
@@ -657,3 +662,13 @@ picking, stock or pacing in RULES 3-11.
     of `wmsExpediteCostOrders` (30) orders at today's pay: the order becomes
     P1 and moves to a later, faster truck, `wmsExpediteLeadTicks` (5 min)
     added to its ship-by (EXPEDITE).
+- **Goodwill and pay** (slice 8). Each destination country has goodwill,
+  0-100, starting at `wmsGoodwillStart` (50). A shipment pays the warehouse
+  `wmsUnitPayBp` (5%) of an idle order's pay (stars and site included) for
+  each unit shipped, times (50 + the country's goodwill)%: x0.5 at goodwill
+  0, x1.5 at 100. The cash counts as earned, so it counts towards stars.
+  Then goodwill moves: +`wmsGoodwillGain` (3) for on time and in full; a
+  late shipment loses `wmsGoodwillLatePerMin` (4) a started minute late, at
+  most `wmsGoodwillLateMax` (20); a short one loses `wmsGoodwillShortMax`
+  (15) times its share of units short. The bonus is small next to the
+  trucks: the RULES 11 targets hold (first sale 36.2 min, was 36.3).

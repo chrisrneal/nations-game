@@ -10,6 +10,7 @@ import { Floor } from './ui/Floor.tsx';
 import { SellSheet } from './ui/SellSheet.tsx';
 import { SettingsSheet } from './ui/SettingsSheet.tsx';
 import { StarsSheet } from './ui/StarsSheet.tsx';
+import { formatCash } from './ui/format.ts';
 import { WarehouseStore } from './ui/store.ts';
 import { TopBar } from './ui/TopBar.tsx';
 import { UpgradeSheet } from './ui/UpgradeSheet.tsx';
@@ -61,6 +62,12 @@ export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedb
             const b = update.view.boosts.find((x) => x.id === e.payload.boost);
             feedback?.cue('boost');
             if (b !== undefined) setToast(`${b.name}! ${b.effect}`);
+          } else if (e.type === 'wmsShipped' && e.payload.priority === 1) {
+            const p = e.payload;
+            const how = p.onTime && p.inFull ? 'on time, in full' : !p.onTime ? 'late' : 'short';
+            setToast(`O-${p.order} to ${p.iso} shipped ${how}${p.cents > 0 ? ` · +${formatCash(p.cents)}` : ''}`);
+          } else if (e.type === 'wmsMissed' && e.payload.priority <= 2) {
+            setToast(`O-${e.payload.order} to ${e.payload.iso} (P${e.payload.priority}) missed its cutoff`);
           } else if (e.type === 'bought') {
             const text = unlockText(e.payload.upgrade, e.payload.level, update.view, checkpoints.current);
             feedback?.cue(text === null ? 'buy' : 'unlock');

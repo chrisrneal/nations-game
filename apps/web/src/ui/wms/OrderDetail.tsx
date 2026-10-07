@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode } from 'react';
 import type { WmsEventView, WmsLineView, WmsOrderView } from '@warehouse/contracts';
 import { clock, countdown } from './grid.ts';
+import { payFactor } from './Countries.tsx';
 import { StatusChip } from './OrderGrid.tsx';
 
 const PRIORITY_NAMES = ['', 'Expedite', 'High', 'Standard'] as const;
@@ -70,6 +71,8 @@ export function OrderDetail(props: {
   events: readonly WmsEventView[];
   tick: number;
   tickMs: number;
+  /** The destination country's goodwill (slice 8), or null if unknown. */
+  goodwill: number | null;
   onBack: () => void;
   selectedLine: number | null;
   onSelectLine: (no: number) => void;
@@ -100,6 +103,10 @@ export function OrderDetail(props: {
               <span aria-hidden="true">{o.dest.flag}</span> {o.dest.iso} · {o.dest.name}
             </Field>
             <Field label="Customer">{o.source}</Field>
+            <Field label="Goodwill" className={props.goodwill !== null && props.goodwill < 40 ? 'late' : undefined}>
+              {props.goodwill === null ? '—' : `${props.goodwill} · pay ${payFactor(props.goodwill)}`}
+            </Field>
+            <Field label="Expedited">{o.expedited ? 'Yes' : 'No'}</Field>
             <Field label="Priority" className={`pri-${o.priority}`}>
               P{o.priority} {PRIORITY_NAMES[o.priority]}
             </Field>

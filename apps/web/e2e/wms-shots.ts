@@ -84,6 +84,12 @@ async function main(): Promise<void> {
       await shot(page, out, 'release');
       await page.getByRole('button', { name: 'Done' }).tap();
     }
+    if (await page.getByTestId('wms-tab-countries').isVisible().catch(() => false)) {
+      await page.getByTestId('wms-tab-countries').tap();
+      await page.waitForTimeout(400);
+      await shot(page, out, 'countries');
+      await page.getByTestId('wms-tab-orders').tap();
+    }
     const feed = page.getByTestId('wms-feed-toggle');
     if (await feed.isVisible().catch(() => false)) {
       await feed.tap();
