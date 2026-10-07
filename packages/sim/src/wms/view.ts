@@ -37,7 +37,10 @@ function orderView(o: WmsOrder, contracts: readonly string[], pickerOn: Readonly
   let unitsPicked = 0;
   let shortUnits = 0;
   let linesPicked = 0;
+  let linesTotal = 0;
   for (const l of o.lines) {
+    if (l.status === 'CANCELLED') continue;
+    linesTotal += 1;
     unitsOrdered += l.ordered;
     unitsPicked += l.picked;
     shortUnits += l.short;
@@ -53,7 +56,7 @@ function orderView(o: WmsOrder, contracts: readonly string[], pickerOn: Readonly
     priority: o.priority,
     wave: o.wave,
     status: o.status,
-    linesTotal: o.lines.length,
+    linesTotal,
     linesPicked,
     unitsOrdered,
     unitsPicked,
@@ -65,6 +68,7 @@ function orderView(o: WmsOrder, contracts: readonly string[], pickerOn: Readonly
     late: o.late,
     exception: !closed && (EXCEPTION_STATUSES.has(o.status) || shortUnits > 0 || o.late),
     open: !closed,
+    expedited: o.expedited,
     lines: lineViews(o, pickerOn),
   };
 }

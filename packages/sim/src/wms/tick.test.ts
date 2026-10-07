@@ -30,7 +30,7 @@ function line(no: number, sku: number, ordered: number): WmsLine {
 }
 
 function order(no: number, lines: WmsLine[], extra: Partial<WmsOrder> = {}): WmsOrder {
-  return { no, dest: 0, source: 0, priority: 3, wave: 0, status: 'NEW', lines, shipBy: 100_000, created: 0, next: 0, late: false, held: null, closed: 0, ...extra };
+  return { no, dest: 0, source: 0, priority: 3, wave: 0, status: 'NEW', lines, shipBy: 100_000, created: 0, next: 0, late: false, held: null, closed: 0, expedited: false, ...extra };
 }
 
 /** A quiet WMS: these orders and stock, no arrivals, waves or replenishment unless asked. */

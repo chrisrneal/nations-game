@@ -14,10 +14,11 @@ function Field(props: { label: string; children: ReactNode; className?: string |
   );
 }
 
-function LineRow(props: { line: WmsLineView }): ReactElement {
+function LineRow(props: { line: WmsLineView; selected: boolean; onSelect: (no: number) => void }): ReactElement {
   const l = props.line;
+  const className = [l.short > 0 ? 'short' : '', l.status === 'CANCELLED' ? 'cancelled' : ''].join(' ').trim();
   return (
-    <tr className={l.short > 0 ? 'short' : undefined}>
+    <tr className={className === '' ? undefined : className} aria-selected={props.selected} onClick={() => props.onSelect(l.no)}>
       <th scope="row" className="c-line num">
         {l.no}
       </th>
@@ -60,12 +61,23 @@ export function EventLines(props: { events: readonly WmsEventView[]; tickMs: num
 
 /**
  * One order (docs/wms-plan.md slice 4): a header summary, its lines with
- * shorts in red, and its own activity. `children` is the action bar
- * (slice 7). The log keeps the latest 200 events of the whole WMS, so an old
+ * shorts in red, and its own activity. `children` is the order's action bar
+ * and `lineActions` the chosen line's (slice 7); tapping a line chooses it. The log keeps the latest 200 events of the whole WMS, so an old
  * order's history may have scrolled out of it.
  */
-export function OrderDetail(props: { order: WmsOrderView | undefined; events: readonly WmsEventView[]; tick: number; tickMs: number; onBack: () => void; children?: ReactNode }): ReactElement {
+export function OrderDetail(props: {
+  order: WmsOrderView | undefined;
+  events: readonly WmsEventView[];
+  tick: number;
+  tickMs: number;
+  onBack: () => void;
+  selectedLine: number | null;
+  onSelectLine: (no: number) => void;
+  lineActions?: (line: WmsLineView) => ReactNode;
+  children?: ReactNode;
+}): ReactElement {
   const { order: o, tickMs } = props;
+  const chosen = o?.lines.find((l) => l.no === props.selectedLine);
   return (
     <div className="wms-detail" data-testid="wms-detail">
       <div className="wms-detail-bar">
@@ -128,11 +140,12 @@ export function OrderDetail(props: { order: WmsOrderView | undefined; events: re
               </thead>
               <tbody>
                 {o.lines.map((l) => (
-                  <LineRow key={l.no} line={l} />
+                  <LineRow key={l.no} line={l} selected={props.selectedLine === l.no} onSelect={props.onSelectLine} />
                 ))}
               </tbody>
             </table>
           </div>
+          {chosen !== undefined && props.lineActions?.(chosen)}
           <h4 className="wms-subhead">Activity</h4>
           {props.events.length > 0 && <EventLines events={props.events} tickMs={tickMs} />}
           <p className="wms-note">The log keeps the latest 200 events of the whole WMS; older ones for this order have scrolled out.</p>

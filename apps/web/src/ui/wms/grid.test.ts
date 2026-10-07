@@ -23,6 +23,7 @@ function row(no: number, extra: Partial<WmsOrderView> = {}): WmsOrderView {
     late: false,
     exception: false,
     open: true,
+    expedited: false,
     lines: [],
     ...extra,
   };

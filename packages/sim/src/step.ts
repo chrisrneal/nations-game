@@ -7,6 +7,7 @@ import { expressChanceBp } from './perks.ts';
 import { boostProblem, boostTicks, cashCap, derive, lockReason, orderBpAt, rushed, starsFor, turnTicksFor, upgradeCost, type Derived } from './rules.ts';
 import { arrivingDock, arrivingPo, openWarehouse } from './state.ts';
 import { WAREHOUSE_TUNABLES as T } from './tunables.ts';
+import { wmsAction } from './wms/actions.ts';
 import { cloneWms, wmsStep, type MWms } from './wms/tick.ts';
 
 const BP = 10_000;
@@ -291,6 +292,17 @@ function apply(m: MState, command: WarehouseCommand, events: Sink): boolean {
       return false;
     case 'sell':
       return sell(m, events);
+    case 'wms': {
+      const d = derive(m);
+      const result = wmsAction(m.wms, command.payload, m.tick, m.cash, mulDiv(d.payCents, d.payMulBp, BP));
+      if (!result.ok) {
+        reject(m, events, 'wms', result.reason);
+        return false;
+      }
+      m.cash -= result.cents;
+      emit(events, { tick: m.tick, type: 'wms', payload: { action: command.payload.action, order: result.order, cents: result.cents } });
+      return false;
+    }
   }
 }
 

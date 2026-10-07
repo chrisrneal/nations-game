@@ -18,6 +18,8 @@ export type Migration = (save: Record<string, unknown>) => Record<string, unknow
  * - 2 to 3 (W5, WMS slice 2): the WMS gains clocks, counters and per-order
  *   timers. A version-2 WMS never moved, so it is generated again the same
  *   way, which gives the same orders and stock with the new fields.
+ * - 3 to 4 (W5, WMS slice 7): every order gains `expedited: false`; the WMS
+ *   is otherwise kept exactly as saved.
  *
  * Old rules are not kept, so a migration changes only the snapshot, and
  * `migrateWarehouseSave` replays the history since it under today's rules and
@@ -35,6 +37,11 @@ export const WAREHOUSE_MIGRATIONS: Readonly<Record<number, Migration>> = {
     const snapshot = save.snapshot as Omit<WarehouseState, 'wms'>;
     const wms = createWms({ seed: snapshot.rng.seed + snapshot.site, tick: snapshot.tick, contract: snapshot.levels.contract });
     return { ...save, schemaVersion: 3, snapshot: { ...snapshot, schemaVersion: 3, wms } };
+  },
+  3: (save) => {
+    const snapshot = save.snapshot as WarehouseState;
+    const orders = snapshot.wms.orders.map((o) => ({ ...o, expedited: false }));
+    return { ...save, schemaVersion: 4, snapshot: { ...snapshot, schemaVersion: 4, wms: { ...snapshot.wms, orders } } };
   },
 };
 

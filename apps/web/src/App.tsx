@@ -140,7 +140,7 @@ export function App(props: { host: WarehouseHost; install?: InstallPrompt; feedb
         </Pier>
       </Floor>
       <BottomBar view={view} store={store} onUpgrades={() => setSheet('upgrades')} onSell={() => setSheet('sell')} onBoost={boost} onWms={() => setSheet('wms')} />
-      {sheet === 'wms' && <WmsScreen store={store} onClose={close} />}
+      {sheet === 'wms' && <WmsScreen store={store} host={host} onClose={close} />}
       {sheet === 'upgrades' && <UpgradeSheet view={view} store={store} onBuy={buy} onSell={() => setSheet('sell')} onClose={close} />}
       {sheet === 'sell' && (
         <SellSheet

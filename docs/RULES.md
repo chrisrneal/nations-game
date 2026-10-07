@@ -637,3 +637,23 @@ picking, stock or pacing in RULES 3-11.
   MISS once and is late. A shipped order is on time if it was never late and
   in full if no line is short; on time and in full is OTIF. Totals since
   opening and per destination country are kept for the KPI strip.
+- **Player actions** (a `wms` command; each logs an event, and a refused one
+  says why):
+  - *Release*: chosen NEW orders go out at once as one wave (WAVE REL); the
+    automatic wave timer is unchanged.
+  - *Priority*: P1, P2 or P3 for an open order (PRIO); pickers take lines by
+    priority from then on.
+  - *Hold* and *release hold*: an order ON HOLD is not allocated, picked or
+    moved on, and its pickers leave it (a line half picked waits again, its
+    count undone); its cutoff still runs. Released, it goes back to where it
+    was (PICKING goes back to ALLOCATED) and timed moves start their delay
+    again (HOLD, UNHOLD).
+  - *Assign*: a chosen picker drops what it is doing (that line waits again)
+    and starts the chosen allocated line (ASSIGN, PICK START).
+  - *Cancel a line*: a line not yet picked, on an order not yet picked, is
+    CANCELLED: its allocation goes back to stock and it no longer counts.
+    Cancelling every line cancels the order (CANCEL).
+  - *Expedite*: once per order, not after its cutoff has passed, for the pay
+    of `wmsExpediteCostOrders` (30) orders at today's pay: the order becomes
+    P1 and moves to a later, faster truck, `wmsExpediteLeadTicks` (5 min)
+    added to its ship-by (EXPEDITE).

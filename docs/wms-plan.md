@@ -131,7 +131,13 @@ WMS catalog, so State stays compact and hashable.
    countdown. Ship-by tightened to 3-8 min for P3 (idle: ~93% on time, ~80%
    OTIF) so priorities and expedites matter.
 7. **Player actions.** Release a wave, change priority, hold/unhold, reassign a
-   picker, cancel a line, expedite for cash; each logs an event. STATUS: TODO
+   picker, cancel a line, expedite for cash; each logs an event. STATUS: DONE.
+   A `wms` command (`WmsAction` in contracts; shape check in `commands.ts`)
+   applied by `wmsAction` in `packages/sim/src/wms/actions.ts`; the step
+   charges the expedite and emits a `wms` event or `rejected`. Orders gained
+   `expedited` (save schema 4); lines can be CANCELLED. UI: `Actions.tsx`
+   (priority, hold, expedite; per line, picker buttons and a two-tap cancel;
+   the Release… mode with its bar). RULES 16 lists the rules.
 8. **Feedback loop.** OTIF and shipping results into customer goodwill per
    country and pay; OTIF per country on screen; toasts for key ships and
    misses. STATUS: TODO
