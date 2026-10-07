@@ -125,7 +125,11 @@ WMS catalog, so State stays compact and hashable.
    the grid and the detail; collapsed it shows the latest event and the
    count of exceptions in the log; open, 52% of the screen.
 6. **KPI strip.** Open orders, lines/hr, fill rate, OTIF, exceptions, pickers
-   busy/total. STATUS: TODO
+   busy/total. STATUS: DONE. `KpiStrip.tsx` from `view.wms.kpis` (lines/hr
+   over the last 4 minutes, `recent` buckets); fill under 95%, OTIF under
+   90% and any exception show red. The header shows the next wave's
+   countdown. Ship-by tightened to 3-8 min for P3 (idle: ~93% on time, ~80%
+   OTIF) so priorities and expedites matter.
 7. **Player actions.** Release a wave, change priority, hold/unhold, reassign a
    picker, cancel a line, expedite for cash; each logs an event. STATUS: TODO
 8. **Feedback loop.** OTIF and shipping results into customer goodwill per

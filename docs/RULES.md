@@ -421,8 +421,8 @@ disagree.
 | `wmsQtyMin` | 4 | 1 | 50 | WMS: fewest units on an order line. |
 | `wmsQtyMax` | 48 | 2 | 500 | WMS: most units on an order line. |
 | `wmsPickers` | 6 | 1 | 20 | WMS: pickers in the pool (Picker 01..N); each works one line at a time. |
-| `wmsCutoffMinTicks` | 2400 | 240 | 14400 | WMS: shortest time to ship-by of a Standard (P3) order (10 min); High (P2) gets 3/4 of that, Expedite (P1) half. |
-| `wmsCutoffMaxTicks` | 7200 | 480 | 28800 | WMS: longest time to ship-by of a Standard order (30 min). |
+| `wmsCutoffMinTicks` | 720 | 240 | 14400 | WMS: shortest time to ship-by of a Standard (P3) order (3 min); High (P2) gets 3/4 of that, Expedite (P1) half. With 3-8 min an idle WMS ships about 93% on time and 80% OTIF (seeds 1-8, 2 h): misses happen, and priorities and expedites can save them. |
+| `wmsCutoffMaxTicks` | 1920 | 480 | 28800 | WMS: longest time to ship-by of a Standard order (8 min). |
 | `wmsExpediteChanceBp` | 1000 | 0 | 5000 | WMS: chance a new order is P1 Expedite (10%). |
 | `wmsHighChanceBp` | 2500 | 0 | 5000 | WMS: chance a new order is P2 High (25%); the rest are P3 Standard. |
 | `wmsStockCoverMinPct` | 60 | 0 | 100 | WMS: least stock a SKU opens with, as % of the units ordered of it: under 100 some lines will be short. |
@@ -592,7 +592,7 @@ picking, stock or pacing in RULES 3-11.
   source the current contract level, status NEW, no wave. Priority: P1
   Expedite `wmsExpediteChanceBp` (10%), P2 High `wmsHighChanceBp` (25%), else
   P3 Standard. Ship-by is a lead time drawn in
-  `[wmsCutoffMinTicks, wmsCutoffMaxTicks]` (10-30 min) for P3, three
+  `[wmsCutoffMinTicks, wmsCutoffMaxTicks]` (3-8 min) for P3, three
   quarters of a draw for P2, half for P1.
 - **Lines.** 1 to `wmsLinesMax` (5) lines of different SKUs, each
   `wmsQtyMin`-`wmsQtyMax` units (4-48), status OPEN.

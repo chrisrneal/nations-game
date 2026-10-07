@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import type { WarehouseStore } from '../store.ts';
-import { FILTERS, filterCounts, matches, nextSort, sortOrders, type Sort, type SortKey, type WmsFilter } from './grid.ts';
+import { FILTERS, countdown, filterCounts, matches, nextSort, sortOrders, type Sort, type SortKey, type WmsFilter } from './grid.ts';
 import { ActivityFeed } from './ActivityFeed.tsx';
+import { KpiStrip } from './KpiStrip.tsx';
 import { OrderDetail } from './OrderDetail.tsx';
 import { OrderGrid, type GridScroll } from './OrderGrid.tsx';
 import { useWms } from './useWms.ts';
@@ -56,7 +57,13 @@ export function WmsScreen(props: { store: WarehouseStore; onClose: () => void })
           ‹ Floor
         </button>
         <h2 className="wms-title">WMS · Orders</h2>
+        {live !== null && (
+          <span className="wms-wave" data-testid="wms-next-wave">
+            Wave in {countdown(live.wms.nextWaveIn, live.tickMs)}
+          </span>
+        )}
       </header>
+      {live !== null && <KpiStrip kpis={live.wms.kpis} />}
       {live === null ? (
         <p className="wms-empty">Connecting…</p>
       ) : (
