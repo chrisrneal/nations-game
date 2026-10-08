@@ -44,7 +44,7 @@ import {
   trailerCode,
   workerCode,
 } from './catalog.ts';
-import { inboundUnits, waitingUnits } from './inbound.ts';
+import { binFullUnits, inboundUnits, waitingUnits } from './inbound.ts';
 import type { MWms } from './mutable.ts';
 import { WMS_LABOR_MODES, WMS_PICK_RULES, WMS_RELEASE_MODES, crewNeeds, doorCost, hireCost, shipDoorCost, waveChoices } from './policy.ts';
 
@@ -331,6 +331,7 @@ function closedLate(w: WmsState, posLate: number): number {
 function inventoryView(w: WmsState): { stock: WmsStockView[]; inventoryKpis: WmsInventoryKpis } {
   const waiting = waitingUnits(w);
   const { onOrder, dock } = inboundUnits(w);
+  const full = binFullUnits();
   const stock = w.inventory.map((s): WmsStockView => {
     const sku = skuAt(s.sku);
     const available = Math.max(0, s.onHand - s.allocated);
@@ -343,6 +344,7 @@ function inventoryView(w: WmsState): { stock: WmsStockView[]; inventoryKpis: Wms
       bin: binCode(s.bin),
       ...binPlace(s.bin),
       onHand: s.onHand,
+      full,
       allocated: s.allocated,
       available,
       onOrder: onOrder[s.sku] ?? 0,

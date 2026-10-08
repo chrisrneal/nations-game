@@ -324,13 +324,20 @@ describe('WMS inbound in the warehouse (W6)', () => {
     expect(all).toEqual(WMS_SKUS.map((_, i) => i));
   });
 
-  it('a new warehouse raises its first POs at its first WMS step', () => {
-    const s = createWarehouse({ seed: 4 });
-    expect(s.wms.pos).toEqual([]);
-    expect(s.wms.workers.filter((x) => x.role === 'receive')).toHaveLength(T.wmsStartReceivers.value);
-    const after = advanceMany(s, STEP);
-    expect(after.wms.pos.length).toBeGreaterThan(0);
-    expect(after.wms.events.some((e) => e.code === 'PO CRT')).toBe(true);
+  it('a new warehouse plans reorders at its first WMS step: a PO line for every SKU its opening orders take under the reorder point, and only those', () => {
+    let raised = 0;
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const s = createWarehouse({ seed });
+      expect(s.wms.pos).toEqual([]);
+      expect(s.wms.workers.filter((x) => x.role === 'receive')).toHaveLength(T.wmsStartReceivers.value);
+      const waiting = waitingUnits(s.wms);
+      const under = s.wms.inventory.filter((x) => x.onHand - (waiting[x.sku] ?? 0) < ROP).map((x) => x.sku);
+      const after = advanceMany(s, STEP);
+      expect(after.wms.pos.flatMap((p) => p.lines.map((l) => l.sku)).sort((a, b) => a - b)).toEqual(under);
+      expect(after.wms.events.some((e) => e.code === 'PO CRT')).toBe(under.length > 0);
+      raised += after.wms.pos.length;
+    }
+    expect(raised).toBeGreaterThan(0);
   });
 
   it('over 20 minutes stock flows in: POs close, cycle counts run, units are picked out, and nothing goes negative', () => {

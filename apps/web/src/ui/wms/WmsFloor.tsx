@@ -239,8 +239,7 @@ function drawStill(ctx: CanvasRenderingContext2D, l: FloorLayout, w: WmsView, pe
   ctx.moveTo(l.yard.left, l.dockLane + 6.5);
   ctx.lineTo(l.width - 8, l.dockLane + 6.5);
   ctx.stroke();
-  // The racks: every bay faint, the stocked bins filled to their stock (bottom up), coloured by status.
-  const deepest = Math.max(200, ...w.stock.map((s) => s.onHand));
+  // The racks: every bay faint, each SKU's bay filled bottom up to its stock against its full mark (W11), coloured by status.
   for (let a = 0; a < l.walk.length; a++) {
     label(ctx, String.fromCharCode(65 + a), l.x0 - 9, ((l.rackTop[a] ?? 0) + (l.walk[a] ?? 0)) / 2 + 1, C.label, 9, 'center');
     ctx.fillStyle = C.bay;
@@ -258,7 +257,7 @@ function drawStill(ctx: CanvasRenderingContext2D, l: FloorLayout, w: WmsView, pe
   }
   for (const s of w.stock) {
     const cell = binCell(l, s.aisle, s.bay);
-    const h = (cell.bottom - cell.top) * Math.min(1, s.onHand / deepest);
+    const h = (cell.bottom - cell.top) * Math.min(1, s.onHand / Math.max(1, s.full));
     ctx.fillStyle = stockColour(s);
     ctx.fillRect(cell.left, cell.bottom - Math.max(s.onHand > 0 ? 1.5 : 0, h), cell.right - cell.left, Math.max(s.onHand > 0 ? 1.5 : 0, h));
     if (s.status !== 'OK') stroke(ctx, { left: cell.left - 1, top: cell.top - 1, right: cell.right + 1, bottom: cell.bottom + 1 }, stockColour(s));

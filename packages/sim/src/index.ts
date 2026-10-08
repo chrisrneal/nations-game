@@ -25,6 +25,7 @@ export {
   WMS_AISLES,
   WMS_AISLE_GAP_BAYS,
   WMS_BAYS,
+  WMS_BINS_PER_BAY,
   WMS_CUSTOMERS,
   WMS_DESTINATIONS,
   WMS_FIRST_ORDER_NO,
@@ -35,6 +36,7 @@ export {
   binPlace,
   customerAt,
   destinationAt,
+  familyOf,
   orderCode,
   poCode,
   skuAt,
@@ -47,5 +49,6 @@ export {
   type WmsSupplier,
 } from './wms/catalog.ts';
 export { createWms } from './wms/generate.ts';
+export { binFullUnits } from './wms/inbound.ts';
 export { WMS_PICK_RULES, WMS_RELEASE_MODES, defaultPolicy, doorCost, hireCost, shipDoorCost } from './wms/policy.ts';
 export { PICK_RULE_NAMES, RELEASE_NAMES, eventText, wmsView } from './wms/view.ts';

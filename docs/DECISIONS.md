@@ -1239,3 +1239,68 @@ cuts.
 back W9's volume; `wmsStartPickers` 6 and `wmsStartReceivers` 3 the crew;
 `wmsTrailerTicks` 60 with `wmsTrailerUnits` 2000 makes trailers leave every
 15 minutes with room for anything, close to the old timers.
+
+
+## W11 - A SKU in every bay: 80 SKUs, a warehouse that opens stocked, and bins drawn against a full mark
+**Status.** Accepted, 2026-10-08, at the owner's request ("The warehouse
+barely gets filled, come on now."). As for W3-W10, the owner asked for it
+directly, so this session wrote the record and updated the affected parts of
+docs/RULES.md.
+**Reading.** The floor draws 80 rack bays (four aisles of 20), but the
+warehouse stocked only 16 SKUs, one bin each, so 64 bays were always empty
+and the 16 that held stock were drawn about half full against whichever bin
+was deepest: measured on seeds 1-3 over 12 warehouse hours, the painted
+share of the racks was 5-15%. "Barely gets filled" is read as the racks, not
+the trailers (64% full, W10) or demand (fixed, docs/GAPS.md): the warehouse
+should look like a warehouse full of stock, and the floor must stay the
+truth (pillar 1), so the fix is more stock in the sim, not fuller drawing.
+**Decision.**
+- *Catalogue.* 80 SKUs, one for every bay: the sixteen product families of
+  before, five kinds each (`WMS_SKUS` is built from `WMS_FAMILIES`). SKU `i`
+  is kind `floor(i / 16)` of family `i % 16`, so SKUs 0-15 keep their codes
+  and names, and every aisle holds some of each family. A supplier supplies
+  its families' SKUs; still 8 suppliers and at most one PO each a run.
+- *Bins.* SKU `i` sits in bay `i` (a bin in `[8i, 8i + 7]`), replacing the
+  37-bin spread: every bay of every aisle holds a SKU.
+- *Stock.* A bin's **full mark** is the level reorder planning tops it up to,
+  `wmsReorderUnits + wmsReplenUnits` (420 units, `binFullUnits`). A new
+  warehouse opens every SKU at `wmsStockOpenMinPct`-`wmsStockOpenMaxPct`
+  (50-100%) of it (the old rule stocked 60-180% of the sample orders' units,
+  about 25 units a SKU at 80 SKUs: empty racks). The reorder point and lot
+  stay as W10 set them, now per SKU over 80 SKUs: each SKU is reordered
+  about every day and a half, and the dock sees as many PO lines as before.
+  A sweep of reorder point 100-180 and lot 200-300 kept every target; the
+  W10 values give the fullest racks.
+- *View and floor.* `WmsStockView` gains `full`; the floor draws each bay's
+  stock against it (capped at full) instead of against the deepest bin.
+- *Report.* RULES 11 gains "racks filled": every bay's stock against its
+  full mark, averaged over the bays at a look every warehouse hour, 55% or
+  more on average and 35% or more at the emptiest look of any seed.
+- *Saves* are schema 10: a version-9 warehouse keeps its sixteen SKUs, bins
+  and stock as they are; the 64 new SKUs take the bays nobody uses (aisle A
+  first, the first bin of each) and arrive at their full mark. Tested with a
+  real version-9 save the W10 build wrote.
+**Measured** (`npm run harness -- report`, seeds 1-8, 2 h, an untouched
+warehouse): racks filled 70% on average (65% at the emptiest look; the
+painted share of the floor was 5-15% before), OTIF 88% (84% at W10), fill
+98% (96%), pickers working 62%, dock crew 47%, $757 a warehouse hour, 219
+POs in (as before). Catch-up of 8 hours: the 40-worker benchmark 301 ms in
+Node against 303 ms for the W10 build on the same machine. Phone check
+55/55 (the busy floor at 59 fps with the CPU slowed 4x; 10 hours away
+reopens in 1.4 s).
+**Why.** The racks are most of the floor, and an empty warehouse reads as a
+broken one. A SKU a bay is the simplest truthful way to fill them: the sim
+holds the stock the screen shows. Drawing against a fixed full mark makes a
+bar mean the same thing in every bay and lets a player see a bin running
+down to its reorder point.
+**Cost.** Deeper stock makes shortages rarer: fill rises from 96% to 98% and
+OTIF from 84% to 88%, so stock-outs, and the plan choices that matter most
+under them, come up less (stock still costs nothing, docs/GAPS.md). Each
+SKU is cycle counted five times less often (every 40 warehouse hours). The
+Stock page lists 80 rows. A save migration that adds stock to the owner's
+warehouse for free. The new SKUs' names are design data, not a real
+catalogue.
+**Reversing it.** `WMS_SKUS` built from one kind per family brings back 16
+SKUs (with the bins they then take, bays 0-15); `wmsStockOpenMinPct` 10
+with `wmsStockOpenMaxPct` 40 opens a thin warehouse. A lower
+`wmsReorderUnits` (100) runs the racks emptier (65%) without hurting fill.

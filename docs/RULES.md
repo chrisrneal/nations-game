@@ -59,16 +59,21 @@ closed, up to a cap. Single player, offline-first, no backend.
 
 - **Seed.** Everything is drawn from the WMS's own seeded stream, from the
   warehouse seed: the same seed opens the same warehouse.
-- **SKUs and bins.** 16 SKUs (`WMS_SKUS`), each in one bin; SKU `i` sits in a
-  bin in `[37i, 37i + 36]`, shown aisle-bay-level+position (`A-03-2B`). Bins
-  sit in four aisles A-D of 20 bays (bin `160a + 8(b-1) + k` is aisle `a`,
-  bay `b`).
+- **SKUs and bins** (W11). 80 SKUs (`WMS_SKUS`), one for every bay: sixteen
+  product families (grain, rice, fertiliser, coffee, steel, copper, lithium,
+  LNG parts, solar, batteries, chips, medical kits, cold chain, pharmacy,
+  water, textiles) of five kinds each. SKU `i` is kind `floor(i / 16)` of
+  family `i % 16` (SKUs 0-15 are the sixteen stocked before W11), and its
+  supplier is its family's. Each SKU is in one bin, in bay `i`: a bin in
+  `[8i, 8i + 7]`, shown aisle-bay-level+position (`A-03-2B`). Bins sit in
+  four aisles A-D of 20 bays (bin `160a + 8(b-1) + k` is aisle `a`, bay `b`),
+  so every bay of every aisle holds a SKU.
 - **Sample orders.** `wmsSampleOrdersMin`-`wmsSampleOrdersMax` (20-30) NEW
   orders, numbered from O-10234 (section 4 says how orders are drawn).
-- **Stock.** Each SKU ordered is stocked at a random
-  `wmsStockCoverMinPct`-`wmsStockCoverMaxPct` (60-180%) of the units ordered
-  of it, rounded down, so some lines will run short; a SKU nobody ordered
-  holds `wmsQtyMin`-`wmsQtyMax` units.
+- **Stock** (W11). Each bin has a **full mark**, the level reorder planning
+  tops it up to: `wmsReorderUnits` plus `wmsReplenUnits` (420 units). Each
+  SKU opens at a random `wmsStockOpenMinPct`-`wmsStockOpenMaxPct` (50-100%)
+  of it, rounded down, so the racks open well stocked.
 - **Crew.** `wmsStartPickers` (14) pickers, W01-W14, and `wmsStartReceivers`
   (6) on the dock, W15-W20, all idle at the pick-and-drop point by the dock,
   with no tasks and a blank record. The default plan (section 8).
@@ -154,7 +159,8 @@ closed, up to a cap. Single player, offline-first, no backend.
   on open purchase orders not yet in the bin, minus the units order lines
   wait for (lines not yet given stock, on orders not yet past picking, NEW
   orders included). A SKU whose position is under the reorder point
-  `wmsReorderUnits` (80) is ordered up to it plus `wmsReplenUnits` (120). Each
+  `wmsReorderUnits` (180) is ordered up to its full mark, the reorder point
+  plus `wmsReplenUnits` (240), 420 units (W11). Each
   SKU has one supplier (8 suppliers, `WMS_SUPPLIERS`); a run raises one PO per
   supplier, numbered from PO-50001 (PO CRT).
 - **Dock appointments** (W8). The warehouse day is cut into appointment slots
@@ -349,8 +355,8 @@ A `wms` command; each logs an event, and a refused one says why.
 - **Floor** (W7, W8). Drawn only from the WMS View. Inbound across the top:
   the trucks on the road (a count), the yard (ARRIVED POs), each dock door
   with the PO being received and its % counted in. The racks: aisles A-D of
-  20 bays, every SKU's bin filled to its stock (green OK, amber LOW, red OUT
-  or SHORT). Every worker is a numbered disc that walks the route the sim
+  20 bays, a SKU in every bay (W11), each filled bottom up to its stock
+  against its bin's full mark (green OK, amber LOW, red OUT or SHORT). Every worker is a numbered disc that walks the route the sim
   times and arrives when it says: pickers blue walking, green picking (with
   an arc for the share of the task done; a gold or blue ring for a P1 or P2
   order), the dock crew orange at the door of the truck they count (with an
@@ -412,16 +418,17 @@ A `wms` command; each logs an event, and a refused one says why.
   holds the targets on every build): an untouched warehouse with the default
   plan, seeds 1-8, 2 hours.
 
-| Target | Measured (seeds 1-8, 2 h, W10) |
+| Target | Measured (seeds 1-8, 2 h, W11) |
 | --- | --- |
-| On time and in full 75-95%: misses happen, and the plan and the order actions can save them | 84% (82-85%; on time 95-98%) |
-| Fill rate 95% or more | 96% |
-| Pickers working (not walking or idle) 50-90% of the time | 61% |
-| Dock crew working 5-80% of the time | 48% |
-| The first hire paid for by 2-10 warehouse hours of shipments | 2.8 ($717 a warehouse hour) |
+| On time and in full 75-95%: misses happen, and the plan and the order actions can save them | 88% (84-91%; on time 93-98%) |
+| Fill rate 95% or more | 98% |
+| Pickers working (not walking or idle) 50-90% of the time | 62% |
+| Dock crew working 5-80% of the time | 47% |
+| Racks filled (W11): every bay's stock against its full mark (capped at full), averaged over the bays at a look every warehouse hour, 55% or more; the emptiest look of any seed 35% or more | 70%; emptiest 65% |
+| The first hire paid for by 2-10 warehouse hours of shipments | 2.6 ($757 a warehouse hour) |
 
 The report also lists, per seed, the trailers that left and how full they
-were (W10: about 337 trailers in 120 warehouse hours, 64% full).
+were (W11: about 338 trailers in 120 warehouse hours, 64% full).
 
 ## 12. Tunables
 
@@ -447,8 +454,8 @@ disagree.
 | `wmsCutoffMaxTicks` | 1920 | 480 | 28800 | WMS: longest time to ship-by of a Standard order (8 warehouse hours). |
 | `wmsExpediteChanceBp` | 1000 | 0 | 5000 | WMS: chance a new order is P1 Expedite (10%). |
 | `wmsHighChanceBp` | 2500 | 0 | 5000 | WMS: chance a new order is P2 High (25%); the rest are P3 Standard. |
-| `wmsStockCoverMinPct` | 60 | 0 | 100 | WMS: least stock a SKU opens with, as % of the units ordered of it: under 100 some lines will be short. |
-| `wmsStockCoverMaxPct` | 180 | 100 | 400 | WMS: most stock a SKU opens with, as % of the units ordered of it. |
+| `wmsStockOpenMinPct` | 50 | 0 | 100 | WMS (W11): least stock a SKU opens with, as % of its full mark (the reorder point plus wmsReplenUnits): a new warehouse opens with every bay at least half full. |
+| `wmsStockOpenMaxPct` | 100 | 0 | 200 | WMS (W11): most stock a SKU opens with, as % of its full mark. |
 | `wmsEventsKept` | 400 | 50 | 1000 | WMS: activity events kept in State (the oldest drop off); bounds the save and the feed. 400 since W10: three times the orders log three times the events. |
 | `wmsStepTicks` | 4 | 1 | 8 | WMS: it steps once every this many ticks (1 s, a warehouse minute): the clock moves a minute a step, and 8 h of catch-up stays cheap. |
 | `wmsPickMilliPerSec` | 1100 | 200 | 4000 | WMS: milli-units a picker picks a second once at the bin (1.1). 0.75 until W10; raised with three times the orders so fourteen pickers keep up with a little to spare: an untouched warehouse ships about 82% OTIF with pickers working about 61% of the time (W10 report, seeds 1-8, 2 h). |
@@ -468,8 +475,8 @@ disagree.
 | `wmsShortPickChanceBp` | 300 | 0 | 2000 | WMS: chance a picker finds a bin short of what was allocated (3%): a SHORT PICK of 1 unit up to the whole line. |
 | `wmsWalkTicksPerBay` | 1 | 0 | 8 | WMS (W7): ticks a picker takes to walk past one bay (4 bays a second). A line across the warehouse is about 30 bays (8 s); between bins in one aisle a few seconds. Walking is why the nearest-bin pick order picks more lines an hour. |
 | `wmsReplenTicks` | 240 | 40 | 2400 | WMS: ticks between reorder planning runs (a warehouse hour, W6); the first runs at opening. |
-| `wmsReorderUnits` | 180 | 0 | 500 | WMS: reorder point: a SKU whose position (available + inbound - units waiting) is under this gets a PO line (W6). 80 until W10; raised with three times the orders, so fill stays at 96% (at 160 it fell to 95%). |
-| `wmsReplenUnits` | 240 | 10 | 1000 | WMS: a PO line orders the SKU up to the reorder point plus this many units (W6; 120 until W10). |
+| `wmsReorderUnits` | 180 | 0 | 500 | WMS: reorder point: a SKU whose position (available + inbound - units waiting) is under this gets a PO line (W6). 80 until W10; raised with three times the orders, so fill stays at 96% (at 160 it fell to 95%). Since W11 it is per SKU over 80 SKUs (16 before), so each SKU is reordered about every day and a half and the racks sit about 70% full (report, seeds 1-8, 2 h). |
+| `wmsReplenUnits` | 240 | 10 | 1000 | WMS: a PO line orders the SKU up to the reorder point plus this many units (W6; 120 until W10). The two together are a bin's full mark (W11), which the floor draws its stock against. |
 | `wmsGoodwillStart` | 50 | 0 | 100 | WMS: goodwill (0-100) every destination country starts at. |
 | `wmsExpediteLeadTicks` | 1200 | 0 | 7200 | WMS: an expedited order goes P1 and onto a later, faster truck: this much is added to its ship-by (5 warehouse hours). |
 | `wmsGoodwillGain` | 3 | 0 | 20 | WMS: goodwill a country gains when its order ships on time and in full. |
@@ -481,7 +488,7 @@ disagree.
 | `wmsDamageChanceBp` | 300 | 0 | 5000 | WMS inbound: chance some of a line arrives damaged (3%): written off, never put away. |
 | `wmsDamageMaxUnits` | 4 | 1 | 50 | WMS inbound: most units of a line that arrive damaged. |
 | `wmsKeepClosedPos` | 20 | 0 | 200 | WMS inbound: closed POs kept on the inbound grid; older ones drop off. |
-| `wmsCountTicks` | 120 | 20 | 2400 | WMS inventory (W6): ticks between cycle counts (30 s); each counts the next SKU in turn, so every SKU is counted every 8 min. |
+| `wmsCountTicks` | 120 | 20 | 2400 | WMS inventory (W6): ticks between cycle counts (30 s); each counts the next SKU in turn, so every SKU is counted about every 40 warehouse hours with 80 SKUs (W11; every 8 with 16). |
 | `wmsCountVarianceBp` | 1000 | 0 | 5000 | WMS inventory: chance a cycle count finds the bin differs from the system (10%); two in three are losses. |
 | `wmsCountVarianceMax` | 3 | 1 | 50 | WMS inventory: most units a cycle count adjusts by; a loss never takes allocated units. |
 | `wmsStartPickers` | 14 | 1 | 30 | WMS crew (W8): workers a new warehouse opens with on picking (W01..W14 since W10). Fourteen keep up with an order every 8 minutes with a little to spare. |
