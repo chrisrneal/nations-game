@@ -1,18 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { WmsState } from '@warehouse/contracts';
 import { hashState } from '../hash.ts';
 import { createWarehouse } from '../state.ts';
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
-import { WMS_BIN_SPREAD, WMS_CUSTOMERS, WMS_DESTINATIONS, WMS_FIRST_ORDER_NO, WMS_SKUS, binCode, destinationAt, orderCode, skuAt } from './catalog.ts';
+import { WMS_AISLES, WMS_BAYS, WMS_BINS_PER_BAY, WMS_CUSTOMERS, WMS_DESTINATIONS, WMS_FIRST_ORDER_NO, WMS_SKUS, WMS_SUPPLIERS, binCode, binPlace, destinationAt, familyOf, orderCode, skuAt } from './catalog.ts';
+import { binFullUnits } from './inbound.ts';
 import { createWms } from './generate.ts';
 
 const seeds = Array.from({ length: 50 }, (_, i) => i + 1);
-
-function demand(wms: WmsState): Map<number, number> {
-  const bySku = new Map<number, number>();
-  for (const order of wms.orders) for (const line of order.lines) bySku.set(line.sku, (bySku.get(line.sku) ?? 0) + line.ordered);
-  return bySku;
-}
 
 describe('WMS catalog', () => {
   it('formats order numbers, SKUs, bins and countries like a real WMS', () => {
@@ -27,6 +21,22 @@ describe('WMS catalog', () => {
     for (const d of WMS_DESTINATIONS) expect(d.iso).toMatch(/^[A-Z]{3}$/);
     expect(skuAt(0).code).toBe('GRN-0042');
     expect(destinationAt(WMS_DESTINATIONS.length).iso).toBe(WMS_DESTINATIONS[0]?.iso);
+  });
+
+  it('stocks a SKU for every bay (W11): sixteen families of five, the first sixteen the SKUs stocked before', () => {
+    expect(WMS_SKUS).toHaveLength(WMS_AISLES * WMS_BAYS);
+    expect(WMS_SKUS.slice(0, 3).map((s) => s.code)).toEqual(['GRN-0042', 'RCE-0025', 'FRT-0091']);
+    expect(WMS_SKUS[15]).toEqual({ code: 'TXT-0315', desc: 'Cotton textile roll' });
+    expect(WMS_SKUS[16]).toEqual({ code: 'GRN-0142', desc: 'Wheat grain 50 kg' });
+    expect(new Set(WMS_SKUS.map((s) => s.desc)).size).toBe(WMS_SKUS.length);
+    expect(familyOf(16)).toBe(0);
+    expect(familyOf(79)).toBe(15);
+  });
+
+  it('gives every SKU exactly one supplier, which supplies its whole family', () => {
+    const all = WMS_SUPPLIERS.flatMap((s) => s.skus);
+    expect([...all].sort((a, b) => a - b)).toEqual(WMS_SKUS.map((_, i) => i));
+    for (const s of WMS_SUPPLIERS) for (const sku of s.skus) for (const other of WMS_SKUS.keys()) if (familyOf(other) === familyOf(sku)) expect(s.skus).toContain(other);
   });
 });
 
@@ -95,35 +105,33 @@ describe('WMS sample order generator (slice 1)', () => {
     expect(counts[3]!).toBeGreaterThan(counts[2]!);
   });
 
-  it('stocks every SKU in its own bin, nothing allocated, and lines point at their SKU’s bin', () => {
+  it('stocks every SKU in its own bin, one SKU a bay so every bay of every aisle holds stock (W11), and lines point at their SKU’s bin', () => {
     for (const seed of seeds) {
       const wms = createWms({ seed, tick: 0 });
       expect(wms.inventory.map((s) => s.sku)).toEqual(WMS_SKUS.map((_, i) => i));
-      expect(new Set(wms.inventory.map((s) => s.bin)).size).toBe(WMS_SKUS.length);
       for (const s of wms.inventory) {
         expect(s.allocated).toBe(0);
-        expect(s.onHand).toBeGreaterThanOrEqual(0);
-        expect(Math.floor(s.bin / WMS_BIN_SPREAD)).toBe(s.sku);
+        expect(Math.floor(s.bin / WMS_BINS_PER_BAY)).toBe(s.sku);
       }
+      const bays = new Set(wms.inventory.map((s) => { const p = binPlace(s.bin); return `${p.aisle}-${p.bay}`; }));
+      expect(bays.size).toBe(WMS_AISLES * WMS_BAYS);
       for (const o of wms.orders) for (const line of o.lines) expect(line.bin).toBe(wms.inventory[line.sku]?.bin);
     }
   });
 
-  it('stocks each ordered SKU at 60-180% of what is ordered, so some lines will run short', () => {
-    let shortSkus = 0;
-    let coveredSkus = 0;
+  it(`opens every SKU at ${T.wmsStockOpenMinPct.value}-${T.wmsStockOpenMaxPct.value}% of its bin's full mark (W11): the racks open well stocked`, () => {
+    const full = binFullUnits();
+    let sum = 0;
+    let n = 0;
     for (const seed of seeds) {
-      const wms = createWms({ seed, tick: 0 });
-      for (const [sku, units] of demand(wms)) {
-        const onHand = wms.inventory[sku]?.onHand ?? -1;
-        expect(onHand).toBeGreaterThanOrEqual(Math.floor((units * T.wmsStockCoverMinPct.value) / 100));
-        expect(onHand).toBeLessThanOrEqual(Math.floor((units * T.wmsStockCoverMaxPct.value) / 100));
-        if (onHand < units) shortSkus += 1;
-        else coveredSkus += 1;
+      for (const s of createWms({ seed, tick: 0 }).inventory) {
+        expect(s.onHand).toBeGreaterThanOrEqual(Math.floor((full * T.wmsStockOpenMinPct.value) / 100));
+        expect(s.onHand).toBeLessThanOrEqual(Math.floor((full * T.wmsStockOpenMaxPct.value) / 100));
+        sum += s.onHand;
+        n += 1;
       }
     }
-    expect(shortSkus).toBeGreaterThan(0);
-    expect(coveredSkus).toBeGreaterThan(shortSkus);
+    expect(sum / n / full).toBeGreaterThan(0.7);
   });
 
   it('starts every worker idle at the dock, pickers first, and logs one ORD CRT per order with its units', () => {

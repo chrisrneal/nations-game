@@ -108,13 +108,14 @@ describe('WMS inbound and inventory view (W6)', () => {
   it('shows one inventory row per SKU with available, inbound and a status', () => {
     const view = warehouseView(advanceMany(createWarehouse({ seed: 6 }), 12 * 60 * 4));
     const { stock, inventoryKpis: k } = view.wms;
-    expect(stock).toHaveLength(16);
+    expect(stock).toHaveLength(80);
     for (const row of stock) {
+      expect(row.full).toBe(T.wmsReorderUnits.value + T.wmsReplenUnits.value);
       expect(row.available).toBe(Math.max(0, row.onHand - row.allocated));
       const expected = row.demand > row.available ? 'SHORT' : row.available === 0 ? 'OUT' : row.available < T.wmsReorderUnits.value ? 'LOW' : 'OK';
       expect(row.status).toBe(expected);
     }
-    expect(k.skus).toBe(16);
+    expect(k.skus).toBe(80);
     expect(k.onHand).toBe(stock.reduce((n, r) => n + r.onHand, 0));
     expect(k.low).toBe(stock.filter((r) => r.status !== 'OK').length);
     expect(k.accuracyPct).not.toBeNull();

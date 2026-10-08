@@ -2,7 +2,8 @@ import type { WmsEvent, WmsOrder, WmsState, WmsStock } from '@warehouse/contract
 import { dayAt } from '../clock.ts';
 import { mix32, seedRng } from '../rng.ts';
 import { WAREHOUSE_TUNABLES as T } from '../tunables.ts';
-import { WMS_BIN_SPREAD, WMS_DESTINATIONS, WMS_FIRST_ORDER_NO, WMS_FIRST_PO_NO, WMS_RATE_BUCKETS, WMS_SKUS } from './catalog.ts';
+import { WMS_BINS_PER_BAY, WMS_DESTINATIONS, WMS_FIRST_ORDER_NO, WMS_FIRST_PO_NO, WMS_RATE_BUCKETS, WMS_SKUS } from './catalog.ts';
+import { binFullUnits } from './inbound.ts';
 import { Roller, rollOrder, unitsOf } from './orders.ts';
 import { defaultPolicy, newWorker, openingShipDoors } from './policy.ts';
 
@@ -10,27 +11,25 @@ import { defaultPolicy, newWorker, openingShipDoors } from './policy.ts';
 const WMS_SALT = 0x574d5321;
 
 /**
- * A new warehouse's WMS (RULES 3): one bin per SKU, the opening crew
+ * A new warehouse's WMS (RULES 3): one bin per SKU, a SKU a bay (W11), the opening crew
  * (`wmsStartPickers` picking, then `wmsStartReceivers` on the dock), the
  * WMS's own operating plan (W7), the opening dock doors, the outbound doors
  * and their first trailers (W10), and 20-30 sample
- * orders from customers abroad, each logged as ORD CRT. Each SKU is stocked at
- * a random share of what is ordered of it, so some lines will run short.
+ * orders from customers abroad, each logged as ORD CRT. Each SKU opens at a
+ * random share of its bin's full mark (W11), so the racks open well stocked.
  * Seeded from `seed` on its own stream: the same seed gives the same WMS.
  */
 export function createWms(options: { readonly seed: number; readonly tick: number }): WmsState {
   const { tick } = options;
   const r = new Roller(seedRng(mix32(options.seed ^ WMS_SALT)));
-  const bins = WMS_SKUS.map((_, sku) => sku * WMS_BIN_SPREAD + r.int(0, WMS_BIN_SPREAD - 1));
+  const bins = WMS_SKUS.map((_, sku) => sku * WMS_BINS_PER_BAY + r.int(0, WMS_BINS_PER_BAY - 1));
   const count = r.int(T.wmsSampleOrdersMin.value, Math.max(T.wmsSampleOrdersMin.value, T.wmsSampleOrdersMax.value));
   const orders: WmsOrder[] = [];
   for (let i = 0; i < count; i++) orders.push(rollOrder(r, WMS_FIRST_ORDER_NO + i, tick, bins));
-  const ordered = WMS_SKUS.map(() => 0);
-  for (const order of orders) for (const line of order.lines) ordered[line.sku] = (ordered[line.sku] ?? 0) + line.ordered;
+  const full = binFullUnits();
   const inventory: WmsStock[] = bins.map((bin, sku) => {
-    const units = ordered[sku] ?? 0;
-    const onHand = units > 0 ? Math.floor((units * r.int(T.wmsStockCoverMinPct.value, T.wmsStockCoverMaxPct.value)) / 100) : r.int(T.wmsQtyMin.value, T.wmsQtyMax.value);
-    return { sku, bin, onHand, allocated: 0, picked: 0, counted: -1, variance: 0 };
+    const pct = r.int(T.wmsStockOpenMinPct.value, Math.max(T.wmsStockOpenMinPct.value, T.wmsStockOpenMaxPct.value));
+    return { sku, bin, onHand: Math.floor((full * pct) / 100), allocated: 0, picked: 0, counted: -1, variance: 0 };
   });
   const crew = T.wmsStartPickers.value + T.wmsStartReceivers.value;
   const workers = Array.from({ length: crew }, (_, i) => newWorker(i + 1, i < T.wmsStartPickers.value ? 'pick' : 'receive'));

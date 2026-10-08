@@ -52,6 +52,11 @@ export function inboundUnits(w: Pick<WmsState, 'pos' | 'inventory'>): { onOrder:
   return { onOrder, dock };
 }
 
+/** A bin's full mark (W11): the level reorder planning tops a SKU up to, the reorder point plus `wmsReplenUnits`. */
+export function binFullUnits(): number {
+  return T.wmsReorderUnits.value + T.wmsReplenUnits.value;
+}
+
 /** POs booked into the appointment slot starting at `at`. */
 function booked(w: MWms, at: number): number {
   let n = 0;
@@ -88,7 +93,7 @@ export function planReorders(w: MWms, r: Roller, tick: number): void {
     if (position >= T.wmsReorderUnits.value) continue;
     const supplier = SUPPLIER_OF[stock.sku] ?? 0;
     const lines = bySupplier.get(supplier) ?? [];
-    const expected = T.wmsReorderUnits.value + T.wmsReplenUnits.value - position;
+    const expected = binFullUnits() - position;
     lines.push({ no: lines.length + 1, sku: stock.sku, bin: stock.bin, expected, received: 0, damaged: 0, short: 0, status: 'OPEN' });
     bySupplier.set(supplier, lines);
   }

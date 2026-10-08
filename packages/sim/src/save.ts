@@ -3,7 +3,9 @@ import { hashState } from './hash.ts';
 import { WAREHOUSE_SCHEMA_VERSION } from './state.ts';
 import { WAREHOUSE_TUNABLES as T } from './tunables.ts';
 import { advanceMany, step } from './step.ts';
+import { WMS_AISLES, WMS_BAYS, WMS_BINS_PER_BAY, WMS_SKUS } from './wms/catalog.ts';
 import { createWms } from './wms/generate.ts';
+import { binFullUnits } from './wms/inbound.ts';
 import { newWorker, openingShipDoors } from './wms/policy.ts';
 
 export type Migration = (save: Record<string, unknown>) => Record<string, unknown>;
@@ -39,6 +41,11 @@ function bump(to: number): Migration {
  *   are staged at a door at once; every order names its door (none yet); the
  *   crew is topped up to the new opening crew (pickers, then the dock), free,
  *   since three times the orders come in; finished tasks move to the history.
+ * - 9 to 10 (W11, a SKU a bay): the sixteen SKUs keep their bins and stock;
+ *   the 64 new SKUs take the bays nobody uses, in order (aisle A first, the
+ *   first bin of each), and arrive full (at the bin's full mark), so an old
+ *   warehouse's empty racks fill at once. A warehouse a version-6 save opened
+ *   already has all 80.
  *
  * Old rules are not kept, so a migration changes only the snapshot, and
  * `migrateWarehouseSave` replays the history since it under today's rules and
@@ -92,6 +99,17 @@ export const WAREHOUSE_MIGRATIONS: Readonly<Record<number, Migration>> = {
       nextTrailerNo: T.wmsShipDoors.value + 1,
     };
     return { ...save, schemaVersion: 9, snapshot: { ...old, schemaVersion: 9, wms } };
+  },
+  9: (save) => {
+    const old = save.snapshot as WarehouseState;
+    const inventory = [...old.wms.inventory];
+    const used = new Set(inventory.map((s) => Math.floor(s.bin / WMS_BINS_PER_BAY)));
+    const free = Array.from({ length: WMS_AISLES * WMS_BAYS }, (_, bay) => bay).filter((bay) => !used.has(bay));
+    for (let sku = inventory.length; sku < WMS_SKUS.length; sku++) {
+      const bay = free.shift() ?? 0;
+      inventory.push({ sku, bin: bay * WMS_BINS_PER_BAY, onHand: binFullUnits(), allocated: 0, picked: 0, counted: -1, variance: 0 });
+    }
+    return { ...save, schemaVersion: 10, snapshot: { ...old, schemaVersion: 10, wms: { ...old.wms, inventory } } };
   },
 };
 

@@ -650,6 +650,8 @@ export interface WmsStockView {
   readonly aisle: number;
   readonly bay: number;
   readonly onHand: number;
+  /** The bin's full mark (W11): the level reorder planning tops it up to; the floor draws the bin's stock against it. */
+  readonly full: number;
   readonly allocated: number;
   readonly available: number;
   /** Units on open PO lines not yet counted in. */

@@ -4,8 +4,9 @@ import { hashState } from '../hash.ts';
 import { createWarehouse } from '../state.ts';
 import { advanceMany, step } from '../step.ts';
 import { WAREHOUSE_TUNABLES } from '../tunables.ts';
-import { isClosed, shipDoorAt } from './catalog.ts';
+import { WMS_SKUS, isClosed, shipDoorAt } from './catalog.ts';
 import { createWms } from './generate.ts';
+import { binFullUnits } from './inbound.ts';
 import { WMS_TRIM_SLACK } from './mutable.ts';
 import { chooseDoor, cloneWms, goodwillChange, loadTicks, shipmentPay, wmsStep, type MWms } from './tick.ts';
 
@@ -88,7 +89,9 @@ describe('WMS waves and allocation (slice 2)', () => {
 
   it('a backorder allocates once a purchase order is received and put away (W6)', () => {
     withTunables({ wmsPoLateChanceBp: 0, wmsPoLeadMinTicks: 40, wmsPoLeadMaxTicks: 40, wmsRcvShortChanceBp: 0, wmsDamageChanceBp: 0, wmsCountVarianceBp: 0, wmsShortPickChanceBp: 0 }, () => {
-      const w = wms([order(1, [line(1, 2, 6)])], {}, { nextReplenAt: 2 * STEP });
+      // Every other bin full (W11: eighty SKUs), so the only PO line is the one the backorder needs.
+      const full = Object.fromEntries(WMS_SKUS.map((_, sku) => [sku, sku === 2 ? 0 : binFullUnits()]));
+      const w = wms([order(1, [line(1, 2, 6)])], full, { nextReplenAt: 2 * STEP });
       wmsStep(w, 0);
       expect(w.orders[0]?.status).toBe('BACKORDER');
       run(w, STEP, 150);

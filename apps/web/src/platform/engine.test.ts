@@ -20,7 +20,9 @@ function engine(speed = 1): { clock: FakeClock; engine: WarehouseEngine; seen: W
 }
 
 describe('WarehouseEngine (the host clock, S4)', () => {
-  it('runs a new warehouse by the wall clock: orders ship and pay within five minutes', () => {
+  // 1,200 live ticks, each with a full View and state hash: about 4 s here and over vitest's 5 s default on CI
+  // since W11's stocked warehouse starts every opening order at once.
+  it('runs a new warehouse by the wall clock: orders ship and pay within five minutes', { timeout: 20_000 }, () => {
     const { clock, engine: e, seen } = engine();
     e.newGame(42);
     expect(seen.at(-1)?.view.tick).toBe(0);

@@ -84,7 +84,8 @@ save-reload-continue.
   (W8); then 5 warehouse minutes a second with pause and 1x/10x, the wave
   interval, and moving people by need, by hand or by the balance plan (W9);
   then outbound doors with scheduled trailers, three times the orders, a
-  dock crew that loads, and a crew of 20 growing to 40 (W10).
+  dock crew that loads, and a crew of 20 growing to 40 (W10); then 80 SKUs,
+  one in every rack bay, in a warehouse that opens stocked (W11).
 
 ## Next (not planned until the owner picks)
 - Play it on a real phone and say what feels slow or confusing (docs/GAPS.md

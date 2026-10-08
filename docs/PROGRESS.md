@@ -17,8 +17,31 @@ Nations log is at commit `67d1d92`.
 - [x] The WMS is the game: tasks for every worker, a Crew page, dock appointments, the idle game removed (W8, wms-plan slice 12)
 - [x] Speed (5 warehouse minutes a second, pause, 1x, 10x), wave interval, moving people by need (W9)
 - [x] Outbound doors with scheduled trailers, three times the orders, the dock crew loads, a crew of 20 to 40 (W10)
+- [x] A SKU in every bay: 80 SKUs, a warehouse that opens stocked, racks drawn against a full mark (W11)
 
 ## Session log
+
+### 2026-10-08 - A SKU in every bay (lanes C, S, H, U, D; owner request, W11)
+**What changed.** The racks were mostly empty: the floor has 80 bays but
+the warehouse stocked only 16 products, so 64 bays never held anything and
+at most about 15% of the racks ever showed stock. Now it stocks **80
+products, one in every bay** (the sixteen families of before in five kinds
+each: wheat 25 kg and 50 kg, barley, maize, oats; solar panels 450 W and
+300 W, inverters...). A new warehouse **opens stocked** (every bay 50-100%
+full), and each bay's bar is drawn against a fixed **full mark** (the level
+reorders top it up to, 420 units), so a bar means the same in every bay.
+Reorder numbers are unchanged; per product they keep the racks about 70%
+full. The harness report gains a "racks filled" target (55% or more on
+average, never under 35%), and existing saves (version 9) keep their 16
+products where they are and get the 64 new ones in the empty bays, full.
+**Measured** (report, seeds 1-8, 2 h): racks 70% full (emptiest look 65%),
+OTIF 88% (was 84%), fill 98% (96%), pickers 62% working, dock crew 47%,
+$757 a warehouse hour. Catch-up time unchanged. Phone check 55/55.
+**How to see it.** Open the app: every bay of aisles A-D has a green bar
+from the first minute. The Stock tab lists all 80 products.
+**What is left.** Deeper stock makes stock-outs rarer (docs/GAPS.md, W11);
+`e2e/wms-shots.ts` fails at its worker-tap step on this build and on the
+W10 build alike (docs/GAPS.md).
 
 ### 2026-10-07 - Outbound doors, more business, more staff (lanes C, S, H, U, P, D; owner request, W10)
 **What changed.** Shipping now goes through **outbound doors**: three to
