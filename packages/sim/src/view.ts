@@ -2,6 +2,7 @@ import type { FriendView, GameState, GameView, KidView, ShopItem } from '@snacks
 import { clueText } from './clues.ts';
 import { priceOf } from './game.ts';
 import { FACINGS } from './geometry.ts';
+import { kindyHint } from './hint.ts';
 import { landing, occupancy, pickupFor, resolveSnacks, type WaveKid } from './resolve.ts';
 import { SNACKS } from './snacks.ts';
 
@@ -68,5 +69,6 @@ export function gameView(state: GameState): GameView {
     loopWarning,
     lastWave: state.lastWave,
     facings: FACINGS,
+    hint: kindyHint(state),
   };
 }

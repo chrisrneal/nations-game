@@ -36,6 +36,7 @@ export const SNACK_TUNABLES = {
   maxProfiles: { value: 6, min: 2, max: 8, note: 'Profiles on one device (RULES 12): six big pictures fit the picker on a 360 x 740 phone; there are 8 pictures.' },
   nameLength: { value: 12, min: 6, max: 20, note: 'Longest profile name, in characters (RULES 12): it sits under a picture.' },
   historyKept: { value: 400, min: 60, max: 3650, note: 'Finished days each profile keeps (RULES 9): over a year; the best streak is kept apart, so trimming never loses it.' },
+  kindyHintIdle: { value: 8, min: 4, max: 20, note: 'Seconds a Kindy child may go without a tap before the next hint shows itself (RULES 11): the interface counts them, never the sim.' },
   recentDays: { value: 7, min: 3, max: 14, note: 'Finished days the done-for-today screen can show (RULES 9): a week.' },
 } as const satisfies Record<string, Tunable>;
 

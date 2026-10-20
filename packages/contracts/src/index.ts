@@ -26,6 +26,7 @@ export type {
   KidOnBoard,
   KidOutcome,
   KidView,
+  KindyHint,
   Lunchbox,
   Mode,
   Phase,

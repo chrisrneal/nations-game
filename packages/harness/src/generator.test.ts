@@ -2,7 +2,8 @@
  * RULES 10 in executable form: "no unsolvable boards, ever". 1000 main-mode
  * dailies, and 300 each of bonus rounds and Kindy dailies, are generated and
  * every one passes the clue checker and the solver, and its solution wins
- * with nobody hungry when played through the real game.
+ * with nobody hungry when played through the real game. A Kindy day also
+ * never gets stuck, whichever kids are left waiting (K8).
  */
 import { performance } from 'node:perf_hooks';
 import { describe, expect, it } from 'vitest';

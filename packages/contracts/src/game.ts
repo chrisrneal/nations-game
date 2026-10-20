@@ -291,6 +291,21 @@ export interface ShopItem {
   readonly canBuy: boolean;
 }
 
+/**
+ * The next step towards feeding the kids on a Kindy board (RULES 11, K8): what
+ * a hint's pointing hand shows. Worked out from the puzzle's stored solution,
+ * or, once a kid is left waiting, from the solver. Kindy only.
+ */
+export type KindyHint =
+  /** Tap this friend (in the tray or on the board), then this square. */
+  | { readonly kind: 'place'; readonly friend: number; readonly cell: number }
+  /** Tap the square that makes this friend throw this way. */
+  | { readonly kind: 'aim'; readonly friend: number; readonly facing: number }
+  /** This friend is in the way: back to the tray. */
+  | { readonly kind: 'tray'; readonly friend: number }
+  /** Everything is ready: press Go. */
+  | { readonly kind: 'go' };
+
 /** What the interface reads (S6). It never holds what a main-mode kid wants. */
 export interface GameView {
   readonly mode: Mode;
@@ -317,4 +332,6 @@ export interface GameView {
   readonly lastWave: WaveResult | null;
   /** Facings each friend type may take, in turning order. */
   readonly facings: Readonly<Record<FriendType, readonly number[]>>;
+  /** Kindy only, during setup: the next step a hint shows. Always null in main mode. */
+  readonly hint: KindyHint | null;
 }

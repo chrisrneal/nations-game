@@ -252,3 +252,55 @@ export function solveDay(puzzle: Puzzle): DaySolution {
   }
   return { ok: true, layouts };
 }
+
+/** What a Kindy wave can do with the kids standing there (K8): a setup, and the kids it feeds. */
+export interface Progress {
+  readonly friends: readonly PlacedFriend[];
+  readonly fed: readonly number[];
+}
+
+/** The kids a setup feeds when every kid in `kids` stands on the board. */
+export function fedBy(board: Board, friends: readonly PlacedFriend[], kids: readonly WaveKid[], mode: Mode): ReadonlyMap<number, SnackId> {
+  return resolveSnacks({ board, friends: friends.map((f, n) => ({ id: n + 1, ...f })), kids, mode }).fed;
+}
+
+/**
+ * A Kindy wave with kids left waiting (RULES 11, D15, K8): a setup that feeds
+ * every kid on the board if the solver finds one; otherwise one that feeds
+ * the longest-waiting kid it can, checked by the engine with every other kid
+ * standing in the way. `prefer` offers setups to try for a kid before the
+ * solver (the stored solution for the wave they came in). Null when no kid
+ * can be fed.
+ */
+export function feedSome(board: Board, kids: readonly WaveKid[], mode: Mode, budget: Budget, prefer: (kid: WaveKid) => readonly (readonly PlacedFriend[])[] = () => []): Progress | null {
+  if (kids.length === 0) return null;
+  const all = solveWave(board, kids, mode, budget);
+  if (all !== null && all.buys.length === 0) return { friends: all.friends, fed: kids.map((k) => k.id) };
+  const oldest = [...kids].sort((a, b) => a.id - b.id);
+  for (const kid of oldest) {
+    const own = solveWave(board, [kid], mode, budget);
+    const options = [...prefer(kid), ...(own !== null && own.buys.length === 0 ? [own.friends] : [])];
+    for (const friends of options) {
+      const fed = fedBy(board, friends, kids, mode);
+      if (fed.has(kid.id)) return { friends, fed: oldest.filter((k) => fed.has(k.id)).map((k) => k.id) };
+    }
+  }
+  return null;
+}
+
+/**
+ * The first set of Kindy kids who could be waiting together (any of them may
+ * miss a wave, so any set can) and of whom none can be fed with the friends
+ * given; null when there is none, so a Kindy day can always be finished (K8).
+ */
+export function stuckKindySet(puzzle: Puzzle): number[] | null {
+  const owned: Partial<Record<FriendType, number>> = {};
+  for (const t of puzzle.tray) owned[t] = (owned[t] ?? 0) + 1;
+  const budget: Budget = { owned, points: 0, shop: puzzle.shop };
+  const kids: WaveKid[] = puzzle.kids.map((k) => ({ id: k.id, cell: k.cell, wants: k.wants }));
+  for (let mask = 1; mask < 1 << kids.length; mask++) {
+    const waiting = kids.filter((_, i) => (mask & (1 << i)) !== 0);
+    if (feedSome(puzzle.board, waiting, puzzle.mode, budget) === null) return waiting.map((k) => k.id);
+  }
+  return null;
+}
