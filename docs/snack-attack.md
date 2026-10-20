@@ -1,10 +1,9 @@
 # Snack Attack: game design spec
 
-Status: **draft for the owner, 2026-10-20.** The owner's decisions of
-2026-10-20 are locked and marked (L). Everything else is a recommended
-default, listed in section 13 for a yes or no. Once the owner answers, this
-file replaces docs/RULES.md (see conflict C4) and a decision record (K1)
-retires the warehouse.
+Status: **locked, 2026-10-20.** The owner's decisions are marked (L); the
+defaults D1-D20 in section 13 were all accepted by the owner the same day and
+are locked too. In build step 0 this file replaces docs/RULES.md (see
+conflict C4) and a decision record (K1) retires the warehouse.
 
 ## 1. The game in one paragraph
 
@@ -293,9 +292,9 @@ yields a board that passes.
   4-year-old can't delete a sibling's progress (D17).
 - Each profile has its own save: snapshot plus command log, as in S9.
 
-## 13. Open questions, each with a recommended default (answer yes or no)
+## 13. Defaults the owner accepted (all yes, 2026-10-20)
 
-| # | Question | Default |
+| # | Decision | Answer |
 |---|---|---|
 | D1 | Main board is 6 wide by 8 tall | yes |
 | D2 | A kid who gets no snack in a wave goes home hungry at the end of that wave (no waiting a second wave) | yes |
