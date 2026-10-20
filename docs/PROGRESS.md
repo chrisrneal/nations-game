@@ -71,7 +71,7 @@ describes the earlier games.
   plays it. The CSS-emoji pictures of K8 (`Pic.tsx`) are gone.
 
 **Measured.**
-- `npm test`: 367 tests pass (was 329). New: 12 art tests (`art.test.ts`: with every
+- `npm test`: 390 tests pass (38 of them new here). New: 12 art tests (`art.test.ts`: with every
   colour taken out, no two snacks, colour chips, lunchbox tags, shirts,
   friends, avatars or clue pictures are the same; the hat, glasses and
   backpack each show; every face is drawn; no picture holds text), 3
@@ -81,7 +81,7 @@ describes the earlier games.
   heal, walks home, Kindy bounce, edge, the calm version) and a View test.
   The 1000-day generator check and the Node-vs-Chromium determinism test
   pass.
-- Phone check: 185/185 at 360 x 740 (was 151). New checks: every picture (lunchboxes,
+- Phone check: 215/215 at 360 x 740, with the shop screen's checks merged in. New checks: every picture (lunchboxes,
   kids, friends, obstacles, tables, the clue's pictures, the card's snack
   key, the result's rows, the shop, Kindy's bubbles and friends) is inside
   360 x 740 and actually showing; no emoji on any main screen; the replay
@@ -90,14 +90,16 @@ describes the earlier games.
   arcs, spins, dances, wobbles or sparkles; no Kindy bubble is cut off.
 - Frame rate in Chromium with the CPU slowed 4x (the phone check's stand-in
   for a mid-range Android): wave 1's replay 60.9 fps (worst frame 17 ms),
-  the day's busiest wave (wave 10: 4 friends throwing to 2 kids) 60.0 fps
-  (worst frame 33 ms, one dropped frame), and the Kindy party 60.3 fps.
+  the day's busiest wave (wave 10: 4 friends throwing to 2 kids) 60.3 fps
+  (worst frame 17 ms; 60.0 with one 33 ms frame on an earlier run), and the
+  Kindy party 60.3 fps.
 - Visual check (new, `npm run visual --workspace web`): the main board, the
   Kindy board, the shop and the result at 360 x 740 match their committed
   pictures (`apps/web/e2e/visual/`), 4/4.
-- Size: the app's JavaScript and CSS went from 317 KB to 357 KB (+40 KB,
-  +12 KB gzipped), against a budget of about 300 KB more. The service
-  worker precaches 405 KB (was 365 KB), and it still reopens offline.
+- Size: the app's JavaScript and CSS went from 321 KB (main, with the shop)
+  to 361 KB (+40 KB, +12 KB gzipped), against a budget of about 300 KB more.
+  The service worker precaches 409 KB (was 370 KB), and it still reopens
+  offline.
 
 **How to see it.** Open the Vercel address on a phone: the board is now a
 schoolyard. Tap a kid's card to see the clue in pictures beside today's
@@ -105,8 +107,11 @@ snacks. Press Go and watch the snacks fly. A Kindy profile shows the same
 art bigger. Turn on "Reduce motion" in the phone's settings to see the calm
 version.
 **What is left.** Real phones (iOS Safari, Android Chrome) still need a
-look; the school gate and home at the path's ends are not drawn; the shop
-screen is step 9; sounds are unchanged (docs/GAPS.md, K10).
+look; the school gate and home at the path's ends are not drawn; sounds
+are unchanged (docs/GAPS.md, K10).
+- **Merged with the shop screen (K9)**, which landed on main while this was
+  built: its cards now show the friends' pictures, a drawn star by each
+  price and the stall's awning, and the art record became K10.
 ### 2026-10-20 - A proper shop screen (build step 9; all lanes, owner request, K9)
 **What changed.**
 - **The Shop button** in the tray shows the points to spend (⭐ 3). It works

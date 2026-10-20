@@ -1831,7 +1831,7 @@ the art small, sharp at any size, identical on every phone and testable as
 text. A timeline keeps the replay honest to the sim and testable without a
 browser.
 **Cost.**
-- About 40 KB more to download (12 KB gzipped): the build was 317 KB of JavaScript and CSS and is now 357 KB, against a budget of about 300 KB more.
+- About 40 KB more to download (12 KB gzipped): main's build was 321 KB of JavaScript and CSS and is now 361 KB, against a budget of about 300 KB more.
 - The kids' skin and hair are picked from their id: looks only, never a clue.
 - The visual check, like the phone check, needs a build and a Chromium, so
   it runs by hand, not in CI.
