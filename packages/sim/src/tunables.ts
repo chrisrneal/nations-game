@@ -33,6 +33,10 @@ export const SNACK_TUNABLES = {
   obstaclesMin: { value: 2, min: 0, max: 6, note: 'Fewest obstacles (trees, benches) on a main board.' },
   obstaclesMax: { value: 4, min: 0, max: 8, note: 'Most obstacles on a main board.' },
   bonusObstacles: { value: 2, min: 0, max: 4, note: 'Extra obstacles on a bonus board: fewer clear lines.' },
+  maxProfiles: { value: 6, min: 2, max: 8, note: 'Profiles on one device (RULES 12): six big pictures fit the picker on a 360 x 740 phone; there are 8 pictures.' },
+  nameLength: { value: 12, min: 6, max: 20, note: 'Longest profile name, in characters (RULES 12): it sits under a picture.' },
+  historyKept: { value: 400, min: 60, max: 3650, note: 'Finished days each profile keeps (RULES 9): over a year; the best streak is kept apart, so trimming never loses it.' },
+  recentDays: { value: 7, min: 3, max: 14, note: 'Finished days the done-for-today screen can show (RULES 9): a week.' },
 } as const satisfies Record<string, Tunable>;
 
 export type SnackTunableId = keyof typeof SNACK_TUNABLES;

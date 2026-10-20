@@ -1344,7 +1344,7 @@ The warehouse code is removed. It is at commit `734c848`.
 - C4 RULES.md was tied to a test: replaced by the Snack Attack rules, test kept.
 - C5 the WMS report targets: replaced by generator checks.
 - C6 ROADMAP, DECISIONS and CLAUDE.md: rewritten by this session (K2).
-- C7 one save per device: a slot per game kind now, per profile in build step 7.
+- C7 one save per device: a slot per game kind now, per profile in build step 7 (done, K7).
 - C8 the sim may not read Date: the host passes in the day number.
 - C9 package names: `@snacks/*`.
 - C10 big-number formatting: kept, harmless.
@@ -1511,3 +1511,91 @@ determinism test untouched.
   friend or open a kid's card on those squares; the cards above the board and
   the Done button cover both.
 **Reversing it.** The previous screen is at commit `f97ff86`.
+
+## K7 - Profiles on one phone: a profile book beside the saves, a streak worked out from finished days, dates that can't break it
+**Status.** Accepted, 2026-10-20, at the owner's request (build step 7:
+"profiles, daily completion and streaks"). The owner asked for the decision
+records to be updated with the change, so this session wrote this record
+and edited ROADMAP.md as in K2.
+**Decision.**
+- **A profile book** (`ProfileBook` in contracts, pure functions in
+  `packages/sim/src/profiles.ts`) holds every profile:
+  - an id (`p1`, `p2`..., never reused);
+  - a picture, an optional name and a mode (set when made, RULES 12);
+  - its finished days, one `DayRecord` each (fed, hungry, retries, bonus won);
+  - its best streak, and the save slot it is playing.
+
+  It is a plain value. The host keeps it on the device and passes in today,
+  so nothing in it reads a clock.
+- **Storage.** The IndexedDB database `snacks` goes to version 2.
+  - A new `meta` store holds the book under `profiles`.
+  - Every game slot moves under its profile: `p1/daily-main-20400`,
+    `p1/bonus-main-20400`, `p1/practice-main`.
+  - The book has its own `version` and a migration chain like S9's.
+  - A book that can't be read (damaged, or from a newer game) is copied to
+    `profiles-unread` and the app carries on with a fresh book. Its first
+    profile finds `p1`'s saves again, and new ids skip every id a slot uses.
+- **Version 0 to 1, the migration.** A device played before profiles had
+  slots without a profile and the active slot in localStorage. They become
+  the first profile's: slots renamed under `p1/`, the active slot carried
+  over, and every won daily and bonus round in the old slots put on its
+  record, so the streak survives. The book is written before the old slots
+  are removed, so a migration cut short simply runs again.
+- **The streak** (RULES 9, D10): consecutive local calendar days on which
+  the profile finished the 10-wave daily.
+  - It is worked out from the finished days and today, never stored: today
+    if finished, else the run up to yesterday; a missed day makes it 0.
+  - A day finished after a retry counts. The bonus round and practice never
+    change it.
+  - The best streak is stored and only grows.
+  - History keeps `historyKept` days, and never cuts a streak still going.
+- **Dates.** A won daily is recorded under the puzzle's day, the day the run
+  started, not the day it ended. So:
+  - a run across midnight counts for its first day;
+  - a timezone change or a clock set backwards only changes which day is
+    today: the finished days are a set, so nothing is counted twice, and
+    days after "today" wait until the clock catches up;
+  - opening the app on a later day opens that day's daily, and an
+    unfinished earlier run stays saved.
+- **The screens.**
+  - **The picker** opens on launch when there is more than one profile;
+    with one, the app goes straight to that child's game. It also opens
+    from the picture in the top bar, which shows the streak.
+  - **The grown-ups' menu** (add, change, delete with a confirm step) opens
+    from a one-second press-and-hold (D17). Lifting the finger after the
+    hold is not a tap, so the menu that opened under it isn't pressed by
+    accident.
+  - **Done for today:** a won daily shows this screen instead of the board,
+    with a countdown to local midnight (from the host, written to the DOM
+    once a second, P7).
+  - **Kindy:** a Kindy profile opens a picture-only "coming soon" screen
+    until build step 10.
+- The host publishes a `HomeView` (profiles, streaks, who is playing, the
+  pictures to offer) beside the game updates, and every `GameUpdate` says
+  whose game it is. The interface shows a game only when it belongs to the
+  profile on screen.
+
+**Owner's spec, refined.** RULES 12 (L) said "the first screen is a row of
+big avatar pictures". The step 7 prompt says the picker opens on launch
+only when there is more than one profile. With one profile there is
+nothing to choose, so RULES 12 now says that. The prompt's "edit" changes
+the picture and name only, because RULES 12 sets the mode when a profile
+is made.
+**Why.**
+- Two children share one phone, and a 4-year-old must be able to switch
+  without reading.
+- Working the streak out from finished days, instead of counting up a
+  number, makes every date problem (midnight, travel, a clock set back)
+  harmless by construction: there is no "last played" to go wrong.
+- Keeping the book pure puts the streak rules beside the other rules, under
+  the same purity checks and tests.
+**Cost.**
+- Old daily slots are never cleaned up: one per profile per day, a few
+  kilobytes each.
+- Changing a timezone can show yesterday's puzzle once more, and a clock
+  set forward lets a child play tomorrow's puzzle early. Both are allowed
+  on purpose.
+- A Kindy profile can't play yet.
+**Reversing it.** The profile screens are in `apps/web/src/ui` (Picker,
+ParentMenu, DoneToday, KindySoon) and the host in `platform/localHost.ts`.
+Without profiles the app would need its one profile's slots renamed back.

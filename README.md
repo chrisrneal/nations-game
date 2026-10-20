@@ -71,7 +71,10 @@ secure `https://` address Vercel gives you).
 4. Turn on airplane mode, close it from the app switcher, and open it again. It
    should start as normal and continue where you left off.
 
-Saves live on the phone.
+Saves live on the phone. Each child gets their own profile on it (a big
+picture to tap), with their own daily, streak and practice board; grown-ups
+add, change or delete profiles by holding the **Grown-ups** button on the
+"Who's playing?" screen for a second.
 
 Preview addresses that Vercel posts on each pull request work for a quick look,
 but install from the production address so the app updates itself after each merge.
@@ -105,7 +108,14 @@ offline or install from there).
   points earned.
 - Fed kids earn ⭐ points to spend in the **Shop** between waves, for today
   only. If more than 3 kids go home hungry, try that wave again.
-- **The menu** (☰): today's puzzle, a new practice board, how to play, sound.
+- **Finish all 10 waves** and the day is done: a "done for today" screen
+  shows how it went, the 🔥 streak (days in a row with the daily finished)
+  and a countdown to tomorrow's puzzle. The bonus round and practice boards
+  are still there.
+- **The picture** in the top-left corner is who is playing; tap it to switch
+  child.
+- **The menu** (☰): today's puzzle, a new practice board, switch player, how
+  to play, sound.
 
 ## A few words you will see
 

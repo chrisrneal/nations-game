@@ -17,10 +17,14 @@ Files:
   answers with the new View. No Worker code, so it is tested in Node.
 - `worker.ts` - exposes one `GameEngine` over Comlink. Puzzle generation runs
   here, off the interface thread.
-- `localHost.ts` - `LocalHost`, the `GameHost` the interface uses: today's
-  daily (the day number from the device's calendar, D18), the bonus round,
-  practice boards, and an autosave after every command. Each kind of game
-  keeps its own save slot.
-- `saves.ts` - save slots in IndexedDB (database `snacks`; memory store for tests).
+- `localHost.ts` - `LocalHost`, the `GameHost` the interface uses: profiles
+  (the picker, switching, the grown-ups' menu, K7), today's daily (the day
+  number from the device's calendar, D18), the bonus round once the daily
+  is finished, practice boards, an autosave after every command, and a
+  record of every finished daily for the streak. Each profile keeps its own
+  save slots (`p1/daily-main-20400`). On the first launch after profiles
+  arrived it folds the old single save into the first profile.
+- `saves.ts` - save slots and the profile book in IndexedDB (database
+  `snacks`, version 2: stores `slots` and `meta`; memory store for tests).
 - `feedback.ts` - haptics and synthesized sounds.
 - `install.ts` - the install prompt (`beforeinstallprompt`, iOS instructions).
