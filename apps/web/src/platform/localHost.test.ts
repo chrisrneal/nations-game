@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SNACK_TUNABLES } from '@snacks/sim';
 import type { GameUpdate } from './engine.ts';
 import { GameEngine } from './engine.ts';
 import { LocalHost, dayNumber, slotFor, type ActiveSlot } from './localHost.ts';
@@ -30,6 +31,12 @@ describe('the local host', () => {
     expect(await h.start()).toBe('new');
     expect(latest().view).toMatchObject({ round: 'daily', day: DAY, wave: 1 });
     expect(await store.get(slotFor('main', 'daily', DAY))).toBeDefined();
+  });
+
+  it('tells the screen how far a Nurse heals, from the sim’s tunable', async () => {
+    const { h, latest } = host();
+    await h.start();
+    expect(latest().healRange).toBe(SNACK_TUNABLES.nurseRange.value);
   });
 
   it('autosaves after every command and reopens where the player left off', async () => {

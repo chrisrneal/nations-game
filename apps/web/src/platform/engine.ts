@@ -1,5 +1,5 @@
 import type { GameCommand, GameSaveFile, GameSpec, GameView, WaveResult } from '@snacks/contracts';
-import { GameSession, gameView, hashState, newGame } from '@snacks/sim';
+import { GameSession, SNACK_TUNABLES, gameView, hashState, newGame } from '@snacks/sim';
 
 /** What the host hands the interface after every change. */
 export interface GameUpdate {
@@ -10,6 +10,8 @@ export interface GameUpdate {
   readonly error: string | null;
   /** What the wave just played did, when the last command was Go. */
   readonly wave: WaveResult | null;
+  /** How far a Nurse heals (the `nurseRange` tunable), so the setup screen can show it without a number of its own. */
+  readonly healRange: number;
 }
 
 /**
@@ -49,7 +51,7 @@ export class GameEngine {
 
   private update(error: string | null, wave: WaveResult | null): GameUpdate {
     const state = this.requireSession().state;
-    return { view: gameView(state), fingerprint: hashState(state), error, wave };
+    return { view: gameView(state), fingerprint: hashState(state), error, wave, healRange: SNACK_TUNABLES.nurseRange.value };
   }
 
   private requireSession(): GameSession {
