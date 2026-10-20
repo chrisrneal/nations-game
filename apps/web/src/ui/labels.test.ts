@@ -49,7 +49,7 @@ describe('screen words', () => {
   });
 
   it('says what a kid wears on their clue card', () => {
-    const kid = (hat: boolean, glasses: boolean, backpack: boolean) => ({ id: 1, cell: 0, label: 'A', clue: 'Something red', wants: null, healed: false, look: { shirt: 0, hat, glasses, backpack, sister: 0 } });
+    const kid = (hat: boolean, glasses: boolean, backpack: boolean) => ({ id: 1, cell: 0, label: 'A', clue: 'Something red', facts: [{ kind: 'is' as const, trait: 'colour' as const, value: 'red' }], wants: null, healed: false, look: { shirt: 0, hat, glasses, backpack, sister: 0 } });
     expect(kidLooks(kid(false, false, false))).toBe('');
     expect(kidLooks(kid(true, false, false))).toBe('Wears a hat.');
     expect(kidLooks(kid(true, true, true))).toBe('Wears a hat, glasses and a backpack.');

@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import type { FriendType, GameCommand, GameView, ProfileView, WaveResult } from '@snacks/contracts';
 import type { Feedback, GameHost } from '../platform/index.ts';
 import { aimSquares, healSquares } from './aim.ts';
+import { FriendArt } from './art/Friend.tsx';
+import { Icon } from './art/Icons.tsx';
+import { FactIcons } from './art/Marks.tsx';
 import { Avatar } from './Avatar.tsx';
 import { Board } from './Board.tsx';
 import { ClueCard } from './ClueCard.tsx';
@@ -9,7 +12,8 @@ import { PatternDiagram } from './Diagram.tsx';
 import { DoneToday } from './DoneToday.tsx';
 import { DragController, type DragSource } from './drag.ts';
 import { clearPlan, undoFor, type UndoStep } from './history.ts';
-import { FRIEND_HOW, FRIEND_NAME, FRIEND_ORDER, SHIRTS, kidBadges, kidLetter, shortClue } from './labels.ts';
+import { FRIEND_HOW, FRIEND_NAME, FRIEND_ORDER, kidLetter, shortClue } from './labels.ts';
+import { KidBadge } from './KidBadge.tsx';
 import { profileLabel, streakText } from './people.ts';
 import { playWave } from './replay.ts';
 import { ResultOverlay } from './ResultOverlay.tsx';
@@ -275,10 +279,10 @@ export function Game(props: {
       ? 'Watch the snacks fly…'
       : ' '
     : view.loopWarning
-      ? '⚠️ A snack would go round in circles. Aim a friend so it can get out.'
+      ? 'A snack would go round in circles. Aim a friend so it can get out.'
       : selection?.kind === 'tray'
-        ? `Tap a grey square for the ${FRIEND_NAME[selection.type]}, or drag it there.`
-        : 'Tap or drag a friend from the tray onto a grey square.';
+        ? `Tap a grass square for the ${FRIEND_NAME[selection.type]}, or drag it there.`
+        : 'Tap or drag a friend from the tray onto the grass.';
 
   return (
     <div className="game">
@@ -289,15 +293,23 @@ export function Game(props: {
         <div className="bar-title">
           <strong>{view.round === 'daily' ? 'Today' : view.round === 'bonus' ? 'Bonus round' : 'Practice'}</strong>
           <span className="bar-streak" aria-label={`Streak: ${streakText(profile.streak)}`}>
-            🔥 {profile.streak}
+            <Icon name="flame" className="stat-icon" /> {profile.streak}
           </span>
         </div>
         <div className="bar-stats" aria-live="polite">
-          <span title="Wave">
-            🌊 {Math.min(view.wave, view.waves)}/{view.waves}
+          <span title="Wave" className="stat">
+            <Icon name="wave" className="stat-icon" /> {Math.min(view.wave, view.waves)}/{view.waves}
           </span>
-          {view.mode === 'main' && <span title="Kids who went home hungry">😢 {view.hungry}/{view.hungryAllowed}</span>}
-          {view.mode === 'main' && <span title="Points">⭐ {short(view.points)}</span>}
+          {view.mode === 'main' && (
+            <span title="Kids who went home hungry" className="stat">
+              <Icon name="sad" className="stat-icon" /> {view.hungry}/{view.hungryAllowed}
+            </span>
+          )}
+          {view.mode === 'main' && (
+            <span title="Points" className="stat">
+              <Icon name="star" className="stat-icon" /> {short(view.points)}
+            </span>
+          )}
         </div>
         <button type="button" className="icon-btn" aria-label="Menu" onClick={props.onMenu}>
           ☰
@@ -313,14 +325,9 @@ export function Game(props: {
               {shown.kids.map((k) => (
                 <li key={k.id}>
                   <button type="button" className="clue-chip" aria-label={`Kid ${k.label}’s card: ${k.clue ?? ''}`} onClick={() => setClueKid(k.id)}>
-                    <span className="clue-kid" style={{ background: SHIRTS[k.look.shirt % SHIRTS.length] }}>
-                      {k.label}
-                    </span>
-                    <span className="clue-chip-text">
-                      {kidBadges(k)}
-                      {kidBadges(k) !== '' && ' '}
-                      {crowded ? shortClue(k.clue ?? '') : k.clue}
-                    </span>
+                    <KidBadge kid={k} />
+                    {k.facts !== null && <FactIcons facts={k.facts} />}
+                    <span className="clue-chip-text">{crowded ? shortClue(k.clue ?? '') : k.clue}</span>
                   </button>
                 </li>
               ))}
@@ -384,10 +391,10 @@ export function Game(props: {
               {setup && selectedFriend !== undefined ? (
                 <>
                   <span className={`dock-what t-${selectedFriend.type}`}>
-                    <PatternDiagram type={selectedFriend.type} />
+                    <FriendArt type={selectedFriend.type} className="dock-friend" />
                     <span className="dock-what-text">
                       <strong>{FRIEND_NAME[selectedFriend.type]}</strong>
-                      <span className="muted">{moving ? 'tap a grey square' : selectedFriend.type === 'nurse' ? 'heals pink squares' : 'tap green to aim'}</span>
+                      <span className="muted">{moving ? 'tap a grass square' : selectedFriend.type === 'nurse' ? 'heals pink squares' : 'tap a lit square to aim'}</span>
                     </span>
                   </span>
                   {selectedFriend.type !== 'nurse' && !moving && (
@@ -428,7 +435,8 @@ export function Game(props: {
                   }}
                 >
                   <span className={`tray-token t-${type}`}>
-                    <PatternDiagram type={type} />
+                    <FriendArt type={type} />
+                    <PatternDiagram type={type} className="tray-diagram" />
                   </span>
                   <span className="tray-name">{FRIEND_NAME[type]}</span>
                   <span className="tray-count">×{left}</span>
@@ -437,10 +445,13 @@ export function Game(props: {
               {view.shop.length > 0 && (
                 <button type="button" className="btn tray-btn tray-shop" disabled={!setup} onClick={() => setShop(true)}>
                   <span className="tray-token" aria-hidden="true">
-                    🛒
+                    <Icon name="shop" />
                   </span>
                   <span className="tray-name">Shop</span>
-                  <span className="tray-count">⭐{short(view.points)}</span>
+                  <span className="tray-count">
+                    <Icon name="star" className="count-icon" />
+                    {short(view.points)}
+                  </span>
                 </button>
               )}
             </div>

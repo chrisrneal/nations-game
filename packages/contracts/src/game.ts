@@ -280,6 +280,8 @@ export interface KidView {
   readonly look: KidLook;
   /** Main mode: the clue card's text. */
   readonly clue: string | null;
+  /** Main mode: the same clue as facts, which the screen draws as pictures (K9). */
+  readonly facts: readonly ClueFact[] | null;
   /** Kindy mode: the snack pictured over their head. Never set in main mode. */
   readonly wants: SnackId | null;
   readonly healed: boolean;

@@ -41,6 +41,7 @@ export function gameView(state: GameState): GameView {
       label: kidLabel(k.id),
       look: kid.look,
       clue: kid.clue === null ? null : clueText(kid.clue),
+      facts: kid.clue === null ? null : kid.clue.facts,
       wants: kindy ? kid.wants : null,
       healed: k.healed,
     };

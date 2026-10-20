@@ -3,7 +3,8 @@ import type { FriendView, GameCommand, GameView, ProfileView, WaveResult } from 
 import type { Feedback, GameHost, Speech } from '../platform/index.ts';
 import { lineEnds } from './aim.ts';
 import { Avatar } from './Avatar.tsx';
-import { Board, KINDY_FRIEND } from './Board.tsx';
+import { FriendArt } from './art/Friend.tsx';
+import { Board } from './Board.tsx';
 import { DragController, type DragSource } from './drag.ts';
 import { HINT_LINES, fedSlots, hintPath, type Spot } from './kindy.ts';
 import { KindyDone } from './KindyDone.tsx';
@@ -352,7 +353,7 @@ export function KindyGame(props: {
                   aria-pressed={selected === f.id}
                   disabled={!setup}
                   onPointerDown={(event) => {
-                    const token = event.currentTarget.querySelector<HTMLElement>('.pic');
+                    const token = event.currentTarget.querySelector<HTMLElement>('.art');
                     if (setup && token !== null) drag.begin(event, { kind: 'tray', type: f.type }, token);
                   }}
                   onClick={() => {
@@ -361,7 +362,7 @@ export function KindyGame(props: {
                     feedback?.cue('tap');
                   }}
                 >
-                  <Pic glyph={KINDY_FRIEND} />
+                  <FriendArt type="straight" />
                 </button>
               ))}
             </div>
