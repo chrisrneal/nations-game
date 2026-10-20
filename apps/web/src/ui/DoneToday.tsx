@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { GameView, ProfileView } from '@snacks/contracts';
 import type { GameHost } from '../platform/index.ts';
+import { Icon } from './art/Icons.tsx';
 import { countdown, retriesText, streakText, weekStrip } from './people.ts';
 
 /**
@@ -30,31 +31,29 @@ export function DoneToday(props: { host: GameHost; view: GameView; profile: Prof
   return (
     <section className="done" aria-label="Done for today">
       <div className="done-card">
-        <p className="done-big" aria-hidden="true">
-          🎉
-        </p>
+        <Icon className="done-big" name="trophy" />
         <h2 className="done-title">Done for today!</h2>
         <ul className="done-rows">
           <li data-row="fed">
-            <span aria-hidden="true">😋</span> Kids fed: <strong>{record?.fed ?? view.fed}</strong>
+            <Icon className="row-icon" name="yum" /> Kids fed: <strong>{record?.fed ?? view.fed}</strong>
           </li>
           <li data-row="hungry">
-            <span aria-hidden="true">😢</span> Went home hungry: <strong>{record?.hungry ?? view.hungry} of {view.hungryAllowed}</strong>
+            <Icon className="row-icon" name="sad" /> Went home hungry: <strong>{record?.hungry ?? view.hungry} of {view.hungryAllowed}</strong>
           </li>
           {record !== undefined && (
             <li data-row="tries">
-              <span aria-hidden="true">🔁</span> Done on the <strong>{retriesText(record.retries)}</strong>
+              <Icon className="row-icon" name="again" /> Done on the <strong>{retriesText(record.retries)}</strong>
             </li>
           )}
           <li data-row="streak">
-            <span aria-hidden="true">🔥</span> Streak: <strong>{streakText(profile.streak)}</strong>
+            <Icon className="row-icon" name="flame" /> Streak: <strong>{streakText(profile.streak)}</strong>
             {profile.best > profile.streak && <span className="muted"> (best {profile.best})</span>}
           </li>
         </ul>
         <ol className="week" aria-label="The last seven days">
           {weekStrip(profile.recent, view.day).map((d) => (
             <li key={d.day} className={d.done ? 'week-done' : ''} aria-label={d.done ? 'finished' : 'not finished'}>
-              {d.done ? '✓' : ''}
+              {d.done && <Icon name="star" />}
             </li>
           ))}
         </ol>
@@ -75,7 +74,9 @@ export function DoneToday(props: { host: GameHost; view: GameView; profile: Prof
             Play today’s puzzle
           </button>
         ) : bonusWon ? (
-          <p className="done-bonus">⭐ Bonus round won too!</p>
+          <p className="done-bonus">
+            <Icon className="row-icon" name="star" /> Bonus round won too!
+          </p>
         ) : (
           <button type="button" className="btn btn-primary btn-wide" onClick={() => void host.bonus()}>
             Play the bonus round

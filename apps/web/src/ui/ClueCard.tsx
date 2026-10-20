@@ -1,11 +1,19 @@
 import type { ReactElement } from 'react';
-import type { GameView, KidView } from '@snacks/contracts';
-import { SHIRTS, SNACK_EMOJI, kidLooks } from './labels.ts';
+import type { GameView, KidView, SnackTrait } from '@snacks/contracts';
+import { FactIcons, FeatureIcon, TraitIcon } from './art/Marks.tsx';
+import { SnackArt } from './art/Snack.tsx';
+import { KidBadge } from './KidBadge.tsx';
+import { kidLooks } from './labels.ts';
 import { Sheet } from './Sheet.tsx';
+
+const TRAITS: readonly SnackTrait[] = ['colour', 'feel', 'taste', 'shape'];
 
 /**
  * A kid's full clue card (RULES 6), with today's snacks and their traits to
- * work it out against. It stays open until the player closes it.
+ * work it out against. Every trait is a picture as well as a word (K10): the
+ * clue's pictures match the pictures beside the snack they point at, and a
+ * colour carries its own mark, so the card can be solved without seeing
+ * colour. It stays open until the player closes it.
  */
 export function ClueCard(props: { view: GameView; kid: KidView; onClose: () => void }): ReactElement {
   const { view, kid } = props;
@@ -13,11 +21,10 @@ export function ClueCard(props: { view: GameView; kid: KidView; onClose: () => v
   return (
     <Sheet title={`Kid ${kid.label}’s card`} label="Clue card" onClose={props.onClose}>
       <div className="clue-card">
-        <span className="clue-kid big" style={{ background: SHIRTS[kid.look.shirt % SHIRTS.length] }}>
-          {kid.label}
-        </span>
+        <KidBadge kid={kid} big />
         <div>
           <p className="clue-card-text">“{kid.clue}”</p>
+          {kid.facts !== null && <FactIcons className="big" facts={kid.facts} />}
           {looks !== '' && <p className="muted small">{looks}</p>}
           {kid.healed && <p className="muted small">A Nurse healed them once already.</p>}
         </div>
@@ -26,17 +33,26 @@ export function ClueCard(props: { view: GameView; kid: KidView; onClose: () => v
       <ul className="snacks">
         {view.snacks.map((s) => (
           <li key={s.id}>
-            <span className="snack-emoji">{SNACK_EMOJI[s.id]}</span>
+            <SnackArt className="snack-pic" snack={s.id} />
             <span className="snack-what">
               <strong>{s.name}</strong>
-              <span className="muted small">
-                {s.colour} · {s.feel} · {s.taste} · {s.shape}
+              <span className="traits">
+                {TRAITS.map((t) => (
+                  <span key={t} className="trait">
+                    <TraitIcon trait={t} value={s[t]} />
+                    {s[t]}
+                  </span>
+                ))}
               </span>
             </span>
           </li>
         ))}
       </ul>
-      {view.kids.some((k) => k.look.sister > 0) && <p className="muted small">Sisters wear the same colour.</p>}
+      {view.kids.some((k) => k.look.sister > 0) && (
+        <p className="muted small sisters">
+          <FeatureIcon feature="sister" /> Sisters wear the same shirt.
+        </p>
+      )}
       <button type="button" className="btn btn-primary btn-wide" onClick={props.onClose}>
         Got it
       </button>

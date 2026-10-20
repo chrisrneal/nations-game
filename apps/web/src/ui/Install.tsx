@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import type { InstallPrompt, InstallState } from '../platform/index.ts';
+import { Icon } from './art/Icons.tsx';
 
 /**
  * The install prompt: one tap to add Snack Attack to the home screen, so it opens
@@ -15,9 +16,7 @@ export function InstallBanner(props: { install: InstallPrompt | undefined; onToa
   if (install === undefined || hidden || state === 'installed' || state === 'none') return null;
   return (
     <aside className="install" aria-label="Install the app" data-testid="install">
-      <span className="install-icon" aria-hidden="true">
-        📲
-      </span>
+      <Icon className="install-icon" name="phone" />
       <span className="install-text">
         {state === 'prompt' ? 'Install it: opens full screen and works offline.' : 'Install on iPhone: tap Share, then “Add to Home Screen”.'}
       </span>

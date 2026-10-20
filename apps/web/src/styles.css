@@ -3,7 +3,7 @@
    the tray and Go in the bottom third, nothing to scroll during setup. This is the grey-squares build (step 6):
    plain colours, no art. Moving things animate on transform and opacity (P7). */
 :root {
-  --bg: #f4f2ee;
+  --bg: #fff8ec;
   --panel: #ffffff;
   --line: #d9d5cc;
   --fg: #23262b;
@@ -11,14 +11,22 @@
   --accent: #2f9e6e;
   --accent-ink: #ffffff;
   --warn: #c8551f;
-  --open: #dcdcdc;
-  --path: #f1dfb8;
+  --grass: #a7d96f;
+  --path: #f4dca8;
   --tap: 44px;
   color-scheme: light;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Every picture (art/Svg.tsx) fills the box it is put in; each use sets that box. */
+.art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 
 html,
@@ -133,10 +141,37 @@ h2 {
 }
 
 .bar-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   font-size: 0.78rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.stat-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.bar-streak .stat-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.count-icon {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  vertical-align: -1px;
+  margin-right: 1px;
 }
 
 /* Who is playing: their picture, a tap back to the picker (K7). */
@@ -219,27 +254,61 @@ h2 {
 }
 
 .crowded .clue-kid {
-  width: 22px;
-  height: 22px;
-  font-size: 0.8rem;
+  width: 24px;
+  height: 26px;
 }
 
 .clue-kid {
-  display: inline-grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  color: #ffffff;
-  font-weight: 800;
+  position: relative;
+  display: inline-block;
+  width: 30px;
+  height: 32px;
   flex-shrink: 0;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+}
+
+.clue-kid-letter {
+  position: absolute;
+  right: -4px;
+  bottom: -2px;
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1.5px solid #4a3428;
+  color: #4a3428;
+  font-size: 0.6rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* A clue's facts as pictures (K10), before its words. */
+.facts {
+  display: inline-flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.facts .art {
+  width: 20px;
+  height: 20px;
+}
+
+.crowded .facts .art {
+  width: 16px;
+  height: 16px;
 }
 
 .clue-kid.big {
-  width: 48px;
-  height: 48px;
-  font-size: 1.4rem;
+  width: 56px;
+  height: 60px;
+}
+
+.clue-kid.big .clue-kid-letter {
+  width: 22px;
+  height: 22px;
+  font-size: 0.85rem;
 }
 
 /* ---- the board ---- */
@@ -262,10 +331,11 @@ h2 {
 
 .board {
   display: grid;
-  gap: 3px;
+  gap: 2px;
   padding: 3px;
-  background: #b9b4aa;
-  border-radius: 10px;
+  background: #6fae4a;
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 2px #4a3428, 0 2px 0 #4a3428;
   overflow: hidden;
   touch-action: none;
 }
@@ -288,13 +358,17 @@ h2 {
   min-width: var(--tap);
   min-height: var(--tap);
   border: 0;
-  border-radius: 6px;
+  border-radius: 7px;
   padding: 0;
   font: inherit;
   font-size: 1.3rem;
   display: grid;
   place-items: center;
-  background: var(--open);
+  /* Grass, with a few tufts drawn by gradients (no image to load). */
+  background:
+    radial-gradient(circle at 24% 30%, #8fc756 0 1.6px, transparent 2.4px),
+    radial-gradient(circle at 70% 72%, #8fc756 0 1.6px, transparent 2.4px),
+    var(--grass);
   color: var(--fg);
   cursor: pointer;
   touch-action: none;
@@ -309,40 +383,36 @@ h2 {
 }
 
 .sq-path {
-  background: var(--path);
+  /* Sandy paving: the school path, from the gate at the top to home at the bottom. */
+  background:
+    linear-gradient(#e2c07e, #e2c07e) 0 50% / 100% 2px no-repeat,
+    linear-gradient(#e2c07e, #e2c07e) 50% 0 / 2px 50% no-repeat,
+    linear-gradient(#e2c07e, #e2c07e) 25% 100% / 2px 50% no-repeat,
+    var(--path);
 }
 
-.sq-lunchbox {
-  background: #fff3c4;
-  box-shadow: inset 0 0 0 3px #e0b84c;
-}
 
-.sq-obstacle {
-  background: #c9d6c0;
-}
 
-.sq-table {
-  background: #e3d4f0;
-}
 
 /* Tap-to-aim: every square the selected friend can throw to. */
 .sq-aimable {
-  box-shadow: inset 0 0 0 3px rgba(47, 158, 110, 0.6);
+  box-shadow: inset 0 0 0 3px #ffffff;
 }
 
 .sq-aimable.sq-open,
 .sq-aimable.sq-path {
-  background: #bfe6cd;
+  background: #e3f6c6;
 }
 
 .sq-aimable::after {
   content: '';
   position: absolute;
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: var(--accent);
-  opacity: 0.7;
+  background: #ffffff;
+  box-shadow: 0 0 0 2px #4a3428;
+  opacity: 0.85;
 }
 
 .sq-aimable:has(.friend, .kid, .sq-box)::after {
@@ -351,7 +421,7 @@ h2 {
 }
 
 .sq-target {
-  box-shadow: inset 0 0 0 4px var(--accent);
+  box-shadow: inset 0 0 0 4px #ff8a3d;
 }
 
 /* A Nurse's heal range. */
@@ -415,20 +485,22 @@ h2 {
   position: relative;
   display: grid;
   place-items: center;
-  width: 84%;
-  height: 84%;
+  width: 94%;
+  height: 94%;
+}
+
+
+/* A picker (next to a lunchbox): a warm glow under its base. */
+.friend.picker::before {
+  content: '';
+  position: absolute;
+  left: 2%;
+  right: 2%;
+  bottom: 0;
+  height: 34%;
   border-radius: 50%;
-  background: #ffffff;
-  border: 3px solid var(--friend, #7a7f87);
-}
-
-.friend .diagram {
-  width: 74%;
-  height: 74%;
-}
-
-.friend.picker {
-  box-shadow: 0 0 0 3px #f2c94c;
+  background: rgba(255, 210, 63, 0.9);
+  box-shadow: 0 0 6px 2px rgba(255, 210, 63, 0.8);
 }
 
 /* The facing: a small triangle on the token's rim, turned the way the friend throws. */
@@ -445,7 +517,7 @@ h2 {
   transform: translateX(-50%);
   border-left: 6px solid transparent;
   border-right: 6px solid transparent;
-  border-bottom: 8px solid #1d2a44;
+  border-bottom: 8px solid #4a3428;
 }
 
 /* The next throw of every friend (D12): a dashed line and a ring where it lands. */
@@ -483,68 +555,61 @@ h2 {
   position: relative;
   display: grid;
   place-items: center;
-  width: 84%;
-  height: 84%;
-  border-radius: 10px;
-  background: #ffffff;
-  border: 3px solid #999;
+  width: 94%;
+  height: 94%;
 }
 
+/* Main mode: the kid's letter, the same one their card above the board shows. */
 .kid-label {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
   display: grid;
   place-items: center;
-  width: 1.45em;
-  height: 1.45em;
+  width: 1.15em;
+  height: 1.15em;
   border-radius: 50%;
-  color: #ffffff;
+  background: #ffffff;
+  border: 2px solid #4a3428;
+  color: #4a3428;
   font-weight: 800;
-  font-size: 0.85em;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+  font-size: 0.62em;
+  line-height: 1;
 }
 
-.kindy .kid-label {
-  color: inherit;
-  text-shadow: none;
-}
 
-.kid-badges {
-  position: absolute;
-  bottom: -6px;
-  font-size: 0.55em;
-  white-space: nowrap;
-}
 
 .kid-wants {
   position: absolute;
-  top: -14px;
-  font-size: 0.8em;
+  left: 50%;
+  top: -34%;
+  width: 62%;
+  height: 62%;
+  transform: translateX(-50%);
+  padding: 6%;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #4a3428;
+  z-index: 1;
 }
 
 .kid-healed {
   position: absolute;
-  top: -6px;
-  right: -6px;
-  font-size: 0.55em;
+  top: -4px;
+  right: -4px;
+  width: 42%;
+  height: 42%;
 }
 
-.sq-box {
-  font-size: 1.15em;
+.sq-box,
+.sq-thing {
+  width: 94%;
+  height: 94%;
 }
 
-/* Kids react once the snacks land (replay.ts sets data-outcome for a moment). */
-.sq[data-outcome='happy'] .kid {
-  animation: dance 0.45s ease-in-out 2;
-  border-color: var(--accent) !important;
-}
+/* Kids react as their snack lands: replay.ts sets data-mood (the face) and data-outcome for a moment. */
 
-.sq[data-outcome='ache'] .kid {
-  animation: wobble 0.3s ease-in-out 3;
-}
 
-.sq[data-outcome='hungry'] .kid,
-.sq[data-outcome='waits'] .kid {
-  opacity: 0.55;
-}
 
 @keyframes dance {
   0%,
@@ -572,11 +637,53 @@ h2 {
   }
 }
 
+/* The replay (replay.ts, K10): only transform and opacity move. */
 .flying-snack {
   position: absolute;
-  font-size: 1.4rem;
-  transform: translate(-50%, -50%);
-  will-change: left, top, transform, opacity;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  will-change: transform, opacity;
+}
+
+.fly-lift,
+.fly-shadow {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
+.fly-shadow {
+  inset: 70% 12% -6% 12%;
+  border-radius: 50%;
+  background: #4a3428;
+  opacity: 0.3;
+}
+
+.fly-lift .art {
+  filter: none;
+}
+
+/* The Nurse's sparkles: a four-point star drawn by CSS. */
+.sparkle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  background: #ffe36b;
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  will-change: transform, opacity;
+}
+
+/* A lunchbox lid pops open on its hinge. */
+.lunchbox-lid {
+  transform-box: fill-box;
+  transform-origin: 0% 100%;
+}
+
+.friend .art,
+.kid {
+  transform-origin: 50% 90%;
 }
 
 /* Drag and drop (drag.ts): a copy of the friend follows the finger. */
@@ -687,8 +794,65 @@ details summary {
   flex-wrap: wrap;
 }
 
-.snack-emoji {
-  font-size: 1.3rem;
+.snack-pic {
+  width: 40px;
+  height: 40px;
+  flex: none;
+}
+
+/* A snack's four traits in the clue card: a picture and a word each (K10). */
+.traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.trait {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.trait .art {
+  width: 18px;
+  height: 18px;
+}
+
+.facts.big {
+  margin: 2px 0 4px;
+}
+
+.facts.big .art {
+  width: 30px;
+  height: 30px;
+}
+
+.sisters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sisters .art {
+  width: 22px;
+  height: 22px;
+}
+
+/* An icon at the start of a row of words. */
+.row-icon {
+  display: inline-block;
+  width: 1.15em;
+  height: 1.15em;
+  vertical-align: -0.2em;
+}
+
+.line-snack {
+  display: inline-block;
+  width: 1.2em;
+  height: 1.2em;
+  vertical-align: -0.25em;
 }
 
 .snack-what {
@@ -729,6 +893,11 @@ details summary {
   border-left: 4px solid var(--friend, var(--line));
   border-radius: 12px;
   background: #ffffff;
+}
+
+.shop-pic .art {
+  width: 88%;
+  height: 88%;
 }
 
 .shop-pic {
@@ -861,8 +1030,14 @@ details summary {
 }
 
 .dock-what .diagram {
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
+}
+
+.dock-friend {
+  width: 34px;
+  height: 34px;
+  flex: none;
 }
 
 .dock-what-text {
@@ -922,24 +1097,30 @@ details summary {
 }
 
 .tray-token {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 2px solid var(--friend, var(--line));
+  width: 32px;
+  height: 32px;
+}
+
+/* The pattern diagram rides on the portrait's corner. */
+.tray-token .tray-diagram {
+  position: absolute;
+  right: -7px;
+  bottom: -2px;
+  width: 15px;
+  height: 15px;
   background: #ffffff;
-  font-size: 1rem;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--friend, #4a3428);
 }
 
 .tray-shop .tray-token {
-  border-color: transparent;
+  width: 28px;
+  height: 28px;
 }
 
-.tray-token .diagram {
-  width: 22px;
-  height: 22px;
-}
 
 .tray-name {
   font-size: 0.68rem;
@@ -1060,6 +1241,12 @@ details summary {
   font-size: 0.85rem;
 }
 
+.install-icon {
+  width: 28px;
+  height: 28px;
+  flex: none;
+}
+
 .install-text {
   flex: 1;
 }
@@ -1076,12 +1263,6 @@ details summary {
   color: #ffffff;
   text-align: center;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sq[data-outcome] .kid {
-    animation: none;
-  }
 }
 
 .help-friends {
@@ -1337,9 +1518,9 @@ details summary {
 }
 
 .done-big {
-  font-size: 3rem;
-  margin: 0;
-  line-height: 1.1;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto;
 }
 
 .done-title {
@@ -1378,9 +1559,13 @@ details summary {
 }
 
 .week li.week-done {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
+  background: #fff3c4;
+  border-color: #e0a83a;
+}
+
+.week li .art {
+  width: 22px;
+  height: 22px;
 }
 
 .done-next {
@@ -1403,15 +1588,16 @@ details summary {
 }
 
 /* ---- pictures drawn by CSS (Pic.tsx): no text on the page for them ---- */
+/* A picture sized by font-size, like the emoji it replaced: 1em square. */
 .pic {
   display: inline-block;
+  width: 1em;
+  height: 1em;
   line-height: 1;
+  flex: none;
 }
 
 .pic::before,
-.avatar::before {
-  content: attr(data-pic);
-}
 
 .loading-pic {
   font-size: 4rem;
@@ -1511,10 +1697,11 @@ details summary {
   font-size: 2.4rem;
 }
 
+/* Kindy: the kid in the lower part of the square, their bubble in the upper part, so the top row's bubble stays on the board. */
 .kindy .kid {
-  width: 80%;
-  height: 80%;
-  border-width: 4px;
+  width: 66%;
+  height: 66%;
+  margin-top: 34%;
   overflow: visible;
 }
 
@@ -1525,24 +1712,21 @@ details summary {
 }
 
 /* The snack a Kindy kid wants: a picture in a bubble over their head. */
+/* The snack a Kindy kid wants: a picture in a bubble over their head. */
+/* The snack a Kindy kid wants: a picture in a bubble over their head. */
 .kindy .kid-wants {
-  top: -22px;
-  font-size: 0.75em;
-  padding: 3px 5px;
-  border-radius: 999px;
-  background: #ffffff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
-  z-index: 1;
+  top: -50%;
+  width: 64%;
+  height: 64%;
+  border-width: 3px;
+  box-shadow: 0 2px 0 #4a3428;
 }
 
 .kindy .friend {
-  width: 80%;
-  height: 80%;
+  width: 86%;
+  height: 86%;
 }
 
-.kindy .friend-pic {
-  font-size: 0.9em;
-}
 
 .kindy .friend-arrow {
   inset: -9px;
@@ -1616,6 +1800,11 @@ details summary {
   border-color: #2f6fd6;
 }
 
+.kindy-friend .art {
+  width: 86%;
+  height: 86%;
+}
+
 .kindy-friend.on {
   background: #dbe6ff;
   box-shadow: 0 0 0 4px #2563eb;
@@ -1658,7 +1847,8 @@ details summary {
   left: 0;
   top: 0;
   z-index: 20;
-  font-size: 3.2rem;
+  width: 3.2rem;
+  height: 3.2rem;
   pointer-events: none;
   filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.35));
   opacity: 0;
@@ -1709,13 +1899,7 @@ details summary {
 }
 
 /* Kindy kids react: a happy dance, or a head shake when a wrong snack bounces off. */
-.kindy .sq[data-outcome='happy'] .kid {
-  animation: dance 0.4s ease-in-out 3;
-}
 
-.sq[data-outcome='shake'] .kid {
-  animation: shake 0.22s ease-in-out 4;
-}
 
 @keyframes shake {
   0%,
@@ -1853,11 +2037,9 @@ details summary {
 .kindy-sun {
   width: 150px;
   height: 150px;
-  border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 5rem;
-  background: radial-gradient(circle, #ffe27a 55%, #ffd23f 56%, #ffd23f 62%, transparent 63%), repeating-conic-gradient(#ffd23f 0 8deg, transparent 8deg 22deg);
+  font-size: 140px;
   animation: breathe 4s ease-in-out infinite;
 }
 
@@ -1951,6 +2133,47 @@ details summary {
   .kindy-confetti {
     display: none;
   }
+}
+
+/* ---- the art (docs/ART.md, K10): inline SVG pictures ---- */
+
+/* A kid's faces: all drawn, one shown. The replay sets data-mood (P7). */
+.art-kid .face {
+  display: none;
+}
+.art-kid .face-ok,
+[data-mood='yum'] .art-kid .face-yum,
+[data-mood='ache'] .art-kid .face-ache,
+[data-mood='sad'] .art-kid .face-sad {
+  display: inline;
+}
+[data-mood='yum'] .art-kid .face-ok,
+[data-mood='ache'] .art-kid .face-ok,
+[data-mood='sad'] .art-kid .face-ok {
+  display: none;
+}
+
+.sq-alt {
+  --grass: #9ccf63;
+  --path: #f0d59d;
+}
+
+/* The shop sheet is a little playground stall: a striped awning on top. */
+/* The shop is a little playground stall: a striped awning along the sheet's top edge, taking no room (the sheet fits 360 x 740, K9). */
+.shop-awning {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 9px;
+  border-bottom: 2px solid #4a3428;
+  background: repeating-linear-gradient(90deg, #ef6f6c 0 20px, #ffffff 20px 40px);
+}
+
+.menu-icon {
+  width: 26px;
+  height: 26px;
+  margin: 0 auto;
 }
 
 /* The shortfall stays readable on a buy button that is off. */

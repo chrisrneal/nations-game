@@ -9,7 +9,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json",
-    "e2e": "tsx e2e/phone-check.ts"
+    "e2e": "tsx e2e/phone-check.ts",
+    "visual": "tsx e2e/visual-check.ts",
+    "art-sheet": "tsx e2e/art-sheet.ts"
   },
   "dependencies": {
     "@snacks/contracts": "*",

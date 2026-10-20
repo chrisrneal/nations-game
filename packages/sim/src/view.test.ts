@@ -14,6 +14,17 @@ describe('the View (S6)', () => {
     expect(kindy.kids.every((k) => k.wants !== null && k.clue === null)).toBe(true);
   });
 
+  it('gives each main-mode clue as facts too, for its pictures (K10), and Kindy none', () => {
+    const puzzle = generatePuzzle('main', 'daily', 20_000, 0);
+    const main = gameView(startGame(puzzle));
+    for (const kid of main.kids) {
+      const clue = puzzle.kids.find((k) => k.id === kid.id)!.clue!;
+      expect(kid.facts).toEqual(clue.facts);
+    }
+    const kindy = gameView(startGame(generatePuzzle('kindy', 'daily', 20_000, 0)));
+    expect(kindy.kids.every((k) => k.facts === null)).toBe(true);
+  });
+
   it('shows where each friend’s next throw lands, and who picks up (D12)', () => {
     let s = startGame(fixturePuzzle(['a S2 . # ka', '. . . . =']));
     s = step(s, { type: 'place', friend: 1, cell: 1, facing: 2 }).state;

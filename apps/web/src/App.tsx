@@ -6,7 +6,7 @@ import { InstallBanner } from './ui/Install.tsx';
 import { KindyGame } from './ui/KindyGame.tsx';
 import { MenuSheet } from './ui/MenuSheet.tsx';
 import { Picker } from './ui/Picker.tsx';
-import { Pic } from './ui/Pic.tsx';
+import { LunchboxArt } from './ui/art/Scenery.tsx';
 
 /**
  * Snack Attack (docs/ROADMAP.md; decision record K1). Who is playing comes
@@ -115,7 +115,7 @@ export function App(props: { host: GameHost; install?: InstallPrompt; feedback?:
 function Loading(props: { pictures?: boolean }): ReactElement {
   return (
     <div className="app loading" aria-busy="true">
-      {props.pictures === true ? <Pic className="loading-pic" glyph="🍱" label="Packing the lunchboxes" /> : <p>Packing the lunchboxes…</p>}
+      {props.pictures === true ? <LunchboxArt className="pic loading-pic" snack="apple" colour="red" label="Packing the lunchboxes" /> : <p>Packing the lunchboxes…</p>}
     </div>
   );
 }

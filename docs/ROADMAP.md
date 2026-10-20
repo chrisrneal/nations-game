@@ -61,8 +61,13 @@ vite-plugin-pwa, Vitest + fast-check, and playwright-core for the phone check.
 - Kindy (K8): the board as wide as the phone, no text on the page anywhere
   in the child's flow, and a whole Kindy day played by taps on what the hint
   points at.
-- The wave replay at 60 fps with the CPU slowed 4x. A day's puzzle generated
-  in under a second with the CPU slowed 4x.
+- The wave replay at 60 fps with the CPU slowed 4x, moving only transform
+  and opacity, with a calm version for reduced motion (K10). A day's puzzle
+  generated in under a second with the CPU slowed 4x.
+- Art (K10): every picture inside 360 x 740 and showing; no emoji; the art
+  adds no more than about 300 KB to the build; a visual check
+  (`apps/web/e2e/visual-check.ts`) compares the main board, the Kindy
+  board, the shop and the result at 360 x 740 with committed pictures.
 
 ## The harness
 - `npm test` generates and checks 1000 main dailies, 300 bonus rounds and 300
@@ -94,7 +99,9 @@ until both work on hand-made test boards.
    the picker, the grown-ups' menu (press and hold), done for today with a
    countdown, the streak in the top bar, and the old single save folded
    into a first profile.
-8. [ ] Art and wave animation.
+8. [x] Art and wave animation (K10): one original SVG style (docs/ART.md),
+   clues readable from the pictures without colour, and the wave replayed as
+   CSS animation from a timeline of the wave result.
 9. [x] Shop screen (K9): a bottom sheet from the Shop button in the tray (it
    shows the points), a card per friend (picture, name, pattern diagram,
    one line on what it does, how many you have, the price or "Need 2

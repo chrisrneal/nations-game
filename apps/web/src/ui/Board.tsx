@@ -1,26 +1,27 @@
 import type { PointerEvent as ReactPointerEvent, ReactElement, Ref } from 'react';
 import type { GameView } from '@snacks/contracts';
 import { throwLine } from './aim.ts';
-import { PatternDiagram } from './Diagram.tsx';
-import { Pic } from './Pic.tsx';
-import { FRIEND_NAME, SHIRTS, SNACK_EMOJI, SNACK_NAME, facingAngle, kidBadges } from './labels.ts';
+import { FriendArt } from './art/Friend.tsx';
+import { Icon } from './art/Icons.tsx';
+import { KidArt } from './art/Kid.tsx';
+import { LunchboxArt, ObstacleArt, TableArt, obstacleKind } from './art/Scenery.tsx';
+import { SnackArt } from './art/Snack.tsx';
+import { FRIEND_NAME, SNACK_NAME, facingAngle } from './labels.ts';
 
 /**
- * The board: grey playground squares, the sandy path, lunchboxes, obstacles,
- * parents' tables, friends (their throw pattern, an arrow for their facing)
- * and kids (a letter badge, their shirt colour). Every square is a button.
+ * The board, drawn as the schoolyard (docs/ART.md, K10): grass for the
+ * playground, sandy paving for the path, open lunchboxes with their snack and
+ * its colour's mark, trees, benches and sandpits, the parents' picnic table,
+ * friends on their round bases with an arrow for their facing, and kids in
+ * their shirts, hats, glasses and backpacks. Every square is a button.
  *
  * During setup every friend shows where its next throw lands (D12): a dashed
  * line to that square, never the whole route. The selected friend's aim
  * squares (or a Nurse's heal range) are highlighted.
  *
- * Kindy (RULES 11): pictures only, drawn by CSS (Pic.tsx), so nothing on the
- * board is text: a friend is a thrower, a kid has the snack they want over
- * their head, and each aim square carries a big arrow the way it throws.
+ * Kindy (RULES 11): the same art bigger, with the snack each kid wants in a
+ * bubble over their head and a big arrow on each aim square; no text at all.
  */
-/** A Kindy friend: a thrower (Kindy has Straight friends only). */
-export const KINDY_FRIEND = '🙋';
-
 export function Board(props: {
   view: GameView;
   selected: number | null;
@@ -52,19 +53,20 @@ export function Board(props: {
           if (aims.has(cell)) classes.push('sq-aimable');
           if (heals.has(cell)) classes.push('sq-heal');
           if (cell === selectedTarget) classes.push('sq-target');
+          if ((cell % view.width) % 2 === Math.floor(cell / view.width) % 2) classes.push('sq-alt');
           if (friend !== undefined && friend.id === selected) classes.push('sq-selected');
           let label = square === 'path' ? 'path' : square === 'open' ? 'playground' : square;
           let content: ReactElement | string | null = null;
           if (box !== undefined) {
             label = `${SNACK_NAME[box.snack]} lunchbox`;
-            content = <Pic className="sq-box" glyph={SNACK_EMOJI[box.snack]} />;
-          } else if (square === 'obstacle') content = <Pic glyph="🌳" />;
-          else if (square === 'table') content = <Pic glyph="👪" />;
+            content = <LunchboxArt className="sq-box" snack={box.snack} colour={view.snacks.find((s) => s.id === box.snack)?.colour ?? ''} />;
+          } else if (square === 'obstacle') content = <ObstacleArt className="sq-thing" kind={obstacleKind(cell)} />;
+          else if (square === 'table') content = <TableArt className="sq-thing" />;
           if (friend !== undefined) {
             label = `${FRIEND_NAME[friend.type]} friend${friend.picker ? ', picks up snacks' : ''}`;
             content = (
               <span className={`friend t-${friend.type}${friend.picker ? ' picker' : ''}`}>
-                {kindy ? <Pic className="friend-pic" glyph={KINDY_FRIEND} /> : <PatternDiagram type={friend.type} />}
+                <FriendArt type={friend.type} />
                 {friend.type !== 'nurse' && (
                   <span className="friend-arrow" style={{ transform: `rotate(${facingAngle(friend.type, friend.facing)}deg)` }} aria-hidden="true">
                     <span className="friend-arrow-tip" />
@@ -76,17 +78,15 @@ export function Board(props: {
           if (kid !== undefined) {
             label = `Kid ${kid.label}${kid.clue !== null ? `: ${kid.clue}` : ''}${kid.healed ? ', healed once' : ''}`;
             content = (
-              <span className="kid" style={{ borderColor: SHIRTS[kid.look.shirt % SHIRTS.length] }}>
-                {kid.wants !== null && <Pic className="kid-wants" glyph={SNACK_EMOJI[kid.wants]} />}
-                {kindy ? (
-                  <Pic className="kid-label" glyph="🧒" />
-                ) : (
-                  <span className="kid-label" style={{ background: SHIRTS[kid.look.shirt % SHIRTS.length] }}>
-                    {kid.label}
+              <span className="kid">
+                {kid.wants !== null && (
+                  <span className="kid-wants">
+                    <SnackArt snack={kid.wants} />
                   </span>
                 )}
-                {kidBadges(kid) !== '' && <Pic className="kid-badges" glyph={kidBadges(kid)} />}
-                {kid.healed && <Pic className="kid-healed" glyph="🩹" />}
+                <KidArt id={kid.id} look={kid.look} />
+                {!kindy && <span className="kid-label">{kid.label}</span>}
+                {kid.healed && <Icon className="kid-healed" name="plaster" />}
               </span>
             );
           }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FriendType, ShopItem } from '@snacks/contracts';
-import { FRIEND_BLURB, FRIEND_PIC } from './labels.ts';
+import { FRIEND_BLURB } from './labels.ts';
 import { shopCard } from './shop.ts';
 
 const item = (over: Partial<ShopItem> = {}): ShopItem => ({ type: 'straight', price: 2, canBuy: true, shortfall: 0, owned: 0, refund: -1, ...over });
@@ -8,7 +8,7 @@ const TYPES: readonly FriendType[] = ['straight', 'diagonal', 'short', 'bouncer'
 
 describe('the shop’s cards (K9)', () => {
   it('a friend the player can afford: buy for its price', () => {
-    expect(shopCard(item())).toEqual({ buy: '⭐ 2', buyLabel: 'Buy a Straight for 2 points', owned: 'You have 0', refundLabel: null, short: false });
+    expect(shopCard(item())).toEqual({ buy: '2', buyLabel: 'Buy a Straight for 2 points', owned: 'You have 0', refundLabel: null, short: false });
   });
 
   it('not enough points: the card is off and says how many more are needed', () => {
@@ -20,9 +20,8 @@ describe('the shop’s cards (K9)', () => {
     expect(shopCard(item({ owned: 2, refund: 7 })).refundLabel).toBe('Give back a Straight for 2 points');
   });
 
-  it('every friend has a picture and one short line a grade-4 reader can follow', () => {
+  it('every friend has one short line a grade-4 reader can follow (its picture is art/Friend.tsx)', () => {
     for (const type of TYPES) {
-      expect(FRIEND_PIC[type]).not.toBe('');
       const line = FRIEND_BLURB[type];
       expect(line.length).toBeLessThanOrEqual(80);
       expect(line).toMatch(/^[A-Z].*\.$/);

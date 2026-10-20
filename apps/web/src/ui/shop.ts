@@ -3,7 +3,7 @@ import { FRIEND_NAME } from './labels.ts';
 
 /**
  * The words on one card of the shop (RULES 8, K9), from the View's shop item:
- * the buy button (its price, or how many more points are needed), how many
+ * the buy button (its price, shown beside a star, or how many more points are needed), how many
  * the player has today, and the refund button's name when there is one.
  */
 export interface ShopCardWords {
@@ -20,7 +20,7 @@ export function shopCard(item: ShopItem): ShopCardWords {
   const name = FRIEND_NAME[item.type];
   const short = item.shortfall > 0;
   return {
-    buy: short ? `Need ${item.shortfall} more` : `⭐ ${item.price}`,
+    buy: short ? `Need ${item.shortfall} more` : String(item.price),
     buyLabel: short ? `${name} costs ${item.price} points. Need ${item.shortfall} more` : `Buy a ${name} for ${item.price} points`,
     owned: `You have ${item.owned}`,
     refundLabel: item.refund >= 0 ? `Give back a ${name} for ${item.price} points` : null,

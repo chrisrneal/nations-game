@@ -12,14 +12,14 @@ describe('screen words', () => {
   });
 
   it('says what happened to each kid in plain words', () => {
-    expect(kidLine({ kid: 1, end: 'happy', ache: false, ate: 'apple' }, 'A')).toBe('A ate the Apple and went home happy 😋');
-    expect(kidLine({ kid: 1, end: 'hungry', ache: false, ate: null }, 'B')).toBe('B got no snack and went home hungry 😢');
+    expect(kidLine({ kid: 1, end: 'happy', ache: false, ate: 'apple' }, 'A')).toBe('A ate the Apple and went home happy');
+    expect(kidLine({ kid: 1, end: 'hungry', ache: false, ate: null }, 'B')).toBe('B got no snack and went home hungry');
     expect(kidLine({ kid: 1, end: 'hungry', ache: true, ate: 'cookie' }, 'C')).toMatch(/tummy ache from the Cookie/);
   });
 
   it('sums up a wave', () => {
     const wave = { wave: 3, snacks: [], points: 1, wentHungry: 1, kids: [{ kid: 1, end: 'happy' as const, ache: false, ate: 'apple' as const }, { kid: 2, end: 'hungry' as const, ache: false, ate: null }] };
-    expect(waveSummary(wave)).toBe('Wave 3: 1 of 2 fed · +1 ⭐ · 1 went home hungry');
+    expect(waveSummary(wave)).toBe('Wave 3: 1 of 2 fed · +1 points · 1 went home hungry');
   });
 
   it('reports a wave for the result overlay: fed, tummy aches, healed, hungry, points', () => {
@@ -49,7 +49,7 @@ describe('screen words', () => {
   });
 
   it('says what a kid wears on their clue card', () => {
-    const kid = (hat: boolean, glasses: boolean, backpack: boolean) => ({ id: 1, cell: 0, label: 'A', clue: 'Something red', wants: null, healed: false, look: { shirt: 0, hat, glasses, backpack, sister: 0 } });
+    const kid = (hat: boolean, glasses: boolean, backpack: boolean) => ({ id: 1, cell: 0, label: 'A', clue: 'Something red', facts: [{ kind: 'is' as const, trait: 'colour' as const, value: 'red' }], wants: null, healed: false, look: { shirt: 0, hat, glasses, backpack, sister: 0 } });
     expect(kidLooks(kid(false, false, false))).toBe('');
     expect(kidLooks(kid(true, false, false))).toBe('Wears a hat.');
     expect(kidLooks(kid(true, true, true))).toBe('Wears a hat, glasses and a backpack.');
@@ -60,7 +60,7 @@ describe('screen words', () => {
     expect(shortClue('Something sweet and long')).toBe('sweet and long');
     expect(shortClue('Something soft, not their sister’s')).toBe('soft, not sister’s');
     expect(shortClue('Not red, not soft')).toBe('not red, not soft');
-    expect(shortClue('Same as the kid in the hat')).toBe('same as 🎩');
-    expect(shortClue('Same as the kid with glasses')).toBe('same as 👓');
+    expect(shortClue('Same as the kid in the hat')).toBe('same as hat');
+    expect(shortClue('Same as the kid with glasses')).toBe('same as glasses');
   });
 });
