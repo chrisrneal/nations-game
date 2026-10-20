@@ -55,13 +55,17 @@ vite-plugin-pwa, Vitest + fast-check, and playwright-core for the phone check.
   all inside 360 x 740.
 - Touch targets of at least 44 px (64 px in Kindy). No horizontal scroll at
   360 px. Safe areas respected.
+- Kindy (K8): the board as wide as the phone, no text on the page anywhere
+  in the child's flow, and a whole Kindy day played by taps on what the hint
+  points at.
 - The wave replay at 60 fps with the CPU slowed 4x. A day's puzzle generated
   in under a second with the CPU slowed 4x.
 
 ## The harness
 - `npm test` generates and checks 1000 main dailies, 300 bonus rounds and 300
   Kindy dailies. Each must pass the clue checker and the solver, and its
-  solution must win with nobody hungry.
+  solution must win with nobody hungry. A Kindy day must also never get
+  stuck, whichever kids are left waiting (K8).
 - `npm test` also hashes 300 scripted games in Node and Chromium.
 - `npm run harness -- report` prints difficulty by wave, seeds skipped and
   time per day (docs/balance/generator-report.md).
@@ -82,11 +86,14 @@ until both work on hand-made test boards.
      Clear board, one screen with no scrolling.
 7. [x] Daily, practice, profiles (avatar picker), saves per profile, the streak (K7):
    the picker, the grown-ups' menu (press and hold), done for today with a
-   countdown, the streak in the top bar, a Kindy "coming soon" screen, and
-   the old single save folded into a first profile.
+   countdown, the streak in the top bar, and the old single save folded
+   into a first profile.
 8. [ ] Art and wave animation.
 9. [ ] Shop screen.
-10. [ ] Kindy mode on screen: the 4x4 board, pictures, spoken and animated hints. Its rules and generator are already built.
+10. [x] Kindy mode on screen (K8): the 4x4 board, pictures only, tap a friend
+    then a square, four big aim squares, a green play button, hints from the
+    stored solution (a pointing hand and the phone's voice), the party, a
+    picture-only done for today; Kindy days that can never get stuck.
 11. [ ] Sticker book, cosmetics and streak rewards.
 12. [ ] Phone check and polish on real phones.
 

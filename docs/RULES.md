@@ -184,6 +184,12 @@ result. Nothing random happens anywhere in resolution (L).
     waits.
 - **A Kindy day** ends when every kid has arrived and been fed. Waves go on
   past the fifth until then.
+- **A Kindy day never gets stuck** (K8). Any kid may miss a wave, so any set
+  of kids may end up waiting together, and one standing in the way of
+  another takes their snack. The generator keeps a Kindy board only if, for
+  every set of kids who could be waiting together, the friends given can
+  feed at least one of them with the others standing there; so the child
+  can always finish the day.
 - **Clue cards run 2 to 7 words.** The brief asked for 3 to 6, but its own
   examples run from "Something crunchy" (2 words) to "Same as the kid in the
   hat" (7).
@@ -346,13 +352,57 @@ Kindy.
 - The wanted snack is a picture over each kid's head, with no text anywhere in
   play.
 - No timer and no way to fail. A wrong snack bounces off and the kid shakes
-  their head.
+  their head. They wait for the next wave, still wanting the same snack, and
+  the board stays as the child left it (D15): the child tries again, with the
+  next kid arriving beside them.
 - Hints are spoken or animated, never text: the phone's built-in voice plus an
-  animated hand, or the animation alone when sound is off (D16).
+  animated hand, or the animation alone when sound is off (D16). See 11a.
 - Big tap targets everywhere: at least 64 px.
 - Its own profile, and its own daily from the date seed with a "kindy" salt.
 - 5 waves of 1 kid each (`kindyWaves`); all friends in the tray from the
-  start; no shop (D15).
+  start; no shop (D15) and no bonus round.
+
+### 11a. Kindy on the screen (decision record K8)
+
+None of this changes a rule: every action is a place, turn or toTray
+command, or Go, checked by the sim.
+
+- **No text at all** from the child's picture to the end of the day: every
+  picture is drawn by CSS, so there is not one letter or digit on the page.
+  Words exist only as the spoken hints and as labels for screen readers.
+  Parent words live behind the grown-ups' menu (section 12).
+- **The screen:** the child's picture (back to the picker), a row of five
+  faces that fill as kids are fed, and a help bubble on top; the board as
+  wide as the phone (squares about 80 px); at the bottom the friends in the
+  tray, the basket and a big green play button.
+- **Setting up:** tap a friend, then the square it goes on (or drag it, as in
+  main mode). A friend on the board lights one big square for each way it
+  can throw, with an arrow: where that throw ends (the first thing in the
+  way, or the last square before the edge). Tapping one aims it. Tap a
+  friend on the board, then another square, to move it; or then the basket
+  to take it back. A tap that can't do anything wiggles the square.
+- **The wave:** the snacks fly; a fed kid dances; a wrong snack bounces off
+  and the kid shakes their head. No card to read or close: the board is
+  ready again as soon as the wave ends.
+- **Hints (D16):** after `kindyHintIdle` (8) seconds without a tap, or a tap
+  on the help bubble, a hand points at the next step: the friend, then where
+  it goes; or the square to aim at; or the basket; or the play button. It
+  stays until that step is done. The steps lead to the puzzle's stored
+  solution for the wave; once a kid is left waiting, to a setup that feeds
+  everyone if there is one, else the kid who has waited longest (their own
+  wave's stored solution first). A setup the child made that already feeds
+  everyone is left alone: the hint is the play button.
+- **The voice** says each hint in a few words ("Put the thrower here!"). A
+  phone may speak only after a tap, so speech starts with the child's first
+  tap; where there is no voice, the hand alone is the hint. A grown-up turns
+  the voice off in the grown-ups' menu.
+- **The end:** a party with confetti and every kid dancing, and one big play
+  button to done for today: a sleeping sun, a moon crossing the night to a
+  sunrise (the next puzzle at local midnight, a picture countdown), a face
+  for each kid fed and a star for each finished day of the week, and a
+  practice button. When the new day comes the sun wakes up and a big play
+  button opens it. A finished Kindy practice board shows the party with a
+  new board and today's buttons.
 
 ## 12. Profiles (L)
 
@@ -376,8 +426,8 @@ Kindy.
   bonus round, practice, its finished days, streak and best streak. Each
   game is saved as snapshot plus command log (S9). Nothing leaves the
   device: no accounts, no server.
-- Until Kindy mode is on screen (build step 10), a Kindy profile opens a
-  picture-only "coming soon" screen with a big way back to the pictures.
+- A Kindy profile opens the Kindy screen (section 11a). The grown-ups' menu
+  also turns Kindy's spoken hints off or on (D16).
 - A device that was played before profiles keeps its progress: its game and
   finished days become the first profile's (K7).
 

@@ -1,12 +1,15 @@
 # Progress
-Current state: **Snack Attack, build steps 0-7 done: a plain playable game
-with a profile for each child** (decision records K1, K7). The engine,
-solver, clue checker and generator are built and tested. A grey-squares
-screen plays the daily, its bonus round and practice boards, with phone
-controls (tap-to-aim, drag, Undo, one screen; K6). Each child has a profile
-with their own daily, retries, practice board, finished days and streak; a
-finished daily shows "done for today" with a countdown (K7). Next is the
-owner's gate: play it with the 9-year-old and say whether it's fun. The
+Current state: **Snack Attack, build steps 0-7 and 10 done: a plain
+playable game with a profile for each child, and Kindy mode on screen**
+(decision records K1, K7, K8). The engine, solver, clue checker and
+generator are built and tested. A grey-squares screen plays the daily, its
+bonus round and practice boards, with phone controls (tap-to-aim, drag,
+Undo, one screen; K6). Each child has a profile with their own daily,
+retries, practice board, finished days and streak; a finished daily shows
+"done for today" with a countdown (K7). A Kindy profile plays its own 4 x 4
+daily with pictures only, a pointing hand and a spoken voice for hints, a
+party at the end and a picture-only done for today (K8). Next is the
+owner's gate: play both modes with the children and say what to change. The
 warehouse simulator is at commit `734c848`; the log below the line describes
 the earlier games.
 
@@ -21,11 +24,74 @@ the earlier games.
 - [x] 7 Daily, practice, profiles, streak (K7)
 - [ ] 8 Art and animation
 - [ ] 9 Shop screen
-- [ ] 10 Kindy mode on screen
+- [x] 10 Kindy mode on screen (K8)
 - [ ] 11 Sticker book and cosmetics
 - [ ] 12 Polish on real phones
 
 ## Session log
+
+### 2026-10-20 - Kindy mode on screen (build step 10; all lanes, owner request, K8)
+**What changed.**
+- **A Kindy profile plays Kindy.** Picking a Kindy child's picture opens
+  their own 4 x 4 daily (the Kindy seed for the date), saved in their own
+  slot. The "coming soon" screen is gone.
+- **Nothing to read.** Every picture on the Kindy screens is drawn by CSS,
+  so there is not a single letter or digit on the page, from the board to
+  the party to done for today. Grown-up words stay in the grown-ups' menu.
+- **The screen.** The child's picture (back to the pictures), five faces that
+  fill as kids are fed, a ❓ help bubble; the board as wide as the phone
+  (squares about 80 px, each kid with the snack they want in a bubble over
+  their head); at the bottom the friends, a basket and a big green ▶.
+  Every button is 64 px or more.
+- **Setting up.** Tap a friend, then a square (or drag it). It lights at most
+  four big squares with arrows; tap one to aim. Tap a friend then another
+  square to move it, or then the basket to take it back.
+- **Feedback.** A fed kid dances. A wrong snack bounces off and the kid
+  shakes their head; they wait for the next wave and the board stays as it
+  was, so the child just tries again (D15). The last kid fed starts a
+  party: confetti, five dancing faces, a big ▶ to done for today.
+- **Hints.** After 8 seconds without a tap, or a tap on ❓, a hand moves from
+  the right friend to the right square (or the aim square, the basket, or
+  ▶). The phone's voice says it ("Put the thrower here!") from the child's
+  first tap on (iOS needs a tap first); with no voice, the hand alone. The
+  steps come from the puzzle's stored solution, or from the solver once a
+  kid is left waiting.
+- **Done for today, in pictures.** A sleeping sun; a moon crossing the night
+  to a sunrise, which is the next puzzle at midnight; a face per kid fed;
+  a star for each finished day this week; 🔄 for a practice board. When the
+  day changes the sun wakes up and a big ▶ opens the new puzzle.
+- **Grown-ups' menu:** a new "Kindy spoken hints: on/off" switch.
+- **Fixed on the way: Kindy days that could never be finished.** On about 1
+  Kindy day in 8, if the child missed one kid, the next kid stood in the way
+  so that neither could ever be fed. The generator now throws such a board
+  away and takes the next seed (K8); the harness checks all 300 Kindy days
+  for it.
+
+**Measured.**
+- `npm test`: 329 tests pass. New: 11 hint and Kindy-day tests in the sim
+  (hints step by step, a friend in the way, the child's own setup, a wrong
+  snack, 60 generated days won by following hints, 60 more by a child who
+  presses Go too soon at random), 4 Kindy host tests, 3 speech tests, and
+  Kindy aiming and hint-pointing tests in the interface. The 1000-day
+  generator check (now also: no stuck Kindy day in 300) and the
+  Node-vs-Chromium determinism test pass.
+- Phone check: 151/151 at 360 x 740 and 151/151 at 412 x 915. The Kindy part plays a
+  whole Kindy day by tapping only what the hand points at (every target 64
+  px or more), checks for no text on every Kindy screen, the hand showing
+  itself after 8 seconds, the voice starting on the first tap (a stand-in
+  voice in headless Chromium) and stopping when a grown-up turns it off, a
+  wrong snack's head shake on the first day that has one, the party at 60
+  fps with the CPU slowed 4x, and done for today again after a reload.
+
+**How to see it.** On the phone, tap your picture top-left, hold
+**Grown-ups** for a second, add a child with **Kindy: pictures only**, and
+tap their picture. Put the thrower out, aim it, press ▶. Wait 8 seconds or
+tap ❓ for the hand (turn the phone's sound up to hear it).
+
+**What is left.** The sticker book (step 11), art (step 8), trying the voice
+on a real iPhone and Android phone, and the gaps logged under K8 in
+docs/GAPS.md (the owner might want to say whether the shared picker should
+lose its words too).
 
 ### 2026-10-20 - Profiles, daily completion and streaks (build step 7; all lanes, owner request, K7)
 **What changed.**
