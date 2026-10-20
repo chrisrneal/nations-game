@@ -1,6 +1,6 @@
 /**
  * Every save migration is tested with a real old save file (S9). The file in
- * fixtures/ was written by the game before K9 (schema 1): a practice board
+ * fixtures/ was written by the game before K11 (schema 1): a practice board
  * with wave 1 played and wave 2 set up but not yet played.
  */
 import { readFileSync } from 'node:fs';
@@ -9,7 +9,7 @@ import { GameSession, SCHEMA_VERSION, gameView, hashState, step } from '@snacks/
 
 const v1 = (): Record<string, unknown> => JSON.parse(readFileSync(new URL('../fixtures/save-v1.json', import.meta.url), 'utf8')) as Record<string, unknown>;
 
-describe('a version-1 save (before hints, K9)', () => {
+describe('a version-1 save (before hints, K11)', () => {
   it('loads at the same point, with no hints used yet, and plays on', () => {
     const raw = v1();
     expect(raw.schemaVersion).toBe(1);

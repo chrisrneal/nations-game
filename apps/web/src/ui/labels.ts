@@ -1,19 +1,9 @@
 import type { FriendType, HintTopic, KidOutcome, KidView, MainHint, SnackEnd, SnackId, WaveResult } from '@snacks/contracts';
 
 /**
- * Words and symbols for the grey-squares screen (build step 6): plain
- * letters, friend names with a diagram of each throw pattern (Diagram.tsx)
- * and emoji for the snacks. The art comes later (step 8).
+ * Words for the screen: snack and friend names, what happened in a wave, the
+ * kids' letters. The pictures are in art/ (K10).
  */
-
-export const SNACK_EMOJI: Readonly<Record<SnackId, string>> = {
-  apple: '🍎',
-  cookie: '🍪',
-  banana: '🍌',
-  cheese: '🧀',
-  pretzel: '🥨',
-  grapes: '🍇',
-};
 
 export const SNACK_NAME: Readonly<Record<SnackId, string>> = {
   apple: 'Apple',
@@ -38,6 +28,15 @@ export const FRIEND_HOW: Readonly<Record<FriendType, string>> = {
   short: 'throws one square, any way',
   bouncer: 'jumps a snack in an L, over anything',
   nurse: 'heals tummy aches next to it',
+};
+
+/** One line in the shop for each friend, for a grade-4 reader (RULES 5, 7). */
+export const FRIEND_BLURB: Readonly<Record<FriendType, string>> = {
+  straight: 'Throws a snack in a straight line: up, down, left or right.',
+  diagonal: 'Throws a snack corner to corner, along a slanted line.',
+  short: 'Passes a snack to a square right next to it.',
+  bouncer: 'Bounces a snack in an L shape, over anything in the way.',
+  nurse: 'Doesn’t throw. Helps a kid near it get over a tummy ache.',
 };
 
 /** The order friend types appear in the tray and shop. */
@@ -98,13 +97,13 @@ export function kidLine(outcome: KidOutcome, label: string): string {
   const ate = outcome.ate === null ? '' : SNACK_NAME[outcome.ate];
   switch (outcome.end) {
     case 'happy':
-      return `${label} ate the ${ate} and went home happy 😋`;
+      return `${label} ate the ${ate} and went home happy`;
     case 'healed':
-      return `${label} got a tummy ache from the ${ate}. The Nurse helped, so ${label} stays one more wave 🩹`;
+      return `${label} got a tummy ache from the ${ate}. The Nurse helped, so ${label} stays one more wave`;
     case 'waits':
       return `${label} is still hungry and waits for the next wave`;
     case 'hungry':
-      return outcome.ache ? `${label} got a tummy ache from the ${ate} and went home hungry 🤢` : `${label} got no snack and went home hungry 😢`;
+      return outcome.ache ? `${label} got a tummy ache from the ${ate} and went home hungry` : `${label} got no snack and went home hungry`;
   }
 }
 
@@ -112,7 +111,7 @@ export function kidLine(outcome: KidOutcome, label: string): string {
 export function waveSummary(wave: WaveResult): string {
   const fed = wave.kids.filter((k) => k.end === 'happy').length;
   const parts = [`Wave ${wave.wave}: ${fed} of ${wave.kids.length} fed`];
-  if (wave.points > 0) parts.push(`+${wave.points} ⭐`);
+  if (wave.points > 0) parts.push(`+${wave.points} points`);
   if (wave.wentHungry > 0) parts.push(`${wave.wentHungry} went home hungry`);
   return parts.join(' · ');
 }
@@ -123,11 +122,6 @@ export function kidLooks(kid: KidView): string {
   if (wears.length === 0) return '';
   const list = wears.length === 1 ? wears[0]! : `${wears.slice(0, -1).join(', ')} and ${wears[wears.length - 1]!}`;
   return `Wears ${list}.`;
-}
-
-/** "the kid in the hat" etc. drawn as small emoji on a kid's square. */
-export function kidBadges(kid: KidView): string {
-  return `${kid.look.hat ? '🎩' : ''}${kid.look.glasses ? '👓' : ''}${kid.look.backpack ? '🎒' : ''}`;
 }
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -166,8 +160,8 @@ export function hungryOf(hungry: number, allowed: number): string {
 export function shortClue(clue: string): string {
   const text = clue
     .replace(/^Something /, '')
-    .replace(/^Same as the kid in the hat$/, 'same as 🎩')
-    .replace(/^Same as the kid with glasses$/, 'same as 👓')
+    .replace(/^Same as the kid in the hat$/, 'same as hat')
+    .replace(/^Same as the kid with glasses$/, 'same as glasses')
     .replace(/their sister’s/, 'sister’s');
   return text.charAt(0).toLowerCase() + text.slice(1);
 }
@@ -191,17 +185,17 @@ const and = (words: readonly string[]): string => (words.length <= 1 ? (words[0]
 export function hintLine(hint: MainHint, label: string, type: FriendType | null): string {
   switch (hint.tier) {
     case 0:
-      return '💡 Every kid gets the right snack. Press Go!';
+      return 'Every kid gets the right snack. Press Go!';
     case 1: {
       const traits = hint.about.filter((t) => t !== 'hat' && t !== 'glasses' && t !== 'sister').map((t) => TOPIC_WORDS[t]);
       const kids = hint.about.filter((t) => t === 'hat' || t === 'glasses' || t === 'sister').map((t) => TOPIC_WORDS[t]);
       const parts = [traits.length > 0 ? `is about ${and(traits)}` : '', kids.length > 0 ? `points at ${and(kids)}` : ''].filter((p) => p !== '');
-      return `💡 Kid ${label} next: their card ${parts.join(', and ')}.`;
+      return `Kid ${label} next: their card ${parts.join(', and ')}.`;
     }
     case 2:
-      return `💡 Kid ${label}’s snack is in the glowing lunchbox.`;
+      return `Kid ${label}’s snack is in the glowing lunchbox.`;
     case 3:
-      return hint.placed >= 0 && type !== null ? `💡 A ${FRIEND_NAME[type]} is in place for kid ${label}. Hint again for the next step.` : `💡 A friend in kid ${label}’s way went back to the tray.`;
+      return hint.placed >= 0 && type !== null ? `A ${FRIEND_NAME[type]} is in place for kid ${label}. Hint again for the next step.` : `A friend in kid ${label}’s way went back to the tray.`;
   }
 }
 

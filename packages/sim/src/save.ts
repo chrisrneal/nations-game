@@ -5,7 +5,7 @@ import { hashState } from './hash.ts';
 export type Migration = (save: Record<string, unknown>) => Record<string, unknown>;
 
 /**
- * Version 1 to 2 (K9): a game gains its hint count per wave and the hint
+ * Version 1 to 2 (K11): a game gains its hint count per wave and the hint
  * showing, none yet. The old hash covered the old fields only, so the log is
  * replayed: if it leads where the old hash says (without the new fields),
  * the save gets the new hash; if not, the old hash stays and the save is

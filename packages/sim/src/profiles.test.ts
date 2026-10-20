@@ -173,10 +173,10 @@ describe('the streak (RULES 9, D10, decision record K7)', () => {
     book = recordDaily(book, 'p1', done(D - 1, 0, 0));
     book = recordDaily(book, 'p1', done(D, 1, 7));
     expect(profileView(book.profiles[0]!, D)).toMatchObject({ streak: 2, today: { day: D, hints: 7, retries: 1 } });
-    // A host from before K9 reports no hints: 0.
+    // A host from before K11 reports no hints: 0.
     book = recordDaily(book, 'p1', { day: D + 1, fed: 1, hungry: 0, retries: 0 });
     expect(book.profiles[0]!.history.at(-1)?.hints).toBe(0);
-    // Stored and read back; a stored day from before K9 has no hints field and reads as 0.
+    // Stored and read back; a stored day from before K11 has no hints field and reads as 0.
     const raw = JSON.parse(JSON.stringify(book));
     delete raw.profiles[0].history[0].hints;
     expect(readBook(raw).profiles[0]!.history.map((r) => r.hints)).toEqual([0, 7, 0]);

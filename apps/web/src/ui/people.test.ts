@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { AVATAR_LOOK, countdown, profileLabel, retriesText, streakText, weekStrip } from './people.ts';
 
 describe('profile words and pictures', () => {
-  it('every picture has a look', () => {
-    for (const look of Object.values(AVATAR_LOOK)) expect(look.emoji.length).toBeGreaterThan(0);
+  it('every picture has a name for screen readers', () => {
+    for (const look of Object.values(AVATAR_LOOK)) expect(look.name.length).toBeGreaterThan(0);
   });
 
   it('names a profile by its name, or by its picture when it has none', () => {

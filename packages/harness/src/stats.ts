@@ -1,5 +1,5 @@
 /**
- * How hard a generated day is, wave by wave (RULES 10, K9): what the
+ * How hard a generated day is, wave by wave (RULES 10, K11): what the
  * difficulty report's sanity tables are made of. Pure code over @snacks/sim,
  * from the puzzle and its stored solution.
  */

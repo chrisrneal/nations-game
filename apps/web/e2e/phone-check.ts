@@ -27,6 +27,17 @@
  * - reopening continues at wave 3; a practice board is generated in under a
  *   second with the CPU slowed 4x; it reopens offline.
  *
+ * The shop (RULES 8, K9):
+ * - its button in the tray shows the points and is off while a wave plays;
+ * - the shop is a bottom sheet with nothing to scroll: every card (picture,
+ *   name, pattern diagram, one line on what it does, how many you have, the
+ *   price) and every button inside 360 x 740; with no points every card is
+ *   off and says how many more are needed; it closes with its close button;
+ * - on the first wave whose plan buys a friend (points earned in earlier
+ *   waves): buy it, the tray under the sheet counts it at once; give it back,
+ *   the points return; buy it again; close the sheet with a swipe down; the
+ *   new friend is placed from the tray and the wave feeds every kid.
+ *
  * Profiles (K7):
  * - the top bar shows who is playing and their streak; its picture opens the
  *   picker; a quick tap on Grown-ups does nothing, a press-and-hold opens the
@@ -60,7 +71,20 @@
  *   again; practice gives a new Kindy board;
  * - turning the voice off in the grown-ups' menu keeps the hand and stops
  *   the voice.
- * Hints in main mode (RULES 8b, K9), by the second child on wave 1:
+ *
+ * The art and the replay (K10):
+ * - every picture (lunchboxes with their snack and tag, kids, friends,
+ *   obstacles, tables, the top bar, each card's clue pictures, the clue
+ *   card's snack key with a picture for each trait, the result's rows, the
+ *   shop, Kindy's bubbles and friends) is inside 360 x 740 and showing; no
+ *   emoji on any main screen; no Kindy bubble cut off by the board's edge;
+ * - the replay flies every snack as its picture, a fed kid smiles, snacks
+ *   rise into an arc, and only transform and opacity are animated (every
+ *   Web Animation is recorded); the busiest wave of the day also holds 55+
+ *   fps with the CPU slowed 4x; with reduced motion there are no arcs,
+ *   spins, dances, wobbles or sparkles.
+ *
+ * Hints in main mode (RULES 8b, K11), by the second child on wave 1:
  * - the Hint button is inside 360 x 740, in the bottom third, 44 px or more;
  * - tier 1 lights the kid and their card and names what the card is about;
  *   their clue card then lights those traits; tier 2 lights the lunchbox of
@@ -70,7 +94,8 @@
  *   uses a hint on wave 3, and done for today counts it with the streak
  *   still 1 (hints never break it).
  * Every new screen and control is checked to be inside 360 x 740 and not
- * covered, not just positioned.
+ * covered, not just positioned. The four screens' looks are checked by the
+ * visual check (visual-check.ts).
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
@@ -275,17 +300,100 @@ async function aimByTap(page: Page, puzzle: Puzzle, friend: PlacedFriend): Promi
   return ok ? how : 'failed';
 }
 
-/** Buys what the witness buys before this wave, through the shop sheet. */
-async function buy(page: Page, types: readonly FriendType[]): Promise<boolean> {
+/** How many of a type the tray shows as left; 0 when the type has no tray button. */
+async function trayLeft(page: Page, type: FriendType): Promise<number> {
+  const button = trayButton(page, type);
+  if ((await button.count()) === 0) return 0;
+  const m = /, (\d+) left/.exec((await button.getAttribute('aria-label')) ?? '');
+  return m === null ? -1 : Number(m[1]);
+}
+
+const shopSheet = (page: Page): Locator => page.getByRole('dialog', { name: 'Shop' });
+const shopCardOf = (page: Page, type: FriendType): Locator => shopSheet(page).locator(`.shop-card[data-type="${type}"]`);
+const shopPoints = async (page: Page): Promise<number> => Number(/(\d+) points?/.exec((await shopSheet(page).locator('.sheet-title').textContent()) ?? '')?.[1] ?? -1);
+
+/** A finger pulls `from` down by `dy` px and lets go: a swipe down. */
+async function swipeDown(cdp: CDPSession, from: Locator, dy: number): Promise<void> {
+  const a = await centre(from);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: a.x, y: a.y }] });
+  for (let i = 1; i <= 10; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: a.x, y: a.y + (dy * i) / 10 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+}
+
+/** Every card of the open shop, its parts and its buttons are inside the viewport, and nothing scrolls. */
+async function shopOnScreen(page: Page, where: string): Promise<void> {
+  const sheet = shopSheet(page);
+  await checkOnScreen(`shop (${where}): the sheet is inside the viewport`, sheet.locator('.sheet-head'));
+  await checkOnScreen(`shop (${where}): every card is inside the viewport`, sheet.locator('.shop-card'));
+  await checkOnScreen(`shop (${where}): every picture is inside the viewport`, sheet.locator('.shop-pic'));
+  await checkOnScreen(`shop (${where}): every buy button is inside the viewport`, sheet.locator('.shop-buy'));
+  await checkOnScreen(`shop (${where}): the close button is inside the viewport`, sheet.locator('.sheet-close'));
+  if ((await sheet.locator('.shop-refund').count()) > 0) await checkOnScreen(`shop (${where}): every Give back is inside the viewport`, sheet.locator('.shop-refund'));
+  await noVerticalScroll(page, `the shop, ${where}`);
+  await noHorizontalScroll(page, `the shop, ${where}`);
+  await touchTargets(page, `the shop, ${where}`);
+}
+
+/** The wave whose plan first buys a friend runs the whole shop flow (K9); what it bought, once it has. */
+let shopFlow: { wave: number; type: FriendType } | null = null;
+
+/**
+ * Buys what the witness buys before this wave, through the shop sheet. The
+ * first time there is something to buy, it also gives the first friend back
+ * and buys it again, checking the tray and the points each time, and closes
+ * the sheet with a swipe down instead of its close button.
+ */
+async function buy(page: Page, cdp: CDPSession, wave: number, types: readonly FriendType[]): Promise<boolean> {
   if (types.length === 0) return true;
+  const full = shopFlow === null;
   await page.locator('.tray-shop').tap();
-  for (const type of types) {
-    const before = (await page.locator('.sheet-title').textContent()) ?? '';
-    await page.getByRole('button', { name: new RegExp(`^Buy a ${FRIEND_NAME[type]} for`) }).tap();
-    if (!(await until(page, async () => ((await page.locator('.sheet-title').textContent()) ?? '') !== before))) return false;
+  await shopSheet(page).waitFor({ timeout: 3000 });
+  if (full) {
+    const type = types[0]!;
+    const card = shopCardOf(page, type);
+    const points0 = await shopPoints(page);
+    const tray0 = await trayLeft(page, type);
+    const owned0 = (await card.locator('.shop-owned').textContent()) ?? '';
+    check(`shop, wave ${wave}: points earned in earlier waves to spend`, points0 > 0 && (await page.locator('.tray-shop').getAttribute('aria-label'))?.includes(`${points0} point`) === true, `${points0} points`);
+    await shopOnScreen(page, 'with points');
+    await shot(page, '5b-shop');
+    await card.locator('.shop-buy').tap();
+    const bought = await until(page, async () => (await shopPoints(page)) < points0);
+    const points1 = await shopPoints(page);
+    const owned1 = (await card.locator('.shop-owned').textContent()) ?? '';
+    const tray1 = await trayLeft(page, type);
+    check(`shop: buying a ${FRIEND_NAME[type]} takes its points and puts it straight in the tray`, bought && tray1 === tray0 + 1 && owned1 !== owned0, `⭐ ${points0} → ${points1}, tray ${tray0} → ${tray1}, ${owned0} → ${owned1}`);
+    const giveBack = card.locator('.shop-refund');
+    await checkOnScreen('shop: a friend bought this setup can be given back; the button is inside the viewport', giveBack);
+    await shot(page, '5c-shop-bought');
+    await giveBack.tap();
+    const back = await until(page, async () => (await shopPoints(page)) === points0);
+    check('shop: giving it back returns every point and takes it out of the tray', back && (await trayLeft(page, type)) === tray0 && (await card.locator('.shop-refund').count()) === 0 && ((await card.locator('.shop-owned').textContent()) ?? '') === owned0, `⭐ ${await shopPoints(page)}, tray ${await trayLeft(page, type)}`);
+    await card.locator('.shop-buy').tap();
+    const again = await until(page, async () => (await shopPoints(page)) === points1);
+    check('shop: bought again after giving it back', again && (await trayLeft(page, type)) === tray0 + 1);
   }
-  await page.locator('.sheet-close').tap();
-  return true;
+  for (const type of full ? types.slice(1) : types) {
+    const before = await shopPoints(page);
+    await shopCardOf(page, type).locator('.shop-buy').tap();
+    if (!(await until(page, async () => (await shopPoints(page)) !== before))) return false;
+  }
+  if (full) {
+    await swipeDown(cdp, shopSheet(page).locator('.sheet-title'), 220);
+    const closed = await until(page, async () => (await shopSheet(page).count()) === 0);
+    check('shop: a swipe down closes it, and the tray shows what was bought', closed && (await trayLeft(page, types[0]!)) > 0, `${FRIEND_NAME[types[0]!]} ×${await trayLeft(page, types[0]!)} in the tray`);
+    shopFlow = { wave, type: types[0]! };
+  } else {
+    await shopSheet(page).locator('.sheet-close').tap();
+  }
+  return until(page, async () => (await shopSheet(page).count()) === 0);
+}
+
+/** After the wave that ran the shop flow: the friend bought was on the board and every kid was fed. */
+function shopFlowPlayed(wave: number, fed: boolean, onBoard: readonly { type: FriendType }[]): void {
+  if (shopFlow === null || shopFlow.wave !== wave) return;
+  const type = shopFlow.type;
+  check(`shop: the ${FRIEND_NAME[type]} bought for wave ${wave} was placed from the tray and the wave fed every kid`, fed && onBoard.some((f) => f.type === type));
 }
 
 /** Waits for the result over the board and checks it. */
@@ -304,6 +412,8 @@ async function checkResult(page: Page, wave: number, kids: number): Promise<void
   const fed = (await overlay.locator('[data-row="fed"]').textContent()) ?? '';
   check(`wave ${wave} result: fed, hungry against the allowance, points`, /Fed: [A-Z]/.test(fed) && /Hungry today: 0 of 3/.test(hungry) && points.includes(`+${kids}`), `${fed} | ${hungry} | ${points}`);
   await checkOnScreen(`wave ${wave} result: its button is inside the viewport`, overlay.getByRole('button', { name: /Set up wave/ }));
+  await checkOnScreen(`wave ${wave} result: each row’s picture is inside the viewport`, overlay.locator('.result-rows .row-icon'));
+  await noEmoji(page, `wave ${wave} result`);
 }
 
 /** Every visible element matching is at least `min` px each way (64 px for what a 4-year-old taps). */
@@ -334,8 +444,8 @@ async function boardFriends(page: Page): Promise<{ cell: number; type: FriendTyp
  * the board: buy, send friends the plan doesn't use to the tray, place the
  * rest from the tray, aim every one, press Go. True when every kid is fed.
  */
-async function playWaveByTaps(page: Page, puzzle: Puzzle, layout: WaveLayout): Promise<boolean> {
-  if (!(await buy(page, layout.buys))) return false;
+async function playWaveByTaps(page: Page, cdp: CDPSession, puzzle: Puzzle, layout: WaveLayout, beforeGo?: () => Promise<void>): Promise<boolean> {
+  if (!(await buy(page, cdp, layout.wave, layout.buys))) return false;
   const todo = [...layout.friends];
   for (const friend of await boardFriends(page)) {
     const i = todo.findIndex((f) => f.cell === friend.cell && f.type === friend.type);
@@ -355,17 +465,21 @@ async function playWaveByTaps(page: Page, puzzle: Puzzle, layout: WaveLayout): P
     if (!(await until(page, () => hasFriend(page, f.cell)))) return false;
   }
   for (const f of layout.friends) if ((await aimByTap(page, puzzle, f)) === 'failed') return false;
+  const onBoard = await boardFriends(page);
+  await beforeGo?.();
   await page.locator('.btn-go').tap();
   const overlay = page.getByRole('region', { name: 'What happened' });
   await overlay.waitFor({ timeout: 15_000 });
   const kids = puzzle.kids.filter((k) => k.wave === layout.wave).length;
-  return ((await overlay.locator('h2').textContent()) ?? '').includes(`${kids} of ${kids} fed`);
+  const fed = ((await overlay.locator('h2').textContent()) ?? '').includes(`${kids} of ${kids} fed`);
+  shopFlowPlayed(layout.wave, fed, onBoard);
+  return fed;
 }
 
 
 /**
  * Kindy has no text (RULES 11): no visible text node anywhere on the page,
- * and no picture drawn by CSS from `data-pic` that is a letter or a digit.
+ * and no picture that holds text (an SVG `<text>`, `<title>` or `<desc>`).
  */
 async function noText(page: Page, where: string): Promise<void> {
   const r = (await page.evaluate(`(() => {
@@ -379,7 +493,7 @@ async function noText(page: Page, where: string): Promise<void> {
       const style = getComputedStyle(el);
       if (box.width > 0 && box.height > 0 && style.visibility !== 'hidden' && style.display !== 'none') text.push(n.textContent.trim().slice(0, 30));
     }
-    const pics = [...document.querySelectorAll('[data-pic]')].map((e) => e.getAttribute('data-pic')).filter((p) => /[\\p{L}\\p{N}]/u.test(p));
+    const pics = [...document.querySelectorAll('svg text, svg title, svg desc')].map((e) => e.tagName + ': ' + (e.textContent ?? '').slice(0, 20));
     return { text, pics, kindy: document.querySelector('.kindy-game') !== null };
   })()`)) as { text: string[]; pics: string[]; kindy: boolean };
   check(`no text anywhere on the page: ${where}`, r.kindy && r.text.length === 0 && r.pics.length === 0, [...r.text, ...r.pics].join(' | '));
@@ -465,6 +579,46 @@ function wrongThrow(puzzle: Puzzle): { cell: number; facing: number; aimAt: numb
   return null;
 }
 
+/**
+ * Writes down every Web Animation the page starts (K10): what it moves, on
+ * what, and the transforms it goes through, so the check can prove the
+ * replay moves only transform and opacity, and that the calm version has no
+ * arcs, spins or dances. Also counts the flying snacks and kids' faces.
+ */
+const RECORDER = `(() => {
+  window.__anims = [];
+  const animate = Element.prototype.animate;
+  Element.prototype.animate = function (frames, options) {
+    const list = Array.isArray(frames) ? frames : [];
+    window.__anims.push({
+      cls: this.getAttribute('class') || '',
+      props: [...new Set(list.flatMap((f) => Object.keys(f)))],
+      transforms: list.map((f) => f.transform || '').join(' | '),
+    });
+    return animate.call(this, frames, options);
+  };
+})()`;
+
+interface Recorded {
+  cls: string;
+  props: string[];
+  transforms: string;
+}
+const recorded = async (page: Page): Promise<Recorded[]> => (await page.evaluate('window.__anims ?? []')) as Recorded[];
+const resetRecorder = (page: Page): Promise<unknown> => page.evaluate('window.__anims = []');
+
+/** No emoji anywhere on the page (the art replaced them, K10): they look different on every phone. */
+async function noEmoji(page: Page, where: string): Promise<void> {
+  const found = (await page.evaluate(`(() => {
+    const out = [];
+    const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = walk.nextNode())) if (/\\p{Extended_Pictographic}/u.test(n.textContent) && n.parentElement && n.parentElement.getBoundingClientRect().width > 0) out.push(n.textContent.trim().slice(0, 30));
+    return out;
+  })()`)) as string[];
+  check(`no emoji on the page, only the art: ${where}`, found.length === 0, found.join(' | '));
+}
+
 async function openPicker(page: Page): Promise<void> {
   await page.locator('.bar-avatar').tap();
   await page.locator('.picker').waitFor({ timeout: 5000 });
@@ -532,6 +686,7 @@ async function main(): Promise<void> {
       Object.defineProperty(window, 'SpeechSynthesisUtterance', { value: Utterance, configurable: true, writable: true });
       Object.defineProperty(window, 'speechSynthesis', { value: { speak: (u) => window.__spoken.push(u.text), cancel: () => {} }, configurable: true });
     })()`);
+    await page.addInitScript(RECORDER);
     await page.goto(URL);
     await page.locator('.board').waitFor();
     await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
@@ -548,7 +703,7 @@ async function main(): Promise<void> {
     await checkOnScreen('setup: every kid’s card is inside the viewport', page.locator('.clue-chip'));
     await checkOnScreen('setup: every tray button is inside the viewport', page.locator('.tray-btn'));
     const trayText = await page.locator('.tray-btn').allTextContents();
-    const named = trayText.every((t) => /^(Straight|Diagonal|Short|Bouncer|Nurse)×\d+$|^Shop/.test(t.replace(/\s/g, '').replace('🛒', '')));
+    const named = trayText.every((t) => /^(Straight|Diagonal|Short|Bouncer|Nurse)×\d+$|^Shop/.test(t.replace(/\s/g, '')));
     const diagrams = await page.locator('.tray-btn:not(.tray-shop) svg.diagram').count();
     const friendButtons = await page.locator('.tray-btn:not(.tray-shop)').count();
     check('the tray names each friend, draws its pattern and counts what is left, no chess symbols', named && diagrams === friendButtons && !trayText.some((t) => CHESS.test(t)), trayText.join(' | '));
@@ -565,6 +720,18 @@ async function main(): Promise<void> {
 
     const puzzle = generatePuzzle('main', 'daily', DAY, 0);
 
+    // ---- the art (K10): every picture is drawn, and inside the viewport ----
+    const squaresOf = (kind: string): number => puzzle.board.squares.filter((k) => k === kind).length;
+    check('art: every lunchbox shows its snack and its colour’s mark', (await page.locator('.board .sq-lunchbox .art-lunchbox .art-snack').count()) === puzzle.board.lunchboxes.length, `${puzzle.board.lunchboxes.length} lunchboxes`);
+    await checkOnScreen('art: every lunchbox is inside the viewport', page.locator('.board .art-lunchbox'));
+    check('art: every obstacle and parents’ table is drawn', (await page.locator('.board .sq-obstacle .art-obstacle').count()) === squaresOf('obstacle') && (await page.locator('.board .sq-table .art-table').count()) === squaresOf('table'), `${squaresOf('obstacle')} obstacles, ${squaresOf('table')} tables`);
+    await checkOnScreen('art: every kid on the board is drawn, inside the viewport', page.locator('.board .kid .art-kid'));
+    await checkOnScreen('art: each kid’s card shows its clue as pictures, inside the viewport', page.locator('.clue-chip .facts'));
+    await checkOnScreen('art: each kid’s card shows the kid as on the board, inside the viewport', page.locator('.clue-chip .clue-kid .art-kid'));
+    await checkOnScreen('art: the tray shows each friend’s picture, inside the viewport', page.locator('.tray-btn:not(.tray-shop) .art-friend'));
+    await checkOnScreen('art: the top bar’s pictures are inside the viewport', page.locator('.bar .art'));
+    await noEmoji(page, 'setup');
+
     // ---- the clue card: from the board and from the cards above it; it stays open ----
     const kid = puzzle.kids.find((k) => k.wave === 1)!;
     await cellOf(page, kid.cell).tap();
@@ -574,12 +741,47 @@ async function main(): Promise<void> {
     await page.waitForTimeout(3500);
     const stillOpen = await card.isVisible();
     check('the clue card stays open until closed (no auto-hide)', stillOpen);
+    const keyed = await card.locator('.snacks li').count();
+    check('art: the clue card shows each of today’s snacks with a picture for each of its four traits', keyed === puzzle.snacks.length && (await card.locator('.snacks .trait .art').count()) === 4 * keyed && (await card.locator('.snacks .snack-pic').count()) === keyed, `${keyed} snacks`);
+    await checkOnScreen('art: the clue card’s snack pictures are inside the viewport', card.locator('.snacks .snack-pic'));
+    await checkOnScreen('art: the clue card’s trait pictures are inside the viewport', card.locator('.snacks .trait .art'));
+    await checkOnScreen('art: the clue card shows the clue as pictures, inside the viewport', card.locator('.facts.big'));
+    await noEmoji(page, 'the clue card');
     await shot(page, '2-clue-card');
     await card.getByRole('button', { name: 'Got it' }).tap();
     await page.locator('.clue-chip').first().tap();
     const fromChip = await card.isVisible();
     await card.getByRole('button', { name: 'Close' }).tap();
     check('the card above the board opens the same clue card, and closes when asked', fromChip && (await card.count()) === 0);
+
+    // ---- the shop before any points: every card off, each saying how many more are needed ----
+    const shopBtn = page.locator('.tray-shop');
+    await checkOnScreen('the shop button is in the tray, inside the viewport', shopBtn);
+    check('the shop button shows the points to spend', ((await shopBtn.textContent()) ?? '').replace(/\s/g, '').includes('Shop0') && (await shopBtn.locator('.icon-star').count()) === 1 && (await shopBtn.getAttribute('aria-label')) === 'Shop: 0 points to spend', (await shopBtn.textContent()) ?? '');
+    await shopBtn.tap();
+    await shopSheet(page).waitFor({ timeout: 3000 });
+    await shopOnScreen(page, 'no points yet');
+    const cards = await shopSheet(page).locator('.shop-card').evaluateAll((els) =>
+      els.map((el) => ({
+        pic: el.querySelector('.shop-pic svg.art-friend')?.getAttribute('aria-label') ?? '',
+        name: el.querySelector('.shop-name')?.textContent ?? '',
+        diagram: el.querySelector('svg.diagram') !== null,
+        blurb: el.querySelector('.shop-blurb')?.textContent ?? '',
+        owned: el.querySelector('.shop-owned')?.textContent ?? '',
+        buy: el.querySelector('.shop-buy')?.textContent ?? '',
+        off: (el.querySelector('.shop-buy') as HTMLButtonElement | null)?.disabled === true && el.classList.contains('short'),
+      })),
+    );
+    check(
+      'the shop: a card per friend with a picture, name, pattern diagram, one line on what it does and how many you have',
+      cards.length === puzzle.shop.length && cards.every((c) => c.pic !== '' && /^(Straight|Diagonal|Short|Bouncer|Nurse)$/.test(c.name) && c.diagram && c.blurb.length > 10 && /^You have \d+$/.test(c.owned)),
+      cards.map((c) => `${c.pic} ${c.name}: ${c.owned}`).join(' | '),
+    );
+    const prices: Record<string, number> = { Short: 1, Straight: 2, Diagonal: 2, Bouncer: 3, Nurse: 3 };
+    check('with no points every card is off and says how many more points it needs', cards.every((c) => c.off && c.buy === `Need ${prices[c.name]} more`), cards.map((c) => c.buy).join(' | '));
+    await shot(page, '2b-shop-empty');
+    await shopSheet(page).locator('.sheet-close').tap();
+    check('the shop closes with its close button', await until(page, async () => (await shopSheet(page).count()) === 0));
 
     // ---- wave 1: placed by taps, aimed by tapping a lit square ----
     const first = puzzle.witness[0]!;
@@ -608,22 +810,54 @@ async function main(): Promise<void> {
     const lines = await page.locator('.board-preview .throw').count();
     check('every friend shows where its next throw lands (D12)', lines === throwers, `${lines} lines for ${throwers} throwing friend(s)`);
     await touchTargets(page, 'friends placed');
+    await checkOnScreen('art: every friend placed is drawn, inside the viewport', page.locator('.board .friend .art-friend'));
     await shot(page, '4-placed');
+    await resetRecorder(page);
+    await page.evaluate(`(() => {
+      const r = (window.__replay = { snacks: 0, pictured: 0, moods: [] });
+      new MutationObserver((muts) => {
+        for (const m of muts) {
+          for (const n of m.addedNodes) if (n instanceof HTMLElement && n.classList.contains('flying-snack')) { r.snacks++; if (n.querySelector('svg.art-snack')) r.pictured++; }
+          if (m.type === 'attributes' && m.target.dataset.mood) r.moods.push(m.target.dataset.mood);
+        }
+      }).observe(document.querySelector('.board-wrap'), { subtree: true, childList: true, attributes: true, attributeFilter: ['data-mood'] });
+    })()`);
 
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
     await page.locator('.btn-go').tap();
+    const shopDuringWave = await page.locator('.tray-shop').isDisabled();
     const fps = await measureFps(page, 1500);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
     check('the wave replay holds 55+ fps with the CPU slowed 4x', fps.frames >= 55, `${fps.frames.toFixed(1)} fps, worst frame ${fps.worst.toFixed(0)} ms`);
+    check('the shop can’t be opened while a wave plays', shopDuringWave);
     await checkResult(page, 1, puzzle.kids.filter((k) => k.wave === 1).length);
+    const replay = (await page.evaluate('window.__replay')) as { snacks: number; pictured: number; moods: string[] };
+    const pickers = resolveSnacks({ board: puzzle.board, friends: first.friends.map((f, i) => ({ id: i + 1, ...f })), kids: puzzle.kids.filter((k) => k.wave === 1), mode: 'main' }).snacks.length;
+    check('the replay flies every snack as its picture, and a fed kid smiles', replay.snacks === pickers && replay.pictured === pickers && replay.moods.includes('yum'), `${replay.snacks} snacks (${pickers} pickers), faces: ${replay.moods.join(', ')}`);
+    const moved = [...new Set((await recorded(page)).flatMap((a) => a.props))];
+    check('the replay moves only transform and opacity (P7)', moved.length > 0 && moved.every((p) => ['offset', 'transform', 'opacity', 'easing', 'composite'].includes(p)), moved.join(', '));
+    const arcs = (await recorded(page)).filter((a) => a.cls === 'fly-lift' && /translateY\(-[1-9]/.test(a.transforms)).length;
+    check('the snacks arc through the air (they rise above the ground)', arcs > 0, `${arcs} arcing snacks`);
     await shot(page, '5-result');
     await noHorizontalScroll(page, 'result');
     await touchTargets(page, 'result');
     await page.getByRole('button', { name: /Set up wave 2/ }).tap();
+    if ((await page.locator('.tray-shop').count()) > 0) {
+      await page.locator('.tray-shop').tap();
+      const sheet = page.locator('.sheet');
+      await sheet.waitFor();
+      await checkOnScreen('art: the shop shows each friend’s picture, inside the viewport', sheet.locator('.shop-pic .art-friend'));
+      await checkOnScreen('art: the shop’s awning is inside the viewport', sheet.locator('.shop-awning'));
+      await checkOnScreen('art: the shop’s prices are inside the viewport', sheet.locator('.shop-buy'));
+      await touchTargets(page, 'the shop');
+      await noEmoji(page, 'the shop');
+      await shot(page, '5d-shop-art');
+      await page.locator('.sheet-close').tap();
+    }
 
     // ---- wave 2: Undo and Clear board first ----
     const second = puzzle.witness[1]!;
-    check('wave 2: bought what the plan needs in the shop', await buy(page, second.buys), second.buys.join(', ') || 'nothing to buy');
+    check('wave 2: bought what the plan needs in the shop', await buy(page, cdp, 2, second.buys), second.buys.join(', ') || 'nothing to buy');
     const earlier = await friendsOnBoard(page);
     const occupied = new Set([...first.friends.map((f) => f.cell), ...second.friends.map((f) => f.cell), ...puzzle.kids.map((k) => k.cell)]);
     const spare = puzzle.board.squares.map((s, cell) => (s === 'open' && !occupied.has(cell) ? cell : -1)).filter((c) => c >= 0);
@@ -743,8 +977,12 @@ async function main(): Promise<void> {
     check('wave 2: every friend aimed by tapping a lit square', !aimed2.includes('failed'), aimed2.join(', '));
     await noVerticalScroll(page, 'wave 2 set up');
     await shot(page, '6-wave2');
+    const onBoard2 = await boardFriends(page);
     await page.locator('.btn-go').tap();
     await checkResult(page, 2, puzzle.kids.filter((k) => k.wave === 2).length);
+    const title2 = (await page.getByRole('region', { name: 'What happened' }).locator('h2').textContent()) ?? '';
+    const kids2 = puzzle.kids.filter((k) => k.wave === 2).length;
+    shopFlowPlayed(2, title2.includes(`${kids2} of ${kids2} fed`), onBoard2);
     await shot(page, '7-result2');
 
     await page.reload();
@@ -775,7 +1013,7 @@ async function main(): Promise<void> {
     await page.getByRole('button', { name: 'Today’s puzzle' }).tap();
     await until(page, async () => (await barStats(page)).includes('3/10'));
     const streak0 = (await page.locator('.bar-streak').textContent()) ?? '';
-    check('the top bar shows who is playing and their streak', streak0.includes('🔥 0') && (await page.locator('.bar-avatar .avatar').count()) === 1, streak0);
+    check('the top bar shows who is playing and their streak', streak0.trim() === '0' && (await page.locator('.bar-streak .icon-flame').count()) === 1 && (await page.locator('.bar-avatar .avatar .art-avatar').count()) === 1, streak0);
     await checkOnScreen('the top bar: the player’s picture is inside the viewport', page.locator('.bar-avatar'));
     await checkOnScreen('the top bar: the streak is inside the viewport', page.locator('.bar-streak'));
     await noHorizontalScroll(page, 'the top bar with a picture and a streak');
@@ -862,7 +1100,7 @@ async function main(): Promise<void> {
     await noVerticalScroll(page, 'a hint showing');
     await noHorizontalScroll(page, 'a hint showing');
     await touchTargets(page, 'a hint showing');
-    check('Sam plays wave 1 by taps and feeds every kid', await playWaveByTaps(page, puzzle, first));
+    check('Sam plays wave 1 by taps and feeds every kid', await playWaveByTaps(page, cdp, puzzle, first));
     const hintRow = page.getByRole('region', { name: 'What happened' }).locator('[data-row="hints"]');
     const hintRowText = (await hintRow.textContent()) ?? '';
     check('the result counts the wave’s hints and the day’s', hintRowText.includes('4 hints this wave') && hintRowText.includes('4 hints today'), hintRowText);
@@ -890,7 +1128,19 @@ async function main(): Promise<void> {
     const kBoard = await kindy.locator('.board').boundingBox();
     check('a Kindy profile opens its own Kindy daily: a 4 x 4 board as wide as the phone', kSquares === 16 && kBoard !== null && kBoard.width >= WIDTH - 40, `${kSquares} squares, ${Math.round(kBoard?.width ?? 0)} px wide`);
     const wantsShown = await kindy.locator('.kid-wants').count();
-    check('the snack each kid wants is a picture over their head', wantsShown === kp.kids.filter((k) => k.wave === 1).length && (await kindy.locator('.kid-wants[data-pic]').count()) === wantsShown);
+    check('the snack each kid wants is a picture over their head', wantsShown === kp.kids.filter((k) => k.wave === 1).length && (await kindy.locator('.kid-wants .art-snack').count()) === wantsShown);
+    await checkOnScreen('Kindy art: the wanted-snack bubble over each kid is inside the viewport', kindy.locator('.kid-wants'));
+    await checkOnScreen('Kindy art: each kid is drawn, inside the viewport', kindy.locator('.board .kid .art-kid'));
+    await checkOnScreen('Kindy art: the friends in the tray are drawn, inside the viewport', kindy.locator('.kindy-friend .art-friend'));
+    await checkOnScreen('Kindy art: every lunchbox is drawn with its snack, inside the viewport', kindy.locator('.board .art-lunchbox'));
+    const bubbleClear = await kindy.locator('.kid-wants').evaluateAll((els) => {
+      const board = document.querySelector('.board')!.getBoundingClientRect();
+      return els.every((el) => {
+        const b = el.getBoundingClientRect();
+        return b.top >= board.top - 0.5 && b.left >= board.left - 0.5 && b.right <= board.right + 0.5;
+      });
+    });
+    check('Kindy art: no wanted-snack bubble is cut off by the edge of the board', bubbleClear);
     for (const part of ['.board', '.kindy-tray', '.kindy-basket', '.kindy-go', '.kindy-ask', '.kindy-avatar', '.kindy-slots']) await checkOnScreen(`Kindy setup: ${part.slice(1)} is inside the viewport`, kindy.locator(part));
     const kGo = await kindy.locator('.kindy-go').boundingBox();
     check('Kindy: the big green Go is in the bottom third', kGo !== null && kGo.y >= (HEIGHT * 2) / 3 && kGo.width >= 80, `top ${Math.round(kGo?.y ?? 0)}, ${Math.round(kGo?.width ?? 0)} px`);
@@ -1009,15 +1259,35 @@ async function main(): Promise<void> {
     await tile(page, 'Dog').tap();
     await until(page, async () => (await barStats(page)).includes('3/10'));
     await page.emulateMedia({ reducedMotion: 'reduce' });
+    await resetRecorder(page);
     const rest: string[] = [];
+    let busiest: Promise<{ frames: number; worst: number }> | null = null;
+    let calm: Recorded[] = [];
     for (const layout of puzzle.witness.slice(2)) {
       // One hint on wave 3: done for today counts it, and the streak doesn't mind.
       if (layout.wave === 3) await page.locator('.btn-hint').tap();
-      const fed = await playWaveByTaps(page, puzzle, layout);
+      // The last wave, the busiest of the day, at full motion with the CPU slowed 4x.
+      const last = layout.wave === puzzle.waves;
+      const fed = await playWaveByTaps(page, cdp, puzzle, layout, !last ? undefined : async () => {
+        calm = await recorded(page);
+        await page.emulateMedia({ reducedMotion: null });
+        await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+        busiest = page.waitForTimeout(150).then(() => measureFps(page, 2000));
+      });
+      if (last && busiest !== null) {
+        const fps = await (busiest as Promise<{ frames: number; worst: number }>);
+        await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+        const snacks = layout.friends.filter((f) => f.type !== 'nurse').length;
+        check(`the busiest wave (${layout.wave}) replays at 55+ fps with the CPU slowed 4x`, fps.frames >= 55, `${fps.frames.toFixed(1)} fps, worst frame ${fps.worst.toFixed(0)} ms, ${layout.friends.length} friends, ${snacks} throwing`);
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+      }
       rest.push(`${layout.wave}${fed ? '' : ' NOT FED'}`);
       if (layout.wave < puzzle.waves) await page.getByRole('button', { name: new RegExp(`Set up wave ${layout.wave + 1}`) }).tap();
     }
     check('waves 3-10 played by taps, every kid fed', rest.every((r) => !r.includes('NOT')), rest.join(', '));
+    const lively = calm.filter((a) => (a.cls === 'fly-lift' && /translateY\(-[1-9]|rotate\([1-9]/.test(a.transforms)) || (/\bkid\b|art-friend|sparkle/.test(a.cls) && a.transforms.replace(/none|\s|\|/g, '') !== ''));
+    check('with reduced motion, the calm replay: no arcs, spins, dances, wobbles or sparkles', calm.length > 0 && lively.length === 0, `${calm.length} animations, ${lively.length} lively: ${lively.slice(0, 3).map((a) => a.cls).join(', ')}`);
+    check('the shop flow ran: earned, bought, gave back, bought again, swiped closed, placed and played', shopFlow !== null, shopFlow === null ? 'no wave of today’s plan buys a friend' : `wave ${shopFlow.wave}, a ${FRIEND_NAME[shopFlow.type]}`);
     await page.getByRole('button', { name: 'See today’s result' }).tap();
     const doneScreen = page.getByRole('region', { name: 'Done for today' });
     await doneScreen.waitFor();
@@ -1037,7 +1307,7 @@ async function main(): Promise<void> {
     await checkOnScreen('done for today: practice is inside the viewport', doneScreen.getByRole('button', { name: 'Practice board' }));
     const bonusBox = await bonusBtn.boundingBox();
     check('done for today: its buttons are in the bottom third', bonusBox !== null && bonusBox.y >= (HEIGHT * 2) / 3, `top ${Math.round(bonusBox?.y ?? 0)}`);
-    check('the top bar’s streak is 1', ((await page.locator('.bar-streak').textContent()) ?? '').includes('🔥 1'));
+    check('the top bar’s streak is 1', ((await page.locator('.bar-streak').textContent()) ?? '').trim() === '1');
     await noVerticalScroll(page, 'done for today');
     await noHorizontalScroll(page, 'done for today');
     await touchTargets(page, 'done for today');
@@ -1050,7 +1320,7 @@ async function main(): Promise<void> {
     check('reopening a finished daily shows done for today, not the board', (await page.locator('.board').count()) === 0);
     await doneScreen.getByRole('button', { name: 'Practice board' }).tap();
     await page.locator('.bar-title', { hasText: 'Practice' }).waitFor();
-    check('practice is still there after the daily, and keeps the streak', ((await page.locator('.bar-streak').textContent()) ?? '').includes('🔥 1'));
+    check('practice is still there after the daily, and keeps the streak', ((await page.locator('.bar-streak').textContent()) ?? '').trim() === '1');
     await page.emulateMedia({ reducedMotion: null });
 
     await context.setOffline(true);
@@ -1085,7 +1355,7 @@ async function main(): Promise<void> {
       await oldPage.locator('.board').waitFor({ timeout: 10_000 });
       const stats = await barStats(oldPage);
       const oldStreak = (await oldPage.locator('.bar-streak').textContent()) ?? '';
-      check('an old save opens as the first profile, at the same wave, with its finished day', stats.includes('2/10') && (await friendsOnBoard(oldPage)) === first.friends.length && oldStreak.includes('🔥 1'), `${stats}, ${oldStreak}`);
+      check('an old save opens as the first profile, at the same wave, with its finished day', stats.includes('2/10') && (await friendsOnBoard(oldPage)) === first.friends.length && oldStreak.trim() === '1', `${stats}, ${oldStreak}`);
       await old.close();
     } finally {
       rmSync(oldProfile, { recursive: true, force: true });

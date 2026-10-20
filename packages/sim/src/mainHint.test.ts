@@ -68,7 +68,7 @@ describe('main-mode hints, tier by tier (RULES 8b)', () => {
     expect(s.hints).toEqual([4]);
   });
 
-  it('the View shows which lunchbox only from tier 2, and never in Kindy (S6, K9)', () => {
+  it('the View shows which lunchbox only from tier 2, and never in Kindy (S6, K11)', () => {
     let s = startGame(oneKid());
     expect(gameView(s).mainHint).toBeNull();
     s = hint(s);

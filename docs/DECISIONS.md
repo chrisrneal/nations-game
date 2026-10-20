@@ -5,7 +5,7 @@ would have to happen to reverse it. **Changing one of these needs a new record
 appended here, not an edit to an old one** - later sessions rely on these being
 stable.
 
-**Read K1 first (then K5-K9 for what was added since), then W8, then W1, then P1.** On 2026-10-20 the warehouse
+**Read K1 first (then K5-K11 for what was added since), then W8, then W1, then P1.** On 2026-10-20 the warehouse
 became Snack Attack, a daily grid puzzle for kids (K1); `K` records cover it,
 and K1 lists which older records still bind. On 2026-10-07 the idle game was removed
 and the warehouse management system became the whole game (W8). On 2026-10-06 the airport game became a warehouse
@@ -1686,7 +1686,159 @@ rule, so no stop):
 `KindyDone.tsx`; the hint is `packages/sim/src/hint.ts`; the stuck check is
 one line in `generate.ts`.
 
-## K9 - Hints in main mode, decoys in the tray, a bonus round that ramps, and a difficulty report
+## K9 - The shop screen: a bottom sheet of cards, a refund until Go, and no options to change before buying
+**Status.** Accepted, 2026-10-20, at the owner's request (build step 9: "a
+proper shop screen"). The owner asked for the rules, the roadmap, the spec
+and the decision records to be updated with the change, so this session
+wrote this record and edited ROADMAP.md as in K2, K7 and K8.
+**Decision.**
+- **The screen** (RULES 8, "On the screen"): the Shop button in the tray
+  shows the points; it opens a bottom sheet with a card per friend the
+  puzzle sells (a picture, the name, the tray's pattern diagram, one line a
+  grade-4 reader can follow, "You have N", the price). Too few points greys
+  the card out and its button says "Need N more". A buy puts the friend
+  straight into the tray under the sheet. The sheet closes with its close
+  button, the backdrop, Escape or a swipe down on its top; every sheet now
+  closes that way, and the swipe moves it by direct DOM writes (P7). Main
+  mode only; Kindy has no shop (D15).
+- **Never during a wave.** The button is off from the moment Go is pressed
+  (before the host answers) until the replay ends, and the sheet closes if
+  setup ends under it.
+- **A refund command** (`{ type: 'refund', friend }`, S2). The spec said
+  nothing about refunds, so, as the step 9 prompt asked, a friend bought in
+  this setup can be given back for its full price until Go is pressed,
+  whether it is in the tray or on the board. "Bought in this setup" is
+  worked out from what the game already holds: a friend's id is at least
+  the checkpoint's next id (`boughtThisSetup`), because only buying makes
+  friends and the checkpoint is set at every Go and kept by a retry. So the
+  save format, the hash and the checkpoint are unchanged, and no new state
+  is stored.
+  - The View's shop item says the shortfall, how many the player has, and
+    which friend a refund gives back: the last one bought, one still in the
+    tray before one on the board.
+  - The interface's Undo stack drops every step that names a friend given
+    back. Undo still never takes back a purchase (K6); Give back does.
+- **Fairness, tested.** A sim test plays three dailies twice, with a buy, a
+  refund and a buy again before every wave that buys, and gets the same
+  wave results and the same hash. The harness checks every one of the
+  1600 generated days sells every friend its solution buys (Kindy none), and
+  makes 150 days again from their own seeds: the catalogue, and the whole
+  puzzle, come out the same. The 300 scripted games hashed in Node and
+  Chromium now buy and refund too.
+
+**Owner's prompt, as read against the spec** (no conflict with a locked
+rule, so no stop):
+- "The spec": the prompt names docs/snack-attack.md, which does not exist;
+  the spec with the (L) rules and D1-D20 is docs/RULES.md, so that is what
+  this session read and updated.
+- "Reached from the setup phase between waves": the button also works in
+  the setup before wave 1, where with no points every card says what it
+  needs. RULES 8 allows the shop whenever the game is in setup.
+- "Refunds: follow the spec": RULES 8a (K6) said only that Undo and Clear
+  board don't reach past Go or back into the shop. A refund until Go keeps
+  to that: nothing a played wave locked in can be changed.
+- **"Modify" (an open question).** The owner's first brief spoke of picking
+  from a catalogue and modifying before buying. The spec defines nothing to
+  modify: a friend is a type and a facing, and the facing is set on the
+  board. This session did not invent one. Recommended default: keep it
+  that way; the facing is the friend's only setting, chosen where it
+  matters, on the board. If the owner meant something else (say, a hat or
+  colour for each friend), that is a cosmetic for step 11 and must never
+  change play (RULES 9). Logged in docs/GAPS.md for the owner.
+- "The catalogue for a day is fixed by the seed": it is, and it was. Every
+  main-mode puzzle sells all five friends, so nothing about the catalogue
+  changes from day to day yet; the checks guard that it stays a function of
+  the seed if it ever varies.
+
+**Why.** A 9-year-old who taps the wrong friend should be able to fix it
+before the wave, without a grown-up and without losing points for good;
+after Go the points are spent, as before. Working out "bought this setup"
+from the checkpoint keeps the sim's state, saves and hashes as they were.
+**Cost.**
+- A refunded friend's number is not reused, so friend ids can have gaps.
+- A friend bought, placed and aimed, then given back, loses its place and
+  facing; buying again puts a new one in the tray.
+- The pictures are emoji until the art in step 8.
+**Reversing it.** Remove the `refund` case in `game.ts`, the `refund`
+field of `ShopItem` and the Give back button in `apps/web/src/ui/Shop.tsx`.
+The plain list the shop replaced is at commit `d205c40`.
+
+## K10 - Art and animation: one original SVG style, clues readable without colour, a replay driven by a timeline
+**Status.** Accepted, 2026-10-20, at the owner's request (build step 8: "art
+and animation"). Numbered K10 because the shop screen, built in parallel
+and merged first, took K9. The owner asked for the rules, the roadmap, the spec and
+the decision records to be updated with the change, so this session wrote
+this record and edited ROADMAP.md as in K2, K7 and K8.
+**Decision.**
+- **One style, all in the repo.** Every picture is inline SVG drawn by a
+  React component in `apps/web/src/ui/art/` (snacks, lunchboxes, obstacles,
+  the parents' table, kids, friends, avatars, icons) or CSS (grass, paving,
+  the shop's awning, sparkles). No image files, no third-party art, no
+  emoji in the game's screens, no new dependency. docs/ART.md is the art
+  direction: a friendly schoolyard at lunchtime, one warm brown ink, chunky
+  rounded shapes, flat fills.
+- **Clues are read from the art.** Every trait a clue can point at has a
+  picture (RULES 6). Colour is never the only cue: each snack colour has a
+  mark (triangle, square, star, diamond, leaf) on the lunchbox's tag, in the
+  clue card's snack key and in the clue's pictures; each shirt colour has a
+  pattern. `art.test.ts` takes every colour out of the pictures and fails if
+  two snacks, colour chips, lunchbox tags, shirts, friends, avatars or clue
+  pictures are then the same; the harness checks every colour in the snack
+  pool has a mark.
+- **The View carries each clue's facts** (`KidView.facts`, main mode only)
+  beside its text, so the screen draws the clue as pictures without parsing
+  words. It holds nothing the text didn't already say (S6).
+- **Friends look like game pieces.** Each stands on a round base and wears
+  the hat of its chess piece (a tower, a tipped hat, a crown, a pony hood)
+  with a badge of its throw (a plus, a cross, a ring, an L); the Nurse a cap
+  and heart (no red cross). Hungry kids have no base, so the two never mix.
+- **The replay is a timeline.** `timeline.ts` turns the wave result into
+  numbers: each snack's position and height at each moment (a beat a square,
+  arcs by the thrower's type), and when lids open, friends catch and kids
+  react, heal or walk home. It is pure and tested on hand-made results.
+  `replay.ts` plays it with the Web Animations API on transform and opacity
+  only, cloning the lunchbox's own snack picture to fly; faces change by one
+  attribute write (`data-mood`). React does not render during a wave (P7).
+  With reduced motion the timeline has no arcs or spins and the kids no
+  dances, wobbles, walks or sparkles: a face change and a gentle fade.
+- **Kindy uses the same art** at about 80 px a square, the wanted snack in a
+  bubble inside the kid's square (so the top row's bubble is not cut off),
+  and pictures only. The CSS emoji of K8 (`Pic.tsx`, `data-pic`) are gone;
+  the no-text check now also fails on any SVG `<text>`, `<title>` or
+  `<desc>`, and `art.test.ts` proves no picture holds text.
+- **Checked on every build and on a phone.** `npm test` runs the art and
+  timeline tests. The phone check also proves every picture is inside 360 x
+  740 and showing, that the replay flies every snack as its picture and
+  moves only transform and opacity, that snacks arc, and that the calm
+  version doesn't; and a new visual check compares four screens (main
+  board, Kindy board, shop, result) at 360 x 740 with committed pictures.
+
+**Owner's prompt, as read against the spec** (no conflict with a locked
+rule, so no stop):
+- "docs/snack-attack.md": there is no such file; the locked decisions (L)
+  and D1-D20 are in docs/RULES.md, which this session read as the spec.
+- "A test that fails if two snacks differ only in colour": read as the art.
+  In RULES 4 the apple and the cookie share every trait but colour (both
+  crunchy, sweet and round), by the owner's own table; the test checks the
+  drawings, and the harness checks that such snacks have different
+  outlines, so "Something red" can still be solved without seeing red.
+- "The tray, shop and profile avatars": the shop screen (K9, merged while
+  this was being built) gets the friends' pictures in place of its emoji, a
+  drawn star beside each price and an awning.
+**Why.** The children should see a place, not a spreadsheet, and a
+colour-blind player must be able to solve every board. Drawing in SVG keeps
+the art small, sharp at any size, identical on every phone and testable as
+text. A timeline keeps the replay honest to the sim and testable without a
+browser.
+**Cost.**
+- About 40 KB more to download (12 KB gzipped): main's build was 321 KB of JavaScript and CSS and is now 361 KB, against a budget of about 300 KB more.
+- The kids' skin and hair are picked from their id: looks only, never a clue.
+- The visual check, like the phone check, needs a build and a Chromium, so
+  it runs by hand, not in CI.
+**Reversing it.** The pictures are `apps/web/src/ui/art/`; the grey-squares
+screen with emoji is at commit `d205c40`.
+
+## K11 - Hints in main mode, decoys in the tray, a bonus round that ramps, and a difficulty report
 **Status.** Accepted, 2026-10-20, at the owner's request ("hints, tray
 giveaway and difficulty ramp"). The owner asked for the rules, the roadmap,
 the spec and the decision records to be updated with the change, so this
@@ -1728,7 +1880,7 @@ session wrote this record and edited ROADMAP.md as in K2, K7 and K8.
   given friends are unchanged (D15): its puzzles are the same, hash for hash.
 - **The giveaway metric.** A wave gives the answer away when the friends
   owned at its start are exactly what its solution places; a day's tray
-  does when every friend in it is placed on some wave. Before K9, on 1000
+  does when every friend in it is placed on some wave. Before K11, on 1000
   days from day 20000: 0.8% of daily waves and 67% of daily trays (2.2% and
   63% in bonus rounds). Now 0% and 0%, the report's target.
 - **The bonus ramp.** Bonus waves are planted so the two kids' shortest

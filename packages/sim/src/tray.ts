@@ -1,7 +1,7 @@
 import type { FriendType, Puzzle } from '@snacks/contracts';
 
 /**
- * What the starting tray tells a player about the answer (RULES 10, K9).
+ * What the starting tray tells a player about the answer (RULES 10, K11).
  *
  * The friends a player owns at a wave are the tray plus what the stored
  * solution (the witness) bought before it. A wave **gives the answer away**

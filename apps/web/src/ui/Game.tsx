@@ -2,21 +2,28 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import type { FriendType, GameCommand, GameView, ProfileView, WaveResult } from '@snacks/contracts';
 import type { Feedback, GameHost } from '../platform/index.ts';
 import { aimSquares, healSquares } from './aim.ts';
+import { FriendArt } from './art/Friend.tsx';
+import { Icon } from './art/Icons.tsx';
+import { FactIcons } from './art/Marks.tsx';
 import { Avatar } from './Avatar.tsx';
 import { Board } from './Board.tsx';
 import { ClueCard } from './ClueCard.tsx';
 import { PatternDiagram } from './Diagram.tsx';
 import { DoneToday } from './DoneToday.tsx';
 import { DragController, type DragSource } from './drag.ts';
-import { clearPlan, undoChange, undoFor, type UndoStep } from './history.ts';
-import { FRIEND_HOW, FRIEND_NAME, FRIEND_ORDER, SHIRTS, hintLine, hintsText, hintsToday, kidBadges, kidLetter, shortClue } from './labels.ts';
+import { clearPlan, forgetFriend, undoChange, undoFor, type UndoStep } from './history.ts';
+import { FRIEND_HOW, FRIEND_NAME, FRIEND_ORDER, hintLine, hintsText, hintsToday, kidLetter, shortClue } from './labels.ts';
+import { KidBadge } from './KidBadge.tsx';
 import { profileLabel, streakText } from './people.ts';
 import { playWave } from './replay.ts';
 import { ResultOverlay } from './ResultOverlay.tsx';
 import { Sheet } from './Sheet.tsx';
+import { Shop } from './Shop.tsx';
 import { short } from './format.ts';
 
 const BEAT_MS = 220;
+/** With reduced motion: a little quicker, and no arcs, spins or dances (K10). */
+const CALM_BEAT_MS = 160;
 
 type Selection = { readonly kind: 'tray'; readonly type: FriendType } | { readonly kind: 'friend'; readonly id: number } | null;
 
@@ -65,6 +72,8 @@ export function Game(props: {
   const [playback, setPlayback] = useState<Playback | null>(null);
   const [result, setResult] = useState<Playback | null>(null);
   const [shop, setShop] = useState(false);
+  // Go pressed, the wave not yet back from the host: setup is over already (nothing, the shop included, can be opened).
+  const [going, setGoing] = useState(false);
   const [clueKid, setClueKid] = useState<number | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [history, setHistory] = useState<readonly UndoStep[]>([]);
@@ -80,24 +89,29 @@ export function Game(props: {
   // A new setup phase (after Go, a retry or a new game): nothing to undo, nothing selected.
   if (phase.key !== phaseKey(view)) {
     // A different game: the last wave's result belongs to the old one.
-    if (!phase.key.startsWith(`${gameKey(view)}-`)) setResult(null);
+    if (!phase.key.startsWith(`${gameKey(view)}-`)) {
+      setResult(null);
+      setGoing(false);
+    }
     setPhase({ key: phaseKey(view), earlier: onBoardIds(view) });
     setHistory([]);
     setSelection(null);
     setMoving(false);
+    setShop(false);
   }
 
   // A new wave result: play it over the board as it stood when Go was pressed.
   useEffect(() => {
     if (props.wave === null || beforeGo.current === null) return;
     setPlayback({ before: beforeGo.current, wave: props.wave });
+    setGoing(false);
     beforeGo.current = null;
   }, [props.wave]);
 
   useEffect(() => {
     if (playback === null || overlayRef.current === null || boardRef.current === null) return;
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
-    const r = playWave(overlayRef.current, boardRef.current, playback.before, playback.wave, reduce ? 40 : BEAT_MS);
+    const r = playWave(overlayRef.current, boardRef.current, playback.before, playback.wave, { beatMs: reduce ? CALM_BEAT_MS : BEAT_MS, calm: reduce, healRange: props.healRange });
     let live = true;
     void r.done.then(() => {
       if (!live) return;
@@ -110,7 +124,7 @@ export function Game(props: {
       live = false;
       r.cancel();
     };
-  }, [playback, feedback]);
+  }, [playback, feedback, props.healRange]);
 
   // The View after a hint press: whatever it moved goes on the undo stack.
   useEffect(() => {
@@ -127,7 +141,7 @@ export function Game(props: {
   }, [view.phase, feedback]);
 
   const shown = playback?.before ?? view;
-  const setup = view.phase === 'setup' && playback === null;
+  const setup = view.phase === 'setup' && playback === null && !going;
   const selectedFriend = selection?.kind === 'friend' ? view.friends.find((f) => f.id === selection.id && f.cell >= 0) : undefined;
   const aims = useMemo(() => (setup && selectedFriend !== undefined && !moving ? aimSquares(view, selectedFriend) : new Map<number, number>()), [setup, selectedFriend, moving, view]);
   const heals = useMemo(
@@ -280,13 +294,30 @@ export function Game(props: {
     else feedback?.cue('tap');
   };
 
+  /** The shop (K9): a friend bought goes straight to the tray; one bought since the last Go can be given back. */
+  const buy = async (type: FriendType): Promise<void> => {
+    if (await submit({ type: 'buy', friend: type })) feedback?.cue('buy');
+  };
+
+  const refund = async (id: number): Promise<void> => {
+    if (!(await submit({ type: 'refund', friend: id }))) return;
+    // The friend is gone: nothing can be undone on it, and it can't stay selected.
+    setHistory((h) => forgetFriend(h, id));
+    if (selection?.kind === 'friend' && selection.id === id) setSelection(null);
+    feedback?.cue('tap');
+  };
+
   const go = async (): Promise<void> => {
     drag.stop();
     setSelection(null);
     setMoving(false);
     setResult(null);
     beforeGo.current = view;
-    if (!(await submit({ type: 'go' }))) beforeGo.current = null;
+    setGoing(true);
+    if (!(await submit({ type: 'go' }))) {
+      beforeGo.current = null;
+      setGoing(false);
+    }
   };
 
   // The result over the board: the wave just watched, or after a reload the last wave of a finished day.
@@ -302,10 +333,10 @@ export function Game(props: {
     : mainHint !== null
       ? hintLine(mainHint, hintKid?.label ?? '', view.friends.find((f) => f.cell === mainHint.placed)?.type ?? null)
       : view.loopWarning
-      ? '⚠️ A snack would go round in circles. Aim a friend so it can get out.'
+      ? 'A snack would go round in circles. Aim a friend so it can get out.'
       : selection?.kind === 'tray'
-        ? `Tap a grey square for the ${FRIEND_NAME[selection.type]}, or drag it there.`
-        : 'Tap or drag a friend from the tray onto a grey square.';
+        ? `Tap a grass square for the ${FRIEND_NAME[selection.type]}, or drag it there.`
+        : 'Tap or drag a friend from the tray onto the grass.';
 
   return (
     <div className="game">
@@ -316,18 +347,26 @@ export function Game(props: {
         <div className="bar-title">
           <strong>{view.round === 'daily' ? 'Today' : view.round === 'bonus' ? 'Bonus round' : 'Practice'}</strong>
           <span className="bar-streak" aria-label={`Streak: ${streakText(profile.streak)}`}>
-            🔥 {profile.streak}
+            <Icon name="flame" className="stat-icon" /> {profile.streak}
           </span>
         </div>
         <div className="bar-stats" aria-live="polite">
-          <span title="Wave">
-            🌊 {Math.min(view.wave, view.waves)}/{view.waves}
+          <span title="Wave" className="stat">
+            <Icon name="wave" className="stat-icon" /> {Math.min(view.wave, view.waves)}/{view.waves}
           </span>
-          {view.mode === 'main' && <span title="Kids who went home hungry">😢 {view.hungry}/{view.hungryAllowed}</span>}
-          {view.mode === 'main' && <span title="Points">⭐ {short(view.points)}</span>}
+          {view.mode === 'main' && (
+            <span title="Kids who went home hungry" className="stat">
+              <Icon name="sad" className="stat-icon" /> {view.hungry}/{view.hungryAllowed}
+            </span>
+          )}
+          {view.mode === 'main' && (
+            <span title="Points" className="stat">
+              <Icon name="star" className="stat-icon" /> {short(view.points)}
+            </span>
+          )}
         </div>
         <button type="button" className="icon-btn" aria-label="Menu" onClick={props.onMenu}>
-          ☰
+          <Icon className="menu-icon" name="menu" />
         </button>
       </header>
 
@@ -340,14 +379,9 @@ export function Game(props: {
               {shown.kids.map((k) => (
                 <li key={k.id}>
                   <button type="button" className={`clue-chip${mainHint?.kid === k.id ? ' hinted' : ''}`} aria-label={`Kid ${k.label}’s card: ${k.clue ?? ''}`} onClick={() => setClueKid(k.id)}>
-                    <span className="clue-kid" style={{ background: SHIRTS[k.look.shirt % SHIRTS.length] }}>
-                      {k.label}
-                    </span>
-                    <span className="clue-chip-text">
-                      {kidBadges(k)}
-                      {kidBadges(k) !== '' && ' '}
-                      {crowded ? shortClue(k.clue ?? '') : k.clue}
-                    </span>
+                    <KidBadge kid={k} />
+                    {k.facts !== null && <FactIcons facts={k.facts} />}
+                    <span className="clue-chip-text">{crowded ? shortClue(k.clue ?? '') : k.clue}</span>
                   </button>
                 </li>
               ))}
@@ -384,7 +418,7 @@ export function Game(props: {
                 {view.phase === 'won' && (
                   <div className="day-end" aria-label="Day won">
                     <p>
-                      <strong>🎉 Everyone got a snack today!</strong> {view.fed} kids fed{view.mode === 'main' ? `, ${view.hungry} went home hungry` : ''}.
+                      <Icon className="row-icon" name="party" /> <strong>Everyone got a snack today!</strong> {view.fed} kids fed{view.mode === 'main' ? `, ${view.hungry} went home hungry` : ''}.
                     </p>
                     {view.round === 'daily' ? (
                       <button type="button" className="btn btn-primary btn-wide" onClick={() => setResult(null)}>
@@ -419,10 +453,10 @@ export function Game(props: {
               {setup && selectedFriend !== undefined ? (
                 <>
                   <span className={`dock-what t-${selectedFriend.type}`}>
-                    <PatternDiagram type={selectedFriend.type} />
+                    <FriendArt type={selectedFriend.type} className="dock-friend" />
                     <span className="dock-what-text">
                       <strong>{FRIEND_NAME[selectedFriend.type]}</strong>
-                      <span className="muted">{moving ? 'tap a grey square' : selectedFriend.type === 'nurse' ? 'heals pink squares' : 'tap green to aim'}</span>
+                      <span className="muted">{moving ? 'tap a grass square' : selectedFriend.type === 'nurse' ? 'heals pink squares' : 'tap a lit square to aim'}</span>
                     </span>
                   </span>
                   {selectedFriend.type !== 'nurse' && !moving && (
@@ -442,6 +476,7 @@ export function Game(props: {
                 </>
               ) : (
                 <p className={`dock-hint${mainHint !== null ? ' hint-line' : view.loopWarning && setup ? ' warn' : ' muted'}`} aria-live="polite">
+                  {mainHint !== null && <Icon className="row-icon" name="bulb" />}
                   {hint}
                 </p>
               )}
@@ -465,19 +500,23 @@ export function Game(props: {
                   }}
                 >
                   <span className={`tray-token t-${type}`}>
-                    <PatternDiagram type={type} />
+                    <FriendArt type={type} />
+                    <PatternDiagram type={type} className="tray-diagram" />
                   </span>
                   <span className="tray-name">{FRIEND_NAME[type]}</span>
                   <span className="tray-count">×{left}</span>
                 </button>
               ))}
               {view.shop.length > 0 && (
-                <button type="button" className="btn tray-btn tray-shop" disabled={!setup} onClick={() => setShop(true)}>
+                <button type="button" className="btn tray-btn tray-shop" disabled={!setup} aria-label={`Shop: ${view.points} ${view.points === 1 ? 'point' : 'points'} to spend`} onClick={() => setShop(true)}>
                   <span className="tray-token" aria-hidden="true">
-                    🛒
+                    <Icon name="shop" />
                   </span>
                   <span className="tray-name">Shop</span>
-                  <span className="tray-count">⭐{short(view.points)}</span>
+                  <span className="tray-count">
+                    <Icon name="star" className="count-icon" />
+                    {short(view.points)}
+                  </span>
                 </button>
               )}
             </div>
@@ -491,7 +530,8 @@ export function Game(props: {
               </button>
               {view.mode === 'main' && (
                 <button type="button" className="btn btn-small btn-hint" disabled={!setup || view.kids.length === 0} aria-label={`Hint (${hintsText(waveHints)} this wave)`} onClick={() => void askHint()}>
-                  💡<span className="btn-hint-word">Hint</span>
+                  <Icon className="btn-hint-icon" name="bulb" />
+                  <span className="btn-hint-word">Hint</span>
                 </button>
               )}
               <button type="button" className={`btn btn-primary btn-go${view.loopWarning && setup ? ' warn' : ''}`} disabled={!setup} onClick={() => void go()}>
@@ -521,35 +561,7 @@ export function Game(props: {
         </Sheet>
       )}
 
-      {shop && (
-        <Sheet title={`Shop · ⭐ ${view.points}`} onClose={() => setShop(false)}>
-          <p className="sheet-note">Points come from fed kids. What you buy is yours for today only.</p>
-          <ul className="shop">
-            {view.shop.map((item) => (
-              <li key={item.type}>
-                <PatternDiagram type={item.type} className="shop-diagram" />
-                <span className="shop-what">
-                  <strong>{FRIEND_NAME[item.type]}</strong>
-                  <span className="muted small">{FRIEND_HOW[item.type]}</span>
-                </span>
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={!item.canBuy}
-                  aria-label={`Buy a ${FRIEND_NAME[item.type]} for ${item.price} points`}
-                  onClick={() =>
-                    void submit({ type: 'buy', friend: item.type }).then((ok) => {
-                      if (ok) feedback?.cue('buy');
-                    })
-                  }
-                >
-                  ⭐ {item.price}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Sheet>
-      )}
+      {shop && setup && view.shop.length > 0 && <Shop view={view} onBuy={(type) => void buy(type)} onRefund={(id) => void refund(id)} onClose={() => setShop(false)} />}
     </div>
   );
 }

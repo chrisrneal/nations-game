@@ -4,7 +4,7 @@ import { resolveSnacks, type WaveKid } from './resolve.ts';
 import { buysFor, fedBy, solveWave, type Budget } from './solver.ts';
 
 /**
- * Main-mode hints (RULES 8b, K9): the hint button, in three tiers per kid,
+ * Main-mode hints (RULES 8b, K11): the hint button, in three tiers per kid,
  * worked out from the puzzle's stored solution.
  *
  * 1. Which kid's card to solve next, and what it is about (a trait, or the

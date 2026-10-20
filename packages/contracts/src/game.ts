@@ -206,7 +206,7 @@ export interface Checkpoint {
 export type HintTopic = SnackTrait | KidFeature | 'sister';
 
 /**
- * A main-mode hint (RULES 8b, K9): what the hint button has shown for one
+ * A main-mode hint (RULES 8b, K11): what the hint button has shown for one
  * kid so far. Worked out from the puzzle's stored solution when the button is
  * pressed, then kept until the next press, Go or a retry.
  */
@@ -256,6 +256,8 @@ export type GameCommand =
   | { readonly type: 'turn'; readonly friend: number; readonly facing: number }
   | { readonly type: 'toTray'; readonly friend: number }
   | { readonly type: 'buy'; readonly friend: FriendType }
+  /** Give back a friend bought since the last Go, for its full price (K9). */
+  | { readonly type: 'refund'; readonly friend: number }
   | { readonly type: 'go' }
   | { readonly type: 'retry' }
   /** Main mode, during setup: the next tier of hint (RULES 8b). Tier 3 places a friend itself. */
@@ -311,15 +313,24 @@ export interface KidView {
   readonly look: KidLook;
   /** Main mode: the clue card's text. */
   readonly clue: string | null;
+  /** Main mode: the same clue as facts, which the screen draws as pictures (K10). */
+  readonly facts: readonly ClueFact[] | null;
   /** Kindy mode: the snack pictured over their head. Never set in main mode. */
   readonly wants: SnackId | null;
   readonly healed: boolean;
 }
 
+/** One card of the shop (RULES 8, K9). */
 export interface ShopItem {
   readonly type: FriendType;
   readonly price: number;
   readonly canBuy: boolean;
+  /** Points still needed to buy one; 0 when there are enough. */
+  readonly shortfall: number;
+  /** Friends of this type the player has today, in the tray or on the board. */
+  readonly owned: number;
+  /** The friend a refund gives back: the last of this type bought since the last Go, one in the tray first; -1 if none. */
+  readonly refund: number;
 }
 
 /**
@@ -365,7 +376,7 @@ export interface GameView {
   readonly facings: Readonly<Record<FriendType, readonly number[]>>;
   /** Kindy only, during setup: the next step a hint shows. Always null in main mode. */
   readonly hint: KindyHint | null;
-  /** Main mode, during setup: the hint the player asked for. The only place the View says which snack a kid wants before they eat (tier 2, K9). */
+  /** Main mode, during setup: the hint the player asked for. The only place the View says which snack a kid wants before they eat (tier 2, K11). */
   readonly mainHint: MainHint | null;
   /** Hints used at each wave (index 0 is wave 1). */
   readonly hints: readonly number[];

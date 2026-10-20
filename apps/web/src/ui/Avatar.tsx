@@ -1,16 +1,12 @@
 import type { ReactElement } from 'react';
 import type { AvatarId } from '@snacks/contracts';
-import { AVATAR_LOOK } from './people.ts';
+import { AvatarArt } from './art/Avatars.tsx';
 
-/** A profile's picture: a placeholder animal on a coloured circle (art comes in build step 8), drawn by CSS so it holds no text (Pic.tsx). */
+/** A profile's picture: an animal face drawn as SVG (art/Avatars.tsx), with no text in it. */
 export function Avatar(props: { id: AvatarId; size: number; className?: string }): ReactElement {
-  const look = AVATAR_LOOK[props.id];
   return (
-    <span
-      className={`avatar${props.className === undefined ? '' : ` ${props.className}`}`}
-      style={{ width: props.size, height: props.size, fontSize: Math.round(props.size * 0.6), background: look.colour }}
-      data-pic={look.emoji}
-      aria-hidden="true"
-    />
+    <span className={`avatar${props.className === undefined ? '' : ` ${props.className}`}`} style={{ width: props.size, height: props.size }} data-avatar={props.id} aria-hidden="true">
+      <AvatarArt id={props.id} />
+    </span>
   );
 }

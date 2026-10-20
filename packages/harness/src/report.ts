@@ -1,7 +1,7 @@
 /**
  * The generator report (RULES 10): generate many days of each kind, check
  * every promise, and summarise how hard the days are and how long they take.
- * Since K9 it also measures how often the tray gives the answer away, draws
+ * Since K11 it also measures how often the tray gives the answer away, draws
  * the bonus round's ramp against its targets, and has a sanity table of each
  * kind's waves.
  */
@@ -45,7 +45,7 @@ export function difficultyCurve(r: KindReport): number[] {
   return Array.from({ length: waves }, (_, w) => mean(r.checks.flatMap((c) => (c.difficulty[w] === undefined ? [] : [c.difficulty[w]]))));
 }
 
-/** How often the tray gives the answer away (K9): waves with nothing spare, and days whose tray is only the answer. */
+/** How often the tray gives the answer away (K11): waves with nothing spare, and days whose tray is only the answer. */
 export function giveaway(r: KindReport): { waves: number; tellWaves: number; days: number; bareDays: number; decoys: number; fewest: number } {
   const stats = statsOf(r);
   return {
@@ -58,7 +58,7 @@ export function giveaway(r: KindReport): { waves: number; tellWaves: number; day
   };
 }
 
-/** The targets the report holds the generator to (K9), each with whether it is met. */
+/** The targets the report holds the generator to (K11), each with whether it is met. */
 export function targets(reports: readonly KindReport[]): { what: string; met: boolean; detail: string }[] {
   const out: { what: string; met: boolean; detail: string }[] = [];
   for (const r of reports.filter((x) => x.mode === 'main')) {
@@ -118,7 +118,7 @@ export function formatReport(reports: readonly KindReport[]): string {
   lines.push('', 'Difficulty by wave (mean friends in the solver’s setup plus relational clues):', '');
   for (const r of reports) lines.push(`- ${name(r)}: ${difficultyCurve(r).map((x) => x.toFixed(1)).join(' · ')}`);
 
-  lines.push('', '## Does the tray give the answer away? (K9)', '');
+  lines.push('', '## Does the tray give the answer away? (K11)', '');
   lines.push(
     'A wave gives it away when the friends you own at its start (the tray plus what the stored solution bought earlier) are exactly the ones its solution places: nothing is spare, so “use everything” is the answer. A day’s tray gives it away when every friend in it is placed by the solution on some wave: it holds nothing but the answer’s pieces. Kindy’s friends are given (D15) and keep no decoys.',
     '',
@@ -130,7 +130,7 @@ export function formatReport(reports: readonly KindReport[]): string {
     lines.push(`| ${name(r)} | ${g.tellWaves} of ${g.waves} (${percent(g.tellWaves, g.waves)}) | ${g.bareDays} of ${g.days} (${percent(g.bareDays, g.days)}) | ${g.decoys.toFixed(1)}, ${g.fewest} |`);
   }
 
-  lines.push('', '## The bonus round’s ramp (K9)', '');
+  lines.push('', '## The bonus round’s ramp (K11)', '');
   const planned = Array.from({ length: SNACK_TUNABLES.mainWaves.value }, (_, i) => bonusFriendsAt(i + 1));
   lines.push(`- Planned (\`bonusFriendsFirst\` ${SNACK_TUNABLES.bonusFriendsFirst.value} to \`bonusFriendsLast\` ${SNACK_TUNABLES.bonusFriendsLast.value}): the two kids’ shortest routes add up to ${planned.join(' · ')} friends.`);
   for (const r of reports.filter((x) => x.mode === 'main')) {
@@ -143,7 +143,7 @@ export function formatReport(reports: readonly KindReport[]): string {
   lines.push('## Targets', '', '| Target | Measured | Met |', '|---|---|---|');
   for (const t of targets(reports)) lines.push(`| ${t.what} | ${t.detail} | ${t.met ? 'yes' : '**NO**'} |`);
 
-  lines.push('', '## Difficulty sanity, wave by wave (K9)', '');
+  lines.push('', '## Difficulty sanity, wave by wave (K11)', '');
   lines.push(
     'From each day’s stored solution: kids arriving, friends it places, clue-logic steps (one per fact on a card; a card pointing at another kid adds that kid’s facts), the pass chain each fed snack travels (friends from the picker to the kid), the friends owned but left spare, and the share of days where that wave places every friend owned.',
     '',

@@ -131,6 +131,16 @@ most one logic step. Clue kinds:
 | Same as | "Same as the kid in the hat" | the kid in the hat is pinned by their own card |
 | Not their sister's | "Something soft, not their sister's" | together with the trait, leaves one |
 
+**Read from the art (K10, docs/ART.md):** every trait a clue can point at
+can be seen in the pictures, and colour is never the only cue. Each snack
+colour carries its own mark (red a triangle, brown a square, yellow a star,
+orange a diamond, green a leaf) on the lunchbox's tag, in the card's snack
+key and in the clue's own pictures; crunchy, soft, sweet, salty, round, long
+and twisty each have a picture; each of the six shirt colours has its own
+pattern, so sisters match by pattern too; the hat, the glasses and the
+backpack are drawn big enough to see on a phone. No two snacks, shirts or
+friends differ only in colour (a test, `art.test.ts`).
+
 **One-step rule:** a card may point at another kid only if that kid's own card
 pins their snack directly. The **clue checker** (`clues.ts`) proves that every
 kid has exactly one possible snack, using only today's snacks and the cards
@@ -144,6 +154,17 @@ head, and appears **only** in Kindy mode (L).
 Once Go is pressed the player can't change anything. The wave is resolved in
 full the moment Go is pressed (`resolve.ts`), and the screen then replays the
 result. Nothing random happens anywhere in resolution (L).
+
+**The replay (K10)** shows exactly that result, a beat (220 ms) per square:
+each snack leaves its lunchbox (the lid pops), reaches its picker after one
+beat and flies its real route, arcing as its thrower throws (low for a
+line, a hop for a Short, high for a Bouncer's jump); a friend bobs as it
+catches and passes; a kid reacts when the first snack reaches them (a happy
+dance, a tummy-ache wobble, or in Kindy a head shake as a wrong snack
+bounces off); then fed kids go home happy down the path, the Nurse sends
+sparkles to a kid it heals, and a hungry kid walks home sad (to the parents'
+table after a tummy ache). With reduced motion the snacks glide without
+arcs or spins and the kids only change face.
 
 1. **Pickups:** every picker takes one snack.
 2. **Flight:** each snack is followed square by square under section 5 until
@@ -207,7 +228,7 @@ result. Nothing random happens anywhere in resolution (L).
 - **Bonus round:** clearing all 10 waves unlocks a harder 10-wave bonus round
   for that day (L). It is a fresh board from the same day's seed with a
   "bonus" salt (D11), with 2 kids a wave and more obstacles.
-  - It gets harder wave by wave (K9): the two kids' shortest routes need
+  - It gets harder wave by wave (K11): the two kids' shortest routes need
     `bonusFriendsFirst` (3) friends together at wave 1, rising evenly to
     `bonusFriendsLast` (5) at wave 10, and the chance that a card points at
     another kid rises from `bonusCluesFirst` (30%) to `bonusCluesLast` (90%).
@@ -218,16 +239,17 @@ result. Nothing random happens anywhere in resolution (L).
 - **The tray** is the row of unplaced friends at the bottom of the screen.
   Each puzzle sets the starting tray. In main mode it also holds decoys,
   friends the stored solution never needs, so the tray alone doesn't give
-  the answer away (section 10, K9).
+  the answer away (section 10, K11).
 
 ### 8a. Setting up on the screen (decision record K6)
 
 How the player gives the commands above on a phone. None of this changes a
 rule: every action is a place, turn or toTray command, checked by the sim.
 
-- **Placing:** tap a friend in the tray, then a grey square; or drag it from
-  the tray onto the square. Each tray button shows the friend's name, a small
-  diagram of its throw pattern and how many are left.
+- **Placing:** tap a friend in the tray, then a grass square; or drag it from
+  the tray onto the square. Each tray button shows the friend's picture
+  (its hat and badge hint at its pattern, K10), its name, a small diagram of
+  its throw pattern and how many are left.
 - **Moving:** drag a placed friend to another square, or select it, tap Move
   and tap a square. Dragging it off the board (or tapping To tray) puts it
   back in the tray. Drag is never the only way to do anything.
@@ -243,17 +265,19 @@ rule: every action is a place, turn or toTray command, checked by the sim.
 - **Undo** takes back the last placement, move, aim change or Clear board of
   this setup. **Clear board** (after a confirm step) puts every friend placed
   during this setup back in the tray; friends already on the board when the
-  setup began stay. Neither can reach past Go: what a played wave did, points
-  spent in the shop and earlier waves stay as they are.
+  setup began stay. Neither can reach past Go: what a played wave did and
+  earlier waves stay as they are. Neither takes back a purchase; the shop's
+  Give back does that, until Go (below, K9).
 - **Clues:** each kid on the board wears a letter badge, and its card is shown
-  above the board (in a shorter form when 3 or 4 kids are on the board).
+  above the board, in words and pictures (in a shorter form when 3 or 4 kids
+  are on the board).
   Tapping the kid or its card opens the full card with today's snacks; it
   stays open until closed.
 - **After a wave**, a card over the board lists who was fed, who got a tummy
   ache, who the Nurse healed, hungry kids against the allowance (say, 1 of 3)
   and the points earned, with one button back to setup.
 
-### 8b. Hints in main mode (decision record K9)
+### 8b. Hints in main mode (decision record K11)
 
 A **Hint** button sits beside Undo during setup. It works only during setup:
 not while a wave plays, and not once the day is won or lost. Each press is
@@ -299,8 +323,35 @@ moved, like any other change; the press itself stays counted.
   | Nurse | 3 (`priceNurse`) |
 
 - The catalogue is part of the puzzle, so everyone has the same tools on the
-  same day (L).
+  same day (L). It is fixed by the puzzle's seed; today every main-mode
+  puzzle (daily, bonus, practice) sells all five friends.
 - Everything bought, and all points, reset when the day ends (L).
+- Main mode only: Kindy has no shop (D15).
+
+**On the screen (decision record K9).** None of this changes a price or a
+rule: every action is a buy or refund command, checked by the sim.
+- **Opening it:** the Shop button in the tray shows the points to spend. It
+  works during setup, before any wave and between waves, and is off from
+  the moment Go is pressed until the wave has played (L: only between
+  waves).
+- **The sheet** rises from the bottom and fits a 360 x 740 phone with
+  nothing to scroll. It closes with its close button, a tap above it, or a
+  swipe down on its top.
+- **A card per friend:** a picture, the name, its throw pattern (the same
+  diagram as the tray), one line on what it does, "You have N" (in the tray
+  and on the board today) and the price. With too few points the card is
+  greyed out and its button says how many more are needed ("Need 2 more").
+- **Buying:** tap the price. The friend goes straight into the tray.
+- **Giving back (K9):** a friend bought since the last Go can be given back
+  for every point it cost, until Go is pressed, from the tray or from the
+  board. The card shows Give back while there is one; it gives back the
+  last one bought, one still in the tray first. Friends from the starting
+  tray, and anything bought before the last Go, can't be given back. A
+  retry starts the setup again with the points it began with.
+- **Nothing to change before buying.** A friend has only a type and a
+  facing, and the facing is set on the board (tap-to-aim, 8a). The owner's
+  brief mentioned modifying a friend before buying; the spec defines no
+  such option, so there is none (an open question in K9).
 
 ## 9. Daily, practice, streaks, cosmetics
 
@@ -310,7 +361,7 @@ moved, like any other change; the press itself stays counted.
     puzzle changes at local midnight (D18). The sim never reads a clock.
   - A finished daily can't be played again. It shows a **done for today**
     screen: kids fed, hungry against the allowance, how many retries it took,
-    hints used (K9), the streak, the last seven days, and a countdown to the
+    hints used (K11), the streak, the last seven days, and a countdown to the
     next puzzle at local midnight. The bonus round and practice are still
     there (K7).
   - Failing isn't final: the player retries from the start of the failed wave
@@ -380,7 +431,7 @@ Kindy.
     snack.
   - It sets the starting tray to what the planted day needs beyond what the
     points earned so far can buy.
-  - **Decoys** (main mode, K9): it then adds `decoys` (2) friends the planted
+  - **Decoys** (main mode, K11): it then adds `decoys` (2) friends the planted
     day doesn't need. The first is certainly spare: a type the tray already
     holds as many of as the solution ever places at once, a type the
     solution never uses if there is one. The second is any type that
@@ -399,7 +450,7 @@ Kindy.
   including the decoys and the bonus ramp, and
   `npm run harness -- report` prints how hard and how fast they are
   (docs/balance/generator-report.md).
-- **The report's targets** (K9): in main dailies and bonus rounds, 0% of
+- **The report's targets** (K11): in main dailies and bonus rounds, 0% of
   waves where the tray gives the answer away and 0% of days whose tray is
   only the answer; the bonus round's last three waves at least 1.5 harder than
   its first three, and its wave 10 harder than the daily's wave 10. Its
@@ -428,7 +479,8 @@ None of this changes a rule: every action is a place, turn or toTray
 command, or Go, checked by the sim.
 
 - **No text at all** from the child's picture to the end of the day: every
-  picture is drawn by CSS, so there is not one letter or digit on the page.
+  picture is drawn as SVG with no text in it (K10), so there is not one
+  letter or digit on the page.
   Words exist only as the spoken hints and as labels for screen readers.
   Parent words live behind the grown-ups' menu (section 12).
 - **The screen:** the child's picture (back to the picker), a row of five
@@ -546,11 +598,11 @@ outside it is a design change.
 | `obstaclesMin` | 2 | 0 | 6 | Fewest obstacles on a main board |
 | `obstaclesMax` | 4 | 0 | 8 | Most obstacles on a main board |
 | `bonusObstacles` | 2 | 0 | 4 | Extra obstacles on a bonus board |
-| `bonusFriendsFirst` | 3 | 2 | 6 | Friends the 2 kids' shortest routes add up to at bonus wave 1 (section 8, K9) |
+| `bonusFriendsFirst` | 3 | 2 | 6 | Friends the 2 kids' shortest routes add up to at bonus wave 1 (section 8, K11) |
 | `bonusFriendsLast` | 5 | 4 | 6 | The same at the last bonus wave; the waves between ramp evenly |
 | `bonusCluesFirst` | 30 | 0 | 100 | Percent chance bonus wave 1 has a card pointing at another kid |
 | `bonusCluesLast` | 90 | 0 | 100 | The same at the last bonus wave |
-| `decoys` | 2 | 1 | 4 | Friends added to a main-mode starting tray beyond what the day needs (section 10, K9) |
+| `decoys` | 2 | 1 | 4 | Friends added to a main-mode starting tray beyond what the day needs (section 10, K11) |
 | `maxProfiles` | 6 | 2 | 8 | Profiles on one device (section 12) |
 | `nameLength` | 12 | 6 | 20 | Longest profile name, in characters (section 12) |
 | `historyKept` | 400 | 60 | 3650 | Finished days a profile keeps, besides the streak still going (section 9) |
@@ -570,11 +622,14 @@ Checked on every build (`npm test`):
   kid takes at most one snack (property tests).
 - The View never holds what a main-mode kid wants, except the lunchbox a
   hint the player asked for shows (section 8b, step 2).
+- The same day with the same purchases, refunds included, plays the same,
+  wave for wave and hash for hash; a day's shop catalogue is fixed by its
+  seed and sells every friend the solution buys (K9).
 - Every main-mode tray keeps a friend the solution never places, and no
   wave's solution places every friend owned; every bonus wave is planted to
-  the ramp (K9).
+  the ramp (K11).
 - A main-mode day played by pressing Hint until it says Go, then Go, wins
-  with nobody hungry.
+  with nobody hungry (K11).
 - A save reloads to the same hash; a damaged save is refused.
 - Profiles are kept apart: one child's game, retries and finished days never
   change another's. A pre-profile save folds into the first profile with the

@@ -13,8 +13,9 @@ practice boards, and every board is proved solvable before you see it.
 
 It works offline, installs like an app, and needs no account or server.
 
-This is an early, plain version (grey squares, no art yet), so the game can
-be play-tested before it is drawn.
+Everything is drawn in the game's own style (a schoolyard at lunchtime,
+docs/ART.md): no outside pictures, and nothing a clue asks about depends on
+seeing colour.
 
 This repository held other games before: a warehouse simulator until
 20 October 2026 (`git checkout 734c848`, decision record K1 in
@@ -52,6 +53,8 @@ npm test                      # runs the automatic checks; should end in "passed
 npm run check                 # checks the code follows the project's rules
 npm run harness               # the generator report: 1000 days of puzzles, checked
 npm run build && npm run e2e --workspace web   # the phone check in a headless browser
+npm run visual --workspace web                  # four screens compared with their saved pictures (after a build)
+npm run art-sheet --workspace web -- sheet.png  # every picture in the game on one sheet
 ```
 
 ## Installing it on your phone
@@ -87,11 +90,11 @@ offline or install from there).
 
 - **Read the kids' cards** above the board: each kid has a letter, and its
   card says which snack it wants. Tap a card (or the kid) to open the full
-  card with today's snacks and their colour, feel, taste and shape. Sisters
-  wear the same colour.
+  card with today's snacks and their colour, feel, taste and shape, each as
+  a word and a picture. Sisters wear the same shirt.
 - **Put friends out**: tap a friend in the tray at the bottom (each shows its
-  name, a little diagram of its throw and how many are left), then tap a grey
-  square. Or drag it straight onto the square. Drag a placed friend to move
+  picture, its name, a little diagram of its throw and how many are left),
+  then tap a grass square. Or drag it straight onto the square. Drag a placed friend to move
   it, or off the board to put it back.
 - **Aim**: tap a placed friend and the squares it can throw to light up
   green; tap one to aim it there. A Nurse lights up the squares it heals
@@ -106,8 +109,11 @@ offline or install from there).
   once). Then a card over the board says who was fed, who got a tummy ache,
   who the Nurse healed, how many have gone home hungry (of 3 allowed) and the
   points earned.
-- Fed kids earn ⭐ points to spend in the **Shop** between waves, for today
-  only. If more than 3 kids go home hungry, try that wave again.
+- Fed kids earn ⭐ points to spend in the **Shop** (the button in the tray
+  shows your points) between waves, for today only. A friend you buy goes
+  straight into the tray; changed your mind? **Give back** returns every
+  point until you press Go. If more than 3 kids go home hungry, try that
+  wave again.
 - **Finish all 10 waves** and the day is done: a "done for today" screen
   shows how it went, the 🔥 streak (days in a row with the daily finished)
   and a countdown to tomorrow's puzzle. The bonus round and practice boards

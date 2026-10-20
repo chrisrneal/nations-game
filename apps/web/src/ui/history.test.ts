@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FriendView } from '@snacks/contracts';
-import { clearPlan, undoChange, undoFor } from './history.ts';
+import { clearPlan, forgetFriend, undoChange, undoFor } from './history.ts';
 
 const friend = (id: number, cell: number, facing = 0, type: FriendView['type'] = 'straight'): FriendView => ({ id, type, cell, facing, target: -1, picker: false });
 
@@ -76,5 +76,13 @@ describe('undoing what a hint did (RULES 8b)', () => {
   it('a friend the hint bought goes to the tray (points spent stay spent); nothing changed, nothing to undo', () => {
     expect(undoChange([], [friend(5, 9, 2)])).toEqual([{ type: 'toTray', friend: 5 }]);
     expect(undoChange([friend(1, 3, 4)], [friend(1, 3, 4)])).toBeNull();
+  });
+});
+
+describe('a refund and the undo stack (K9)', () => {
+  it('forgets every undo step that names a friend given back, keeping the rest in order', () => {
+    const history = [[{ type: 'toTray', friend: 4 }], [{ type: 'turn', friend: 2, facing: 1 }], [{ type: 'place', friend: 4, cell: 3, facing: 0 }, { type: 'turn', friend: 2, facing: 0 }]] as const;
+    expect(forgetFriend(history, 4)).toEqual([[{ type: 'turn', friend: 2, facing: 1 }], [{ type: 'turn', friend: 2, facing: 0 }]]);
+    expect(forgetFriend(history, 9)).toEqual(history);
   });
 });

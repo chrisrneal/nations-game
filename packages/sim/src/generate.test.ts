@@ -66,7 +66,7 @@ describe('main-mode days', () => {
   });
 });
 
-describe('the tray does not give the answer away (K9)', () => {
+describe('the tray does not give the answer away (K11)', () => {
   const sample = [...days('main', 'daily', 25), ...days('main', 'bonus', 10), generatePuzzle('main', 'practice', 0, 7)];
 
   it('holds decoys: a friend the solution never places, so the tray is not just the answer', () => {
@@ -98,14 +98,14 @@ describe('the tray does not give the answer away (K9)', () => {
   });
 
   it('leaves Kindy’s given friends as they were before decoys: the same puzzles, hash for hash', () => {
-    // Fingerprints taken from the generator before K9.
+    // Fingerprints taken from the generator before K11.
     expect(hashState(generatePuzzle('kindy', 'daily', 20_000, 0))).toBe('7d216be7bbfc3661');
     expect(hashState(generatePuzzle('kindy', 'daily', 20_001, 0))).toBe('5bdfd2986918c71f');
     expect(hashState(generatePuzzle('kindy', 'practice', 0, 20_002))).toBe('12cd84a4f9852101');
   });
 });
 
-describe('the bonus round ramps up (K9)', () => {
+describe('the bonus round ramps up (K11)', () => {
   const bonus = days('main', 'bonus', 30);
   const daily = days('main', 'daily', 30);
 

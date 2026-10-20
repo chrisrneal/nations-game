@@ -1,6 +1,6 @@
 import type { FriendView, GameState, GameView, KidView, ShopItem } from '@snacks/contracts';
 import { clueText } from './clues.ts';
-import { priceOf } from './game.ts';
+import { boughtThisSetup, priceOf } from './game.ts';
 import { FACINGS } from './geometry.ts';
 import { kindyHint } from './hint.ts';
 import { landing, occupancy, pickupFor, resolveSnacks, type WaveKid } from './resolve.ts';
@@ -10,7 +10,7 @@ import { SNACKS } from './snacks.ts';
  * The View (S6): everything the interface may show. It never says what a
  * main-mode kid wants; that is the puzzle. After a wave, the wave result
  * shows what each kid ate, which the player has then seen; and a hint the
- * player asked for may show the lunchbox that feeds a kid (tier 2, K9).
+ * player asked for may show the lunchbox that feeds a kid (tier 2, K11).
  */
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -42,11 +42,19 @@ export function gameView(state: GameState): GameView {
       label: kidLabel(k.id),
       look: kid.look,
       clue: kid.clue === null ? null : clueText(kid.clue),
+      facts: kid.clue === null ? null : kid.clue.facts,
       wants: kindy ? kid.wants : null,
       healed: k.healed,
     };
   });
-  const shop: ShopItem[] = puzzle.shop.map((type) => ({ type, price: priceOf(type), canBuy: state.phase === 'setup' && state.points >= priceOf(type) }));
+  const shop: ShopItem[] = puzzle.shop.map((type) => {
+    const price = priceOf(type);
+    const mine = state.friends.filter((f) => f.type === type);
+    // The last one bought this setup, one still in the tray before one on the board.
+    const back = mine.filter((f) => boughtThisSetup(state, f)).sort((a, b) => Number(a.cell < 0) - Number(b.cell < 0) || a.id - b.id);
+    const setup = state.phase === 'setup';
+    return { type, price, canBuy: setup && state.points >= price, shortfall: Math.max(0, price - state.points), owned: mine.length, refund: setup ? (back.at(-1)?.id ?? -1) : -1 };
+  });
   return {
     mode: puzzle.mode,
     round: puzzle.round,
@@ -71,7 +79,7 @@ export function gameView(state: GameState): GameView {
     lastWave: state.lastWave,
     facings: FACINGS,
     hint: kindyHint(state),
-    // Main mode, during setup: the hint the player asked for (K9). Its lunchbox, from tier 2, is the one way the View says what a kid wants.
+    // Main mode, during setup: the hint the player asked for (K11). Its lunchbox, from tier 2, is the one way the View says what a kid wants.
     mainHint: !kindy && state.phase === 'setup' ? state.hint : null,
     hints: state.hints,
   };

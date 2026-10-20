@@ -1,21 +1,21 @@
 import type { AvatarId, DayRecord, ProfileView } from '@snacks/contracts';
 
 /**
- * Pictures and words for profiles (RULES 12, K7). The avatars are
- * placeholders, an animal emoji on a coloured circle, until the art in
- * build step 8; a child who doesn't read finds theirs by the picture. Which
+ * Pictures and words for profiles (RULES 12, K7). The avatars are animal
+ * faces drawn as SVG (art/Avatars.tsx); a child who doesn't read finds
+ * theirs by the picture, and these names are for screen readers. Which
  * pictures there are, and their order, comes from the host (HomeView.avatars).
  */
 
-export const AVATAR_LOOK: Readonly<Record<AvatarId, { readonly emoji: string; readonly colour: string; readonly name: string }>> = {
-  dog: { emoji: '🐶', colour: '#f6d7a7', name: 'Dog' },
-  cat: { emoji: '🐱', colour: '#f9c6d0', name: 'Cat' },
-  fox: { emoji: '🦊', colour: '#ffd6b0', name: 'Fox' },
-  panda: { emoji: '🐼', colour: '#d8e2ec', name: 'Panda' },
-  frog: { emoji: '🐸', colour: '#c9eec0', name: 'Frog' },
-  owl: { emoji: '🦉', colour: '#e3d3f5', name: 'Owl' },
-  bunny: { emoji: '🐰', colour: '#fbe3ef', name: 'Bunny' },
-  tiger: { emoji: '🐯', colour: '#fde8a6', name: 'Tiger' },
+export const AVATAR_LOOK: Readonly<Record<AvatarId, { readonly name: string }>> = {
+  dog: { name: 'Dog' },
+  cat: { name: 'Cat' },
+  fox: { name: 'Fox' },
+  panda: { name: 'Panda' },
+  frog: { name: 'Frog' },
+  owl: { name: 'Owl' },
+  bunny: { name: 'Bunny' },
+  tiger: { name: 'Tiger' },
 };
 
 /** What to call a profile in words: its name, or its picture's when it has none. */

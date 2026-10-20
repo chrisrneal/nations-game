@@ -62,3 +62,11 @@ export function undoChange(before: readonly FriendView[], after: readonly Friend
   const steps = [...toTray, ...putBack];
   return steps.length === 0 ? null : steps;
 }
+
+/**
+ * A friend given back in the shop (K9) is gone: every undo step that names it
+ * is dropped, since putting it back would be refused. Steps left empty go too.
+ */
+export function forgetFriend(history: readonly UndoStep[], friend: number): UndoStep[] {
+  return history.map((step) => step.filter((c) => !('friend' in c) || c.friend !== friend)).filter((step) => step.length > 0);
+}

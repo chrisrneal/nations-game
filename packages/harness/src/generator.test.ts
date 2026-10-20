@@ -3,14 +3,16 @@
  * dailies, and 300 each of bonus rounds and Kindy dailies, are generated and
  * every one passes the clue checker and the solver, and its solution wins
  * with nobody hungry when played through the real game. A Kindy day also
- * never gets stuck, whichever kids are left waiting (K8). Since K9 every
- * main-mode day also keeps decoys in its tray and never has a wave that
+ * never gets stuck, whichever kids are left waiting (K8). Every day's shop
+ * sells what its solution buys, and its catalogue is fixed by its seed (K9).
+ * Every main-mode day keeps decoys in its tray and never has a wave that
  * places every friend owned, every bonus wave is planted to the ramp, and
- * the measured bonus curve rises and ends above the daily's last wave.
+ * the measured bonus curve rises and ends above the daily's last wave (K11).
  */
 import { performance } from 'node:perf_hooks';
 import { describe, expect, it } from 'vitest';
-import { checkDays, type DayCheck } from './games.ts';
+import { generatePuzzle } from '@snacks/sim';
+import { catalogueFixedBySeed, checkDays, type DayCheck } from './games.ts';
 import { difficultyCurve, targets, type KindReport } from './report.ts';
 
 const now = (): number => performance.now();
@@ -31,7 +33,7 @@ describe('every generated day can be won (RULES 10)', () => {
     expect(bonus.failed).toEqual([]);
   }, 300_000);
 
-  it('the bonus round gets harder wave by wave and ends above the daily’s wave 10; the tray targets hold (K9)', () => {
+  it('the bonus round gets harder wave by wave and ends above the daily’s wave 10; the tray targets hold (K11)', () => {
     expect(daily).not.toBeNull();
     expect(bonus).not.toBeNull();
     const curve = difficultyCurve(bonus!);
@@ -43,5 +45,15 @@ describe('every generated day can be won (RULES 10)', () => {
   it('300 Kindy dailies', () => {
     const checks = checkDays('kindy', 'daily', 20_000, 300, now);
     expect(checks.filter((c) => c.problems.length > 0)).toEqual([]);
+  }, 300_000);
+
+  it('a day’s shop catalogue is fixed by its seed: 100 dailies and 50 bonus rounds made again', () => {
+    const differ: string[] = [];
+    for (let day = 20_000; day < 20_100; day++) {
+      const daily = generatePuzzle('main', 'daily', day, 0);
+      if (!catalogueFixedBySeed(daily)) differ.push(`daily ${day}`);
+      if (day % 2 === 0 && !catalogueFixedBySeed(generatePuzzle('main', 'bonus', day, 0))) differ.push(`bonus ${day}`);
+    }
+    expect(differ).toEqual([]);
   }, 300_000);
 });

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import type { HomeView } from '@snacks/contracts';
 import type { Feedback, GameHost } from '../platform/index.ts';
+import { Icon } from './art/Icons.tsx';
 import { Avatar } from './Avatar.tsx';
 import { ParentMenu } from './ParentMenu.tsx';
 import { profileLabel } from './people.ts';
@@ -41,7 +42,8 @@ export function Picker(props: {
               <span className="picker-name">{p.name}</span>
               {p.streak > 0 && (
                 <span className="picker-streak" aria-label={`Streak ${p.streak}`}>
-                  🔥{p.streak}
+                  <Icon className="count-icon" name="flame" />
+                  {p.streak}
                 </span>
               )}
             </button>
@@ -50,7 +52,7 @@ export function Picker(props: {
       </ul>
       <footer className="picker-foot">
         <HoldButton label="Grown-ups" onHold={() => setParents(true)} onTap={() => onToast('Grown-ups: press and hold the button.')}>
-          👪 Grown-ups <span className="muted small">(hold)</span>
+          Grown-ups <span className="muted small">(hold)</span>
         </HoldButton>
       </footer>
       {parents && <ParentMenu home={home} host={host} feedback={props.feedback} onToast={onToast} onClose={() => setParents(false)} />}

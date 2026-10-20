@@ -85,7 +85,7 @@ interface Plan {
   readonly attempts: number;
   /** Percent chance a wave's clues point at another kid. */
   relationalAt(w: number): number;
-  /** Decoy friends added to the starting tray (K9). */
+  /** Decoy friends added to the starting tray (K11). */
   readonly decoys: number;
 }
 
@@ -97,7 +97,7 @@ function ramp(first: number, last: number, w: number, waves: number): number {
 }
 
 /**
- * The bonus round's ramp (RULES 10, K9): the friends the shortest routes of
+ * The bonus round's ramp (RULES 10, K11): the friends the shortest routes of
  * bonus wave w add up to, for its 2 kids, rising from `bonusFriendsFirst` to
  * `bonusFriendsLast`.
  */
@@ -317,7 +317,7 @@ function pairsOf(spots: readonly Spot[], total: number): [Spot, Spot][] {
 }
 
 /**
- * The bonus ramp (K9): pairs of kids whose shortest routes, each on their
+ * The bonus ramp (K11): pairs of kids whose shortest routes, each on their
  * own, add up to `total`, in a random order. Picking from these instead of
  * at random makes a long-route wave quick to find; the two kids are checked
  * together afterwards, since one can stand in the other's way.
@@ -468,14 +468,14 @@ export function tryGenerate(mode: Mode, round: Round, day: number, seed: number)
   const solvedDraft = { ...draft, witness: solved.layouts };
   const done = { ...solvedDraft, difficulty: difficultyOf(solvedDraft) };
   if (plan.decoys === 0) return done;
-  // The tray must not give the answer away (K9): a friend the solution never places, and no wave that places every friend owned.
+  // The tray must not give the answer away (K11): a friend the solution never places, and no wave that places every friend owned.
   const decoyed = withDecoys(done, plan, dice);
   const use = trayUse(decoyed);
   return use.unused > 0 && use.tells.length === 0 ? decoyed : null;
 }
 
 /**
- * The tray with decoys (K9): friends the stored solution does not need, so
+ * The tray with decoys (K11): friends the stored solution does not need, so
  * the tray is not just the answer's pieces.
  *
  * - The solution the solver proved on the planted tray still works: owning

@@ -85,7 +85,7 @@ export function ParentMenu(props: { home: HomeView; host: GameHost; feedback?: F
             <Avatar id={p.avatar} size={44} />
             <span className="parent-what">
               <strong>{p.name === '' ? 'No name' : p.name}</strong>
-              <span className="muted small">{p.mode === 'main' ? 'Main' : 'Kindy'} · 🔥 {streakText(p.streak)}</span>
+              <span className="muted small">{p.mode === 'main' ? 'Main' : 'Kindy'} · streak {streakText(p.streak)}</span>
             </span>
             <button type="button" className="btn btn-small" aria-label={`Change ${profileLabel(p)}`} onClick={() => setPage({ kind: 'edit', id: p.id })}>
               Change

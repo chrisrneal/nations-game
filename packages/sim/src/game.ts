@@ -77,6 +77,15 @@ function refuse(state: GameState, error: string): StepResult {
   return { state, error, wave: null };
 }
 
+/**
+ * A friend bought since this setup began (K9): its id is at least the next id
+ * the checkpoint had, because only buying makes new friends. Set again at
+ * every Go and kept by a retry, so nothing reaches past Go.
+ */
+export function boughtThisSetup(state: GameState, friend: Friend): boolean {
+  return friend.id >= state.checkpoint.nextFriendId;
+}
+
 /** Why a friend may not stand on a square, or null (RULES 3, 5). */
 export function placementProblem(state: GameState, friend: Friend, cell: number, facing: number): string | null {
   const board = state.puzzle.board;
@@ -125,6 +134,12 @@ export function step(state: GameState, command: GameCommand): StepResult {
       if (state.points < price) return refuse(state, 'Not enough points yet.');
       const friend: Friend = { id: state.nextFriendId, type: command.friend, cell: -1, facing: 0 };
       return applied(state, { friends: [...state.friends, friend], nextFriendId: state.nextFriendId + 1, points: state.points - price });
+    }
+    case 'refund': {
+      const friend = state.friends.find((f) => f.id === command.friend);
+      if (friend === undefined) return refuse(state, 'No such friend.');
+      if (!boughtThisSetup(state, friend)) return refuse(state, 'Only friends bought since the last Go can be given back.');
+      return applied(state, { friends: state.friends.filter((f) => f.id !== friend.id), points: state.points + priceOf(friend.type) });
     }
     case 'go':
       return go(state);

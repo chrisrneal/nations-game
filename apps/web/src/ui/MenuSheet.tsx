@@ -77,8 +77,8 @@ export function HowToPlay(props: { onClose: () => void }): ReactElement {
         <p>A dashed line shows where each friend’s next throw lands. Tap a kid, or their card above the board, to read their clue.</p>
         <p>A friend in the way catches the snack and throws it on, their own way. A kid in the way takes it. Trees, tables and the edge stop it.</p>
         <p>The first snack to reach a kid counts. The right one: they’re fed! The wrong one: tummy ache. A Nurse next to them can help, once.</p>
-        <p>Stuck? Press 💡 Hint: first it says whose card to work on, then which lunchbox feeds them, then it puts a friend out for you. Hints never break your streak.</p>
-        <p>Press Go and watch. After each wave you can move friends and buy new ones with your ⭐ points. If more than 3 kids go home hungry, try that wave again.</p>
+        <p>Stuck? Press the Hint button: first it says whose card to work on, then which lunchbox feeds them, then it puts a friend out for you. Hints never break your streak.</p>
+        <p>Press Go and watch. After each wave you can move friends and buy new ones with your points (the stars). If more than 3 kids go home hungry, try that wave again.</p>
       </div>
     </Sheet>
   );
