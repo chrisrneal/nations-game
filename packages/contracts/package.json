@@ -1,9 +1,9 @@
 {
-  "name": "@warehouse/contracts",
+  "name": "@snacks/contracts",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Shared warehouse types only. No runtime code, no dependencies.",
+  "description": "Shared Snack Attack types only. No runtime code, no dependencies.",
   "exports": {
     ".": "./src/index.ts"
   },
