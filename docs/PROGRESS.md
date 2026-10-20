@@ -1,17 +1,18 @@
 # Progress
-Current state: **Snack Attack, build steps 0-7 and 10 done: a plain
-playable game with a profile for each child, and Kindy mode on screen**
-(decision records K1, K7, K8). The engine, solver, clue checker and
-generator are built and tested. A grey-squares screen plays the daily, its
-bonus round and practice boards, with phone controls (tap-to-aim, drag,
-Undo, one screen; K6). Each child has a profile with their own daily,
-retries, practice board, finished days and streak; a finished daily shows
-"done for today" with a countdown (K7). A Kindy profile plays its own 4 x 4
-daily with pictures only, a pointing hand and a spoken voice for hints, a
-party at the end and a picture-only done for today (K8). Next is the
-owner's gate: play both modes with the children and say what to change. The
-warehouse simulator is at commit `734c848`; the log below the line describes
-the earlier games.
+Current state: **Snack Attack, build steps 0-8 and 10 done: the whole game
+drawn in its own style, with the waves animated** (decision records K1, K7,
+K8, K9). The engine, solver, clue checker and generator are built and
+tested. The daily, its bonus round and practice boards play on one phone
+screen (tap-to-aim, drag, Undo; K6), drawn as a schoolyard at lunchtime
+(docs/ART.md): friends on game-piece bases, kids in patterned shirts, open
+lunchboxes, trees and benches, and every clue readable from the pictures
+without seeing colour (K9). A wave plays out as snacks arcing along their
+real routes, catches, dances, wobbles, sparkles and sad walks home. Each
+child has a profile with their own daily, retries, practice board,
+finished days and streak (K7); a Kindy profile plays its own 4 x 4 daily
+with pictures only (K8). Next is the owner's gate: play both modes with the
+children and say what to change. The warehouse simulator is at commit
+`734c848`; the log below the line describes the earlier games.
 
 ## Build order (docs/ROADMAP.md)
 - [x] 0 Reset (K1-K5)
@@ -22,13 +23,88 @@ the earlier games.
 - [x] 5 Generator
 - [x] 6 Plain playable screen (the owner's gate is open)
 - [x] 7 Daily, practice, profiles, streak (K7)
-- [ ] 8 Art and animation
+- [x] 8 Art and animation (K9)
 - [ ] 9 Shop screen
 - [x] 10 Kindy mode on screen (K8)
 - [ ] 11 Sticker book and cosmetics
 - [ ] 12 Polish on real phones
 
 ## Session log
+
+### 2026-10-20 - Art and animation (build step 8; all lanes, owner request, K9)
+**What changed.**
+- **One art style, drawn in the repo.** docs/ART.md sets it: a friendly
+  schoolyard at lunchtime, one warm brown outline, chunky rounded shapes,
+  flat colours. Every picture is SVG or CSS made here (no outside art, no
+  emoji, no new dependency): grass and a paved path for the board; open
+  lunchboxes with their snack sticking out; trees, benches, sandpits; the
+  parents' picnic table; kids; the five friends; eight animal avatars; and
+  the icons. `docs/art-sheet.png` shows them all.
+- **Clues read from the pictures.** Each clue card shows its facts as
+  pictures next to the words (a cloud for soft, a salt shaker for salty, a
+  slash for "not"...). Each snack colour has its own mark (red a triangle,
+  brown a square, yellow a star, orange a diamond, green a leaf), on the
+  lunchbox's tag, in the card's snack list and in the clue, so "Not red" can
+  be solved without seeing red. Each shirt colour has its own pattern, so
+  sisters match by pattern too. The hat, glasses and backpack are drawn big.
+- **Friends you can tell apart by shape**, each hinting at its throw: a
+  castle-tower helmet and a plus (Straight), a tall tipped hat and a cross
+  (Diagonal), a crown and a ring of dots (Short), a pony hood on a spring
+  and an L (Bouncer), a nurse's cap and a heart (Nurse). They stand on round
+  bases like game pieces; the hungry kids don't.
+- **The wave, animated.** Lids pop, snacks arc along their real routes (low
+  for lines, a hop for a Short, high for a Bouncer's jump), friends bob as
+  they catch and pass, a fed kid dances and skips home, a tummy ache
+  wobbles green, the Nurse sends sparkles, a hungry kid walks home sad (to
+  the parents' table after a tummy ache), and in Kindy a wrong snack
+  bounces off a shaking head. Only transform and opacity move; React does
+  not render during a wave (P7). With reduced motion: no arcs, spins,
+  dances or sparkles, just a face change and a gentle fade.
+- **Kindy** uses the same art bigger, with the wanted snack in a bubble over
+  each kid (kept inside the square, so the top row's isn't cut off), and
+  still not one letter or digit on the page.
+- **Under the hood.** The View now also gives each main-mode clue as facts
+  (`KidView.facts`), so the screen draws them without reading words.
+  `timeline.ts` works the replay out from the wave result; `replay.ts`
+  plays it. The CSS-emoji pictures of K8 (`Pic.tsx`) are gone.
+
+**Measured.**
+- `npm test`: 367 tests pass (was 329). New: 12 art tests (`art.test.ts`: with every
+  colour taken out, no two snacks, colour chips, lunchbox tags, shirts,
+  friends, avatars or clue pictures are the same; the hat, glasses and
+  backpack each show; every face is drawn; no picture holds text), 3
+  harness art tests (every colour in the snack pool has a mark; snacks of
+  one colour have different outlines), 12 timeline tests (a beat a square,
+  the real squares in between, arcs by thrower, catches, first snack only,
+  heal, walks home, Kindy bounce, edge, the calm version) and a View test.
+  The 1000-day generator check and the Node-vs-Chromium determinism test
+  pass.
+- Phone check: 185/185 at 360 x 740 (was 151). New checks: every picture (lunchboxes,
+  kids, friends, obstacles, tables, the clue's pictures, the card's snack
+  key, the result's rows, the shop, Kindy's bubbles and friends) is inside
+  360 x 740 and actually showing; no emoji on any main screen; the replay
+  flies every snack as its picture, a fed kid smiles, snacks rise into an
+  arc, and only transform and opacity are animated; the calm version has no
+  arcs, spins, dances, wobbles or sparkles; no Kindy bubble is cut off.
+- Frame rate in Chromium with the CPU slowed 4x (the phone check's stand-in
+  for a mid-range Android): wave 1's replay 60.9 fps (worst frame 17 ms),
+  the day's busiest wave (wave 10: 4 friends throwing to 2 kids) 60.0 fps
+  (worst frame 33 ms, one dropped frame), and the Kindy party 60.3 fps.
+- Visual check (new, `npm run visual --workspace web`): the main board, the
+  Kindy board, the shop and the result at 360 x 740 match their committed
+  pictures (`apps/web/e2e/visual/`), 4/4.
+- Size: the app's JavaScript and CSS went from 317 KB to 357 KB (+40 KB,
+  +12 KB gzipped), against a budget of about 300 KB more. The service
+  worker precaches 405 KB (was 365 KB), and it still reopens offline.
+
+**How to see it.** Open the Vercel address on a phone: the board is now a
+schoolyard. Tap a kid's card to see the clue in pictures beside today's
+snacks. Press Go and watch the snacks fly. A Kindy profile shows the same
+art bigger. Turn on "Reduce motion" in the phone's settings to see the calm
+version.
+**What is left.** Real phones (iOS Safari, Android Chrome) still need a
+look; the school gate and home at the path's ends are not drawn; the shop
+screen is step 9; sounds are unchanged (docs/GAPS.md, K9).
 
 ### 2026-10-20 - Kindy mode on screen (build step 10; all lanes, owner request, K8)
 **What changed.**

@@ -60,8 +60,21 @@
  *   again; practice gives a new Kindy board;
  * - turning the voice off in the grown-ups' menu keeps the hand and stops
  *   the voice.
+ *
+ * The art and the replay (K9):
+ * - every picture (lunchboxes with their snack and tag, kids, friends,
+ *   obstacles, tables, the top bar, each card's clue pictures, the clue
+ *   card's snack key with a picture for each trait, the result's rows, the
+ *   shop, Kindy's bubbles and friends) is inside 360 x 740 and showing; no
+ *   emoji on any main screen; no Kindy bubble cut off by the board's edge;
+ * - the replay flies every snack as its picture, a fed kid smiles, snacks
+ *   rise into an arc, and only transform and opacity are animated (every
+ *   Web Animation is recorded); the busiest wave of the day also holds 55+
+ *   fps with the CPU slowed 4x; with reduced motion there are no arcs,
+ *   spins, dances, wobbles or sparkles.
  * Every new screen and control is checked to be inside 360 x 740 and not
- * covered, not just positioned.
+ * covered, not just positioned. The four screens' looks are checked by the
+ * visual check (visual-check.ts).
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
@@ -327,7 +340,7 @@ async function boardFriends(page: Page): Promise<{ cell: number; type: FriendTyp
  * the board: buy, send friends the plan doesn't use to the tray, place the
  * rest from the tray, aim every one, press Go. True when every kid is fed.
  */
-async function playWaveByTaps(page: Page, puzzle: Puzzle, layout: WaveLayout): Promise<boolean> {
+async function playWaveByTaps(page: Page, puzzle: Puzzle, layout: WaveLayout, beforeGo?: () => Promise<void>): Promise<boolean> {
   if (!(await buy(page, layout.buys))) return false;
   const todo = [...layout.friends];
   for (const friend of await boardFriends(page)) {
@@ -348,6 +361,7 @@ async function playWaveByTaps(page: Page, puzzle: Puzzle, layout: WaveLayout): P
     if (!(await until(page, () => hasFriend(page, f.cell)))) return false;
   }
   for (const f of layout.friends) if ((await aimByTap(page, puzzle, f)) === 'failed') return false;
+  await beforeGo?.();
   await page.locator('.btn-go').tap();
   const overlay = page.getByRole('region', { name: 'What happened' });
   await overlay.waitFor({ timeout: 15_000 });
@@ -1055,13 +1069,28 @@ async function main(): Promise<void> {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await resetRecorder(page);
     const rest: string[] = [];
+    let busiest: Promise<{ frames: number; worst: number }> | null = null;
+    let calm: Recorded[] = [];
     for (const layout of puzzle.witness.slice(2)) {
-      const fed = await playWaveByTaps(page, puzzle, layout);
+      // The last wave, the busiest of the day, at full motion with the CPU slowed 4x.
+      const last = layout.wave === puzzle.waves;
+      const fed = await playWaveByTaps(page, puzzle, layout, !last ? undefined : async () => {
+        calm = await recorded(page);
+        await page.emulateMedia({ reducedMotion: null });
+        await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+        busiest = page.waitForTimeout(150).then(() => measureFps(page, 2000));
+      });
+      if (last && busiest !== null) {
+        const fps = await (busiest as Promise<{ frames: number; worst: number }>);
+        await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+        const snacks = layout.friends.filter((f) => f.type !== 'nurse').length;
+        check(`the busiest wave (${layout.wave}) replays at 55+ fps with the CPU slowed 4x`, fps.frames >= 55, `${fps.frames.toFixed(1)} fps, worst frame ${fps.worst.toFixed(0)} ms, ${layout.friends.length} friends, ${snacks} throwing`);
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+      }
       rest.push(`${layout.wave}${fed ? '' : ' NOT FED'}`);
       if (layout.wave < puzzle.waves) await page.getByRole('button', { name: new RegExp(`Set up wave ${layout.wave + 1}`) }).tap();
     }
     check('waves 3-10 played by taps, every kid fed', rest.every((r) => !r.includes('NOT')), rest.join(', '));
-    const calm = await recorded(page);
     const lively = calm.filter((a) => (a.cls === 'fly-lift' && /translateY\(-[1-9]|rotate\([1-9]/.test(a.transforms)) || (/\bkid\b|art-friend|sparkle/.test(a.cls) && a.transforms.replace(/none|\s|\|/g, '') !== ''));
     check('with reduced motion, the calm replay: no arcs, spins, dances, wobbles or sparkles', calm.length > 0 && lively.length === 0, `${calm.length} animations, ${lively.length} lively: ${lively.slice(0, 3).map((a) => a.cls).join(', ')}`);
     await page.getByRole('button', { name: 'See today’s result' }).tap();

@@ -81,7 +81,7 @@ body{background:#fff8ec;padding:12px;font-family:system-ui;height:auto}
 const out = process.argv[2] ?? 'art-sheet.png';
 const exe = ['/opt/pw-browsers/chromium', '/usr/bin/chromium'].find((p) => existsSync(p));
 const browser = await chromium.launch(exe === undefined ? {} : { executablePath: exe });
-const page = await browser.newPage({ viewport: { width: 560, height: 400 }, deviceScaleFactor: 2 });
+const page = await browser.newPage({ viewport: { width: 560, height: 400 }, deviceScaleFactor: Number(process.env.DPR ?? 2) });
 await page.setContent(html);
 await page.locator('#sheet').screenshot({ path: out });
 await browser.close();

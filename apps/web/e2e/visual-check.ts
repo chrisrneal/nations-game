@@ -21,7 +21,7 @@ import { generatePuzzle } from '@snacks/sim';
 import { FRIEND_NAME, stepOf } from '../src/ui/labels.ts';
 
 const PORT = 4181;
-const URL = `http://localhost:${PORT}/`;
+const APP = `http://localhost:${PORT}/`;
 const DAY = Number(process.env.DAY ?? 20746);
 const UPDATE = process.env.UPDATE === '1';
 const BASE = new URL('./visual/', import.meta.url).pathname;
@@ -39,32 +39,30 @@ function chromiumPath(): string {
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
 
-/** Fraction of pixels that differ, worked out in the page from two PNGs. */
+/** Fraction of pixels that differ, worked out in the page from two PNGs. A string, not a function: tsx would inject a helper the page does not have. */
 async function difference(page: Page, a: Buffer, b: Buffer): Promise<number> {
-  return (await page.evaluate(
-    async ([x, y]) => {
-      const load = async (src: string): Promise<ImageData> => {
-        const img = new Image();
-        img.src = src;
-        await img.decode();
-        const c = document.createElement('canvas');
-        c.width = img.width;
-        c.height = img.height;
-        const g = c.getContext('2d')!;
-        g.drawImage(img, 0, 0);
-        return g.getImageData(0, 0, img.width, img.height);
-      };
-      const [p, q] = await Promise.all([load(x), load(y)]);
-      if (p.width !== q.width || p.height !== q.height) return 1;
-      let off = 0;
-      for (let i = 0; i < p.data.length; i += 4) {
-        const d = Math.max(Math.abs(p.data[i]! - q.data[i]!), Math.abs(p.data[i + 1]! - q.data[i + 1]!), Math.abs(p.data[i + 2]! - q.data[i + 2]!));
-        if (d > 48) off++;
-      }
-      return off / (p.width * p.height);
-    },
-    [`data:image/png;base64,${a.toString('base64')}`, `data:image/png;base64,${b.toString('base64')}`] as const,
-  )) as number;
+  const urls = JSON.stringify([`data:image/png;base64,${a.toString('base64')}`, `data:image/png;base64,${b.toString('base64')}`]);
+  return (await page.evaluate(`(async () => {
+    const load = async (src) => {
+      const img = new Image();
+      img.src = src;
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      const g = c.getContext('2d');
+      g.drawImage(img, 0, 0);
+      return g.getImageData(0, 0, img.width, img.height);
+    };
+    const [p, q] = await Promise.all(${urls}.map(load));
+    if (p.width !== q.width || p.height !== q.height) return 1;
+    let off = 0;
+    for (let i = 0; i < p.data.length; i += 4) {
+      const d = Math.max(Math.abs(p.data[i] - q.data[i]), Math.abs(p.data[i + 1] - q.data[i + 1]), Math.abs(p.data[i + 2] - q.data[i + 2]));
+      if (d > 48) off++;
+    }
+    return off / (p.width * p.height);
+  })()`)) as number;
 }
 
 async function compare(page: Page, name: string): Promise<void> {
@@ -131,7 +129,7 @@ async function main(): Promise<void> {
     const page = context.pages()[0] ?? (await context.newPage());
     await page.clock.setFixedTime(DAY * 86_400_000 + 43_200_000);
     await page.addInitScript(`addEventListener('DOMContentLoaded', () => { const s = document.createElement('style'); s.textContent = ${JSON.stringify(QUIET)}; document.head.appendChild(s); })`);
-    await page.goto(URL);
+    await page.goto(APP);
     await page.locator('.board').waitFor();
     const cdp = await context.newCDPSession(page);
 

@@ -8,7 +8,6 @@ airport and Nations gap went with the code. They are in this file at commit
 ## Snack Attack (K1)
 - K1 / step 6, the owner's gate is open: nobody has played it yet. The owner and the 9-year-old to play several dailies and say what is fun, too easy, too hard or confusing. Owner.
 - K1 / step 6, not yet checked on a real phone (iOS Safari, Android Chrome); the phone check is headless Chromium and is not in CI because it needs a build and a browser. Owner, lane P.
-- K1 / step 6, the screen is plain on purpose: pattern diagrams for friends, emoji for snacks, letters for kids, and a simple flight replay. Art and real animation are step 8. Lane U.
 - K1 / step 11, no sticker book or cosmetics yet. Profiles and the streak came in step 7 (K7). Lanes S, U.
 - K1 / step 6, the shop is a plain list in a sheet (step 9). Lane U.
 - K1 / step 6, main mode has no hint button. Kindy's hints (K8) come from the stored witness; main mode could use the same, but a main hint would have to avoid giving away the clue. Lanes S, U.
@@ -27,7 +26,6 @@ airport and Nations gap went with the code. They are in this file at commit
 - K7, the picker opens on launch only when there is more than one profile (the step 7 prompt). RULES 12 (L) said the avatar row is always the first screen; with one profile it now goes straight to the game. Owner to confirm.
 - K7, a profile's mode can't be changed after it is made (RULES 12); to move a child from Kindy to Main, a grown-up makes a new profile. Owner.
 - K7, the Grown-ups press-and-hold (D17) stops a 4-year-old, not a 9-year-old who has watched a parent do it; there is no PIN by design. Owner.
-- K7, the avatars are emoji on coloured circles; art comes in step 8. Lane U.
 - K7, old daily and bonus slots are never cleaned up: one per profile per day, a few kilobytes each (a year is a few megabytes). A cleanup older than, say, 30 days would need care with clocks set backwards. Lane P.
 - K7, the countdown to midnight uses today's timezone offset, so on a daylight-saving night it can be an hour out; when it reaches 0 the done screen checks the day again and offers the new puzzle only if it has really changed. Lane P.
 - K7, a clock set forward lets a child play a later day's puzzle early, and flying west can show yesterday's puzzle again. Both are allowed (the prompt: don't try to prevent clock cheating). Owner.
@@ -43,6 +41,16 @@ airport and Nations gap went with the code. They are in this file at commit
 - K8, the spoken hints use the Web Speech API and were tested with a stand-in voice in headless Chromium only. Real iOS Safari (speech after the first tap) and Android Chrome voices still need trying; the hand works without them. Owner, lane P.
 - K8, the voice preference is one per phone, not per child. Lane P.
 - K8, a hint off the plan (a kid left waiting) comes from the solver: it may feed only the kid who waited longest that wave, and is not always the shortest way. Lane S.
-- K8, Kindy pictures are emoji drawn by CSS; they look different on iOS, Android and Windows until the art in step 8. Lane U.
 - K8, the moon on the done screen moves every 30 seconds by the fraction of the day gone; like the main countdown it can be an hour out on a daylight-saving night (K7). Lane U.
 - K8, about 1 Kindy day in 8 now takes a later seed than before (the never-stuck check); nobody had played Kindy yet, so nothing visible changed. Lane S.
+
+## Art and animation (step 8, K9)
+- K9, the art and the replay are checked in headless Chromium only (the CPU slowed 4x stands in for a mid-range Android phone). Real iOS Safari and Android Chrome still need a look: SVG drawing, the Web Animations API and the frame rate. Owner, lane P.
+- K9, the visual check (`apps/web/e2e/visual-check.ts`), like the phone check, needs a build and a Chromium, so it is run by hand and not in CI. Its pictures are from this machine's fonts; another machine may need `UPDATE=1` once. Lane P.
+- K9, the school gate at the top of the path and home at the bottom (RULES 3) are not drawn; kids walk off the bottom edge of the board to go home. Lane U.
+- K9, which obstacle a square shows (tree, bench or sandpit) is picked by the screen from the square's number; the sim has one kind of obstacle, so the picture means nothing for play. Lane U.
+- K9, a kid with a tummy ache walks in a straight line to the nearest parents' table, over whatever is in between (pictures only, nothing in the sim moves). Lane U.
+- K9, the kids' skin and hair are picked from their id (sisters share theirs). They are looks only and never a clue; the owner may want to choose the mix. Owner, lane U.
+- K9, main-mode kids keep their letter badge (A, B...), so the cards above the board can name them; Kindy kids have none. Lane U.
+- K9, the shop is still a sheet, now with pictures and an awning; the shop screen is step 9. Lane U.
+- K9, sounds are unchanged (the placeholder synth notes of step 6). Lane P.
