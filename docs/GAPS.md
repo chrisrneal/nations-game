@@ -37,3 +37,5 @@ airport and Nations gap went with the code. They are in this file at commit
 - K7, a profile book that can't be read (damaged, or written by a newer version after a downgrade) is copied to `profiles-unread` and the app starts a fresh book; the first profile finds its saves again, but other profiles' saves can only be recovered by hand. Lane P.
 - K7, the migration from the pre-profile save is tested in Node and once in headless Chromium (the phone check seeds an old database); not yet on a real phone that had the old version installed. Owner, lane P.
 - K7, there is no way to back up or move profiles to another phone (no server, by design). Lane P.
+- K7, the Grown-ups button needs a press-and-hold, which a keyboard or switch-access user can't do (Enter only shows the hint). Fine for a family phone; a long Enter press could be added. Lane U.
+- K7, saves an old cached copy of the app might still write after the migration (slots without a profile) are left in place and ignored, never deleted. Lane P.

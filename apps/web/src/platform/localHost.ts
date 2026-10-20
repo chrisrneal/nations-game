@@ -354,8 +354,8 @@ export class LocalHost implements GameHost {
     }
     const slots = (await store.list()).map((s) => s.slot);
     const legacy = slots.filter((s) => !s.includes('/'));
+    // Slots without a profile once a book exists (an old cached copy of the app ran once more) are left alone, never deleted.
     if (book === null) book = await this.migrate(legacy);
-    else for (const slot of legacy) await store.remove(slot); // left over from a migration cut short
     const highest = Math.max(0, ...slots.map((s) => /^p(\d+)\//.exec(s)).map((m) => (m === null ? 0 : Number(m[1]))));
     return highest >= book.nextId ? { ...book, nextId: highest + 1 } : book;
   }
