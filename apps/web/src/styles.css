@@ -679,8 +679,7 @@ details summary {
   padding: 0;
 }
 
-.snacks li,
-.shop li {
+.snacks li {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -698,19 +697,123 @@ details summary {
   line-height: 1.2;
 }
 
-.shop li {
-  flex-wrap: nowrap;
+/* ---- the shop (K9): a card per friend in a bottom sheet that fits 360 x 740 without scrolling ---- */
+.shop-sheet {
+  max-height: calc(100dvh - 12px - env(safe-area-inset-top));
+  padding-top: 4px;
 }
 
-.shop-diagram {
-  width: 32px;
-  height: 32px;
+.shop-note {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+
+.shop {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shop-card {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  grid-template-areas:
+    'pic what buttons'
+    'diagram blurb blurb';
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--friend, var(--line));
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.shop-pic {
+  grid-area: pic;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid var(--friend, var(--line));
+  background: #fbfaf7;
+  font-size: 1.35rem;
+  line-height: 1;
 }
 
 .shop-what {
-  flex: 1;
+  grid-area: what;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.shop-name {
+  font-size: 0.98rem;
+}
+
+.shop-owned {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.shop-buttons {
+  grid-area: buttons;
+  display: flex;
+  gap: 4px;
+}
+
+.shop-buy {
+  min-width: 76px;
+  font-weight: 700;
+}
+
+.shop-refund {
+  font-size: 0.78rem;
+  padding: 0 8px;
+}
+
+.shop-diagram {
+  grid-area: diagram;
+  justify-self: center;
+  width: 30px;
+  height: 30px;
+}
+
+.shop-blurb {
+  grid-area: blurb;
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+
+/* Too few points: the card is off and the buy button says how many more are needed. */
+.shop-card.short {
+  background: #f6f5f2;
+}
+
+.shop-card.short .shop-pic,
+.shop-card.short .shop-name,
+.shop-card.short .shop-diagram,
+.shop-card.short .shop-blurb {
+  opacity: 0.5;
+}
+
+.shop-card.short .shop-buy {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.tray-shop {
+  background: #fff6d6;
+  border-color: #e6c44d;
+}
+
+.tray-shop .tray-count {
+  color: var(--fg);
 }
 
 /* ---- the clue card ---- */
@@ -895,10 +998,27 @@ details summary {
 }
 
 .sheet-head {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  padding-top: 6px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* The grabber says the sheet can be pulled down to close it. */
+.sheet-grabber {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 40px;
+  height: 4px;
+  margin-left: -20px;
+  border-radius: 2px;
+  background: var(--line);
 }
 
 .sheet-title {
@@ -1831,4 +1951,9 @@ details summary {
   .kindy-confetti {
     display: none;
   }
+}
+
+/* The shortfall stays readable on a buy button that is off. */
+.shop-card.short .shop-buy:disabled {
+  opacity: 0.75;
 }

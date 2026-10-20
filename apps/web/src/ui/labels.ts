@@ -40,6 +40,24 @@ export const FRIEND_HOW: Readonly<Record<FriendType, string>> = {
   nurse: 'heals tummy aches next to it',
 };
 
+/** A picture for each friend in the shop: emoji until the art in build step 8. */
+export const FRIEND_PIC: Readonly<Record<FriendType, string>> = {
+  straight: '🙋',
+  diagonal: '🤸',
+  short: '🤝',
+  bouncer: '🦘',
+  nurse: '🧑‍⚕️',
+};
+
+/** One line in the shop for each friend, for a grade-4 reader (RULES 5, 7). */
+export const FRIEND_BLURB: Readonly<Record<FriendType, string>> = {
+  straight: 'Throws a snack in a straight line: up, down, left or right.',
+  diagonal: 'Throws a snack corner to corner, along a slanted line.',
+  short: 'Passes a snack to a square right next to it.',
+  bouncer: 'Bounces a snack in an L shape, over anything in the way.',
+  nurse: 'Doesn’t throw. Helps a kid near it get over a tummy ache.',
+};
+
 /** The order friend types appear in the tray and shop. */
 export const FRIEND_ORDER: readonly FriendType[] = ['straight', 'diagonal', 'short', 'bouncer', 'nurse'];
 
