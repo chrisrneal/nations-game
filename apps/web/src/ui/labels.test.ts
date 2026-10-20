@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { facingAngle, kidLine, waveSummary } from './labels.ts';
+import { facingAngle, hungryOf, kidLetter, kidLine, kidLooks, shortClue, waveReport, waveSummary } from './labels.ts';
 
 describe('screen words', () => {
   it('points a friend’s arrow the way it throws', () => {
@@ -20,5 +20,47 @@ describe('screen words', () => {
   it('sums up a wave', () => {
     const wave = { wave: 3, snacks: [], points: 1, wentHungry: 1, kids: [{ kid: 1, end: 'happy' as const, ache: false, ate: 'apple' as const }, { kid: 2, end: 'hungry' as const, ache: false, ate: null }] };
     expect(waveSummary(wave)).toBe('Wave 3: 1 of 2 fed · +1 ⭐ · 1 went home hungry');
+  });
+
+  it('reports a wave for the result overlay: fed, tummy aches, healed, hungry, points', () => {
+    const wave = {
+      wave: 4,
+      snacks: [],
+      points: 1,
+      wentHungry: 1,
+      kids: [
+        { kid: 1, end: 'happy' as const, ache: false, ate: 'apple' as const },
+        { kid: 2, end: 'healed' as const, ache: true, ate: 'cookie' as const },
+        { kid: 3, end: 'hungry' as const, ache: true, ate: 'banana' as const },
+      ],
+    };
+    expect(waveReport(wave, kidLetter)).toEqual({ fed: ['A'], aches: ['B', 'C'], healed: ['B'], hungry: ['C'], points: 1 });
+  });
+
+  it('counts hungry kids against the allowance', () => {
+    expect(hungryOf(1, 3)).toBe('1 of 3');
+    expect(hungryOf(4, 3)).toBe('4 of 3: too many');
+  });
+
+  it('letters kids the way the View does', () => {
+    expect(kidLetter(1)).toBe('A');
+    expect(kidLetter(26)).toBe('Z');
+    expect(kidLetter(27)).toBe('A');
+  });
+
+  it('says what a kid wears on their clue card', () => {
+    const kid = (hat: boolean, glasses: boolean, backpack: boolean) => ({ id: 1, cell: 0, label: 'A', clue: 'Something red', wants: null, healed: false, look: { shirt: 0, hat, glasses, backpack, sister: 0 } });
+    expect(kidLooks(kid(false, false, false))).toBe('');
+    expect(kidLooks(kid(true, false, false))).toBe('Wears a hat.');
+    expect(kidLooks(kid(true, true, true))).toBe('Wears a hat, glasses and a backpack.');
+  });
+
+  it('shortens a clue for a crowded row of cards, keeping every fact', () => {
+    expect(shortClue('Something crunchy')).toBe('crunchy');
+    expect(shortClue('Something sweet and long')).toBe('sweet and long');
+    expect(shortClue('Something soft, not their sister’s')).toBe('soft, not sister’s');
+    expect(shortClue('Not red, not soft')).toBe('not red, not soft');
+    expect(shortClue('Same as the kid in the hat')).toBe('same as 🎩');
+    expect(shortClue('Same as the kid with glasses')).toBe('same as 👓');
   });
 });

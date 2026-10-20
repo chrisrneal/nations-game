@@ -36,7 +36,7 @@ export function App(props: { host: GameHost; install?: InstallPrompt; feedback?:
   return (
     <div className="app">
       <InstallBanner install={install} onToast={setToast} />
-      <Game host={host} view={update.view} wave={update.wave} feedback={feedback} onToast={setToast} onMenu={() => setMenu(true)} />
+      <Game host={host} view={update.view} wave={update.wave} healRange={update.healRange} feedback={feedback} onToast={setToast} onMenu={() => setMenu(true)} />
       {menu && <MenuSheet host={host} view={update.view} feedback={feedback} onClose={() => setMenu(false)} />}
       {toast !== null && (
         <div className="toast" role="status">

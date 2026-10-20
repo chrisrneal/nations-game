@@ -69,9 +69,10 @@ facts.
 
 ## 5. Friends and throws (L)
 
-Every friend has a **type** and a **facing**. The player sets the facing when
-placing the friend (tap to turn it) and can change it between waves. A facing
-is one direction, so each friend sends every snack it holds the same way.
+Every friend has a **type** and a **facing**. The player sets the facing after
+placing the friend (by tapping one of the squares its pattern can throw to,
+section 8a) and can change it between waves. A facing is one direction, so
+each friend sends every snack it holds the same way.
 
 | Friend | Pattern | Facings | Where the snack goes |
 |---|---|---|---|
@@ -205,6 +206,39 @@ result. Nothing random happens anywhere in resolution (L).
   waves).
 - **The tray** is the row of unplaced friends at the bottom of the screen.
   Each puzzle sets the starting tray.
+
+### 8a. Setting up on the screen (decision record K6)
+
+How the player gives the commands above on a phone. None of this changes a
+rule: every action is a place, turn or toTray command, checked by the sim.
+
+- **Placing:** tap a friend in the tray, then a grey square; or drag it from
+  the tray onto the square. Each tray button shows the friend's name, a small
+  diagram of its throw pattern and how many are left.
+- **Moving:** drag a placed friend to another square, or select it, tap Move
+  and tap a square. Dragging it off the board (or tapping To tray) puts it
+  back in the tray. Drag is never the only way to do anything.
+- **Aiming (tap-to-aim):** a selected friend lights every square its pattern
+  can throw to: Straight and Diagonal along each of their 4 lines up to the
+  first thing in the way, Short the 8 squares around it, Bouncer its 8
+  L-hops. Tapping a lit square sets the facing that throws there. A small
+  turn button stays for a facing no square stands for (towards the edge).
+  A selected Nurse lights its heal range (`nurseRange`) instead.
+- **The preview (D12):** during setup every friend shows where its next throw
+  lands, with a dashed line to that square. The screen never draws a snack's
+  whole route.
+- **Undo** takes back the last placement, move, aim change or Clear board of
+  this setup. **Clear board** (after a confirm step) puts every friend placed
+  during this setup back in the tray; friends already on the board when the
+  setup began stay. Neither can reach past Go: what a played wave did, points
+  spent in the shop and earlier waves stay as they are.
+- **Clues:** each kid on the board wears a letter badge, and its card is shown
+  above the board (in a shorter form when 3 or 4 kids are on the board).
+  Tapping the kid or its card opens the full card with today's snacks; it
+  stays open until closed.
+- **After a wave**, a card over the board lists who was fed, who got a tummy
+  ache, who the Nurse healed, hungry kids against the allowance (say, 1 of 3)
+  and the points earned, with one button back to setup.
 
 ### The shop (L: this day only)
 

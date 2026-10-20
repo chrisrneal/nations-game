@@ -2,8 +2,8 @@ import type { FriendType, KidOutcome, KidView, SnackEnd, SnackId, WaveResult } f
 
 /**
  * Words and symbols for the grey-squares screen (build step 6): plain
- * letters, chess symbols for the throw patterns and emoji for the snacks.
- * The art comes later (step 8).
+ * letters, friend names with a diagram of each throw pattern (Diagram.tsx)
+ * and emoji for the snacks. The art comes later (step 8).
  */
 
 export const SNACK_EMOJI: Readonly<Record<SnackId, string>> = {
@@ -22,15 +22,6 @@ export const SNACK_NAME: Readonly<Record<SnackId, string>> = {
   cheese: 'Cheese stick',
   pretzel: 'Pretzel',
   grapes: 'Grapes',
-};
-
-/** Chess symbols: the friend throws the way that piece moves. */
-export const FRIEND_GLYPH: Readonly<Record<FriendType, string>> = {
-  straight: '♜',
-  diagonal: '♝',
-  short: '♚',
-  bouncer: '♞',
-  nurse: '✚',
 };
 
 export const FRIEND_NAME: Readonly<Record<FriendType, string>> = {
@@ -126,7 +117,57 @@ export function waveSummary(wave: WaveResult): string {
   return parts.join(' · ');
 }
 
+/** What a kid wears, in words, for their clue card: "Wears a hat and glasses." */
+export function kidLooks(kid: KidView): string {
+  const wears = [kid.look.hat ? 'a hat' : '', kid.look.glasses ? 'glasses' : '', kid.look.backpack ? 'a backpack' : ''].filter((w) => w !== '');
+  if (wears.length === 0) return '';
+  const list = wears.length === 1 ? wears[0]! : `${wears.slice(0, -1).join(', ')} and ${wears[wears.length - 1]!}`;
+  return `Wears ${list}.`;
+}
+
 /** "the kid in the hat" etc. drawn as small emoji on a kid's square. */
 export function kidBadges(kid: KidView): string {
   return `${kid.look.hat ? '🎩' : ''}${kid.look.glasses ? '👓' : ''}${kid.look.backpack ? '🎒' : ''}`;
+}
+
+const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+/** A kid's letter from their id: the same letters the View gives (KidView.label). */
+export function kidLetter(id: number): string {
+  return LETTERS[(id - 1) % LETTERS.length] ?? '?';
+}
+
+/** What the result overlay lists after a wave: kids by letter. */
+export interface WaveReport {
+  readonly fed: readonly string[];
+  readonly aches: readonly string[];
+  readonly healed: readonly string[];
+  readonly hungry: readonly string[];
+  readonly points: number;
+}
+
+export function waveReport(wave: WaveResult, label: (kid: number) => string): WaveReport {
+  const of = (keep: (k: KidOutcome) => boolean): string[] => wave.kids.filter(keep).map((k) => label(k.kid));
+  return {
+    fed: of((k) => k.end === 'happy'),
+    aches: of((k) => k.ache),
+    healed: of((k) => k.end === 'healed'),
+    hungry: of((k) => k.end === 'hungry'),
+    points: wave.points,
+  };
+}
+
+/** Kids who went home hungry today against how many may (RULES 8). */
+export function hungryOf(hungry: number, allowed: number): string {
+  return hungry > allowed ? `${hungry} of ${allowed}: too many` : `${hungry} of ${allowed}`;
+}
+
+/** A clue in fewer letters for a crowded row of cards (3 or 4 kids at once). Every fact stays; the full card is a tap away. */
+export function shortClue(clue: string): string {
+  const text = clue
+    .replace(/^Something /, '')
+    .replace(/^Same as the kid in the hat$/, 'same as 🎩')
+    .replace(/^Same as the kid with glasses$/, 'same as 👓')
+    .replace(/their sister’s/, 'sister’s');
+  return text.charAt(0).toLowerCase() + text.slice(1);
 }

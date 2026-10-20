@@ -48,8 +48,10 @@ Stack: TypeScript, Vite + React, a Web Worker via Comlink, IndexedDB,
 vite-plugin-pwa, Vitest + fast-check, and playwright-core for the phone check.
 
 ## Phone UX budget (checked by apps/web/e2e/phone-check.ts)
-- Portrait and one-handed. The bar is on top, the board and clue cards scroll
-  in the middle, and the tray and Go are pinned in the bottom third.
+- Portrait and one-handed. Nothing scrolls during setup (K6): the bar and the
+  kids' cards on top, the board sized to fit in the middle, and the selected
+  friend's controls, the tray, Undo, Clear board and Go in the bottom third,
+  all inside 360 x 740.
 - Touch targets of at least 44 px (64 px in Kindy). No horizontal scroll at
   360 px. Safe areas respected.
 - The wave replay at 60 fps with the CPU slowed 4x. A day's puzzle generated
@@ -74,6 +76,9 @@ until both work on hand-made test boards.
 5. [x] Generator: plant, check, a difficulty ramp, the bonus salt, and the 1000-day harness check.
 6. [x] A plain playable screen (grey squares, chess symbols, emoji snacks).
    **Gate:** the owner and the 9-year-old play it and say whether it's fun, or what to change.
+   - [x] Controls pass for phones (K6): tap-to-aim, drag to place and move, a
+     named tray, clues on the board, the result over the board, Undo and
+     Clear board, one screen with no scrolling.
 7. [ ] Daily, practice, profiles (avatar picker), saves per profile, the streak.
 8. [ ] Art and wave animation.
 9. [ ] Shop screen.

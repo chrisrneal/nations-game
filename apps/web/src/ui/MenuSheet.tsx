@@ -1,7 +1,8 @@
 import { useState, type ReactElement } from 'react';
 import type { GameView } from '@snacks/contracts';
 import type { Feedback, GameHost } from '../platform/index.ts';
-import { FRIEND_GLYPH, FRIEND_HOW, FRIEND_NAME } from './labels.ts';
+import { PatternDiagram } from './Diagram.tsx';
+import { FRIEND_HOW, FRIEND_NAME, FRIEND_ORDER } from './labels.ts';
 import { Sheet } from './Sheet.tsx';
 
 /** The menu: today's puzzle, a practice board, how to play, sound. */
@@ -54,14 +55,16 @@ export function HowToPlay(props: { onClose: () => void }): ReactElement {
       <div className="help">
         <p>Hungry kids stand on the path. Each one wants one snack. Read their card to work out which!</p>
         <p>Snacks start in lunchboxes. A friend standing right next to a lunchbox (not corner to corner) picks up one snack and throws it.</p>
-        <p>Each kind of friend throws its own way. Tap a friend on the board, then turn it with ↺ ↻:</p>
-        <ul>
-          {(['straight', 'diagonal', 'short', 'bouncer', 'nurse'] as const).map((t) => (
+        <p>Put a friend out: tap it in the tray, then tap a grey square. Or drag it there. Drag a friend off the board to put it back.</p>
+        <p>Each kind of friend throws its own way. Tap a friend on the board: the squares it can throw to light up green. Tap one to aim it there.</p>
+        <ul className="help-friends">
+          {FRIEND_ORDER.map((t) => (
             <li key={t}>
-              {FRIEND_GLYPH[t]} <strong>{FRIEND_NAME[t]}</strong> {FRIEND_HOW[t]}.
+              <PatternDiagram type={t} /> <strong>{FRIEND_NAME[t]}</strong> {FRIEND_HOW[t]}.
             </li>
           ))}
         </ul>
+        <p>A dashed line shows where each friend’s next throw lands. Tap a kid, or their card above the board, to read their clue.</p>
         <p>A friend in the way catches the snack and throws it on, their own way. A kid in the way takes it. Trees, tables and the edge stop it.</p>
         <p>The first snack to reach a kid counts. The right one: they’re fed! The wrong one: tummy ache. A Nurse next to them can help, once.</p>
         <p>Press Go and watch. After each wave you can move friends and buy new ones with your ⭐ points. If more than 3 kids go home hungry, try that wave again.</p>
