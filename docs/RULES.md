@@ -236,8 +236,9 @@ rule: every action is a place, turn or toTray command, checked by the sim.
 - **Undo** takes back the last placement, move, aim change or Clear board of
   this setup. **Clear board** (after a confirm step) puts every friend placed
   during this setup back in the tray; friends already on the board when the
-  setup began stay. Neither can reach past Go: what a played wave did, points
-  spent in the shop and earlier waves stay as they are.
+  setup began stay. Neither can reach past Go: what a played wave did and
+  earlier waves stay as they are. Neither takes back a purchase; the shop's
+  Give back does that, until Go (below, K9).
 - **Clues:** each kid on the board wears a letter badge, and its card is shown
   above the board (in a shorter form when 3 or 4 kids are on the board).
   Tapping the kid or its card opens the full card with today's snacks; it
@@ -260,8 +261,35 @@ rule: every action is a place, turn or toTray command, checked by the sim.
   | Nurse | 3 (`priceNurse`) |
 
 - The catalogue is part of the puzzle, so everyone has the same tools on the
-  same day (L).
+  same day (L). It is fixed by the puzzle's seed; today every main-mode
+  puzzle (daily, bonus, practice) sells all five friends.
 - Everything bought, and all points, reset when the day ends (L).
+- Main mode only: Kindy has no shop (D15).
+
+**On the screen (decision record K9).** None of this changes a price or a
+rule: every action is a buy or refund command, checked by the sim.
+- **Opening it:** the Shop button in the tray shows the points to spend. It
+  works during setup, before any wave and between waves, and is off from
+  the moment Go is pressed until the wave has played (L: only between
+  waves).
+- **The sheet** rises from the bottom and fits a 360 x 740 phone with
+  nothing to scroll. It closes with its close button, a tap above it, or a
+  swipe down on its top.
+- **A card per friend:** a picture, the name, its throw pattern (the same
+  diagram as the tray), one line on what it does, "You have N" (in the tray
+  and on the board today) and the price. With too few points the card is
+  greyed out and its button says how many more are needed ("Need 2 more").
+- **Buying:** tap the price. The friend goes straight into the tray.
+- **Giving back (K9):** a friend bought since the last Go can be given back
+  for every point it cost, until Go is pressed, from the tray or from the
+  board. The card shows Give back while there is one; it gives back the
+  last one bought, one still in the tray first. Friends from the starting
+  tray, and anything bought before the last Go, can't be given back. A
+  retry starts the setup again with the points it began with.
+- **Nothing to change before buying.** A friend has only a type and a
+  facing, and the facing is set on the board (tap-to-aim, 8a). The owner's
+  brief mentioned modifying a friend before buying; the spec defines no
+  such option, so there is none (an open question in K9).
 
 ## 9. Daily, practice, streaks, cosmetics
 
@@ -504,6 +532,9 @@ Checked on every build (`npm test`):
 - Every picker sends exactly one snack, each snack ends exactly one way, and a
   kid takes at most one snack (property tests).
 - The View never holds what a main-mode kid wants.
+- The same day with the same purchases, refunds included, plays the same,
+  wave for wave and hash for hash; a day's shop catalogue is fixed by its
+  seed and sells every friend the solution buys (K9).
 - A save reloads to the same hash; a damaged save is refused.
 - Profiles are kept apart: one child's game, retries and finished days never
   change another's. A pre-profile save folds into the first profile with the
