@@ -28,7 +28,7 @@ describe('profile words and pictures', () => {
   });
 
   it('marks the finished days of the week ending on a day', () => {
-    const rec = (day: number) => ({ day, fed: 1, hungry: 0, retries: 0, bonus: false });
+    const rec = (day: number) => ({ day, fed: 1, hungry: 0, retries: 0, hints: 0, bonus: false });
     expect(weekStrip([rec(98), rec(100)], 100)).toEqual([
       { day: 94, done: false },
       { day: 95, done: false },

@@ -30,6 +30,7 @@ export type IconName =
   | 'shop'
   | 'party'
   | 'sparkle'
+  | 'bulb'
   | 'heart'
   | 'phone'
   | 'menu';
@@ -149,6 +150,14 @@ const DRAW: Readonly<Record<IconName, () => ReactElement>> = {
     </>
   ),
   sparkle: () => <path d="M12 1.5 Q13 11 22.5 12 Q13 13 12 22.5 Q11 13 1.5 12 Q11 11 12 1.5 Z" fill="#ffe36b" strokeWidth={1.2} />,
+  // The main-mode hint (RULES 8b, K11): a light bulb.
+  bulb: () => (
+    <>
+      <path d="M12 2.5 C7.6 2.5 5 5.6 5 9.2 C5 11.8 6.4 13.4 7.6 14.6 C8.4 15.4 8.8 16.2 8.8 17 H15.2 C15.2 16.2 15.6 15.4 16.4 14.6 C17.6 13.4 19 11.8 19 9.2 C19 5.6 16.4 2.5 12 2.5 Z" fill="#ffe36b" />
+      <path d="M9 19.2 H15 M10 21.5 H14" fill="none" strokeWidth={1.8} />
+      <path d="M10.2 12.5 L12 9.5 L13.8 12.5" fill="none" stroke="#e0a400" strokeWidth={1.3} />
+    </>
+  ),
   heart: () => <path d="M12 20.5 C2.5 14 3.5 6 8 5.5 C10 5.3 11.5 6.8 12 8 C12.5 6.8 14 5.3 16 5.5 C20.5 6 21.5 14 12 20.5 Z" fill="#ff7fa8" />,
   menu: () => <path d="M4 6.5 H20 M4 12 H20 M4 17.5 H20" fill="none" strokeWidth={2.4} />,
   phone: () => (

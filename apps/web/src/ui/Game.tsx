@@ -11,8 +11,8 @@ import { ClueCard } from './ClueCard.tsx';
 import { PatternDiagram } from './Diagram.tsx';
 import { DoneToday } from './DoneToday.tsx';
 import { DragController, type DragSource } from './drag.ts';
-import { clearPlan, forgetFriend, undoFor, type UndoStep } from './history.ts';
-import { FRIEND_HOW, FRIEND_NAME, FRIEND_ORDER, kidLetter, shortClue } from './labels.ts';
+import { clearPlan, forgetFriend, undoChange, undoFor, type UndoStep } from './history.ts';
+import { FRIEND_HOW, FRIEND_NAME, FRIEND_ORDER, hintLine, hintsText, hintsToday, kidLetter, shortClue } from './labels.ts';
 import { KidBadge } from './KidBadge.tsx';
 import { profileLabel, streakText } from './people.ts';
 import { playWave } from './replay.ts';
@@ -82,6 +82,8 @@ export function Game(props: {
   const overlayRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const beforeGo = useRef<GameView | null>(null);
+  // The friends as they stood when Hint was pressed: what its tier 3 changed is undone like any other change (RULES 8b).
+  const beforeHint = useRef<GameView['friends'] | null>(null);
   const lastFacing = useRef<Partial<Record<FriendType, number>>>({});
 
   // A new setup phase (after Go, a retry or a new game): nothing to undo, nothing selected.
@@ -124,6 +126,15 @@ export function Game(props: {
     };
   }, [playback, feedback, props.healRange]);
 
+  // The View after a hint press: whatever it moved goes on the undo stack.
+  useEffect(() => {
+    const before = beforeHint.current;
+    if (before === null || view.friends === before) return;
+    beforeHint.current = null;
+    const undo = undoChange(before, view.friends);
+    if (undo !== null) setHistory((h) => [...h, undo]);
+  }, [view.friends]);
+
   useEffect(() => {
     if (view.phase === 'won') feedback?.cue('win');
     if (view.phase === 'lost') feedback?.cue('lose');
@@ -139,6 +150,11 @@ export function Game(props: {
   );
   const owned = FRIEND_ORDER.map((type) => ({ type, left: view.friends.filter((f) => f.type === type && f.cell < 0).length, all: view.friends.filter((f) => f.type === type).length })).filter((t) => t.all > 0);
   const toClear = clearPlan(view.friends, phase.earlier);
+  // The hint showing (main mode, setup only): its kid, their lunchbox from tier 2, the friend tier 3 put out.
+  const mainHint = setup ? view.mainHint : null;
+  const hintKid = mainHint === null ? undefined : view.kids.find((k) => k.id === mainHint.kid);
+  const hinted = new Set<number>(mainHint === null ? [] : [hintKid?.cell ?? -1, mainHint.lunchbox, mainHint.placed].filter((c) => c >= 0));
+  const waveHints = view.hints[view.wave - 1] ?? 0;
   const clueOf = shown.kids.find((k) => k.id === clueKid);
   // Three or four kids at once: their cards share one row, in short form, so the board keeps its size.
   const crowded = shown.kids.length > 2;
@@ -269,6 +285,15 @@ export function Game(props: {
     if (plan.undo.length > 0) setHistory((h) => [...h, plan.undo]);
   };
 
+  const askHint = async (): Promise<void> => {
+    drag.stop();
+    setSelection(null);
+    setMoving(false);
+    beforeHint.current = view.friends;
+    if (!(await submit({ type: 'hint' }))) beforeHint.current = null;
+    else feedback?.cue('tap');
+  };
+
   /** The shop (K9): a friend bought goes straight to the tray; one bought since the last Go can be given back. */
   const buy = async (type: FriendType): Promise<void> => {
     if (await submit({ type: 'buy', friend: type })) feedback?.cue('buy');
@@ -305,7 +330,9 @@ export function Game(props: {
     ? playback !== null
       ? 'Watch the snacks fly…'
       : ' '
-    : view.loopWarning
+    : mainHint !== null
+      ? hintLine(mainHint, hintKid?.label ?? '', view.friends.find((f) => f.cell === mainHint.placed)?.type ?? null)
+      : view.loopWarning
       ? 'A snack would go round in circles. Aim a friend so it can get out.'
       : selection?.kind === 'tray'
         ? `Tap a grass square for the ${FRIEND_NAME[selection.type]}, or drag it there.`
@@ -351,7 +378,7 @@ export function Game(props: {
             <ul className={`cluebar${crowded ? ' crowded' : ''}`} aria-label="Kids’ cards" style={{ ['--n' as string]: shown.kids.length }}>
               {shown.kids.map((k) => (
                 <li key={k.id}>
-                  <button type="button" className="clue-chip" aria-label={`Kid ${k.label}’s card: ${k.clue ?? ''}`} onClick={() => setClueKid(k.id)}>
+                  <button type="button" className={`clue-chip${mainHint?.kid === k.id ? ' hinted' : ''}`} aria-label={`Kid ${k.label}’s card: ${k.clue ?? ''}`} onClick={() => setClueKid(k.id)}>
                     <KidBadge kid={k} />
                     {k.facts !== null && <FactIcons facts={k.facts} />}
                     <span className="clue-chip-text">{crowded ? shortClue(k.clue ?? '') : k.clue}</span>
@@ -367,6 +394,7 @@ export function Game(props: {
               selected={setup && selectedFriend !== undefined ? selectedFriend.id : null}
               aims={aims}
               heals={heals}
+              hinted={hinted}
               preview={setup}
               onCell={(cell) => void onCell(cell)}
               onFriendDown={onFriendDown}
@@ -374,7 +402,14 @@ export function Game(props: {
               boardRef={boardRef}
             />
             {report !== null && (
-              <ResultOverlay wave={report.wave} label={report.label} hungry={view.hungry} hungryAllowed={view.hungryAllowed} main={view.mode === 'main'}>
+              <ResultOverlay
+                wave={report.wave}
+                label={report.label}
+                hungry={view.hungry}
+                hungryAllowed={view.hungryAllowed}
+                main={view.mode === 'main'}
+                hints={{ wave: view.hints[report.wave.wave - 1] ?? 0, today: hintsToday(view.hints) }}
+              >
                 {view.phase === 'setup' && (
                   <button type="button" className="btn btn-primary btn-wide" onClick={() => setResult(null)}>
                     Set up wave {view.wave}
@@ -440,7 +475,10 @@ export function Game(props: {
                   </button>
                 </>
               ) : (
-                <p className={`dock-hint${view.loopWarning && setup ? ' warn' : ' muted'}`}>{hint}</p>
+                <p className={`dock-hint${mainHint !== null ? ' hint-line' : view.loopWarning && setup ? ' warn' : ' muted'}`} aria-live="polite">
+                  {mainHint !== null && <Icon className="row-icon" name="bulb" />}
+                  {hint}
+                </p>
               )}
             </div>
 
@@ -490,6 +528,12 @@ export function Game(props: {
               <button type="button" className="btn btn-small" disabled={!setup || toClear.commands.length === 0} onClick={() => setConfirmClear(true)}>
                 Clear board
               </button>
+              {view.mode === 'main' && (
+                // Just the bulb: with a word it squeezes Go onto three lines on a 360 px phone, and the board runs under the dock.
+                <button type="button" className="btn btn-small btn-hint" disabled={!setup || view.kids.length === 0} aria-label={`Hint (${hintsText(waveHints)} this wave)`} title="Hint" onClick={() => void askHint()}>
+                  <Icon className="btn-hint-icon" name="bulb" />
+                </button>
+              )}
               <button type="button" className={`btn btn-primary btn-go${view.loopWarning && setup ? ' warn' : ''}`} disabled={!setup} onClick={() => void go()}>
                 Go! Wave {Math.min(view.wave, view.waves)}
               </button>
@@ -498,7 +542,7 @@ export function Game(props: {
         </>
       )}
 
-      {clueOf !== undefined && clueOf.clue !== null && <ClueCard view={shown} kid={clueOf} onClose={() => setClueKid(null)} />}
+      {clueOf !== undefined && clueOf.clue !== null && <ClueCard view={shown} kid={clueOf} about={mainHint?.kid === clueOf.id ? mainHint.about : []} onClose={() => setClueKid(null)} />}
 
       {confirmClear && (
         <Sheet title="Clear the board?" onClose={() => setConfirmClear(false)}>

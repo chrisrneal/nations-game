@@ -11,8 +11,11 @@ for two kids sharing one phone.
   clue card.
 - **Kindy mode** (a 4-year-old who doesn't read yet): the snack is pictured.
 - **A wave.** Set up, press Go, watch it play out.
-- **A day.** 10 waves that get harder, a bonus round, points to spend in a
-  shop for that day only, and up to 3 kids allowed to go home hungry.
+- **A day.** 10 waves that get harder, a bonus round that ramps up past the
+  day's end, points to spend in a shop for that day only, and up to 3 kids
+  allowed to go home hungry. A Hint button in three steps (whose card, which
+  lunchbox, a friend put out) for when the 9-year-old is stuck; hints never
+  break the streak (K11).
 - **Daily and practice.** One daily puzzle per day, the same for everyone,
   plus unlimited practice boards. Every board is proved solvable by a solver
   before anyone sees it.
@@ -31,7 +34,7 @@ for two kids sharing one phone.
 
 ## Architecture (kept from the earlier games, decision record K1)
 1. Pure sim core: `step(state, command) -> state, error, wave` (S1, K3).
-2. Commands are the only mutation: place, turn, toTray, buy, refund, go, retry (S2, K9).
+2. Commands are the only mutation: place, turn, toTray, buy, refund, go, retry, hint (S2, K9, K11).
 3. Host interface: the UI submits and subscribes; LocalHost runs the sim in a
    Web Worker (S3).
 4. No clock: a wave is resolved whole at Go and replayed as animation; the
@@ -75,11 +78,15 @@ vite-plugin-pwa, Vitest + fast-check, and playwright-core for the phone check.
   solution must win with nobody hungry. A Kindy day must also never get
   stuck, whichever kids are left waiting (K8). Every day's shop must sell what
   its solution buys, and 150 days made again from their seeds must come out
-  the same, catalogue included (K9).
+  the same, catalogue included (K9). A main day must keep a decoy in its
+  tray and never have a wave that uses every friend owned; a bonus round
+  must follow its ramp and end harder than the daily (K11).
 - `npm test` also hashes 300 scripted games in Node and Chromium, each with a
-  buy and a refund in the shop before every wave that buys (K9).
+  buy and a refund in the shop before every wave that buys (K9), and a whole
+  day played by pressing Hint (K11).
 - `npm run harness -- report` prints difficulty by wave, seeds skipped and
-  time per day (docs/balance/generator-report.md).
+  time per day, how often the tray gives the answer away, the bonus curve,
+  the K11 targets and a sanity table per kind (docs/balance/generator-report.md).
 
 ## Build order (K1)
 The engine and the solver come first. No art, shop screen or Kindy mode
@@ -112,6 +119,8 @@ until both work on hand-made test boards.
     stored solution (a pointing hand and the phone's voice), the party, a
     picture-only done for today; Kindy days that can never get stuck.
 11. [ ] Sticker book, cosmetics and streak rewards.
+    - [x] Between steps 10 and 11 (K11): main-mode hints, decoys in the tray,
+      the bonus ramp, and the difficulty report.
 12. [ ] Phone check and polish on real phones.
 
 ## History

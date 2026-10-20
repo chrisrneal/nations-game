@@ -322,6 +322,22 @@ describe('the local host: finishing the daily, the streak and the bonus round (R
     expect(profile(app, 'p1')).toMatchObject({ streak: 1, today: { retries: 1 } });
   });
 
+  it('a daily won with hints records how many, and still counts for the streak (RULES 8b)', async () => {
+    const app = launch(device());
+    await app.h.start();
+    const game = track('main', 'daily', DAY);
+    let used = 0;
+    while (game.state.phase === 'setup') {
+      await send(app, game, { type: game.state.hint?.tier === 0 ? 'go' : 'hint' });
+      if (game.state.hint !== null) used += 1;
+    }
+    expect(app.latest()!.view.phase).toBe('won');
+    expect(app.latest()!.fingerprint).toBe(hashState(game.state));
+    expect(used).toBeGreaterThan(10);
+    expect(app.latest()!.view.hints.reduce((a, b) => a + b, 0)).toBe(used);
+    expect(profile(app, 'p1')).toMatchObject({ streak: 1, today: { day: DAY, hints: used, hungry: 0 } });
+  });
+
   it('practice never touches the streak or the day’s record', async () => {
     const app = launch(device());
     await app.h.start();

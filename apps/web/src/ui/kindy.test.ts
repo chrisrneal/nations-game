@@ -31,6 +31,8 @@ function view(friends: readonly FriendView[]): GameView {
     lastWave: null,
     facings: { straight: [0, 2, 4, 6], diagonal: [1, 3, 5, 7], short: [0, 1, 2, 3, 4, 5, 6, 7], bouncer: [0, 1, 2, 3, 4, 5, 6, 7], nurse: [0] },
     hint: null,
+    mainHint: null,
+    hints: [],
   };
 }
 

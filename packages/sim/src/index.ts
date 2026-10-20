@@ -21,7 +21,8 @@ export { SCHEMA_VERSION, boughtThisSetup, placementProblem, priceOf, startGame, 
 export { clueProblems, clueText } from './clues.ts';
 export { feedSome, routesTo, solveDay, solveWave, stuckKindySet, type Budget, type DaySolution, type Progress, type WaveSolution } from './solver.ts';
 export { kindyHint } from './hint.ts';
-export { daySeed, generatePuzzle, tryGenerate } from './generate.ts';
+export { bonusCluesAt, bonusFriendsAt, daySeed, generatePuzzle, shortestRoutes, tryGenerate } from './generate.ts';
+export { trayUse, type TrayUse } from './tray.ts';
 export { kidLabel, gameView } from './view.ts';
 export { MIGRATIONS, createSave, loadSave, migrateSave, type LoadedGame } from './save.ts';
 export { GameSession, newGame } from './session.ts';

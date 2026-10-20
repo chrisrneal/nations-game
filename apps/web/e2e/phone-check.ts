@@ -83,6 +83,16 @@
  *   Web Animation is recorded); the busiest wave of the day also holds 55+
  *   fps with the CPU slowed 4x; with reduced motion there are no arcs,
  *   spins, dances, wobbles or sparkles.
+ *
+ * Hints in main mode (RULES 8b, K11), by the second child on wave 1:
+ * - the Hint button is inside 360 x 740, in the bottom third, 44 px or more;
+ * - tier 1 lights the kid and their card and names what the card is about;
+ *   their clue card then lights those traits; tier 2 lights the lunchbox of
+ *   the snack they want; tier 3 puts the stored solution's friend out,
+ *   aimed; Undo takes it back and Hint puts it out again;
+ * - the result card counts the wave's hints and the day's; the first child
+ *   uses a hint on wave 3, and done for today counts it with the streak
+ *   still 1 (hints never break it).
  * Every new screen and control is checked to be inside 360 x 740 and not
  * covered, not just positioned. The four screens' looks are checked by the
  * visual check (visual-check.ts).
@@ -653,6 +663,9 @@ function legacySaves(day: number): { slot: string; savedAt: number; game: unknow
   ];
 }
 
+/** The main page, for a picture when a step throws. */
+let crashPage: Page | null = null;
+
 async function main(): Promise<void> {
   const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'ignore' });
   const profile = mkdtempSync(join(tmpdir(), 'snacks-phone-'));
@@ -667,6 +680,7 @@ async function main(): Promise<void> {
       timezoneId: 'UTC',
     });
     const page = context.pages()[0] ?? (await context.newPage());
+    crashPage = page;
     // Midday on the day being checked; timers keep running.
     if (process.env.DAY !== undefined) await page.clock.setFixedTime(DAY * 86_400_000 + 43_200_000);
     // A stand-in for the phone's voice (headless Chromium has none): it writes down what it is asked to say.
@@ -700,6 +714,9 @@ async function main(): Promise<void> {
     const go = await page.locator('.btn-go').boundingBox();
     check('Go is on screen, in the bottom third', go !== null && go.y >= (HEIGHT * 2) / 3 && go.y + go.height <= HEIGHT, `top ${Math.round(go?.y ?? 0)} of ${HEIGHT}`);
     await checkOnScreen('setup: Go is inside the viewport', page.locator('.btn-go'));
+    await checkOnScreen('setup: the Hint button is inside the viewport', page.locator('.btn-hint'));
+    const hintBox = await page.locator('.btn-hint').boundingBox();
+    check('the Hint button is in the bottom third', hintBox !== null && hintBox.y >= (HEIGHT * 2) / 3 && hintBox.y + hintBox.height <= HEIGHT, `top ${Math.round(hintBox?.y ?? 0)} of ${HEIGHT}`);
     await noHorizontalScroll(page, 'setup');
     await noVerticalScroll(page, 'setup');
     await touchTargets(page, 'setup');
@@ -1044,7 +1061,54 @@ async function main(): Promise<void> {
     await page.locator('.board').waitFor();
     const samStart = await barStats(page);
     check('Sam’s daily opens at wave 1 with nothing on the board', samStart.includes('1/10') && (await friendsOnBoard(page)) === 0 && (await page.locator('.bar-avatar').getAttribute('aria-label'))?.startsWith('Sam') === true, samStart);
+
+    // ---- hints (RULES 8b): Sam asks for all three tiers on wave 1 ----
+    const hintBtn = page.locator('.btn-hint');
+    const hintLine = page.locator('.dock-hint.hint-line');
+    const hintKid = puzzle.kids.find((k) => k.wave === 1)!;
+    const hintLetter = String.fromCharCode(64 + hintKid.id);
+    await hintBtn.tap();
+    await until(page, async () => (await hintLine.count()) === 1);
+    const line1 = (await hintLine.textContent()) ?? '';
+    check('hint 1: names the kid whose card to solve and what it is about', line1.includes(`Kid ${hintLetter} next`) && /is about|points at/.test(line1), line1);
+    await checkOnScreen('hint 1: the hint line is inside the viewport', hintLine);
+    await checkOnScreen('hint 1: the kid’s card is lit, inside the viewport', page.locator('.clue-chip.hinted'));
+    check('hint 1: the kid’s square is lit, and no lunchbox yet', (await cellOf(page, hintKid.cell).getAttribute('class'))?.includes('sq-hint') === true && (await page.locator('.board .sq-lunchbox.sq-hint').count()) === 0);
+    check('hint 1: the Hint button counts the wave’s hints', ((await hintBtn.getAttribute('aria-label')) ?? '').includes('1 hint this wave'), (await hintBtn.getAttribute('aria-label')) ?? '');
+    await page.locator('.clue-chip.hinted').tap();
+    const hintCard = page.getByRole('dialog', { name: 'Clue card' });
+    await hintCard.waitFor();
+    const traitsOnCard = hintKid.clue!.facts.some((f) => f.kind === 'is' || f.kind === 'not');
+    check('hint 1: the kid’s clue card lights the traits their card is about', !traitsOnCard || (await hintCard.locator('.trait-hint').count()) > 0, `${await hintCard.locator('.trait-hint').count()} lit`);
+    await checkOnScreen('hint 1: the clue card is inside the viewport', hintCard.getByRole('button', { name: 'Got it' }));
+    await shot(page, '12a-hint-card');
+    await hintCard.getByRole('button', { name: 'Got it' }).tap();
+    await shot(page, '12b-hint-1');
+    await hintBtn.tap();
+    const box = puzzle.board.lunchboxes.find((l) => l.snack === hintKid.wants)!;
+    const boxLit = await until(page, async () => (await cellOf(page, box.cell).getAttribute('class'))?.includes('sq-hint') === true);
+    check('hint 2: the lunchbox that feeds the kid lights up, and only that one', boxLit && (await page.locator('.board .sq-lunchbox.sq-hint').count()) === 1, (await hintLine.textContent()) ?? '');
+    await checkOnScreen('hint 2: the lit lunchbox is inside the viewport', cellOf(page, box.cell));
+    await shot(page, '12c-hint-2');
+    await hintBtn.tap();
+    const firstFriend = first.friends[0]!;
+    const placedByHint = await until(page, async () => (await hasFriend(page, firstFriend.cell)) && (await arrowAngle(page, firstFriend.cell)) === facingAngle(firstFriend.type, firstFriend.facing));
+    check('hint 3: a friend goes out on the planned square, aimed the right way', placedByHint, (await hintLine.textContent()) ?? '');
+    await checkOnScreen('hint 3: the friend it put out is inside the viewport', cellOf(page, firstFriend.cell));
+    await shot(page, '12d-hint-3');
+    await page.getByRole('button', { name: /Undo/ }).tap();
+    const undoneHint = await until(page, async () => !(await hasFriend(page, firstFriend.cell)));
+    await hintBtn.tap();
+    const again = await until(page, () => hasFriend(page, firstFriend.cell));
+    check('Undo takes back the friend a hint put out; Hint puts it out again', undoneHint && again);
+    await noVerticalScroll(page, 'a hint showing');
+    await noHorizontalScroll(page, 'a hint showing');
+    await touchTargets(page, 'a hint showing');
     check('Sam plays wave 1 by taps and feeds every kid', await playWaveByTaps(page, cdp, puzzle, first));
+    const hintRow = page.getByRole('region', { name: 'What happened' }).locator('[data-row="hints"]');
+    const hintRowText = (await hintRow.textContent()) ?? '';
+    check('the result counts the wave’s hints and the day’s', hintRowText.includes('4 hints this wave') && hintRowText.includes('4 hints today'), hintRowText);
+    await checkOnScreen('the result: the hints row is inside the viewport', hintRow);
     await page.getByRole('button', { name: /Set up wave 2/ }).tap();
     await openPicker(page);
     await tile(page, 'Dog').tap();
@@ -1204,6 +1268,8 @@ async function main(): Promise<void> {
     let busiest: Promise<{ frames: number; worst: number }> | null = null;
     let calm: Recorded[] = [];
     for (const layout of puzzle.witness.slice(2)) {
+      // One hint on wave 3: done for today counts it, and the streak doesn't mind.
+      if (layout.wave === 3) await page.locator('.btn-hint').tap();
       // The last wave, the busiest of the day, at full motion with the CPU slowed 4x.
       const last = layout.wave === puzzle.waves;
       const fed = await playWaveByTaps(page, cdp, puzzle, layout, !last ? undefined : async () => {
@@ -1237,6 +1303,8 @@ async function main(): Promise<void> {
     await page.waitForTimeout(2100);
     const clock2 = (await doneScreen.locator('.done-clock').textContent()) ?? '';
     check('the countdown runs', clock1 !== clock2, `${clock1} then ${clock2}`);
+    check('done for today counts the hints used, and the streak still counts the day', /Hints used: 1 hint/.test(doneText) && /Streak: 1 day/.test(doneText), doneText.replace(/\s+/g, ' '));
+    await checkOnScreen('done for today: the hints row is inside the viewport', doneScreen.locator('[data-row="hints"]'));
     for (const part of ['.done-title', '.done-rows', '.week', '.done-next']) await checkOnScreen(`done for today: ${part.slice(1)} is inside the viewport`, doneScreen.locator(part));
     const bonusBtn = doneScreen.getByRole('button', { name: 'Play the bonus round' });
     await checkOnScreen('done for today: the bonus round is inside the viewport', bonusBtn);
@@ -1353,6 +1421,10 @@ async function main(): Promise<void> {
     } finally {
       rmSync(wrongProfile, { recursive: true, force: true });
     }
+  } catch (error) {
+    // A step that throws (a tap that times out) leaves a picture of the screen it stopped on.
+    if (crashPage !== null) await shot(crashPage, 'zz-crash').catch(() => undefined);
+    throw error;
   } finally {
     server.kill();
     rmSync(profile, { recursive: true, force: true });

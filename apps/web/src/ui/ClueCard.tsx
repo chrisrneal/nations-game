@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import type { GameView, KidView, SnackTrait } from '@snacks/contracts';
+import type { GameView, HintTopic, KidView, SnackTrait } from '@snacks/contracts';
 import { FactIcons, FeatureIcon, TraitIcon } from './art/Marks.tsx';
 import { SnackArt } from './art/Snack.tsx';
 import { KidBadge } from './KidBadge.tsx';
@@ -15,8 +15,9 @@ const TRAITS: readonly SnackTrait[] = ['colour', 'feel', 'taste', 'shape'];
  * colour carries its own mark, so the card can be solved without seeing
  * colour. It stays open until the player closes it.
  */
-export function ClueCard(props: { view: GameView; kid: KidView; onClose: () => void }): ReactElement {
+export function ClueCard(props: { view: GameView; kid: KidView; about?: readonly HintTopic[]; onClose: () => void }): ReactElement {
   const { view, kid } = props;
+  // A hint about this kid's card (RULES 8b) lights the traits it is about.
   const looks = kidLooks(kid);
   return (
     <Sheet title={`Kid ${kid.label}’s card`} label="Clue card" onClose={props.onClose}>
@@ -38,7 +39,7 @@ export function ClueCard(props: { view: GameView; kid: KidView; onClose: () => v
               <strong>{s.name}</strong>
               <span className="traits">
                 {TRAITS.map((t) => (
-                  <span key={t} className="trait">
+                  <span key={t} className={`trait${props.about?.includes(t) === true ? ' trait-hint' : ''}`}>
                     <TraitIcon trait={t} value={s[t]} />
                     {s[t]}
                   </span>

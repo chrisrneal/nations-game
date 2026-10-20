@@ -18,8 +18,8 @@ export const AVATARS: readonly AvatarId[] = ['dog', 'cat', 'fox', 'panda', 'frog
 
 const MODES: readonly Mode[] = ['main', 'kindy'];
 
-/** A finished daily as the host reports it; the bonus flag is added by recordBonus. */
-export type FinishedDay = Omit<DayRecord, 'bonus'>;
+/** A finished daily as the host reports it; the bonus flag is added by recordBonus. Hints count 0 when left out (a save from before K11). */
+export type FinishedDay = Omit<DayRecord, 'bonus' | 'hints'> & { readonly hints?: number };
 
 /** A change to the book: the new book, or the old one and why it was refused. */
 export interface BookChange {
@@ -135,7 +135,7 @@ function withHistory(profile: Profile, history: readonly DayRecord[]): Profile {
 export function recordDaily(book: ProfileBook, id: string, finished: FinishedDay): ProfileBook {
   return update(book, id, (p) => {
     if (p.history.some((r) => r.day === finished.day)) return p;
-    const record: DayRecord = { day: finished.day, fed: finished.fed, hungry: finished.hungry, retries: finished.retries, bonus: false };
+    const record: DayRecord = { day: finished.day, fed: finished.fed, hungry: finished.hungry, retries: finished.retries, hints: finished.hints ?? 0, bonus: false };
     return withHistory(p, [...p.history, record]);
   });
 }
@@ -181,7 +181,8 @@ function readRecord(raw: unknown): DayRecord | null {
   const r = raw as Record<string, unknown>;
   const day = whole(r.day);
   if (day === null) return null;
-  return { day, fed: count(r.fed), hungry: count(r.hungry), retries: count(r.retries), bonus: r.bonus === true };
+  // `hints` came with K11 in the same book version: a record from before has none, so 0 (an older app ignores the field).
+  return { day, fed: count(r.fed), hungry: count(r.hungry), retries: count(r.retries), hints: count(r.hints), bonus: r.bonus === true };
 }
 
 function readProfile(raw: unknown, taken: readonly Profile[]): Profile | null {

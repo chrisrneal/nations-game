@@ -9,7 +9,8 @@ import { SNACKS } from './snacks.ts';
 /**
  * The View (S6): everything the interface may show. It never says what a
  * main-mode kid wants; that is the puzzle. After a wave, the wave result
- * shows what each kid ate, which the player has then seen.
+ * shows what each kid ate, which the player has then seen; and a hint the
+ * player asked for may show the lunchbox that feeds a kid (tier 2, K11).
  */
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -78,5 +79,8 @@ export function gameView(state: GameState): GameView {
     lastWave: state.lastWave,
     facings: FACINGS,
     hint: kindyHint(state),
+    // Main mode, during setup: the hint the player asked for (K11). Its lunchbox, from tier 2, is the one way the View says what a kid wants.
+    mainHint: !kindy && state.phase === 'setup' ? state.hint : null,
+    hints: state.hints,
   };
 }

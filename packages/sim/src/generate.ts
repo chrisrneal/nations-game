@@ -22,6 +22,7 @@ import { lunchboxesBeside, resolveSnacks } from './resolve.ts';
 import { mix32, randomInt, seedRng } from './rng.ts';
 import { SNACK_IDS } from './snacks.ts';
 import { routesTo, solveDay, stuckKindySet, throwersOnto, upstream } from './solver.ts';
+import { trayUse } from './tray.ts';
 import { SNACK_TUNABLES as T } from './tunables.ts';
 
 /**
@@ -78,8 +79,35 @@ interface Plan {
   kidsAt(w: number, dice: Dice): number;
   /** The shortest route each kid of wave w should need: [fewest, most] friends. */
   routeAt(w: number): readonly [number, number];
+  /** What the kids' shortest routes at wave w must add up to, or null for no rule (the bonus ramp). */
+  totalAt(w: number): number | null;
+  /** Tries at a wave's kids before the seed is given up. */
+  readonly attempts: number;
   /** Percent chance a wave's clues point at another kid. */
   relationalAt(w: number): number;
+  /** Decoy friends added to the starting tray (K11). */
+  readonly decoys: number;
+}
+
+/** A whole-number straight line from `first` at wave 1 to `last` at the last wave, rounded to the nearest. */
+function ramp(first: number, last: number, w: number, waves: number): number {
+  const span = Math.max(1, waves - 1);
+  const step = (last - first) * (Math.min(Math.max(w, 1), waves) - 1);
+  return first + Math.floor((2 * step + span) / (2 * span));
+}
+
+/**
+ * The bonus round's ramp (RULES 10, K11): the friends the shortest routes of
+ * bonus wave w add up to, for its 2 kids, rising from `bonusFriendsFirst` to
+ * `bonusFriendsLast`.
+ */
+export function bonusFriendsAt(w: number): number {
+  return ramp(T.bonusFriendsFirst.value, T.bonusFriendsLast.value, w, T.mainWaves.value);
+}
+
+/** Percent chance bonus wave w has a card pointing at another kid, rising from `bonusCluesFirst` to `bonusCluesLast`. */
+export function bonusCluesAt(w: number): number {
+  return ramp(T.bonusCluesFirst.value, T.bonusCluesLast.value, w, T.mainWaves.value);
 }
 
 function planFor(mode: Mode, round: Round): Plan {
@@ -98,7 +126,10 @@ function planFor(mode: Mode, round: Round): Plan {
       shop: [],
       kidsAt: () => 1,
       routeAt: (w) => (w <= 2 ? [1, 1] : [1, 2]),
+      totalAt: () => null,
+      attempts: 40,
       relationalAt: () => 0,
+      decoys: 0,
     };
   }
   const bonus = round === 'bonus';
@@ -117,8 +148,12 @@ function planFor(mode: Mode, round: Round): Plan {
     // Main: 1 kid in waves 1-3, then 1 or 2, then 2. Bonus: 2 a wave.
     kidsAt: (w, dice) => (bonus ? 2 : w <= 3 ? 1 : w <= 6 ? dice.int(1, 2) : 2),
     // Main: the first waves need one friend, the middle two, the last two or three.
-    routeAt: (w) => (bonus ? (w <= 3 ? [2, 2] : [2, 3]) : w <= 2 ? [1, 1] : w <= 5 ? [1, 2] : w <= 8 ? [2, 2] : [2, 3]),
-    relationalAt: (w) => (bonus ? 50 : w <= 3 ? 0 : 35),
+    // Bonus: any route length, as long as the two kids' add up to the ramp's number.
+    routeAt: (w) => (bonus ? [1, T.routeMax.value] : w <= 2 ? [1, 1] : w <= 5 ? [1, 2] : w <= 8 ? [2, 2] : [2, 3]),
+    totalAt: (w) => (bonus ? bonusFriendsAt(w) : null),
+    attempts: bonus ? 120 : 40,
+    relationalAt: (w) => (bonus ? bonusCluesAt(w) : w <= 3 ? 0 : 35),
+    decoys: T.decoys.value,
   };
 }
 
@@ -207,24 +242,34 @@ interface PlantedWave {
 }
 
 /** Kids for one wave and a planted setup that feeds them all, or null. */
-function plantWave(board: Board, snacks: readonly SnackId[], plan: Plan, wave: number, count: number, forbidden: ReadonlySet<number>, dice: Dice): PlantedWave | null {
+function plantWave(board: Board, snacks: readonly SnackId[], plan: Plan, wave: number, count: number, forbidden: ReadonlySet<number>, spots: readonly Spot[], dice: Dice): PlantedWave | null {
   const pathCells = board.squares.flatMap((s, c) => (s === 'path' && !forbidden.has(c) ? [c] : []));
   if (pathCells.length < count) return null;
   const [shortest, longest] = plan.routeAt(wave);
-  for (let attempt = 0; attempt < 40; attempt++) {
-    const cells = dice.shuffle(pathCells).slice(0, count);
+  const total = plan.totalAt(wave);
+  const pairs = total === null ? [] : pairsAdding(spots.filter((s) => !forbidden.has(s.cell) && s.length >= shortest && s.length <= longest), total, dice);
+  for (let attempt = 0; attempt < plan.attempts; attempt++) {
+    let cells: number[];
+    let wants: SnackId[];
+    if (total === null) {
+      cells = dice.shuffle(pathCells).slice(0, count);
+      const sameSnack = count === 2 && dice.chance(30);
+      const first = dice.pick(snacks);
+      wants = cells.map((_, i) => (i === 0 || sameSnack ? first : dice.pick(snacks.filter((s) => s !== first))));
+    } else {
+      const pair = pairs[attempt];
+      if (pair === undefined || count !== 2) break;
+      cells = [pair[0].cell, pair[1].cell];
+      wants = [pair[0].snack, pair[1].snack];
+    }
     const kidCells = new Set(cells);
-    const sameSnack = count === 2 && dice.chance(30);
-    const first = dice.pick(snacks);
-    const wants = cells.map((_, i) => (i === 0 || sameSnack ? first : dice.pick(snacks.filter((s) => s !== first))));
+    const lengths = cells.map((cell, i) => shortestRoute(board, kidCells, cell, wants[i]!, plan.types));
+    if (lengths.some((length) => length < shortest || length > longest)) continue;
+    if (total !== null && lengths.reduce((a, b) => a + b, 0) !== total) continue;
     const friends: PlacedFriend[] = [];
     let ok = true;
     for (let i = 0; i < count && ok; i++) {
-      const length = shortestRoute(board, kidCells, cells[i]!, wants[i]!, plan.types);
-      if (length < shortest || length > longest) {
-        ok = false;
-        break;
-      }
+      const length = lengths[i]!;
       const routes = routesTo(board, kidCells, cells[i]!, wants[i]!, plan.types, length).filter(
         (r) => r.length === length && r.every((f) => friends.every((g) => g.cell !== f.cell)),
       );
@@ -238,6 +283,59 @@ function plantWave(board: Board, snacks: readonly SnackId[], plan: Plan, wave: n
     return { kids: kids.map((k) => ({ cell: k.cell, wants: k.wants })), friends };
   }
   return null;
+}
+
+/**
+ * The fewest friends any route needs to feed each kid of a wave, with that
+ * wave's kids on the path (RULES 10): what the generator planted to, and what
+ * the harness checks the bonus ramp against.
+ */
+export function shortestRoutes(puzzle: Puzzle, wave: number): number[] {
+  const kids = puzzle.kids.filter((k) => k.wave === wave);
+  const kidCells = new Set(kids.map((k) => k.cell));
+  return kids.map((k) => shortestRoute(puzzle.board, kidCells, k.cell, k.wants, planFor(puzzle.mode, puzzle.round).types));
+}
+
+/** A kid's square and snack, and the fewest friends that bring it there with nobody else on the path. */
+interface Spot {
+  readonly cell: number;
+  readonly snack: SnackId;
+  readonly length: number;
+}
+
+/** Every path square and snack, with the fewest friends that bring that snack there when that kid is the only one on the path. */
+function spotsOn(board: Board, snacks: readonly SnackId[], plan: Plan): Spot[] {
+  const path = board.squares.flatMap((s, c) => (s === 'path' ? [c] : []));
+  return path.flatMap((cell) => snacks.map((snack) => ({ cell, snack, length: shortestRoute(board, new Set([cell]), cell, snack, plan.types) })));
+}
+
+/** Pairs of spots on different squares whose lengths add up to `total`. */
+function pairsOf(spots: readonly Spot[], total: number): [Spot, Spot][] {
+  const pairs: [Spot, Spot][] = [];
+  for (const a of spots) for (const b of spots) if (a.cell < b.cell && a.length + b.length === total) pairs.push([a, b]);
+  return pairs;
+}
+
+/**
+ * The bonus ramp (K11): pairs of kids whose shortest routes, each on their
+ * own, add up to `total`, in a random order. Picking from these instead of
+ * at random makes a long-route wave quick to find; the two kids are checked
+ * together afterwards, since one can stand in the other's way.
+ */
+function pairsAdding(spots: readonly Spot[], total: number, dice: Dice): [Spot, Spot][] {
+  return dice.shuffle(pairsOf(spots, total).map(([a, b]) => (dice.chance(50) ? [a, b] : [b, a])));
+}
+
+/**
+ * Can this board carry the ramp's hardest wave twice running? A wave's kids
+ * never arrive where the last wave's stood, so the hardest total needs two
+ * pairs on four different squares. Boards without them are thrown away
+ * before any kid is planted, which keeps a bonus day quick to make.
+ */
+function rampFits(spots: readonly Spot[], plan: Plan): boolean {
+  const totals = Array.from({ length: plan.waves }, (_, i) => plan.totalAt(i + 1) ?? 0);
+  const pairs = pairsOf(spots, Math.max(...totals));
+  return pairs.some(([a, b]) => pairs.some(([c, d]) => new Set([a.cell, b.cell, c.cell, d.cell]).size === 4));
 }
 
 /**
@@ -317,6 +415,8 @@ export function tryGenerate(mode: Mode, round: Round, day: number, seed: number)
   const laid = layBoard(plan, dice);
   if (laid === null) return null;
   const { board, snacks } = laid;
+  const spots = plan.totalAt(1) === null ? [] : spotsOn(board, snacks, plan);
+  if (plan.totalAt(1) !== null && !rampFits(spots, plan)) return null;
 
   const planted: PlantedWave[] = [];
   let kids: PuzzleKid[] = [];
@@ -326,7 +426,7 @@ export function tryGenerate(mode: Mode, round: Round, day: number, seed: number)
     // Main: a healed kid from the last wave may still stand there. Kindy: every earlier kid may still be waiting.
     const forbidden = new Set(kids.filter((k) => (mode === 'kindy' ? true : k.wave === wave - 1)).map((k) => k.cell));
     const count = plan.kidsAt(wave, dice);
-    const w = plantWave(board, snacks, plan, wave, count, forbidden, dice);
+    const w = plantWave(board, snacks, plan, wave, count, forbidden, spots, dice);
     if (w === null) return null;
     planted.push(w);
     let clues: (Clue | null)[] = w.kids.map(() => null);
@@ -344,6 +444,7 @@ export function tryGenerate(mode: Mode, round: Round, day: number, seed: number)
   }
   kids = dressKids(kids, dice);
 
+  const needed = trayFor(planted, plan).sort((a, b) => THROWERS.indexOf(a) - THROWERS.indexOf(b));
   const draft: Puzzle = {
     mode,
     round,
@@ -353,7 +454,7 @@ export function tryGenerate(mode: Mode, round: Round, day: number, seed: number)
     snacks,
     kids,
     waves: plan.waves,
-    tray: trayFor(planted, plan).sort((a, b) => THROWERS.indexOf(a) - THROWERS.indexOf(b)),
+    tray: needed,
     shop: plan.shop,
     hungryAllowed: mode === 'kindy' ? 0 : T.hungryAllowed.value,
     difficulty: [],
@@ -364,11 +465,46 @@ export function tryGenerate(mode: Mode, round: Round, day: number, seed: number)
   if (!solved.ok) return null;
   // Kindy can't be lost (K8): whichever kids are left waiting, some kid can always be fed with the friends given.
   if (mode === 'kindy' && stuckKindySet(draft) !== null) return null;
-  const difficulty = solved.layouts.map((layout) => {
-    const relational = kids.filter((k) => k.wave === layout.wave && k.clue !== null && k.clue.facts.some((f) => f.kind === 'same' || f.kind === 'notSister')).length;
+  const solvedDraft = { ...draft, witness: solved.layouts };
+  const done = { ...solvedDraft, difficulty: difficultyOf(solvedDraft) };
+  if (plan.decoys === 0) return done;
+  // The tray must not give the answer away (K11): a friend the solution never places, and no wave that places every friend owned.
+  const decoyed = withDecoys(done, plan, dice);
+  const use = trayUse(decoyed);
+  return use.unused > 0 && use.tells.length === 0 ? decoyed : null;
+}
+
+/**
+ * The tray with decoys (K11): friends the stored solution does not need, so
+ * the tray is not just the answer's pieces.
+ *
+ * - The solution the solver proved on the planted tray still works: owning
+ *   more friends never stops a setup, and what it buys costs the same.
+ * - The first decoy is a spare for certain: a type of which the tray already
+ *   holds as many as the solution ever places at once (so one is always left
+ *   over, on every wave). A type the solution never uses is taken first, so
+ *   the mix of types says less too.
+ * - Any more decoys are any type that throws. One of a type the solution
+ *   buys later is fine: it saves the player points.
+ */
+function withDecoys(puzzle: Puzzle, plan: Plan, dice: Dice): Puzzle {
+  const peak = (type: FriendType): number => Math.max(0, ...puzzle.witness.map((l) => l.friends.filter((f) => f.type === type).length));
+  const tray = [...puzzle.tray];
+  for (let i = 0; i < plan.decoys; i++) {
+    const held = (type: FriendType): number => tray.filter((t) => t === type).length;
+    const spare = plan.types.filter((t) => held(t) >= peak(t));
+    const unusedTypes = spare.filter((t) => peak(t) === 0);
+    tray.push(dice.pick(i > 0 || spare.length === 0 ? plan.types : unusedTypes.length > 0 ? unusedTypes : spare));
+  }
+  return { ...puzzle, tray: tray.sort((a, b) => THROWERS.indexOf(a) - THROWERS.indexOf(b)) };
+}
+
+/** How hard each wave is (RULES 10): friends in the solution plus kids whose card points at another kid. */
+function difficultyOf(puzzle: Puzzle): number[] {
+  return puzzle.witness.map((layout) => {
+    const relational = puzzle.kids.filter((k) => k.wave === layout.wave && k.clue !== null && k.clue.facts.some((f) => f.kind === 'same' || f.kind === 'notSister')).length;
     return layout.friends.length + relational;
   });
-  return { ...draft, difficulty, witness: solved.layouts };
 }
 
 const SALT: Readonly<Record<string, number>> = { 'main/daily': 0x51ac, 'main/bonus': 0xb0b5, 'main/practice': 0x9ac7, 'kindy/daily': 0x4b1d, 'kindy/bonus': 0x4b1e, 'kindy/practice': 0x4b1f };

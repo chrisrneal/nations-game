@@ -29,6 +29,8 @@ export function Board(props: {
   aims: ReadonlyMap<number, number>;
   /** Squares the selected Nurse heals. */
   heals: ReadonlySet<number>;
+  /** Squares a main-mode hint lights up: the kid, their lunchbox, the friend it put out (RULES 8b). */
+  hinted?: ReadonlySet<number>;
   /** Show the next-throw lines (setup only). */
   preview: boolean;
   onCell: (cell: number) => void;
@@ -52,6 +54,7 @@ export function Board(props: {
           const classes = ['sq', `sq-${square}`];
           if (aims.has(cell)) classes.push('sq-aimable');
           if (heals.has(cell)) classes.push('sq-heal');
+          if (props.hinted?.has(cell) === true) classes.push('sq-hint');
           if (cell === selectedTarget) classes.push('sq-target');
           if ((cell % view.width) % 2 === Math.floor(cell / view.width) % 2) classes.push('sq-alt');
           if (friend !== undefined && friend.id === selected) classes.push('sq-selected');
@@ -101,6 +104,7 @@ export function Board(props: {
               onPointerDown={friend === undefined ? undefined : (event) => props.onFriendDown(event, friend.id)}
             >
               {content}
+              {props.hinted?.has(cell) === true && <Icon className="sq-hint-badge" name="bulb" />}
               {kindy && aims.has(cell) && <span className="aim-arrow" style={{ transform: `rotate(${facingAngle('straight', aims.get(cell)!)}deg)` }} aria-hidden="true" />}
             </button>
           );

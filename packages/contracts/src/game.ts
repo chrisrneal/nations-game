@@ -202,6 +202,31 @@ export interface Checkpoint {
   readonly fed: number;
 }
 
+/** What a clue card is about (RULES 8b): a snack trait, or the kid it points at by their hat, glasses or sister. */
+export type HintTopic = SnackTrait | KidFeature | 'sister';
+
+/**
+ * A main-mode hint (RULES 8b, K11): what the hint button has shown for one
+ * kid so far. Worked out from the puzzle's stored solution when the button is
+ * pressed, then kept until the next press, Go or a retry.
+ */
+export interface MainHint {
+  /**
+   * 1: whose card to solve next and what it is about; 2: also the lunchbox
+   * that feeds them; 3: a friend put in place for them, with the right
+   * facing. 0: every kid on the board is set to get their snack: press Go.
+   */
+  readonly tier: 0 | 1 | 2 | 3;
+  /** The kid the hint is about; -1 at tier 0. */
+  readonly kid: number;
+  /** What their card is about (tier 1 on). */
+  readonly about: readonly HintTopic[];
+  /** The lunchbox square holding their snack, from tier 2; -1 before. */
+  readonly lunchbox: number;
+  /** Tier 3: the square of the friend this press put in place, or -1 when it took a friend in the way back to the tray. */
+  readonly placed: number;
+}
+
 /** The whole game: one puzzle being played. */
 export interface GameState {
   readonly schemaVersion: number;
@@ -219,6 +244,10 @@ export interface GameState {
   readonly fed: number;
   readonly lastWave: WaveResult | null;
   readonly checkpoint: Checkpoint;
+  /** Hints used at each wave (index 0 is wave 1), main mode; a retry keeps them (RULES 8b). */
+  readonly hints: readonly number[];
+  /** The hint showing now; null once Go or a retry ends the setup. */
+  readonly hint: MainHint | null;
 }
 
 /** The only way to change a game (S2). Allowed only between waves. */
@@ -230,7 +259,9 @@ export type GameCommand =
   /** Give back a friend bought since the last Go, for its full price (K9). */
   | { readonly type: 'refund'; readonly friend: number }
   | { readonly type: 'go' }
-  | { readonly type: 'retry' };
+  | { readonly type: 'retry' }
+  /** Main mode, during setup: the next tier of hint (RULES 8b). Tier 3 places a friend itself. */
+  | { readonly type: 'hint' };
 
 export type GameCommandType = GameCommand['type'];
 
@@ -345,4 +376,8 @@ export interface GameView {
   readonly facings: Readonly<Record<FriendType, readonly number[]>>;
   /** Kindy only, during setup: the next step a hint shows. Always null in main mode. */
   readonly hint: KindyHint | null;
+  /** Main mode, during setup: the hint the player asked for. The only place the View says which snack a kid wants before they eat (tier 2, K11). */
+  readonly mainHint: MainHint | null;
+  /** Hints used at each wave (index 0 is wave 1). */
+  readonly hints: readonly number[];
 }
