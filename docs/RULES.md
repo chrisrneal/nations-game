@@ -279,7 +279,7 @@ rule: every action is a place, turn or toTray command, checked by the sim.
 
 ### 8b. Hints in main mode (decision record K11)
 
-A **Hint** button sits beside Undo during setup. It works only during setup:
+A **Hint** button (a light bulb) sits beside Undo during setup. It works only during setup:
 not while a wave plays, and not once the day is won or lost. Each press is
 the next step for one kid, from the puzzle's stored solution:
 

@@ -195,7 +195,7 @@ export function hintLine(hint: MainHint, label: string, type: FriendType | null)
     case 2:
       return `Kid ${label}’s snack is in the glowing lunchbox.`;
     case 3:
-      return hint.placed >= 0 && type !== null ? `A ${FRIEND_NAME[type]} is in place for kid ${label}. Hint again for the next step.` : `A friend in kid ${label}’s way went back to the tray.`;
+      return hint.placed >= 0 && type !== null ? `A ${FRIEND_NAME[type]} is in place for kid ${label}.` : `A friend in kid ${label}’s way went back to the tray.`;
   }
 }
 

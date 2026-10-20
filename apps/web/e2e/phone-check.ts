@@ -663,6 +663,9 @@ function legacySaves(day: number): { slot: string; savedAt: number; game: unknow
   ];
 }
 
+/** The main page, for a picture when a step throws. */
+let crashPage: Page | null = null;
+
 async function main(): Promise<void> {
   const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'ignore' });
   const profile = mkdtempSync(join(tmpdir(), 'snacks-phone-'));
@@ -677,6 +680,7 @@ async function main(): Promise<void> {
       timezoneId: 'UTC',
     });
     const page = context.pages()[0] ?? (await context.newPage());
+    crashPage = page;
     // Midday on the day being checked; timers keep running.
     if (process.env.DAY !== undefined) await page.clock.setFixedTime(DAY * 86_400_000 + 43_200_000);
     // A stand-in for the phone's voice (headless Chromium has none): it writes down what it is asked to say.
@@ -1417,6 +1421,10 @@ async function main(): Promise<void> {
     } finally {
       rmSync(wrongProfile, { recursive: true, force: true });
     }
+  } catch (error) {
+    // A step that throws (a tap that times out) leaves a picture of the screen it stopped on.
+    if (crashPage !== null) await shot(crashPage, 'zz-crash').catch(() => undefined);
+    throw error;
   } finally {
     server.kill();
     rmSync(profile, { recursive: true, force: true });

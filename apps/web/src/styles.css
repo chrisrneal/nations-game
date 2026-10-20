@@ -1179,32 +1179,32 @@ details summary {
 }
 
 .btn-hint {
-  padding: 0 7px;
-  gap: 2px;
-}
-
-.btn-hint {
-  display: inline-flex;
-  align-items: center;
+  display: inline-grid;
+  place-items: center;
+  min-width: 48px;
+  padding: 0 6px;
 }
 
 .btn-hint-icon {
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
 }
 
-.btn-hint-word {
-  margin-left: 2px;
+/* At most two lines, so the dock never grows and pushes the board under it. */
+.dock-hint.hint-line {
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--fg);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 
 .dock-hint.hint-line .row-icon {
   vertical-align: -4px;
   margin-right: 4px;
-}
-
-.dock-hint.hint-line {
-  font-weight: 600;
-  color: var(--fg);
 }
 
 .trait-hint {

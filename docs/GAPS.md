@@ -68,3 +68,4 @@ airport and Nations gap went with the code. They are in this file at commit
 - K11, Kindy keeps its given friends (D15), so its tray still gives the answer away on about half its waves (report). Owner to say if Kindy should get a decoy. Owner, lane S.
 - K11, the second decoy is any throwing type, so on some days it is a type the solution buys later and gets used: the report counts 1.6-1.7 never-used tray friends a day, never fewer than 1. Lane S.
 - K11, the hint button, the purple lit squares and Undo of a hint are checked in headless Chromium only, not yet on a real phone. Owner, lane P.
+- K11, the Hint button is a light bulb with no word under it: with the word, Go wrapped onto three lines on a 360 px phone on busy days, and the board ran under the dock (found by the phone check on day 20390). How to play names it. Watch whether the 9-year-old finds it. Owner, lane U.

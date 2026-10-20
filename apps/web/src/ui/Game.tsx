@@ -529,9 +529,9 @@ export function Game(props: {
                 Clear board
               </button>
               {view.mode === 'main' && (
-                <button type="button" className="btn btn-small btn-hint" disabled={!setup || view.kids.length === 0} aria-label={`Hint (${hintsText(waveHints)} this wave)`} onClick={() => void askHint()}>
+                // Just the bulb: with a word it squeezes Go onto three lines on a 360 px phone, and the board runs under the dock.
+                <button type="button" className="btn btn-small btn-hint" disabled={!setup || view.kids.length === 0} aria-label={`Hint (${hintsText(waveHints)} this wave)`} title="Hint" onClick={() => void askHint()}>
                   <Icon className="btn-hint-icon" name="bulb" />
-                  <span className="btn-hint-word">Hint</span>
                 </button>
               )}
               <button type="button" className={`btn btn-primary btn-go${view.loopWarning && setup ? ' warn' : ''}`} disabled={!setup} onClick={() => void go()}>

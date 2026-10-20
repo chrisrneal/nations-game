@@ -78,7 +78,7 @@ describe('hint words (RULES 8b)', () => {
 
   it('tier 2 points at the lunchbox, tier 3 says what it put out, tier 0 says Go', () => {
     expect(hintLine(hint(2), 'B', null)).toBe('Kid B’s snack is in the glowing lunchbox.');
-    expect(hintLine(hint(3, ['feel'], 9), 'B', 'bouncer')).toBe('A Bouncer is in place for kid B. Hint again for the next step.');
+    expect(hintLine(hint(3, ['feel'], 9), 'B', 'bouncer')).toBe('A Bouncer is in place for kid B.');
     expect(hintLine(hint(3, ['feel'], -1), 'B', null)).toBe('A friend in kid B’s way went back to the tray.');
     expect(hintLine({ tier: 0, kid: -1, about: [], lunchbox: -1, placed: -1 }, '', null)).toBe('Every kid gets the right snack. Press Go!');
   });
