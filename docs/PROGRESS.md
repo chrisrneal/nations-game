@@ -75,7 +75,8 @@ the earlier games.
   Kindy aiming and hint-pointing tests in the interface. The 1000-day
   generator check (now also: no stuck Kindy day in 300) and the
   Node-vs-Chromium determinism test pass.
-- Phone check: 151/151 at 360 x 740 and 151/151 at 412 x 915. The Kindy part plays a
+- Phone check: 151/151 at 360 x 740, 151/151 at 412 x 915, and 151/151 on
+  another day's dailies (`DAY=20390`). The Kindy part plays a
   whole Kindy day by tapping only what the hand points at (every target 64
   px or more), checks for no text on every Kindy screen, the hand showing
   itself after 8 seconds, the voice starting on the first tap (a stand-in
