@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { facingAngle, hungryOf, kidLetter, kidLine, kidLooks, shortClue, waveReport, waveSummary } from './labels.ts';
+import type { MainHint } from '@snacks/contracts';
+import { facingAngle, hintLine, hintsText, hintsToday, hungryOf, kidLetter, kidLine, kidLooks, shortClue, waveReport, waveSummary } from './labels.ts';
 
 describe('screen words', () => {
   it('points a friend’s arrow the way it throws', () => {
@@ -62,5 +63,30 @@ describe('screen words', () => {
     expect(shortClue('Not red, not soft')).toBe('not red, not soft');
     expect(shortClue('Same as the kid in the hat')).toBe('same as 🎩');
     expect(shortClue('Same as the kid with glasses')).toBe('same as 👓');
+  });
+});
+
+describe('hint words (RULES 8b)', () => {
+  const hint = (tier: 0 | 1 | 2 | 3, about: MainHint['about'] = ['feel'], placed = -1): MainHint => ({ tier, kid: 2, about, lunchbox: tier >= 2 ? 0 : -1, placed });
+
+  it('tier 1 names the kid and what their card is about', () => {
+    expect(hintLine(hint(1), 'B', null)).toBe('💡 Kid B next: their card is about how it feels.');
+    expect(hintLine(hint(1, ['taste', 'shape']), 'B', null)).toBe('💡 Kid B next: their card is about how it tastes and its shape.');
+    expect(hintLine(hint(1, ['hat']), 'B', null)).toBe('💡 Kid B next: their card points at the kid in the hat.');
+    expect(hintLine(hint(1, ['colour', 'sister']), 'B', null)).toBe('💡 Kid B next: their card is about its colour, and points at their sister.');
+  });
+
+  it('tier 2 points at the lunchbox, tier 3 says what it put out, tier 0 says Go', () => {
+    expect(hintLine(hint(2), 'B', null)).toBe('💡 Kid B’s snack is in the glowing lunchbox.');
+    expect(hintLine(hint(3, ['feel'], 9), 'B', 'bouncer')).toBe('💡 A Bouncer is in place for kid B. Hint again for the next step.');
+    expect(hintLine(hint(3, ['feel'], -1), 'B', null)).toBe('💡 A friend in kid B’s way went back to the tray.');
+    expect(hintLine({ tier: 0, kid: -1, about: [], lunchbox: -1, placed: -1 }, '', null)).toBe('💡 Every kid gets the right snack. Press Go!');
+  });
+
+  it('counts hints for a wave and a day', () => {
+    expect(hintsText(0)).toBe('none');
+    expect(hintsText(1)).toBe('1 hint');
+    expect(hintsText(4)).toBe('4 hints');
+    expect(hintsToday([2, 0, 3])).toBe(5);
   });
 });

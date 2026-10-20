@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { GameView, ProfileView } from '@snacks/contracts';
 import type { GameHost } from '../platform/index.ts';
+import { hintsText, hintsToday } from './labels.ts';
 import { countdown, retriesText, streakText, weekStrip } from './people.ts';
 
 /**
@@ -46,6 +47,9 @@ export function DoneToday(props: { host: GameHost; view: GameView; profile: Prof
               <span aria-hidden="true">🔁</span> Done on the <strong>{retriesText(record.retries)}</strong>
             </li>
           )}
+          <li data-row="hints">
+            <span aria-hidden="true">💡</span> Hints used: <strong>{hintsText(record?.hints ?? hintsToday(view.hints))}</strong>
+          </li>
           <li data-row="streak">
             <span aria-hidden="true">🔥</span> Streak: <strong>{streakText(profile.streak)}</strong>
             {profile.best > profile.streak && <span className="muted"> (best {profile.best})</span>}

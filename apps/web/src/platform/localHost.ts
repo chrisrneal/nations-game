@@ -304,7 +304,7 @@ export class LocalHost implements GameHost {
     if (s.mode !== profile.mode || s.phase !== 'won') return;
     const day = profile.history.find((r) => r.day === s.day);
     let book = this.requireBook();
-    if (s.round === 'daily' && day === undefined) book = recordDaily(book, profile.id, { day: s.day, fed: s.fed, hungry: s.hungry, retries: s.retries });
+    if (s.round === 'daily' && day === undefined) book = recordDaily(book, profile.id, { day: s.day, fed: s.fed, hungry: s.hungry, retries: s.retries, hints: s.hints });
     else if (s.round === 'bonus' && day !== undefined && !day.bonus) book = recordBonus(book, profile.id, s.day);
     else return;
     await this.saveBook(book);
@@ -367,7 +367,7 @@ export class LocalHost implements GameHost {
       if (record === undefined) continue;
       try {
         const s = await this.options.engine.inspect(record.game);
-        if (s.mode === 'main' && s.phase === 'won' && s.round === 'daily') finished.push({ day: s.day, fed: s.fed, hungry: s.hungry, retries: s.retries });
+        if (s.mode === 'main' && s.phase === 'won' && s.round === 'daily') finished.push({ day: s.day, fed: s.fed, hungry: s.hungry, retries: s.retries, hints: s.hints });
         if (s.mode === 'main' && s.phase === 'won' && s.round === 'bonus') bonusWon.push(s.day);
       } catch (error) {
         console.warn(`The old save in ${slot} could not be read; it is moved as it is.`, error);

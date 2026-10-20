@@ -1,4 +1,4 @@
-import type { FriendType, KidOutcome, KidView, SnackEnd, SnackId, WaveResult } from '@snacks/contracts';
+import type { FriendType, HintTopic, KidOutcome, KidView, MainHint, SnackEnd, SnackId, WaveResult } from '@snacks/contracts';
 
 /**
  * Words and symbols for the grey-squares screen (build step 6): plain
@@ -170,4 +170,47 @@ export function shortClue(clue: string): string {
     .replace(/^Same as the kid with glasses$/, 'same as 👓')
     .replace(/their sister’s/, 'sister’s');
   return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+const TOPIC_WORDS: Readonly<Record<HintTopic, string>> = {
+  colour: 'its colour',
+  feel: 'how it feels',
+  taste: 'how it tastes',
+  shape: 'its shape',
+  hat: 'the kid in the hat',
+  glasses: 'the kid with glasses',
+  sister: 'their sister',
+};
+
+const and = (words: readonly string[]): string => (words.length <= 1 ? (words[0] ?? '') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]!}`);
+
+/**
+ * The hint showing, in a 9-year-old's words (RULES 8b). `label` is the kid's
+ * letter; `type` the friend standing where tier 3 put one.
+ */
+export function hintLine(hint: MainHint, label: string, type: FriendType | null): string {
+  switch (hint.tier) {
+    case 0:
+      return '💡 Every kid gets the right snack. Press Go!';
+    case 1: {
+      const traits = hint.about.filter((t) => t !== 'hat' && t !== 'glasses' && t !== 'sister').map((t) => TOPIC_WORDS[t]);
+      const kids = hint.about.filter((t) => t === 'hat' || t === 'glasses' || t === 'sister').map((t) => TOPIC_WORDS[t]);
+      const parts = [traits.length > 0 ? `is about ${and(traits)}` : '', kids.length > 0 ? `points at ${and(kids)}` : ''].filter((p) => p !== '');
+      return `💡 Kid ${label} next: their card ${parts.join(', and ')}.`;
+    }
+    case 2:
+      return `💡 Kid ${label}’s snack is in the glowing lunchbox.`;
+    case 3:
+      return hint.placed >= 0 && type !== null ? `💡 A ${FRIEND_NAME[type]} is in place for kid ${label}. Hint again for the next step.` : `💡 A friend in kid ${label}’s way went back to the tray.`;
+  }
+}
+
+/** Hints used, in words: "none", "1 hint", "4 hints". */
+export function hintsText(n: number): string {
+  return n === 0 ? 'none' : n === 1 ? '1 hint' : `${n} hints`;
+}
+
+/** Hints used today: every wave's added up. */
+export function hintsToday(hints: readonly number[]): number {
+  return hints.reduce((a, b) => a + b, 0);
 }

@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import type { GameView, KidView } from '@snacks/contracts';
+import type { GameView, HintTopic, KidView, SnackTrait } from '@snacks/contracts';
 import { SHIRTS, SNACK_EMOJI, kidLooks } from './labels.ts';
 import { Sheet } from './Sheet.tsx';
 
@@ -7,8 +7,10 @@ import { Sheet } from './Sheet.tsx';
  * A kid's full clue card (RULES 6), with today's snacks and their traits to
  * work it out against. It stays open until the player closes it.
  */
-export function ClueCard(props: { view: GameView; kid: KidView; onClose: () => void }): ReactElement {
+export function ClueCard(props: { view: GameView; kid: KidView; about?: readonly HintTopic[]; onClose: () => void }): ReactElement {
   const { view, kid } = props;
+  // A hint about this kid's card (RULES 8b) lights the traits it is about.
+  const trait = (t: SnackTrait, word: string): ReactElement => <span className={props.about?.includes(t) === true ? 'trait-hint' : undefined}>{word}</span>;
   const looks = kidLooks(kid);
   return (
     <Sheet title={`Kid ${kid.label}’s card`} label="Clue card" onClose={props.onClose}>
@@ -30,7 +32,7 @@ export function ClueCard(props: { view: GameView; kid: KidView; onClose: () => v
             <span className="snack-what">
               <strong>{s.name}</strong>
               <span className="muted small">
-                {s.colour} · {s.feel} · {s.taste} · {s.shape}
+                {trait('colour', s.colour)} · {trait('feel', s.feel)} · {trait('taste', s.taste)} · {trait('shape', s.shape)}
               </span>
             </span>
           </li>

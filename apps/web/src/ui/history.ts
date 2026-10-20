@@ -40,3 +40,25 @@ export function clearPlan(friends: readonly FriendView[], earlier: ReadonlySet<n
     undo: placed.map((f) => ({ type: 'place', friend: f.id, cell: f.cell, facing: f.facing })),
   };
 }
+
+/**
+ * What undoes a change the screen didn't make itself (a hint's tier 3, RULES
+ * 8b), worked out from the friends before and after: friends the change put
+ * out or bought go to the tray first, then the ones it moved, turned or sent
+ * to the tray go back where they stood. Null when nothing changed.
+ */
+export function undoChange(before: readonly FriendView[], after: readonly FriendView[]): UndoStep | null {
+  const toTray: GameCommand[] = [];
+  const putBack: GameCommand[] = [];
+  for (const now of after) {
+    const was = before.find((f) => f.id === now.id);
+    if (was !== undefined && was.cell === now.cell && was.facing === now.facing) continue;
+    if (was === undefined) toTray.push({ type: 'toTray', friend: now.id });
+    else if (was.cell < 0) {
+      toTray.push({ type: 'toTray', friend: now.id });
+      if (was.facing !== now.facing) toTray.push({ type: 'turn', friend: now.id, facing: was.facing });
+    } else putBack.push({ type: 'place', friend: now.id, cell: was.cell, facing: was.facing });
+  }
+  const steps = [...toTray, ...putBack];
+  return steps.length === 0 ? null : steps;
+}

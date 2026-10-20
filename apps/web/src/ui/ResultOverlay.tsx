@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from 'react';
 import type { WaveResult } from '@snacks/contracts';
-import { SNACK_EMOJI, hungryOf, kidLine, snackEndWords, waveReport } from './labels.ts';
+import { SNACK_EMOJI, hintsText, hungryOf, kidLine, snackEndWords, waveReport } from './labels.ts';
 
 /**
  * What a wave did, laid over the board once its replay ends (RULES 7): who
@@ -14,6 +14,8 @@ export function ResultOverlay(props: {
   hungryAllowed: number;
   /** Main mode counts hungry kids and points; Kindy cannot be lost. */
   main: boolean;
+  /** Main mode: hints used this wave and today (RULES 8b). */
+  hints?: { readonly wave: number; readonly today: number };
   children: ReactNode;
 }): ReactElement {
   const { wave, label } = props;
@@ -42,6 +44,11 @@ export function ResultOverlay(props: {
           {props.main && (
             <li data-row="hungry">
               <span aria-hidden="true">😢</span> Hungry today: <strong>{hungryOf(props.hungry, props.hungryAllowed)}</strong>
+            </li>
+          )}
+          {props.main && props.hints !== undefined && (
+            <li data-row="hints">
+              <span aria-hidden="true">💡</span> Hints: <strong>{hintsText(props.hints.wave)}</strong> this wave, {hintsText(props.hints.today)} today
             </li>
           )}
           {props.main && (

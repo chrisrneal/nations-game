@@ -27,11 +27,13 @@ export interface GameSummary {
   readonly hungry: number;
   /** Failed waves tried again (D10). */
   readonly retries: number;
+  /** Hints used in the whole game (RULES 8b). */
+  readonly hints: number;
 }
 
 function summarize(state: GameState, log: readonly GameCommand[]): GameSummary {
   const { mode, round, day } = state.puzzle;
-  return { mode, round, day, phase: state.phase, fed: state.fed, hungry: state.hungry, retries: log.filter((c) => c.type === 'retry').length };
+  return { mode, round, day, phase: state.phase, fed: state.fed, hungry: state.hungry, retries: log.filter((c) => c.type === 'retry').length, hints: state.hints.reduce((a, b) => a + b, 0) };
 }
 
 /**
