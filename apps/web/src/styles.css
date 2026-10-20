@@ -1,29 +1,20 @@
-/* The warehouse on a phone (docs/ROADMAP.md, phone UX): portrait, one-handed,
+/* Snack Attack on a phone (docs/ROADMAP.md, phone UX): portrait, one-handed,
    no horizontal scroll at 360 px, safe areas, touch targets of 44 px or more,
-   actions in the bottom third. Anything that moves every tick animates with a
-   CSS transition one tick long on `transform` only (P7), so it stays on the
-   compositor at 60 fps. */
+   the tray and Go in the bottom third. This is the grey-squares build (step 6):
+   plain colours, no art. Moving things animate on transform and opacity (P7). */
 :root {
-  --bg: #0b1424;
-  --panel: #13213a;
-  --panel-2: #1a2c4b;
-  --line: #29406a;
-  --fg: #eef3fb;
-  --muted: #98aac6;
-  --accent: #56d3a0;
-  --accent-ink: #052016;
-  --sky: #6cb6ff;
-  /* Pickers on the floor and under the order board (the canvas uses the same colour). */
-  --picker: #d9e8ff;
-  --gold: #ffcc5c;
-  --warn: #ff9d6c;
+  --bg: #f4f2ee;
+  --panel: #ffffff;
+  --line: #d9d5cc;
+  --fg: #23262b;
+  --muted: #6c6f75;
+  --accent: #2f9e6e;
+  --accent-ink: #ffffff;
+  --warn: #c8551f;
+  --open: #dcdcdc;
+  --path: #f1dfb8;
   --tap: 44px;
-  --tick: 250ms;
-  /* Text on the floor grows with the phone: 360 px phones keep the small sizes, 412 px ones (a Pixel Pro XL) get about 15% more. */
-  --fs-booth: clamp(0.64rem, 2.85vw, 0.76rem);
-  --fs-head: clamp(0.7rem, 3.1vw, 0.84rem);
-  --fs-small: clamp(0.64rem, 2.85vw, 0.76rem);
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 * {
@@ -38,37 +29,32 @@ body {
   color: var(--fg);
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.35;
-  overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
-  -webkit-text-size-adjust: 100%;
   overscroll-behavior: none;
 }
 
-button {
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  touch-action: manipulation;
+#root {
+  height: 100dvh;
 }
 
-h1,
-h2,
-p {
-  margin: 0;
+h2 {
+  font-size: 1rem;
+  margin: 0 0 6px;
 }
 
 .muted {
   color: var(--muted);
 }
 
-/* ---- layout ---- */
+.small {
+  font-size: 0.82rem;
+}
+
 .app {
+  height: 100dvh;
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  height: 100dvh;
-  max-width: 34rem;
-  margin: 0 auto;
+  padding-top: env(safe-area-inset-top);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
 }
@@ -76,73 +62,446 @@ p {
 .loading {
   align-items: center;
   justify-content: center;
-  color: var(--muted);
-}
-
-/* ---- the bar over the WMS ---- */
-.icon-btn {
-  width: var(--tap);
-  height: var(--tap);
-  margin-right: -0.5rem;
-  border: none;
-  background: none;
-  font-size: 1.25rem;
-  color: var(--muted);
 }
 
 /* ---- buttons ---- */
-.btn {
+.btn,
+.icon-btn {
+  min-width: var(--tap);
   min-height: var(--tap);
-  padding: 0.6rem 1rem;
   border-radius: 12px;
   border: 1px solid var(--line);
-  background: var(--panel-2);
+  background: var(--panel);
+  color: var(--fg);
+  font: inherit;
   font-weight: 600;
-  width: 100%;
+  padding: 0 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.icon-btn {
+  font-size: 1.3rem;
+  padding: 0;
 }
 
 .btn:disabled {
   opacity: 0.45;
+  cursor: default;
 }
 
 .btn-primary {
   background: var(--accent);
-  color: var(--accent-ink);
   border-color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .btn-wide {
-  min-height: 54px;
-  font-size: 1.05rem;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
+  width: 100%;
+  margin-top: 8px;
 }
 
 .btn-quiet {
-  background: none;
+  background: transparent;
 }
 
 .btn-small {
-  width: auto;
-  min-width: var(--tap);
-  padding: 0.4rem 0.9rem;
-}
-
-.btn-danger {
-  background: #5a1f24;
-  border-color: #a8414a;
-}
-
-.count {
-  min-width: 1.5rem;
-  padding: 0 0.4rem;
-  border-radius: 999px;
-  background: var(--accent-ink);
-  color: var(--accent);
+  min-height: var(--tap);
   font-size: 0.85rem;
+}
+
+/* ---- the screen ---- */
+.game {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* The board and panels scroll between the bar and the dock; the dock (tray, Go) never leaves the screen. */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.bar-title {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+
+.bar-title .muted {
+  font-size: 0.78rem;
+}
+
+.bar-stats {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px 16px;
+}
+
+/* ---- the board ---- */
+.board-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.board {
+  display: grid;
+  gap: 3px;
+  padding: 3px;
+  background: #b9b4aa;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.board-overlay {
+  position: absolute;
+  inset: 3px;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.sq {
+  position: relative;
+  aspect-ratio: 1;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  border: 0;
+  border-radius: 6px;
+  padding: 0;
+  font: inherit;
+  font-size: 1.3rem;
+  display: grid;
+  place-items: center;
+  background: var(--open);
+  color: var(--fg);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.kindy .sq {
+  min-width: 64px;
+  min-height: 64px;
+  font-size: 2rem;
+}
+
+.sq-path {
+  background: var(--path);
+}
+
+.sq-lunchbox {
+  background: #fff3c4;
+  box-shadow: inset 0 0 0 3px #e0b84c;
+}
+
+.sq-obstacle {
+  background: #c9d6c0;
+}
+
+.sq-table {
+  background: #e3d4f0;
+}
+
+.sq-line {
+  box-shadow: inset 0 0 0 3px rgba(47, 158, 110, 0.35);
+}
+
+.sq-target {
+  box-shadow: inset 0 0 0 3px var(--accent);
+}
+
+.sq-aim::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.6;
+}
+
+.sq-selected {
+  box-shadow: inset 0 0 0 3px #2563eb;
+}
+
+.friend {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 82%;
+  height: 82%;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #7a7f87;
+}
+
+.friend.picker {
+  border-color: #e0b84c;
+  border-width: 3px;
+}
+
+.friend-nurse {
+  color: #d23b3b;
+}
+
+.friend-glyph {
+  font-size: 1.15em;
+  line-height: 1;
+}
+
+.friend-arrow {
+  position: absolute;
+  inset: -3px;
+  display: flex;
+  justify-content: center;
+  font-size: 0.7em;
+  font-weight: 800;
+  color: #2563eb;
+  line-height: 1;
+}
+
+.kid {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 82%;
+  height: 82%;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 4px solid #999;
+}
+
+.kid-label {
+  font-weight: 800;
+  font-size: 0.95em;
+}
+
+.kid-badges {
+  position: absolute;
+  bottom: -6px;
+  font-size: 0.55em;
+  white-space: nowrap;
+}
+
+.kid-wants {
+  position: absolute;
+  top: -14px;
+  font-size: 0.8em;
+}
+
+.kid-healed {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  font-size: 0.55em;
+}
+
+.sq-box {
+  font-size: 1.15em;
+}
+
+/* Kids react once the snacks land (replay.ts sets data-outcome for a moment). */
+.sq[data-outcome='happy'] .kid {
+  animation: dance 0.45s ease-in-out 2;
+  border-color: var(--accent) !important;
+}
+
+.sq[data-outcome='ache'] .kid {
+  animation: wobble 0.3s ease-in-out 3;
+}
+
+.sq[data-outcome='hungry'] .kid,
+.sq[data-outcome='waits'] .kid {
+  opacity: 0.55;
+}
+
+@keyframes dance {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  30% {
+    transform: translateY(-6px) rotate(-8deg);
+  }
+  70% {
+    transform: translateY(-6px) rotate(8deg);
+  }
+}
+
+@keyframes wobble {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px) rotate(-6deg);
+  }
+  75% {
+    transform: translateX(4px) rotate(6deg);
+  }
+}
+
+.flying-snack {
+  position: absolute;
+  font-size: 1.4rem;
+  transform: translate(-50%, -50%);
+  will-change: left, top, transform, opacity;
+}
+
+/* ---- panels ---- */
+.panel {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.warn {
+  margin: 10px 0 0;
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.lines {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.lines li {
+  margin: 3px 0;
+}
+
+details summary {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.clues,
+.snacks,
+.shop {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.clues li,
+.snacks li,
+.shop li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  flex-wrap: wrap;
+}
+
+.clue-kid {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: #ffffff;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.clue-text {
+  font-weight: 600;
+}
+
+.snack-emoji {
+  font-size: 1.3rem;
+}
+
+.shop li {
+  flex-wrap: nowrap;
+}
+
+.shop-what {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- the dock: tray, selected friend, Go (bottom third) ---- */
+.dock {
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+}
+
+.dock-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-height: var(--tap);
+}
+
+.dock-what {
+  flex: 1;
+  font-weight: 700;
+  min-width: 0;
+}
+
+.tray-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tray-btn.on {
+  border-color: #2563eb;
+  box-shadow: inset 0 0 0 2px #2563eb;
+}
+
+.tray-glyph {
+  font-size: 1.3rem;
+}
+
+.tray-count {
+  font-size: 0.85rem;
+}
+
+.dock-hint {
+  margin: 4px 0;
+  font-size: 0.82rem;
+  min-height: 1.2em;
+}
+
+.dock-summary {
+  font-weight: 700;
+}
+
+.btn-go {
+  width: 100%;
+  min-height: 52px;
+  font-size: 1.1rem;
 }
 
 /* ---- sheets ---- */
@@ -158,215 +517,85 @@ p {
 .sheet-backdrop {
   position: absolute;
   inset: 0;
-  border: none;
-  background: rgb(0 0 0 / 55%);
+  border: 0;
+  background: rgba(20, 20, 20, 0.35);
 }
 
 .sheet {
   position: relative;
-  max-width: 34rem;
-  width: 100%;
-  margin: 0 auto;
-  max-height: 82dvh;
+  max-height: 85dvh;
   overflow-y: auto;
   background: var(--panel);
-  border-radius: 18px 18px 0 0;
-  border-top: 1px solid var(--line);
-  padding: 0.9rem 0.85rem max(0.9rem, env(safe-area-inset-bottom));
-  animation: rise 160ms ease-out;
-}
-
-@keyframes rise {
-  from {
-    transform: translateY(24px);
-    opacity: 0;
-  }
+  border-radius: 16px 16px 0 0;
+  padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
 }
 
 .sheet-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 8px;
 }
 
 .sheet-title {
-  font-size: 1.15rem;
-  margin-bottom: 0.35rem;
+  font-size: 1.1rem;
+  margin: 0;
 }
 
 .sheet-close {
-  flex-shrink: 0;
-  width: var(--tap);
-  height: var(--tap);
-  margin: -0.5rem -0.5rem 0 0;
-  border: none;
-  background: none;
-  color: var(--muted);
-  font-size: 1.1rem;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  border: 0;
+  background: transparent;
+  font-size: 1.2rem;
+  cursor: pointer;
 }
 
 .sheet-note {
-  font-size: 0.85rem;
-  color: var(--muted);
-  margin-bottom: 0.6rem;
+  margin: 6px 0 10px;
 }
 
 .sheet-actions {
-  display: grid;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-
-/* ---- away recap ---- */
-.recap-earned {
-  font-size: 2rem;
-  font-weight: 800;
-  color: var(--accent);
-  margin-bottom: 0.4rem;
-}
-
-.recap-lines {
-  margin: 0 0 0.9rem;
-  padding-left: 1.2rem;
-  display: grid;
-  gap: 0.35rem;
-  font-size: 0.92rem;
-}
-
-/* ---- settings ---- */
-.switches {
-  display: grid;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-
-.switch {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  min-height: var(--tap);
-  padding: 0.5rem 0.8rem;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: var(--panel-2);
-  font-weight: 600;
+  flex-direction: column;
 }
 
-.switch[aria-checked='true'] .switch-state {
-  color: var(--accent);
+.help p,
+.help li {
+  margin: 6px 0;
 }
 
-.stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
-  margin: 0;
-}
-
-.stats div {
-  padding: 0.5rem 0.6rem;
-  border-radius: 10px;
-  background: var(--panel-2);
-}
-
-.stats dt {
-  font-size: 0.72rem;
-  color: var(--muted);
-}
-
-.stats dd {
-  margin: 0;
-  font-weight: 700;
-}
-
-/* ---- install ---- */
+/* ---- install banner and toast ---- */
 .install {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin: 0 0.75rem 0.5rem;
-  padding: 0.5rem 0.65rem;
-  border-radius: 12px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  font-size: 0.82rem;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #e8f5ee;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.85rem;
 }
 
 .install-text {
   flex: 1;
-  min-width: 0;
 }
 
-/* ---- toast ---- */
 .toast {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  /* Below the cash, over the warehouse floor: news, never over the money or a sheet's buttons. */
-  top: calc(env(safe-area-inset-top) + 6.2rem);
-  width: min(92vw, 30rem);
-  background: var(--fg);
-  color: var(--bg);
-  border-radius: 12px;
-  padding: 0.55rem 0.9rem;
-  font-size: 0.9rem;
-  font-weight: 700;
-  text-align: center;
-  animation: toast-in 180ms ease-out;
+  left: 16px;
+  right: 16px;
+  bottom: calc(150px + env(safe-area-inset-bottom));
   z-index: 30;
-  pointer-events: none;
-}
-
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -8px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #23262b;
+  color: #ffffff;
+  text-align: center;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .boost-ready.helps::after,
-  .dock-truck,
-  .sheet,
-  .pop {
+  .sq[data-outcome] .kid {
     animation: none;
   }
-  .pop,
-  .fly,
-  .flash,
-  .ripple {
-    display: none;
-  }
-}
-
-/* ---- settings: the testing time skip ---- */
-.skip {
-  margin-top: 0.75rem;
-  padding: 0.5rem 0.6rem 0.6rem;
-  border-radius: 10px;
-  border: 1px dashed var(--line);
-}
-
-.skip-title {
-  margin-bottom: 0.4rem;
-  font-size: 0.75rem;
-  color: var(--muted);
-}
-
-.skip-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.4rem;
-}
-
-.skip-row .btn {
-  min-height: var(--tap);
-  padding-left: 0.2rem;
-  padding-right: 0.2rem;
-  white-space: nowrap;
 }

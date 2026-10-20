@@ -1,9 +1,9 @@
 {
-  "name": "warehouse-idle",
+  "name": "snack-attack",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Mobile-first PWA warehouse simulator: run a warehouse through its WMS, from dock appointments to shipping.",
+  "description": "Snack Attack: a cute daily grid puzzle for kids. Mobile-first PWA, offline, no backend.",
   "engines": {
     "node": ">=22"
   },

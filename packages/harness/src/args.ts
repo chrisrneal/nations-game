@@ -15,9 +15,9 @@ interface FlagSpec {
 }
 
 const FLAGS: Record<HarnessCommand, FlagSpec> = {
-  report: { numbers: ['seed', 'seeds', 'minutes'], strings: ['out', 'set'], switches: [], positive: ['seeds', 'minutes'] },
-  determinism: { numbers: ['seeds', 'ticks'], strings: [], switches: ['no-browser'] },
-  bench: { numbers: ['ticks', 'runs'], strings: [], switches: ['no-browser'] },
+  report: { numbers: ['from', 'days'], strings: ['out'], switches: [], positive: ['days'] },
+  determinism: { numbers: ['seeds'], strings: [], switches: ['no-browser'], positive: ['seeds'] },
+  bench: { numbers: ['runs'], strings: [], switches: ['no-browser'], positive: ['runs'] },
 };
 
 export interface ParsedArgs {
@@ -61,7 +61,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   const known = [...spec.numbers, ...spec.strings, ...spec.switches].map((f) => `--${f}`).join(', ');
   for (let i = 0; i < rest.length; i++) {
     const word = rest[i] as string;
-    if (!word.startsWith('--')) throw new Error(`Unexpected argument "${word}". Flags look like --games 200.`);
+    if (!word.startsWith('--')) throw new Error(`Unexpected argument "${word}". Flags look like --days 200.`);
     const name = word.slice(2);
     if (spec.switches.includes(name)) {
       switches.push(name);

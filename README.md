@@ -1,36 +1,36 @@
-# Warehouse WMS
+# Snack Attack
 
-A warehouse simulator you play on your phone. You run a warehouse through its
-warehouse management system (WMS): customers abroad send orders, and the WMS
-turns every line into a pick task for one of your pickers. When stock runs
-low it raises purchase orders (POs) to suppliers and books each truck into a
-dock appointment in the warehouse day; your receivers count each truck in at
-the door and put the stock away in its bin. Tap any worker on the live floor
-to see what they are doing, what the WMS has lined up for them next and what
-they have done. You set the WMS's plan (the pick order, how orders are
-released, how many people pick and how many receive), step in on single
-orders (priority, hold, expedite), and spend what shipments earn on more
-people and more dock doors. Ship on time and in full and your customers'
-goodwill, and what they pay, goes up. Close the app and the warehouse keeps
-running (up to 8 hours); open it again for a three-line recap.
+A cute daily puzzle for kids, played on a phone. Hungry kids stand on the
+school path, and snacks start in lunchboxes. You place **friends** on the
+playground, and each friend throws snacks the way a chess piece moves:
+Straight (like a rook), Diagonal (a bishop), Short (a king), Bouncer (a
+knight), plus a Nurse who heals tummy aches. Each kid wants one snack. In main
+mode you work out which from their clue card ("Something crunchy", "Same as
+the kid in the hat"). In Kindy mode, for children who don't read yet, it is
+pictured. Set up, press Go, and watch the snacks fly. A day is 10 waves that
+get harder. There is one new daily puzzle a day, the same for everyone, plus
+practice boards, and every board is proved solvable before you see it.
 
 It works offline, installs like an app, and needs no account or server.
 
-This repository held other games before: an idle warehouse game until
-7 October 2026 (`git checkout b34368a`, decision record W8 in
+This is an early, plain version (grey squares, no art yet), so the game can
+be play-tested before it is drawn.
+
+This repository held other games before: a warehouse simulator until
+20 October 2026 (`git checkout 734c848`, decision record K1 in
 `docs/DECISIONS.md`), an airport idle game until 6 October 2026
-(`git checkout 5f78bce`, decision record W1) and "Nations" until October 2026
-(`git checkout 67d1d92`, decision record P1).
+(`git checkout 5f78bce`) and "Nations" until October 2026
+(`git checkout 67d1d92`).
 
 ## What is in here
 
 | Folder | What it is |
 | --- | --- |
 | `apps/web` | The app you actually see, and the code that makes it installable on a phone. |
-| `packages/sim` | The game rules as code: orders, stock, purchase orders and dock appointments, the crew and their tasks. Deliberately knows nothing about screens, clocks or the internet, so it gives the same result everywhere. |
+| `packages/sim` | The game rules as code: where every snack goes, the solver that proves a board can be won, the clue checker, and the puzzle generator. Deliberately knows nothing about screens, clocks or the internet, so it gives the same result everywhere. |
 | `packages/contracts` | The shared vocabulary (what a "command", a "view", a "save file" is). |
-| `packages/harness` | Runs the game with no screen, to report how a warehouse performs and check that it runs the same in every browser. |
-| `docs/` | The plan (`ROADMAP.md`), the reasoning (`DECISIONS.md`), the game rules with every number (`RULES.md`), the running log (`PROGRESS.md`), known shortcuts (`GAPS.md`), and the latest WMS report (`balance/wms-report.md`). |
+| `packages/harness` | Generates and checks thousands of puzzles with no screen, and checks the game runs the same in every browser. |
+| `docs/` | The plan (`ROADMAP.md`), the reasoning (`DECISIONS.md`), the game rules with every number (`RULES.md`), the running log (`PROGRESS.md`), known shortcuts (`GAPS.md`), and the latest generator report (`balance/generator-report.md`). |
 | `CLAUDE.md` | The rules every AI session must follow when building this. |
 
 ## Running it on your computer
@@ -50,7 +50,7 @@ Other commands, useful if something looks broken or you want to see the numbers:
 ```bash
 npm test                      # runs the automatic checks; should end in "passed"
 npm run check                 # checks the code follows the project's rules
-npm run harness               # the WMS report: how an untouched warehouse performs
+npm run harness               # the generator report: 1000 days of puzzles, checked
 npm run build && npm run e2e --workspace web   # the phone check in a headless browser
 ```
 
@@ -69,11 +69,9 @@ secure `https://` address Vercel gives you).
    - **Android:** in **Chrome**, tap ⋮, then *Install app* (or *Add to Home screen*).
 3. Open it once from the new home-screen icon while online, so it can store itself.
 4. Turn on airplane mode, close it from the app switcher, and open it again. It
-   should start as normal, and your warehouse continues from its autosave, with a
-   recap of what it earned while you were away.
+   should start as normal and continue where you left off.
 
-Saves live on the phone. To move a warehouse to another device, open the gear
-(top right), *Save to a file*, and *Load from a file* on the other one.
+Saves live on the phone.
 
 Preview addresses that Vercel posts on each pull request work for a quick look,
 but install from the production address so the app updates itself after each merge.
@@ -84,45 +82,22 @@ offline or install from there).
 
 ## How to play
 
-- **The dashboard** (under your cash): orders shipped from this warehouse,
-  orders a minute, the backlog, and how full the shelves are. The tile that is
-  holding you back turns orange.
-- **Receiving** (the top lane): the PO at the dock ("PO #12 · 30/48" units put
-  away), purple dots carrying stock through quality check onto the shelves,
-  and the shelves bar. **Tap it** to send extra hands for a moment. Buy a
-  bigger **Receiving bay** when the shelves keep running empty.
-- **Picking** (the maze in the middle): each blue dot is an order. New ones
-  come in at the order desk and wait in the maze: that line is the real
-  backlog. The pickers at its end take orders through as fast as they can pick
-  (each takes one unit off the shelves). A growing maze means picking is
-  falling behind: buy **More pickers**, or **tap the maze** for extra pickers
-  for a moment. Orange dots fading at the door are customers who cancelled
-  because the backlog was too long.
-- **Packing**: picked orders, as boxes, waiting for a truck. A full bench
-  means the docks are the bottleneck; an empty one means you need more orders.
-- **Docks**: each bay has a truck seen from above, filling box by box. **Tap a
-  dock** to rush it: faster loading, counter orders even when packing is
-  empty, a quicker truck swap. Playing actively earns about two and a half
-  times what idling does. You never have to.
-- **A full truck** earns a 25% bonus. A truck too big for your orders leaves
-  on its timer without it. Gold trucks are express: double pay.
-- **Boosts** (the three buttons above Upgrades): free, a minute long, then they
-  recharge. Flash sale brings 3x orders (ready from the start), All hands
-  rushes every dock, picking and receiving for you (opens at 3 docks), Peak
-  rates doubles pay (opens with the Web shop contract). The one that fixes your
-  bottleneck glows. They keep running while the app is closed, so use one on
-  your way out.
-- **Upgrades** (the big button at the bottom): the line above it names the
-  bottleneck, and the sheet marks the upgrades that fix it.
-- **Sell** appears once the warehouse is worth a star (about half an hour of
-  active play for the first sale worth making).
-- **Stars** (the ★ button by the site's name): how many you own and the five
-  perks they unlock, never spent: Head start (1 star, open with $250), Second
-  dock (3), Quick charge (6, boosts recharge faster), Express lane (10, twice
-  the express trucks) and Long shift (15, a longer offline cap).
-- **Settings** (the gear): lifetime numbers, sound (off at first), vibration,
-  save files, start over, and a testing time skip (+5 min, +1 hour, +8 hours)
-  that runs the warehouse ahead at once.
+- **Read the kids' cards** under the board (or tap a kid). Each card points at
+  one of today's snacks: the list under it gives each snack's colour, feel,
+  taste and shape. Sisters wear the same colour.
+- **Pick a friend** from the tray at the bottom, then **tap a grey square**.
+  Tap a placed friend to select it, turn it with ↺ ↻, tap another grey square
+  to move it, or send it back to the tray. The square its throw will reach
+  lights up green.
+- A friend **right next to a lunchbox** (sharing a side) picks up that snack
+  and throws it. A friend in the way catches it and throws it on, its own
+  way. A kid in the way takes it. Trees, tables and the edge stop it.
+- **Press Go** and watch. The first snack to reach a kid counts: the right one
+  feeds them, the wrong one gives a tummy ache (a Nurse next to them helps,
+  once).
+- Fed kids earn ⭐ points to spend in the **Shop** between waves, for today
+  only. If more than 3 kids go home hungry, try that wave again.
+- **The menu** (☰): today's puzzle, a new practice board, how to play, sound.
 
 ## A few words you will see
 
@@ -132,9 +107,9 @@ offline or install from there).
   do not merge.
 - **lane:** the folder a given work session is allowed to edit, so sessions running
   at the same time do not collide. Lanes are listed in `CLAUDE.md`.
-- **tick:** one step of game time: a quarter of a second.
-- **tunable:** a number in the rules (a cost, a speed, a bonus) kept in one file
-  with the range it may be tuned within.
+- **solver:** the code that proves a puzzle can be won before anyone sees it.
+- **tunable:** a number in the rules (a price, a board size, a limit) kept in one
+  file with the range it may be tuned within.
 
 ## Where the rules live
 

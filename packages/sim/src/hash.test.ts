@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { canonicalJson, hashState } from './hash.ts';
-import { createWarehouse } from './state.ts';
+import { startGame } from './game.ts';
+import { generatePuzzle } from './generate.ts';
 
-const world = (seed: number) => createWarehouse({ seed });
+const world = (seed: number) => startGame(generatePuzzle('kindy', 'practice', 0, seed));
 
 describe('state hash', () => {
   it('ignores key insertion order', () => {
@@ -11,7 +12,7 @@ describe('state hash', () => {
 
   it('changes when any value changes', () => {
     const base = world(1);
-    expect(hashState(base)).not.toBe(hashState({ ...base, tick: 1 }));
+    expect(hashState(base)).not.toBe(hashState({ ...base, points: 1 }));
     expect(hashState(base)).not.toBe(hashState(world(2)));
   });
 

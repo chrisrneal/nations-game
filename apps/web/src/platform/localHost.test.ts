@@ -1,90 +1,72 @@
 import { describe, expect, it } from 'vitest';
-import { WarehouseEngine, type WarehouseUpdate } from './engine.ts';
-import { AUTOSAVE_EVERY_TICKS, AUTOSAVE_SLOT, LocalHost } from './localHost.ts';
+import type { GameUpdate } from './engine.ts';
+import { GameEngine } from './engine.ts';
+import { LocalHost, dayNumber, slotFor, type ActiveSlot } from './localHost.ts';
 import { MemorySaveStore } from './saves.ts';
-import { FakeClock } from './testClock.ts';
 
-function setup(store = new MemorySaveStore(), clock = new FakeClock(), speed = 1) {
-  const engine = new WarehouseEngine(clock, speed);
-  const host = new LocalHost({ engine, store, now: () => clock.time, newSeed: () => 9 });
-  const seen: WarehouseUpdate[] = [];
-  host.subscribe((u) => seen.push(u));
-  return { clock, engine, host, store, seen };
+const DAY = 20_400;
+
+function memoryActive(): ActiveSlot {
+  let slot: string | null = null;
+  return { get: () => slot, set: (s) => void (slot = s) };
 }
 
-const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+function host(store = new MemorySaveStore(), active = memoryActive(), day = DAY, seed = 5) {
+  const h = new LocalHost({ engine: new GameEngine(), store, active, now: () => day * 86_400_000 + 3_600_000, timezoneOffset: () => 0, newSeed: () => seed });
+  let latest: GameUpdate | null = null;
+  h.subscribe((u) => (latest = u));
+  return { h, store, active, latest: () => latest! };
+}
 
-describe('LocalHost (S3)', () => {
-  it('opens a new warehouse when there is no autosave, and autosaves it', async () => {
-    const { host, store } = setup();
-    expect(await host.start()).toBe('new');
-    expect((await store.get(AUTOSAVE_SLOT))?.tick).toBe(0);
+describe('the local host', () => {
+  it('counts days on the device calendar: the daily changes at local midnight (D18)', () => {
+    expect(dayNumber(86_400_000 * 10 + 1000, 0)).toBe(10);
+    // 23:30 local time on day 10 in a zone 5 hours behind UTC is already day 11 in UTC.
+    expect(dayNumber(86_400_000 * 11 + 4 * 3_600_000 + 1_800_000, 300)).toBe(10);
   });
 
-  it('autosaves every 10 seconds of play', async () => {
-    const { host, store, clock } = setup();
-    await host.start();
-    for (let i = 0; i < AUTOSAVE_EVERY_TICKS; i++) clock.advance(250);
-    await settle();
-    expect((await store.get(AUTOSAVE_SLOT))?.tick).toBe(AUTOSAVE_EVERY_TICKS);
+  it('opens today’s daily the first time, and saves it in its own slot', async () => {
+    const { h, store, latest } = host();
+    expect(await h.start()).toBe('new');
+    expect(latest().view).toMatchObject({ round: 'daily', day: DAY, wave: 1 });
+    expect(await store.get(slotFor('main', 'daily', DAY))).toBeDefined();
   });
 
-  it('at 5 warehouse minutes a second it still autosaves every 10 real seconds, and keeps the speed with the save (W9)', async () => {
-    const { host, store, clock } = setup(undefined, undefined, 5);
-    await host.start();
-    for (let i = 0; i < AUTOSAVE_EVERY_TICKS - 1; i++) clock.advance(250);
-    await settle();
-    expect((await store.get(AUTOSAVE_SLOT))?.tick).toBe(0);
-    clock.advance(250);
-    await settle();
-    expect((await store.get(AUTOSAVE_SLOT))?.tick).toBe(AUTOSAVE_EVERY_TICKS * 5);
-    await host.setSpeed(10);
-    expect((await store.get(AUTOSAVE_SLOT))?.game.speed).toBe(10);
+  it('autosaves after every command and reopens where the player left off', async () => {
+    const first = host();
+    await first.h.start();
+    const friend = first.latest().view.friends[0]!;
+    const facing = first.latest().view.facings[friend.type][0]!;
+    const open = first.latest().view.squares.findIndex((s, c) => s === 'open' && first.latest().view.lunchboxes.every((l) => Math.abs((l.cell % 6) - (c % 6)) + Math.abs(Math.floor(l.cell / 6) - Math.floor(c / 6)) > 1));
+    expect(await first.h.submit({ type: 'place', friend: friend.id, cell: open, facing })).toBeNull();
+    const again = host(first.store, first.active);
+    expect(await again.h.start()).toBe('continued');
+    expect(again.latest().fingerprint).toBe(first.latest().fingerprint);
   });
 
-  it('a reopened app continues the autosave, caught up by the wall clock', async () => {
-    const store = new MemorySaveStore();
-    const clock = new FakeClock();
-    const first = setup(store, clock);
-    await first.host.start();
-    await first.host.submit({ type: 'wms', payload: { action: 'policy', policy: { pick: 'nearest', release: 'continuous', pickers: 6 } } });
-    for (let i = 0; i < 400; i++) clock.advance(250);
-    await first.host.away();
-    const saved = first.seen.at(-1);
-    clock.time += 30_000;
-    const second = setup(store, clock);
-    expect(await second.host.start()).toBe('continued');
-    const resumed = second.seen.at(-1);
-    expect(resumed?.view.tick).toBe((saved?.view.tick ?? 0) + 120);
-    expect(resumed?.view.wms.policy.pick).toBe('nearest');
-    expect(resumed?.view.wms.stats.linesPicked).toBeGreaterThan(saved?.view.wms.stats.linesPicked ?? 0);
+  it('says why a command was refused, and does not save it', async () => {
+    const { h, latest } = host();
+    await h.start();
+    expect(await h.submit({ type: 'retry' })).toMatch(/lost/);
+    expect(latest().error).toMatch(/lost/);
   });
 
-  it('exports a file that resumes the same warehouse on a device with no saves', async () => {
-    const first = setup();
-    await first.host.start();
-    first.clock.advance(5_000);
-    const file = await first.host.exportFile();
-    expect(file.name).toMatch(/^warehouse-tick-\d+\.json$/);
-    const fingerprint = first.seen.at(-1)?.fingerprint;
-    const second = setup(new MemorySaveStore(), first.clock);
-    await second.host.importFile(file.text);
-    expect(second.seen.at(-1)?.fingerprint).toBe(fingerprint);
-    expect((await second.store.get(AUTOSAVE_SLOT))?.tick).toBe(first.seen.at(-1)?.view.tick);
+  it('a daily from an earlier day is over: the app opens today’s', async () => {
+    const yesterday = host(new MemorySaveStore(), memoryActive(), DAY - 1);
+    await yesterday.h.start();
+    const today = host(yesterday.store, yesterday.active, DAY);
+    expect(await today.h.start()).toBe('new');
+    expect(today.latest().view.day).toBe(DAY);
   });
 
-  it('refuses files that are not warehouse saves', async () => {
-    const { host } = setup();
-    await expect(host.importFile('not json')).rejects.toThrow(/not a saved warehouse/);
-    await expect(host.importFile('{"format":"nations-game-save","version":1,"game":{}}')).rejects.toThrow(/not a saved warehouse/);
-    await expect(host.importFile('{"format":"warehouse-idle-save","version":99,"game":{}}')).rejects.toThrow(/newer version/);
-  });
-
-  it('starts over with a new warehouse', async () => {
-    const { host, seen, clock } = setup();
-    await host.start();
-    clock.advance(10_000);
-    await host.newGame();
-    expect(seen.at(-1)?.view.tick).toBe(0);
+  it('practice boards come from a new seed and keep their own slot; the daily continues after', async () => {
+    const { h, store, latest } = host();
+    await h.start();
+    const daily = latest().fingerprint;
+    await h.practice();
+    expect(latest().view.round).toBe('practice');
+    expect(await store.get(slotFor('main', 'practice', 0))).toBeDefined();
+    await h.daily();
+    expect(latest().fingerprint).toBe(daily);
   });
 });

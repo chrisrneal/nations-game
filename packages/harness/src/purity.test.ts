@@ -17,7 +17,7 @@ const repoRoot = fileURLToPath(new URL('../../..', import.meta.url));
 const PURE_PACKAGES = ['packages/contracts/src', 'packages/sim/src'] as const;
 
 /** Imports allowed in pure packages. Everything else is a failure. */
-const ALLOWED_IMPORTS = /^(\.{1,2}\/|@warehouse\/contracts($|\/))/;
+const ALLOWED_IMPORTS = /^(\.{1,2}\/|@snacks\/contracts($|\/))/;
 /** Extra imports allowed in *.test.ts inside pure packages: the test runner itself. */
 const ALLOWED_TEST_IMPORTS = /^(vitest|fast-check)$/;
 
@@ -82,7 +82,7 @@ describe('pure packages stay pure', () => {
           ALLOWED_IMPORTS.test(specifier) || (isTest && ALLOWED_TEST_IMPORTS.test(specifier));
         expect(
           allowed,
-          `${name} imports "${specifier}". Pure packages may import only @warehouse/contracts and relative files (CLAUDE.md).`,
+          `${name} imports "${specifier}". Pure packages may import only @snacks/contracts and relative files (CLAUDE.md).`,
         ).toBe(true);
       }
     },
