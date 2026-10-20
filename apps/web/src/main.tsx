@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
-import { createFeedback, createHost, installPrompt } from './platform/index.ts';
+import { createFeedback, createHost, createSpeech, installPrompt } from './platform/index.ts';
 import './styles.css';
 
 const root = document.getElementById('root');
@@ -13,9 +13,11 @@ const host = createHost();
 const install = installPrompt();
 // Haptics where supported, sound off until the player turns it on.
 const feedback = createFeedback();
+// Spoken Kindy hints, unless a grown-up turned them off.
+const speech = createSpeech(() => feedback.prefs.voice);
 
 createRoot(root).render(
   <StrictMode>
-    <App host={host} install={install} feedback={feedback} />
+    <App host={host} install={install} feedback={feedback} speech={speech} />
   </StrictMode>,
 );

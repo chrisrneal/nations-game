@@ -1,6 +1,6 @@
 import { useState, type ReactElement } from 'react';
 import type { AvatarId, HomeView, Mode, ProfileView } from '@snacks/contracts';
-import type { GameHost } from '../platform/index.ts';
+import type { Feedback, GameHost } from '../platform/index.ts';
 import { Avatar } from './Avatar.tsx';
 import { AVATAR_LOOK, profileLabel, streakText } from './people.ts';
 import { Sheet } from './Sheet.tsx';
@@ -12,11 +12,13 @@ const MODE_WORDS: Readonly<Record<Mode, string>> = { main: 'Main: reads clue car
 /**
  * The grown-ups' menu (RULES 12, D17), opened by a press-and-hold on the
  * picker: add a child, change a picture or name, delete a profile after a
- * confirm step. The mode is chosen once, when the profile is made.
+ * confirm step, and turn Kindy's spoken hints off or on (D16). The mode is
+ * chosen once, when the profile is made.
  */
-export function ParentMenu(props: { home: HomeView; host: GameHost; onToast: (text: string) => void; onClose: () => void }): ReactElement {
-  const { home, host, onToast, onClose } = props;
+export function ParentMenu(props: { home: HomeView; host: GameHost; feedback?: Feedback | undefined; onToast: (text: string) => void; onClose: () => void }): ReactElement {
+  const { home, host, feedback, onToast, onClose } = props;
   const [page, setPage] = useState<Page>({ kind: 'list' });
+  const [voice, setVoice] = useState(feedback?.prefs.voice ?? true);
   const back = (): void => setPage({ kind: 'list' });
   const done = (error: string | null): void => {
     if (error === null) back();
@@ -99,7 +101,21 @@ export function ParentMenu(props: { home: HomeView; host: GameHost; onToast: (te
         <button type="button" className="btn btn-primary btn-wide" onClick={() => setPage({ kind: 'add' })}>
           ＋ Add a child
         </button>
+        {feedback !== undefined && (
+          <button
+            type="button"
+            className="btn btn-wide"
+            aria-pressed={voice}
+            onClick={() => {
+              feedback.setPrefs({ ...feedback.prefs, voice: !voice });
+              setVoice(!voice);
+            }}
+          >
+            Kindy spoken hints: {voice ? 'on' : 'off'}
+          </button>
+        )}
       </div>
+      {feedback !== undefined && <p className="sheet-note muted small">Kindy hints always show a pointing hand; with this on, the phone also says them out loud.</p>}
     </Sheet>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import type { HomeView } from '@snacks/contracts';
-import type { GameHost } from '../platform/index.ts';
+import type { Feedback, GameHost } from '../platform/index.ts';
 import { Avatar } from './Avatar.tsx';
 import { ParentMenu } from './ParentMenu.tsx';
 import { profileLabel } from './people.ts';
@@ -13,7 +13,14 @@ const HOLD_MS = 1000;
  * is the whole switch, so a 4-year-old can do it without reading. Adding,
  * changing and deleting profiles is behind a grown-up press-and-hold (D17).
  */
-export function Picker(props: { home: HomeView; host: GameHost; onPick: (id: string) => void; onClose?: (() => void) | undefined; onToast: (text: string) => void }): ReactElement {
+export function Picker(props: {
+  home: HomeView;
+  host: GameHost;
+  feedback?: Feedback | undefined;
+  onPick: (id: string) => void;
+  onClose?: (() => void) | undefined;
+  onToast: (text: string) => void;
+}): ReactElement {
   const { home, host, onToast } = props;
   const [parents, setParents] = useState(false);
   return (
@@ -46,7 +53,7 @@ export function Picker(props: { home: HomeView; host: GameHost; onPick: (id: str
           👪 Grown-ups <span className="muted small">(hold)</span>
         </HoldButton>
       </footer>
-      {parents && <ParentMenu home={home} host={host} onToast={onToast} onClose={() => setParents(false)} />}
+      {parents && <ParentMenu home={home} host={host} feedback={props.feedback} onToast={onToast} onClose={() => setParents(false)} />}
     </div>
   );
 }

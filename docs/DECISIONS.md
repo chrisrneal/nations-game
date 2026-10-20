@@ -1568,8 +1568,8 @@ and edited ROADMAP.md as in K2.
   - **Done for today:** a won daily shows this screen instead of the board,
     with a countdown to local midnight (from the host, written to the DOM
     once a second, P7).
-  - **Kindy:** a Kindy profile opens a picture-only "coming soon" screen
-    until build step 10.
+  - **Kindy:** a Kindy profile opened a picture-only "coming soon" screen
+    until build step 10 (K8 replaced it with the Kindy screen).
 - The host publishes a `HomeView` (profiles, streaks, who is playing, the
   pictures to offer) beside the game updates, and every `GameUpdate` says
   whose game it is. The interface shows a game only when it belongs to the
@@ -1597,5 +1597,91 @@ is made.
   on purpose.
 - A Kindy profile can't play yet.
 **Reversing it.** The profile screens are in `apps/web/src/ui` (Picker,
-ParentMenu, DoneToday, KindySoon) and the host in `platform/localHost.ts`.
+ParentMenu, DoneToday; KindySoon until K8) and the host in `platform/localHost.ts`.
 Without profiles the app would need its one profile's slots renamed back.
+
+## K8 - Kindy on screen: pictures drawn by CSS, hints from the stored solution, and Kindy days that never get stuck
+**Status.** Accepted, 2026-10-20, at the owner's request (build step 10:
+"Kindy mode playable on screen"). The owner asked for the rules, the
+roadmap, the spec and the decision records to be updated with the change,
+so this session wrote this record and edited ROADMAP.md as in K2 and K7.
+**Decision.**
+- **A Kindy profile plays Kindy.** The host opens its own daily (the date
+  seed with the Kindy salt) in its own slot, `pN/daily-kindy-<day>`, and its
+  practice board in `pN/practice-kindy`. A won Kindy daily goes on that
+  child's record like a main one; Kindy has no bonus round. The "coming
+  soon" screen is gone.
+- **No text, proved.** Every picture on the Kindy screens (snacks, kids,
+  friends, avatars, the flying snacks, the hand) is an emoji drawn by CSS
+  from a `data-pic` attribute (`Pic.tsx`), so the page holds no text node at
+  all. The phone check walks the whole page on every Kindy screen and fails
+  on any visible text, or any `data-pic` that is a letter or digit. The
+  Kindy screen never shows a toast; a refused tap wiggles the square.
+- **Aiming in Kindy** lights one square per facing: where that throw ends
+  (`lineEnds`), so a Straight has at most 4 big squares, each with an arrow.
+- **Hints** are pure sim (`hint.ts`), in the View as `hint` for Kindy only
+  (always null in main mode, S6). A hint is one step: place a friend (moving
+  one already out before taking one from the tray), aim it, take one in the
+  way back, or Go. The setup it leads to is the stored solution (the
+  witness) while the day goes to plan. Once a kid is left waiting, the
+  witness no longer fits the board, so the hint leads to what the solver
+  finds: a setup that feeds every kid there, else one that feeds the kid who
+  has waited longest (their own wave's witness first), checked by the real
+  engine with the others standing in the way (`feedSome`). A setup that
+  already feeds everyone gives the hint Go.
+- **The interface shows the hint** after `kindyHintIdle` (8) seconds without
+  a tap, or when the help bubble is tapped: a hand moves from the friend to
+  where it goes, by CSS variables on one element (P7). The phone's voice says
+  a few words (platform `speech.ts`, the Web Speech API). Speech starts on
+  the child's first tap (iOS allows it only after one) and is silently
+  skipped where there is no voice; the hand is always there. A `voice`
+  preference beside sound and haptics, on by default, is switched in the
+  grown-ups' menu.
+- **Kindy days never get stuck.** The step 10 work found that on about 1
+  Kindy day in 8, if the child missed one kid, the next kid stood in the way
+  so that neither could ever be fed with the friends given: a day that could
+  not be finished, against "Kindy can't be lost" (L). The generator now
+  rejects such a board (`stuckKindySet`: every set of kids who could be
+  waiting together must have one kid `feedSome` can feed) and tries the next
+  seed, as K5 does for any other failure. The harness checks it on its 300
+  Kindy days, and a sim test plays 60 days by a child who presses Go too
+  soon at random and then follows the hints.
+
+**Owner's prompt, as read against the spec** (no conflict with a locked
+rule, so no stop):
+- "5 waves of 1 kid each": RULES 7a (K4) goes on past the fifth wave until
+  every kid is fed, as the prompt said to follow the spec where it is more
+  detailed.
+- "Let the child try again (follow the spec on whether the board resets)":
+  the board stays as the child left it and the kid waits for the next wave
+  (D15); there is no reset in Kindy.
+- "No timer" and the 8-second idle hint: nothing in the game is timed; the
+  idle clock only decides when the hand shows itself, in the interface.
+- "Aim by tapping one of the 4 highlighted squares": one square per facing,
+  so fewer at the edge of the board, where a throw off the board feeds
+  nobody.
+- "Its own sticker book per profile": the sticker book is build step 11 and
+  not built here (logged in docs/GAPS.md).
+- "From picking their avatar": the picker is shared with the main-mode
+  child and keeps its heading, the optional names and the Grown-ups button;
+  a Kindy child needs only their picture there. The no-text check covers
+  every Kindy screen. Owner to confirm (logged in docs/GAPS.md).
+
+**Why.**
+- Drawing pictures by CSS makes "no text" something a test can prove, not
+  just a promise, and costs nothing (an emoji either way).
+- Hints in the sim keep them deterministic, tested on hand-made boards and
+  on generated days, and next to the solver they reuse; the interface only
+  points.
+- A stuck day would leave a 4-year-old with no way forward: rejecting the
+  board is the same "never unfair" rule as K5.
+**Cost.**
+- About 1 Kindy day in 8 moves to a later seed than before, so those days'
+  Kindy puzzles changed. Nobody had played a Kindy day yet.
+- The View carries a hint on every Kindy update (cheap on a 4 x 4 board).
+- The voice preference is per phone, not per child.
+- Hints off the plan come from the solver, so they may not be the shortest
+  way, and they may feed only one of two waiting kids in a wave.
+**Reversing it.** The Kindy screen is `apps/web/src/ui/KindyGame.tsx` and
+`KindyDone.tsx`; the hint is `packages/sim/src/hint.ts`; the stuck check is
+one line in `generate.ts`.

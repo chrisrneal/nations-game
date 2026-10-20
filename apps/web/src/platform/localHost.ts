@@ -24,13 +24,13 @@ export interface GameHost {
   subscribeHome(listener: (home: HomeView) => void): () => void;
   /** Opens the app: the only profile's game, or the picker when there are more. */
   start(): Promise<void>;
-  /** A child tapped their picture: their game reopens where they left it (none yet for Kindy). */
+  /** A child tapped their picture: their game, main or Kindy, reopens where they left it. */
   choose(profile: string): Promise<void>;
   /** Apply a command; resolves to why it was refused, or null. */
   submit(command: GameCommand): Promise<string | null>;
   /** Today's daily: continued if started, shown finished if finished. */
   daily(): Promise<void>;
-  /** Today's bonus round, once today's daily is finished (RULES 8); today's daily before that. */
+  /** Today's bonus round, once today's daily is finished (RULES 8); today's daily before that, and always for Kindy. */
   bonus(): Promise<void>;
   /** A fresh practice board from a new seed. */
   practice(): Promise<void>;
@@ -93,7 +93,7 @@ export class LocalHost implements GameHost {
   private home: HomeView | null = null;
   private book: ProfileBook | null = null;
   private current: string | null = null;
-  /** The slot being played in the current profile, or null (picker, Kindy). */
+  /** The slot being played in the current profile, or null (the picker). */
   private slot: string | null = null;
   private started: Promise<void> | null = null;
   private queue: Promise<unknown> = Promise.resolve();
@@ -160,19 +160,16 @@ export class LocalHost implements GameHost {
     });
   }
 
-  /** Opens a profile: back to the slot it was playing, or today's daily if that slot is from another day. */
+  /** Opens a profile: back to the slot it was playing, or today's daily if that slot is from another day. Main and Kindy alike (RULES 11). */
   private async enter(id: string): Promise<void> {
     this.current = id;
     this.slot = null;
     const profile = this.requireProfile();
-    if (profile.mode === 'main') {
-      const active = profile.active;
-      const today = this.today();
-      // A daily or bonus from another day is over: today's daily opens instead.
-      const stale = active !== null && !active.startsWith('practice') && !active.endsWith(`-${today}`);
-      if (active === null || stale || !(await this.resume(active))) await this.openSlot(this.spec('daily', today));
-    }
-    // A Kindy profile has no game on screen yet (build step 10).
+    const active = profile.active;
+    const today = this.today();
+    // A daily or bonus from another day is over: today's daily opens instead.
+    const stale = active !== null && !active.startsWith('practice') && !active.endsWith(`-${today}`);
+    if (active === null || stale || !(await this.resume(active))) await this.openSlot(this.spec('daily', today));
     this.publishHome();
   }
 
@@ -194,8 +191,10 @@ export class LocalHost implements GameHost {
   bonus(): Promise<void> {
     return this.serial(async () => {
       const today = this.today();
-      const finished = this.requireProfile().history.some((r) => r.day === today);
-      await this.openSlot(this.spec(finished ? 'bonus' : 'daily', today));
+      const profile = this.requireProfile();
+      const finished = profile.history.some((r) => r.day === today);
+      // Kindy has no bonus round (RULES 8, 11): its finished daily shows again.
+      await this.openSlot(this.spec(finished && profile.mode === 'main' ? 'bonus' : 'daily', today));
     });
   }
 
@@ -244,11 +243,9 @@ export class LocalHost implements GameHost {
 
   // ---- games ----
 
-  /** A main-mode game spec for the current profile. Kindy has no game on screen yet. */
+  /** A game spec in the current profile's mode: a Kindy profile plays Kindy boards, from the Kindy salt (RULES 11). */
   private spec(round: Round, day: number): GameSpec {
-    const mode = this.requireProfile().mode;
-    if (mode === 'kindy') throw new Error('Kindy mode is not on screen yet');
-    return { mode, round, day, seed: 0 };
+    return { mode: this.requireProfile().mode, round, day, seed: 0 };
   }
 
   /** Continue a day's slot if it is saved, else start it. */

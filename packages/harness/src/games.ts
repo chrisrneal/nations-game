@@ -4,7 +4,7 @@
  * Chromium too (browser-entry.ts); the caller passes in a timer.
  */
 import type { Mode, Puzzle, Round } from '@snacks/contracts';
-import { clueProblems, daySeed, generatePuzzle, hashState, playWitness, solveDay, startGame, step } from '@snacks/sim';
+import { clueProblems, daySeed, generatePuzzle, hashState, playWitness, solveDay, startGame, step, stuckKindySet } from '@snacks/sim';
 
 /**
  * Two scripted games per seed, hashed together. Practice boards, every fourth
@@ -58,6 +58,9 @@ export function checkPuzzle(p: Puzzle): string[] {
     const clash = p.kids.some((k) => k.id !== kid.id && k.cell === kid.cell && (p.mode === 'kindy' ? k.wave < kid.wave : k.wave === kid.wave || k.wave === kid.wave - 1));
     if (clash) problems.push(`kid ${kid.id} arrives where another kid may stand`);
   }
+  // Kindy can't be lost (K8): whoever is left waiting, some kid can be fed.
+  const stuck = p.mode === 'kindy' ? stuckKindySet(p) : null;
+  if (stuck !== null) problems.push(`Kindy kids ${stuck.join(', ')} waiting together can't be fed`);
   return problems;
 }
 

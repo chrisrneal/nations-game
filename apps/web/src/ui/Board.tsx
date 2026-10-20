@@ -2,6 +2,7 @@ import type { PointerEvent as ReactPointerEvent, ReactElement, Ref } from 'react
 import type { GameView } from '@snacks/contracts';
 import { throwLine } from './aim.ts';
 import { PatternDiagram } from './Diagram.tsx';
+import { Pic } from './Pic.tsx';
 import { FRIEND_NAME, SHIRTS, SNACK_EMOJI, SNACK_NAME, facingAngle, kidBadges } from './labels.ts';
 
 /**
@@ -12,7 +13,14 @@ import { FRIEND_NAME, SHIRTS, SNACK_EMOJI, SNACK_NAME, facingAngle, kidBadges } 
  * During setup every friend shows where its next throw lands (D12): a dashed
  * line to that square, never the whole route. The selected friend's aim
  * squares (or a Nurse's heal range) are highlighted.
+ *
+ * Kindy (RULES 11): pictures only, drawn by CSS (Pic.tsx), so nothing on the
+ * board is text: a friend is a thrower, a kid has the snack they want over
+ * their head, and each aim square carries a big arrow the way it throws.
  */
+/** A Kindy friend: a thrower (Kindy has Straight friends only). */
+export const KINDY_FRIEND = '🙋';
+
 export function Board(props: {
   view: GameView;
   selected: number | null;
@@ -49,14 +57,14 @@ export function Board(props: {
           let content: ReactElement | string | null = null;
           if (box !== undefined) {
             label = `${SNACK_NAME[box.snack]} lunchbox`;
-            content = <span className="sq-box">{SNACK_EMOJI[box.snack]}</span>;
-          } else if (square === 'obstacle') content = '🌳';
-          else if (square === 'table') content = '👪';
+            content = <Pic className="sq-box" glyph={SNACK_EMOJI[box.snack]} />;
+          } else if (square === 'obstacle') content = <Pic glyph="🌳" />;
+          else if (square === 'table') content = <Pic glyph="👪" />;
           if (friend !== undefined) {
             label = `${FRIEND_NAME[friend.type]} friend${friend.picker ? ', picks up snacks' : ''}`;
             content = (
               <span className={`friend t-${friend.type}${friend.picker ? ' picker' : ''}`}>
-                <PatternDiagram type={friend.type} />
+                {kindy ? <Pic className="friend-pic" glyph={KINDY_FRIEND} /> : <PatternDiagram type={friend.type} />}
                 {friend.type !== 'nurse' && (
                   <span className="friend-arrow" style={{ transform: `rotate(${facingAngle(friend.type, friend.facing)}deg)` }} aria-hidden="true">
                     <span className="friend-arrow-tip" />
@@ -69,12 +77,16 @@ export function Board(props: {
             label = `Kid ${kid.label}${kid.clue !== null ? `: ${kid.clue}` : ''}${kid.healed ? ', healed once' : ''}`;
             content = (
               <span className="kid" style={{ borderColor: SHIRTS[kid.look.shirt % SHIRTS.length] }}>
-                {kid.wants !== null && <span className="kid-wants">{SNACK_EMOJI[kid.wants]}</span>}
-                <span className="kid-label" style={kindy ? undefined : { background: SHIRTS[kid.look.shirt % SHIRTS.length] }}>
-                  {kindy ? '🙂' : kid.label}
-                </span>
-                <span className="kid-badges">{kidBadges(kid)}</span>
-                {kid.healed && <span className="kid-healed">🩹</span>}
+                {kid.wants !== null && <Pic className="kid-wants" glyph={SNACK_EMOJI[kid.wants]} />}
+                {kindy ? (
+                  <Pic className="kid-label" glyph="🧒" />
+                ) : (
+                  <span className="kid-label" style={{ background: SHIRTS[kid.look.shirt % SHIRTS.length] }}>
+                    {kid.label}
+                  </span>
+                )}
+                {kidBadges(kid) !== '' && <Pic className="kid-badges" glyph={kidBadges(kid)} />}
+                {kid.healed && <Pic className="kid-healed" glyph="🩹" />}
               </span>
             );
           }
@@ -89,6 +101,7 @@ export function Board(props: {
               onPointerDown={friend === undefined ? undefined : (event) => props.onFriendDown(event, friend.id)}
             >
               {content}
+              {kindy && aims.has(cell) && <span className="aim-arrow" style={{ transform: `rotate(${facingAngle('straight', aims.get(cell)!)}deg)` }} aria-hidden="true" />}
             </button>
           );
         })}

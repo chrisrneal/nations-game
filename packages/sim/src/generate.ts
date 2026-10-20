@@ -21,7 +21,7 @@ import { THROWERS } from './geometry.ts';
 import { lunchboxesBeside, resolveSnacks } from './resolve.ts';
 import { mix32, randomInt, seedRng } from './rng.ts';
 import { SNACK_IDS } from './snacks.ts';
-import { routesTo, solveDay, throwersOnto, upstream } from './solver.ts';
+import { routesTo, solveDay, stuckKindySet, throwersOnto, upstream } from './solver.ts';
 import { SNACK_TUNABLES as T } from './tunables.ts';
 
 /**
@@ -32,8 +32,9 @@ import { SNACK_TUNABLES as T } from './tunables.ts';
  * and plants one such route. It writes clues that pin each kid's snack, sets
  * the tray so the planted day is affordable, and finally runs both checkers:
  * the clue checker and the day solver, whose own solution becomes the
- * witness. Any failure moves on to the next seed, so a day's puzzle is still
- * the same for everyone.
+ * witness. A Kindy day is also checked never to get stuck, whichever kids are
+ * left waiting (K8). Any failure moves on to the next seed, so a day's puzzle
+ * is still the same for everyone.
  */
 
 /** A tiny wrapper so generation code reads as draws, not RNG plumbing. */
@@ -361,6 +362,8 @@ export function tryGenerate(mode: Mode, round: Round, day: number, seed: number)
   if (clueProblems(draft).length > 0) return null;
   const solved = solveDay(draft);
   if (!solved.ok) return null;
+  // Kindy can't be lost (K8): whichever kids are left waiting, some kid can always be fed with the friends given.
+  if (mode === 'kindy' && stuckKindySet(draft) !== null) return null;
   const difficulty = solved.layouts.map((layout) => {
     const relational = kids.filter((k) => k.wave === layout.wave && k.clue !== null && k.clue.facts.some((f) => f.kind === 'same' || f.kind === 'notSister')).length;
     return layout.friends.length + relational;

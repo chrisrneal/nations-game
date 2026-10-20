@@ -8,7 +8,8 @@
  * Surface: `step(state, command)` (S1), `newGame(spec)` and `GameSession` for
  * a host; the interface reads only `gameView(state)`. Profiles and the
  * streak (`profiles.ts`) are plain values the host keeps and passes today to. The solver and the
- * generator are exported for the harness.
+ * generator are exported for the harness; Kindy hints (`hint.ts`) reach the
+ * interface in the View.
  */
 export { SNACK_TUNABLES, type SnackTunableId } from './tunables.ts';
 export { canonicalJson, hashState, hashString } from './hash.ts';
@@ -18,7 +19,8 @@ export { SNACKS, SNACK_IDS } from './snacks.ts';
 export { resolveSnacks, type Flights, type WaveInput, type WaveKid } from './resolve.ts';
 export { SCHEMA_VERSION, placementProblem, priceOf, startGame, step, type StepResult } from './game.ts';
 export { clueProblems, clueText } from './clues.ts';
-export { routesTo, solveDay, solveWave, type Budget, type DaySolution, type WaveSolution } from './solver.ts';
+export { feedSome, routesTo, solveDay, solveWave, stuckKindySet, type Budget, type DaySolution, type Progress, type WaveSolution } from './solver.ts';
+export { kindyHint } from './hint.ts';
 export { daySeed, generatePuzzle, tryGenerate } from './generate.ts';
 export { kidLabel, gameView } from './view.ts';
 export { MIGRATIONS, createSave, loadSave, migrateSave, type LoadedGame } from './save.ts';

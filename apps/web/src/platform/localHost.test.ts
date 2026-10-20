@@ -205,16 +205,69 @@ describe('the local host: profiles (RULES 12)', () => {
     expect(app.latest()!.profile).toBe('p1');
   });
 
-  it('a Kindy profile is stored and chosen, but opens no game yet', async () => {
-    const d = device();
+  it('tells the screen how long a Kindy child may sit before a hint shows itself, from the sim’s tunable', async () => {
+    const app = launch(device());
+    await app.h.start();
+    expect(app.latest()!.hintIdle).toBe(SNACK_TUNABLES.kindyHintIdle.value);
+  });
+});
+
+describe('the local host: Kindy profiles (RULES 11, 12)', () => {
+  async function withKindy(d: Device): Promise<App> {
     const app = await twoProfiles(d);
     expect(await app.h.addProfile({ name: 'Pip', avatar: AVATARS[2]!, mode: 'kindy' })).toBeNull();
     await app.h.choose('p3');
+    return app;
+  }
+
+  it('a Kindy profile opens its own Kindy daily, from the date seed with the Kindy salt, saved in its own slot', async () => {
+    const d = device();
+    const app = await withKindy(d);
     expect(app.home().current).toBe('p3');
-    expect(profile(app, 'p3').mode).toBe('kindy');
-    expect(app.latest()!.profile).not.toBe('p3');
-    await expect(app.h.daily()).rejects.toThrow(/Kindy/);
-    expect((await d.store.list()).some((s) => s.slot.startsWith('p3/'))).toBe(false);
+    const update = app.latest()!;
+    expect(update.profile).toBe('p3');
+    expect(update.view).toMatchObject({ mode: 'kindy', round: 'daily', day: DAY, width: 4, height: 4 });
+    expect(update.fingerprint).toBe(hashState(track('kindy', 'daily', DAY).state));
+    expect(update.view.hint?.kind).toBe('place');
+    expect(await d.store.get(`p3/${slotFor('kindy', 'daily', DAY)}`)).toBeDefined();
+    expect(profile(app, 'p3')).toMatchObject({ streak: 0, today: null });
+  });
+
+  it('a won Kindy daily is on that child’s record only, and reopens finished; there is no bonus round', async () => {
+    const d = device();
+    const app = await withKindy(d);
+    await playWaves(app, track('kindy', 'daily', DAY), 1, 5);
+    expect(app.latest()!.view.phase).toBe('won');
+    expect(profile(app, 'p3')).toMatchObject({ streak: 1, today: { day: DAY, fed: 5, hungry: 0, retries: 0 } });
+    expect(profile(app, 'p1').today).toBeNull();
+    expect(profile(app, 'p2').today).toBeNull();
+    await app.h.bonus();
+    expect(app.latest()!.view).toMatchObject({ mode: 'kindy', round: 'daily', phase: 'won' });
+    const again = launch(d);
+    await again.h.start();
+    await again.h.choose('p3');
+    expect(again.latest()!.view).toMatchObject({ mode: 'kindy', round: 'daily', phase: 'won' });
+  });
+
+  it('a Kindy child’s missed waves and wrong snacks never lose the day, and never touch the other children’s games', async () => {
+    const d = device();
+    const app = await withKindy(d);
+    for (let i = 0; i < 3; i++) expect(await app.h.submit({ type: 'go' })).toBeNull();
+    expect(app.latest()!.view).toMatchObject({ phase: 'setup', wave: 4, hungry: 0 });
+    expect(app.latest()!.view.kids).toHaveLength(4);
+    await app.h.choose('p1');
+    expect(app.latest()!.view).toMatchObject({ mode: 'main', wave: 1 });
+    await app.h.choose('p3');
+    expect(app.latest()!.view).toMatchObject({ mode: 'kindy', wave: 4 });
+  });
+
+  it('Kindy practice is a Kindy board, and today’s daily comes back after it', async () => {
+    const d = device();
+    const app = await withKindy(d);
+    await app.h.practice();
+    expect(app.latest()!.view).toMatchObject({ mode: 'kindy', round: 'practice', width: 4 });
+    await app.h.daily();
+    expect(app.latest()!.view).toMatchObject({ mode: 'kindy', round: 'daily', day: DAY });
   });
 });
 

@@ -2,9 +2,9 @@
 
 | Kind | Days | Passed | Seeds skipped (mean, worst) | ms a day (median, 99th) | Kids a day | Tray |
 |---|---|---|---|---|---|---|
-| main daily | 1000 | 1000 | 0.7, 9 | 15.1, 49.6 | 15.5 | 3.1 |
-| main bonus | 1000 | 1000 | 1.0, 9 | 19.2, 55.6 | 20.0 | 5.4 |
-| kindy daily | 1000 | 1000 | 0.8, 10 | 0.2, 1.9 | 5.0 | 1.8 |
+| main daily | 1000 | 1000 | 0.7, 9 | 11.2, 38.7 | 15.5 | 3.1 |
+| main bonus | 1000 | 1000 | 1.0, 9 | 14.4, 41.9 | 20.0 | 5.4 |
+| kindy daily | 1000 | 1000 | 1.1, 10 | 1.0, 3.0 | 5.0 | 1.8 |
 
 Difficulty by wave (mean friends in the solver’s setup plus relational clues):
 

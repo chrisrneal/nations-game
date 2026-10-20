@@ -1,20 +1,23 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import type { HomeView } from '@snacks/contracts';
-import type { Feedback, GameHost, GameUpdate, InstallPrompt } from './platform/index.ts';
+import type { Feedback, GameHost, GameUpdate, InstallPrompt, Speech } from './platform/index.ts';
 import { Game } from './ui/Game.tsx';
 import { InstallBanner } from './ui/Install.tsx';
-import { KindySoon } from './ui/KindySoon.tsx';
+import { KindyGame } from './ui/KindyGame.tsx';
 import { MenuSheet } from './ui/MenuSheet.tsx';
 import { Picker } from './ui/Picker.tsx';
+import { Pic } from './ui/Pic.tsx';
 
 /**
  * Snack Attack (docs/ROADMAP.md; decision record K1). Who is playing comes
  * first (K7): the picker when there is more than one profile, then that
- * child's game. The game re-renders only when the player does something:
- * there is no clock (K3). The wave replay animates outside React (P7).
+ * child's game: the main screen, or for a Kindy profile the picture-only
+ * Kindy screen (RULES 11). The game re-renders only when the player does
+ * something: there is no clock (K3). The wave replay animates outside React
+ * (P7).
  */
-export function App(props: { host: GameHost; install?: InstallPrompt; feedback?: Feedback }): ReactElement {
-  const { host, install, feedback } = props;
+export function App(props: { host: GameHost; install?: InstallPrompt; feedback?: Feedback; speech?: Speech }): ReactElement {
+  const { host, install, feedback, speech } = props;
   const [home, setHome] = useState<HomeView | null>(null);
   const [update, setUpdate] = useState<GameUpdate | null>(null);
   const [picking, setPicking] = useState(false);
@@ -51,6 +54,7 @@ export function App(props: { host: GameHost; install?: InstallPrompt; feedback?:
         <Picker
           home={home}
           host={host}
+          feedback={feedback}
           onToast={setToast}
           onClose={profile === undefined ? undefined : () => setPicking(false)}
           onPick={(id) => {
@@ -66,16 +70,26 @@ export function App(props: { host: GameHost; install?: InstallPrompt; feedback?:
     );
   }
 
+  // The game on screen must be this child's: while a switch loads, nobody else's shows.
+  if (update === null || update.profile !== profile.id || home.current !== profile.id) return <Loading pictures={profile.mode === 'kindy'} />;
+
   if (profile.mode === 'kindy') {
+    // No install banner, menu or toasts: nothing to read in Kindy (RULES 11). Grown-ups go through the picker.
     return (
       <div className="app">
-        <KindySoon profile={profile} onBack={() => setPicking(true)} />
+        <KindyGame
+          host={host}
+          view={update.view}
+          wave={update.wave}
+          hintIdle={update.hintIdle}
+          profile={profile}
+          feedback={feedback}
+          speech={speech}
+          onProfiles={() => setPicking(true)}
+        />
       </div>
     );
   }
-
-  // The game on screen must be this child's: while a switch loads, nobody else's shows.
-  if (update === null || update.profile !== profile.id || home.current !== profile.id) return <Loading />;
 
   return (
     <div className="app">
@@ -97,10 +111,11 @@ export function App(props: { host: GameHost; install?: InstallPrompt; feedback?:
   );
 }
 
-function Loading(): ReactElement {
+/** Waiting for the host: words for main mode, a bouncing lunchbox for Kindy. */
+function Loading(props: { pictures?: boolean }): ReactElement {
   return (
     <div className="app loading" aria-busy="true">
-      <p>Packing the lunchboxes…</p>
+      {props.pictures === true ? <Pic className="loading-pic" glyph="🍱" label="Packing the lunchboxes" /> : <p>Packing the lunchboxes…</p>}
     </div>
   );
 }
