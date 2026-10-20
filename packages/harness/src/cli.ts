@@ -2,8 +2,8 @@
 /**
  * `npm run harness` entry point.
  *
- *   npm run harness [-- report] [--from 20000]       generate and check main, bonus and Kindy days (RULES 10);
- *     [--days 1000] [--out DIR]                      writes report.md
+ *   npm run harness [-- report] [--from 20000]       generate and check main, bonus and Kindy days (RULES 10),
+ *     [--days 1000] [--out DIR]                      with the K9 targets (tray giveaway, bonus ramp); writes report.md
  *   npm run harness -- determinism [--seeds 300]     scripted games hash the same twice in Node and in Chromium
  *     [--no-browser]
  *   npm run harness -- bench [--runs 20]             time generating a main day in Node and Chromium
@@ -15,7 +15,7 @@ import { join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { benchGeneration, hashGames } from './games.ts';
-import { formatReport, runReport } from './report.ts';
+import { formatReport, runReport, targets } from './report.ts';
 import { findChromium, runInBrowser } from './browser.ts';
 import { parseArgs, type HarnessCommand, type ParsedArgs } from './args.ts';
 
@@ -77,7 +77,7 @@ async function report(): Promise<void> {
   writeFileSync(join(outDir, 'report.md'), `${text}\n`);
   console.log(text);
   console.log(`wall time ${Math.round(now() - start)} ms; wrote ${join(outDir, 'report.md')}`);
-  if (reports.some((r) => r.failed.length > 0)) process.exitCode = 1;
+  if (reports.some((r) => r.failed.length > 0) || targets(reports).some((t) => !t.met)) process.exitCode = 1;
 }
 
 const commands: Record<HarnessCommand, () => Promise<void>> = { report, determinism, bench };

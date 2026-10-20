@@ -5,12 +5,40 @@ import { hashState } from './hash.ts';
 export type Migration = (save: Record<string, unknown>) => Record<string, unknown>;
 
 /**
- * Migrations keyed by the version they upgrade FROM (S9): `MIGRATIONS[1]`
- * would turn a version-1 save into version 2. Snack Attack starts at 1 (K1);
- * warehouse saves are not carried over (a different database name, too).
- * Each migration needs a test with a real old save file.
+ * Version 1 to 2 (K9): a game gains its hint count per wave and the hint
+ * showing, none yet. The old hash covered the old fields only, so the log is
+ * replayed: if it leads where the old hash says (without the new fields),
+ * the save gets the new hash; if not, the old hash stays and the save is
+ * refused as damaged, as before.
  */
-export const MIGRATIONS: Readonly<Record<number, Migration>> = {};
+function addHints(save: Record<string, unknown>): Record<string, unknown> {
+  const snapshot = { ...(save.snapshot as GameState), hints: [], hint: null };
+  let hash = save.hash;
+  try {
+    let state: GameState = snapshot;
+    for (const command of save.log as GameCommand[]) {
+      const r = step(state, command);
+      if (r.error !== null) throw new Error(r.error);
+      state = r.state;
+    }
+    const old: Record<string, unknown> = { ...state };
+    delete old.hints;
+    delete old.hint;
+    if (hashState(old) === save.hash) hash = hashState(state);
+  } catch {
+    // Left as it was: loadSave refuses it.
+  }
+  return { ...save, schemaVersion: 2, snapshot, hash };
+}
+
+/**
+ * Migrations keyed by the version they upgrade FROM (S9): `MIGRATIONS[1]`
+ * turns a version-1 save into version 2. Snack Attack starts at 1 (K1);
+ * warehouse saves are not carried over (a different database name, too).
+ * Each migration needs a test with a real old save file
+ * (packages/harness/src/save-migration.test.ts).
+ */
+export const MIGRATIONS: Readonly<Record<number, Migration>> = { 1: addHints };
 
 /** A save: the snapshot, the commands since, and the hash of where they lead. */
 export function createSave(snapshot: GameState, log: readonly GameCommand[], current: GameState): GameSaveFile {

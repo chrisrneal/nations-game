@@ -207,11 +207,18 @@ result. Nothing random happens anywhere in resolution (L).
 - **Bonus round:** clearing all 10 waves unlocks a harder 10-wave bonus round
   for that day (L). It is a fresh board from the same day's seed with a
   "bonus" salt (D11), with 2 kids a wave and more obstacles.
+  - It gets harder wave by wave (K9): the two kids' shortest routes need
+    `bonusFriendsFirst` (3) friends together at wave 1, rising evenly to
+    `bonusFriendsLast` (5) at wave 10, and the chance that a card points at
+    another kid rises from `bonusCluesFirst` (30%) to `bonusCluesLast` (90%).
+    Its last waves are harder than the daily's last.
 - **Between waves**, the player can place friends from the tray, move them,
   turn them, put them back in the tray, and visit the shop (L: only between
   waves).
 - **The tray** is the row of unplaced friends at the bottom of the screen.
-  Each puzzle sets the starting tray.
+  Each puzzle sets the starting tray. In main mode it also holds decoys,
+  friends the stored solution never needs, so the tray alone doesn't give
+  the answer away (section 10, K9).
 
 ### 8a. Setting up on the screen (decision record K6)
 
@@ -246,6 +253,38 @@ rule: every action is a place, turn or toTray command, checked by the sim.
   ache, who the Nurse healed, hungry kids against the allowance (say, 1 of 3)
   and the points earned, with one button back to setup.
 
+### 8b. Hints in main mode (decision record K9)
+
+A **Hint** button sits beside Undo during setup. It works only during setup:
+not while a wave plays, and not once the day is won or lost. Each press is
+the next step for one kid, from the puzzle's stored solution:
+
+1. **Which card to solve next**, and what it is about: the kid's card and
+   kid light up, with a line such as "Kid B next: their card is about how it
+   feels". Cards that pin their snack themselves come before cards that point
+   at another kid.
+2. **Which lunchbox feeds them**: that lunchbox lights up. This gives away
+   which snack the kid wants, because the player asked for it.
+3. **One friend put in place** for that kid, with the right facing. A friend
+   of another type on its square goes back to the tray; a friend already on
+   the board that the plan doesn't use moves there before one comes from the
+   tray; one is bought only when none is owned and the points are there.
+   Pressed again: the next friend of that kid's route. With the route
+   complete, a friend still in the way goes back to the tray.
+
+When the setup on the board feeds the kid, the next press moves on to the
+next kid, at step 1. When it feeds every kid, the hint says so: press Go.
+The setup a hint leads to is the stored solution while the wave goes to plan;
+otherwise (a healed kid staying, different friends bought) what the solver
+finds with the friends and points the player has. Undo takes back what step 3
+moved, like any other change; the press itself stays counted.
+
+- **Counting:** hints used are counted for each wave and for the day, and
+  kept in the save. A retry keeps them. The result card after a wave shows
+  the wave's hints and the day's; done for today shows the day's.
+- **Hints never change the streak**, nor anything else about the day.
+- Kindy has its own hints (section 11a), which show by themselves.
+
 ### The shop (L: this day only)
 
 - Points come from fed kids: `pointsPerKid` (1) each (D20).
@@ -271,8 +310,9 @@ rule: every action is a place, turn or toTray command, checked by the sim.
     puzzle changes at local midnight (D18). The sim never reads a clock.
   - A finished daily can't be played again. It shows a **done for today**
     screen: kids fed, hungry against the allowance, how many retries it took,
-    the streak, the last seven days, and a countdown to the next puzzle at
-    local midnight. The bonus round and practice are still there (K7).
+    hints used (K9), the streak, the last seven days, and a countdown to the
+    next puzzle at local midnight. The bonus round and practice are still
+    there (K7).
   - Failing isn't final: the player retries from the start of the failed wave
     as often as they like (D10).
 - **The streak** (D10, K7): consecutive local calendar days on which the
@@ -282,7 +322,7 @@ rule: every action is a place, turn or toTray command, checked by the sim.
   - Today counts once it is finished. Until then the streak still shows the
     run up to yesterday; a missed day resets it to 0.
   - The **best streak** is the longest run the profile ever had.
-  - The bonus round (D11) and practice never change it.
+  - The bonus round (D11), practice and hints (section 8b) never change it.
   - Each profile keeps its finished days (`historyKept`, more than a year,
     and all of a streak still going).
 - **When the date misbehaves** (K7). The game never tries to stop clock
@@ -324,27 +364,47 @@ Kindy.
     the engine checked it. It may miss a cleverer one, and then the board is
     thrown away.
   - Its solution is stored with the puzzle as the **witness**. The View never
-    shows it, but it can power a hint later.
+    shows it; it powers the hints (sections 8b, 11a).
 - **Generator** (`generate.ts`): "plant a solution, then check it".
   - From a seed it lays out a board.
   - Then, wave by wave, it puts kids on the path where the **shortest** route
     to their snack is as long as that wave calls for:
     - main: 1 friend in waves 1-2, 1-2 in waves 3-5, 2 in waves 6-8, 2-3 in
       waves 9-10;
-    - bonus: 2-3;
+    - bonus: 1-3 each, the two kids' together adding up to the ramp's
+      number for that wave (section 8: 3, 3, 3, 4, 4, 4, 4, 5, 5, 5). A
+      bonus board that can't carry the ramp's last waves is thrown away
+      before any kid is placed;
     - Kindy: 1-2.
   - It plants one such route per kid and writes clues that pin each kid's
     snack.
   - It sets the starting tray to what the planted day needs beyond what the
     points earned so far can buy.
+  - **Decoys** (main mode, K9): it then adds `decoys` (2) friends the planted
+    day doesn't need. The first is certainly spare: a type the tray already
+    holds as many of as the solution ever places at once, a type the
+    solution never uses if there is one. The second is any type that
+    throws. The solution proved on the planted tray still works, since
+    owning more friends never stops a setup. A day is kept only if its tray
+    keeps a friend the solution never places, and no wave's solution places
+    every friend owned at that wave (the tray would then say "use
+    everything"). Kindy's friends are given as they are (D15): no decoys.
   - It runs both checkers. On any failure it moves to the next seed, at most
     `generatorSeeds` of them, so the board is still the same for everyone.
 - **Difficulty** of a wave is the number of friends in the solver's setup plus
   the relational clues.
 - **Budget:** a daily board is generated and checked in under 1 second on a
   phone with the CPU slowed 4x. The harness checks that all of 1000 main
-  dailies, 300 bonus rounds and 300 Kindy dailies pass (`npm test`), and
-  `npm run harness -- report` prints how hard and how fast they are.
+  dailies, 300 bonus rounds and 300 Kindy dailies pass (`npm test`),
+  including the decoys and the bonus ramp, and
+  `npm run harness -- report` prints how hard and how fast they are
+  (docs/balance/generator-report.md).
+- **The report's targets** (K9): in main dailies and bonus rounds, 0% of
+  waves where the tray gives the answer away and 0% of days whose tray is
+  only the answer; the bonus round's last three waves at least 1.5 harder than
+  its first three, and its wave 10 harder than the daily's wave 10. Its
+  sanity tables give, for each kind and wave, the kids, friends needed,
+  clue-logic steps, pass-chain lengths, spare friends and decoys.
 
 ## 11. Kindy mode (L)
 
@@ -486,6 +546,11 @@ outside it is a design change.
 | `obstaclesMin` | 2 | 0 | 6 | Fewest obstacles on a main board |
 | `obstaclesMax` | 4 | 0 | 8 | Most obstacles on a main board |
 | `bonusObstacles` | 2 | 0 | 4 | Extra obstacles on a bonus board |
+| `bonusFriendsFirst` | 3 | 2 | 6 | Friends the 2 kids' shortest routes add up to at bonus wave 1 (section 8, K9) |
+| `bonusFriendsLast` | 5 | 4 | 6 | The same at the last bonus wave; the waves between ramp evenly |
+| `bonusCluesFirst` | 30 | 0 | 100 | Percent chance bonus wave 1 has a card pointing at another kid |
+| `bonusCluesLast` | 90 | 0 | 100 | The same at the last bonus wave |
+| `decoys` | 2 | 1 | 4 | Friends added to a main-mode starting tray beyond what the day needs (section 10, K9) |
 | `maxProfiles` | 6 | 2 | 8 | Profiles on one device (section 12) |
 | `nameLength` | 12 | 6 | 20 | Longest profile name, in characters (section 12) |
 | `historyKept` | 400 | 60 | 3650 | Finished days a profile keeps, besides the streak still going (section 9) |
@@ -503,7 +568,13 @@ Checked on every build (`npm test`):
 - A kid never arrives on an occupied square (section 7a).
 - Every picker sends exactly one snack, each snack ends exactly one way, and a
   kid takes at most one snack (property tests).
-- The View never holds what a main-mode kid wants.
+- The View never holds what a main-mode kid wants, except the lunchbox a
+  hint the player asked for shows (section 8b, step 2).
+- Every main-mode tray keeps a friend the solution never places, and no
+  wave's solution places every friend owned; every bonus wave is planted to
+  the ramp (K9).
+- A main-mode day played by pressing Hint until it says Go, then Go, wins
+  with nobody hungry.
 - A save reloads to the same hash; a damaged save is refused.
 - Profiles are kept apart: one child's game, retries and finished days never
   change another's. A pre-profile save folds into the first profile with the

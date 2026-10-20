@@ -32,7 +32,7 @@ function made(...drafts: { name?: string; avatar?: (typeof AVATARS)[number]; mod
   return book;
 }
 
-const done = (day: number, retries = 0) => ({ day, fed: 14, hungry: 1, retries });
+const done = (day: number, retries = 0, hints = 0) => ({ day, fed: 14, hungry: 1, retries, hints });
 const days = (...list: number[]): DayRecord[] => list.map((day) => ({ ...done(day), bonus: false }));
 
 describe('making, editing and deleting profiles (RULES 12)', () => {
@@ -168,6 +168,20 @@ describe('the streak (RULES 9, D10, decision record K7)', () => {
     expect(longestStreak(book.profiles[0]!.history)).toBe(4);
   });
 
+  it('hints used are kept with the day, and never change the streak (RULES 8b)', () => {
+    let book = made({});
+    book = recordDaily(book, 'p1', done(D - 1, 0, 0));
+    book = recordDaily(book, 'p1', done(D, 1, 7));
+    expect(profileView(book.profiles[0]!, D)).toMatchObject({ streak: 2, today: { day: D, hints: 7, retries: 1 } });
+    // A host from before K9 reports no hints: 0.
+    book = recordDaily(book, 'p1', { day: D + 1, fed: 1, hungry: 0, retries: 0 });
+    expect(book.profiles[0]!.history.at(-1)?.hints).toBe(0);
+    // Stored and read back; a stored day from before K9 has no hints field and reads as 0.
+    const raw = JSON.parse(JSON.stringify(book));
+    delete raw.profiles[0].history[0].hints;
+    expect(readBook(raw).profiles[0]!.history.map((r) => r.hints)).toEqual([0, 7, 0]);
+  });
+
   it('recording a day twice changes nothing: the first finish stands', () => {
     let book = recordDaily(made({}), 'p1', done(D));
     const once = book;
@@ -262,8 +276,8 @@ describe('the profile save: versioned, read with care (S9, K7)', () => {
     const p1 = book.profiles[0]!;
     expect(p1).toMatchObject({ name: '', active: null, best: 2 });
     expect(p1.history).toEqual([
-      { day: D - 1, fed: 0, hungry: 0, retries: 0, bonus: false },
-      { day: D, fed: 0, hungry: 0, retries: 0, bonus: false },
+      { day: D - 1, fed: 0, hungry: 0, retries: 0, hints: 0, bonus: false },
+      { day: D, fed: 0, hungry: 0, retries: 0, hints: 0, bonus: false },
     ]);
     expect(book.profiles[1]!.history).toEqual([]);
   });

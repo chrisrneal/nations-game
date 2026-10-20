@@ -20,6 +20,8 @@ export interface DayRecord {
   readonly hungry: number;
   /** Times a failed wave was tried again (D10). */
   readonly retries: number;
+  /** Hints used on the way (RULES 8b). They never change the streak. */
+  readonly hints: number;
   /** That day's bonus round was won too (D11). It never counts for the streak. */
   readonly bonus: boolean;
 }

@@ -11,6 +11,7 @@ import type {
   WaveResult,
 } from '@snacks/contracts';
 import { validFacing } from './geometry.ts';
+import { pressHint } from './mainHint.ts';
 import { lunchboxesBeside, resolveSnacks, type WaveKid } from './resolve.ts';
 import { SNACK_TUNABLES as T } from './tunables.ts';
 
@@ -20,7 +21,7 @@ import { SNACK_TUNABLES as T } from './tunables.ts';
  */
 
 /** Current save schema. Bump it with a migration in save.ts. */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export function priceOf(type: FriendType): number {
   switch (type) {
@@ -41,7 +42,7 @@ function arrivals(puzzle: Puzzle, wave: number): KidOnBoard[] {
   return puzzle.kids.filter((k) => k.wave === wave).map((k) => ({ id: k.id, cell: k.cell, healed: false }));
 }
 
-function checkpointOf(s: Omit<GameState, 'checkpoint'>): Checkpoint {
+function checkpointOf(s: Omit<GameState, 'checkpoint' | 'hints' | 'hint'>): Checkpoint {
   return { wave: s.wave, friends: s.friends, nextFriendId: s.nextFriendId, kids: s.kids, points: s.points, hungry: s.hungry, fed: s.fed };
 }
 
@@ -61,7 +62,7 @@ export function startGame(puzzle: Puzzle): GameState {
     fed: 0,
     lastWave: null,
   };
-  return { ...base, checkpoint: checkpointOf(base) };
+  return { ...base, checkpoint: checkpointOf(base), hints: [], hint: null };
 }
 
 export interface StepResult {
@@ -93,7 +94,8 @@ export function step(state: GameState, command: GameCommand): StepResult {
     if (state.phase !== 'lost') return refuse(state, 'Only a lost day can be tried again.');
     const c = state.checkpoint;
     return {
-      state: { ...state, phase: 'setup', wave: c.wave, friends: c.friends, nextFriendId: c.nextFriendId, kids: c.kids, points: c.points, hungry: c.hungry, fed: c.fed, lastWave: null },
+      // Hints used stay counted (RULES 8b); the one showing belonged to the failed setup.
+      state: { ...state, phase: 'setup', wave: c.wave, friends: c.friends, nextFriendId: c.nextFriendId, kids: c.kids, points: c.points, hungry: c.hungry, fed: c.fed, lastWave: null, hint: null },
       error: null,
       wave: null,
     };
@@ -126,6 +128,12 @@ export function step(state: GameState, command: GameCommand): StepResult {
     }
     case 'go':
       return go(state);
+    case 'hint': {
+      if (state.puzzle.mode !== 'main') return refuse(state, 'Kindy hints show by themselves.');
+      if (state.kids.length === 0) return refuse(state, 'There is nobody to help.');
+      const r = pressHint(state, step);
+      return r.error === null ? applied(r.state, {}) : refuse(state, r.error);
+    }
     default:
       return refuse(state, 'Unknown command.');
   }
@@ -209,5 +217,5 @@ function go(state: GameState): StepResult {
   const next = { schemaVersion: state.schemaVersion, puzzle, wave, phase, friends: state.friends, nextFriendId: state.nextFriendId, kids, points: state.points + points, hungry, fed, lastWave: result };
   // A new wave's setup is the point a retry goes back to; a lost day keeps the failed wave's.
   const checkpoint = phase === 'setup' ? checkpointOf(next) : state.checkpoint;
-  return { state: { ...next, checkpoint }, error: null, wave: result };
+  return { state: { ...next, checkpoint, hints: state.hints, hint: null }, error: null, wave: result };
 }

@@ -4,14 +4,16 @@
  * Chromium too (browser-entry.ts); the caller passes in a timer.
  */
 import type { Mode, Puzzle, Round } from '@snacks/contracts';
-import { clueProblems, daySeed, generatePuzzle, hashState, playWitness, solveDay, startGame, step, stuckKindySet } from '@snacks/sim';
+import { SNACK_TUNABLES, bonusFriendsAt, clueProblems, daySeed, generatePuzzle, hashState, playWitness, shortestRoutes, solveDay, startGame, step, stuckKindySet } from '@snacks/sim';
+import { dayStats, type DayStats } from './stats.ts';
 
 /**
- * Two scripted games per seed, hashed together. Practice boards, every fourth
+ * Scripted games per seed, hashed together. Practice boards, every fourth
  * one Kindy. In the first the player presses Go with nobody placed until the
  * day is lost (Kindy cannot be lost: five waves), then retries; in the second
- * the player plays the solver's solution to the end. Losing, retrying and
- * winning are all covered.
+ * the player plays the solver's solution to the end; in the third (main
+ * mode) the player presses Hint until every kid is set, then Go, all day
+ * (RULES 8b). Losing, retrying, hints and winning are all covered.
  */
 export function hashGames(firstSeed: number, seeds: number): string[] {
   const hashes: string[] = [];
@@ -27,7 +29,13 @@ export function hashGames(firstSeed: number, seeds: number): string[] {
     for (let i = 0; i < puzzle.waves && lost.phase === 'setup'; i++) apply({ type: 'go' });
     if (lost.phase === 'lost') apply({ type: 'retry' });
     const won = playWitness(puzzle);
-    hashes.push(hashState([lost, won]));
+    let hinted = startGame(puzzle);
+    for (let i = 0; i < 400 && mode === 'main' && hinted.phase === 'setup'; i++) {
+      const r = step(hinted, { type: hinted.hint?.tier === 0 ? 'go' : 'hint' });
+      if (r.error !== null) throw new Error(`seed ${seed}: hint refused: ${r.error}`);
+      hinted = r.state;
+    }
+    hashes.push(hashState([lost, won, hinted]));
   }
   return hashes;
 }
@@ -41,6 +49,8 @@ export interface DayCheck {
   readonly difficulty: readonly number[];
   readonly kids: number;
   readonly tray: number;
+  /** Wave-by-wave difficulty for the report's sanity tables; null when the day failed to generate. */
+  readonly stats: DayStats | null;
 }
 
 /** Everything RULES 10 promises about one generated day. */
@@ -61,6 +71,20 @@ export function checkPuzzle(p: Puzzle): string[] {
   // Kindy can't be lost (K8): whoever is left waiting, some kid can be fed.
   const stuck = p.mode === 'kindy' ? stuckKindySet(p) : null;
   if (stuck !== null) problems.push(`Kindy kids ${stuck.join(', ')} waiting together can't be fed`);
+  if (p.mode === 'main') {
+    // The tray never gives the answer away (K9): decoys the solution never places, and no wave that uses every friend owned.
+    const stats = dayStats(p);
+    if (stats.unused < 1) problems.push('the tray holds only friends the solution places: no decoy');
+    if (stats.tells.length > 0) problems.push(`waves ${stats.tells.join(', ')} place every friend owned: the tray gives the answer away`);
+    if (p.tray.length < SNACK_TUNABLES.decoys.value + 1) problems.push(`a tray of ${p.tray.length} has no room for ${SNACK_TUNABLES.decoys.value} decoys`);
+  }
+  if (p.round === 'bonus') {
+    // The bonus ramp (K9): each wave's kids are planted to the curve.
+    for (let w = 1; w <= p.waves; w++) {
+      const total = shortestRoutes(p, w).reduce((a, b) => a + b, 0);
+      if (total !== bonusFriendsAt(w)) problems.push(`bonus wave ${w} needs ${total} friends, the ramp says ${bonusFriendsAt(w)}`);
+    }
+  }
   return problems;
 }
 
@@ -73,7 +97,7 @@ export function checkDays(mode: Mode, round: Round, firstDay: number, days: numb
     try {
       puzzle = generatePuzzle(mode, round, day, 0);
     } catch (error) {
-      out.push({ day, problems: [String(error)], ms: now() - t0, skipped: -1, difficulty: [], kids: 0, tray: 0 });
+      out.push({ day, problems: [String(error)], ms: now() - t0, skipped: -1, difficulty: [], kids: 0, tray: 0, stats: null });
       continue;
     }
     const ms = now() - t0;
@@ -85,6 +109,7 @@ export function checkDays(mode: Mode, round: Round, firstDay: number, days: numb
       difficulty: puzzle.difficulty,
       kids: puzzle.kids.length,
       tray: puzzle.tray.length,
+      stats: dayStats(puzzle),
     });
   }
   return out;
