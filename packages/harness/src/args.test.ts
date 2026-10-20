@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { parseArgs } from './args.ts';
 
 describe('harness command line', () => {
-  it('defaults to the WMS report with no arguments', () => {
+  it('defaults to the generator report with no arguments', () => {
     expect(parseArgs([])).toEqual({ command: 'report', numbers: {}, strings: {}, switches: [] });
   });
 
   it('reads the command and its flags', () => {
-    const parsed = parseArgs(['report', '--seed', '4', '--minutes', '60', '--out', 'x', '--set', 'wmsTaskQueue=2']);
+    const parsed = parseArgs(['report', '--from', '20000', '--days', '60', '--out', 'x']);
     expect(parsed.command).toBe('report');
-    expect(parsed.numbers).toEqual({ seed: 4, minutes: 60 });
-    expect(parsed.strings).toEqual({ out: 'x', set: 'wmsTaskQueue=2' });
+    expect(parsed.numbers).toEqual({ from: 20000, days: 60 });
+    expect(parsed.strings).toEqual({ out: 'x' });
   });
 
   it('accepts --suite as another way to name the command', () => {
@@ -18,7 +18,7 @@ describe('harness command line', () => {
   });
 
   it('rejects an unknown flag, command, suite or stray word with a clear message', () => {
-    expect(() => parseArgs(['report', '--sed', '1'])).toThrow(/Unknown flag --sed for "report".*--seed/);
+    expect(() => parseArgs(['report', '--dys', '1'])).toThrow(/Unknown flag --dys for "report".*--days/);
     expect(() => parseArgs(['dock1'])).toThrow(/Unknown harness command "dock1"/);
     expect(() => parseArgs(['--suite', 'dock1'])).toThrow(/Unknown suite "dock1"/);
     expect(() => parseArgs(['report', '200'])).toThrow(/Unexpected argument "200"/);
@@ -26,14 +26,14 @@ describe('harness command line', () => {
   });
 
   it('rejects a missing or non-whole-number value', () => {
-    expect(() => parseArgs(['report', '--seed'])).toThrow(/--seed needs a whole number/);
-    expect(() => parseArgs(['report', '--minutes', '0'])).toThrow(/--minutes needs a whole number of at least 1/);
+    expect(() => parseArgs(['report', '--from'])).toThrow(/--from needs a whole number/);
+    expect(() => parseArgs(['report', '--days', '0'])).toThrow(/--days needs a whole number of at least 1/);
     expect(() => parseArgs(['report', '--out'])).toThrow(/--out needs a value/);
   });
 
   it('reads switches only where they exist', () => {
     expect(parseArgs(['determinism', '--no-browser']).switches).toEqual(['no-browser']);
     expect(() => parseArgs(['report', '--no-browser'])).toThrow(/Unknown flag --no-browser for "report"/);
-    expect(() => parseArgs(['bench', '--set', 'a=1'])).toThrow(/Unknown flag --set for "bench"/);
+    expect(() => parseArgs(['bench', '--out', 'a'])).toThrow(/Unknown flag --out for "bench"/);
   });
 });

@@ -1,12 +1,12 @@
 /**
- * S5 in executable form: 1,000 seeds of the warehouse, each played by a scripted
- * player for a minute of WMS actions (plans, hires, holds, assignments) and
- * then caught up for an hour, give identical state hashes in Node and in headless Chromium (see
- * browser.ts). Skips only on a machine with no Chromium/Chrome and no CI
- * variable; in CI a missing browser is a failure, not a skip.
+ * S5 in executable form: 300 seeds of scripted games (practice boards, every
+ * fourth Kindy; one game lost on purpose and retried, one won with the
+ * solver's solution) give identical state hashes in Node and in headless Chromium
+ * (see browser.ts). Skips only on a machine with no Chromium/Chrome and no
+ * CI variable; in CI a missing browser is a failure, not a skip.
  */
 import { describe, expect, it } from 'vitest';
-import { hashWarehouseSeeds } from './warehouse.ts';
+import { hashGames } from './games.ts';
 import { findChromium, runInBrowser } from './browser.ts';
 
 const browser = findChromium();
@@ -18,13 +18,12 @@ if (browser === undefined && !inCi) {
 
 describe('determinism across engines', () => {
   it.skipIf(browser === undefined && !inCi)(
-    '1,000 warehouses hash identically in Node and in Chromium',
+    '300 games hash identically in Node and in Chromium',
     async () => {
-      const seeds = 1000;
-      const ticks = 240;
-      const node = hashWarehouseSeeds(1, seeds, ticks);
-      expect(new Set(node).size).toBeGreaterThan(990);
-      const run = await runInBrowser({ firstSeed: 1, seeds, ticks, benchTicks: 0, benchRuns: 0 }, browser);
+      const seeds = 300;
+      const node = hashGames(1, seeds);
+      expect(new Set(node).size).toBeGreaterThan(295);
+      const run = await runInBrowser({ firstSeed: 1, seeds, benchRuns: 0 }, browser);
       expect(run.hashes).toHaveLength(seeds);
       expect(run.hashes).toEqual(node);
     },
