@@ -11,8 +11,11 @@ for two kids sharing one phone.
   clue card.
 - **Kindy mode** (a 4-year-old who doesn't read yet): the snack is pictured.
 - **A wave.** Set up, press Go, watch it play out.
-- **A day.** 10 waves that get harder, a bonus round, points to spend in a
-  shop for that day only, and up to 3 kids allowed to go home hungry.
+- **A day.** 10 waves that get harder, a bonus round that ramps up past the
+  day's end, points to spend in a shop for that day only, and up to 3 kids
+  allowed to go home hungry. A Hint button in three steps (whose card, which
+  lunchbox, a friend put out) for when the 9-year-old is stuck; hints never
+  break the streak (K9).
 - **Daily and practice.** One daily puzzle per day, the same for everyone,
   plus unlimited practice boards. Every board is proved solvable by a solver
   before anyone sees it.
@@ -65,10 +68,13 @@ vite-plugin-pwa, Vitest + fast-check, and playwright-core for the phone check.
 - `npm test` generates and checks 1000 main dailies, 300 bonus rounds and 300
   Kindy dailies. Each must pass the clue checker and the solver, and its
   solution must win with nobody hungry. A Kindy day must also never get
-  stuck, whichever kids are left waiting (K8).
+  stuck, whichever kids are left waiting (K8). A main day must keep a decoy
+  in its tray and never have a wave that uses every friend owned; a bonus
+  round must follow its ramp and end harder than the daily (K9).
 - `npm test` also hashes 300 scripted games in Node and Chromium.
 - `npm run harness -- report` prints difficulty by wave, seeds skipped and
-  time per day (docs/balance/generator-report.md).
+  time per day, how often the tray gives the answer away, the bonus curve,
+  the K9 targets and a sanity table per kind (docs/balance/generator-report.md).
 
 ## Build order (K1)
 The engine and the solver come first. No art, shop screen or Kindy mode
@@ -95,6 +101,8 @@ until both work on hand-made test boards.
     stored solution (a pointing hand and the phone's voice), the party, a
     picture-only done for today; Kindy days that can never get stuck.
 11. [ ] Sticker book, cosmetics and streak rewards.
+    - [x] Between steps 10 and 11 (K9): main-mode hints, decoys in the tray,
+      the bonus ramp, and the difficulty report.
 12. [ ] Phone check and polish on real phones.
 
 ## History

@@ -8,8 +8,10 @@ Undo, one screen; K6). Each child has a profile with their own daily,
 retries, practice board, finished days and streak; a finished daily shows
 "done for today" with a countdown (K7). A Kindy profile plays its own 4 x 4
 daily with pictures only, a pointing hand and a spoken voice for hints, a
-party at the end and a picture-only done for today (K8). Next is the
-owner's gate: play both modes with the children and say what to change. The
+party at the end and a picture-only done for today (K8). Main mode has a
+three-step Hint button, trays carry decoys so they no longer give the answer
+away, and the bonus round ramps up past the daily's hardest wave (K9). Next
+is the owner's gate: play both modes with the children and say what to change. The
 warehouse simulator is at commit `734c848`; the log below the line describes
 the earlier games.
 
@@ -29,6 +31,66 @@ the earlier games.
 - [ ] 12 Polish on real phones
 
 ## Session log
+
+### 2026-10-20 - Hints, tray giveaway and difficulty ramp (all lanes, owner request, K9)
+**What changed.**
+- **A 💡 Hint button** beside Undo in main mode, during setup only. Each
+  press is one step for one kid, from the stored solution:
+  1. whose card to work on next and what it's about ("Kid B next: their
+     card is about how it feels"): the kid and their card light up purple,
+     and their clue card highlights those traits;
+  2. the lunchbox that feeds them lights up;
+  3. a friend goes out for them, aimed (pressed again: the next friend).
+     Undo takes it back.
+  When the board feeds that kid, the next press moves to the next kid; when
+  it feeds everyone, it says "Press Go!". Cards that work on their own come
+  before "same as" and "sister" cards.
+- **Counting hints.** Per wave and per day, in the save; a retry keeps them.
+  The result card says "Hints: 2 this wave, 5 today"; done for today says
+  "Hints used". The profile record keeps the day's count. Hints never touch
+  the streak.
+- **Decoys.** Every main-mode tray now has 2 extra friends the solution
+  doesn't need, the first one always spare on every wave. Before, 67% of
+  daily trays held nothing but the answer's pieces; now none do. Kindy's
+  friends are unchanged (the same puzzles, checked hash for hash).
+- **The bonus ramp.** Bonus waves are built so the two kids' routes need 3
+  friends at wave 1 rising to 5 at wave 10, with more "same as" cards as it
+  goes (30% to 90%). Measured difficulty: 3.4 rising to 5.9 (the daily ends
+  at 4.5). It was flat at about 4.6.
+- **The report** (docs/balance/generator-report.md, 1000 days of each kind):
+  how often the tray gives the answer away (target 0%, met), the bonus curve
+  (targets met), and per-wave tables for main days, bonus days and Kindy
+  days: kids, friends needed, clue-logic steps, pass-chain lengths, spare
+  friends and decoys.
+- **Saves.** Game saves move to version 2; an old save loads at the same
+  wave with no hints used (tested on a real old save file).
+
+**Measured.**
+- `npm test`: 375 tests pass. New: 13 hint tests in the sim (each tier on
+  hand-made boards, the order of cards, moving, buying and clearing a
+  friend in the way, counting, retry, 17 generated days won by pressing Hint
+  until it says Go), 9 decoy and ramp tests (one fails if the bonus curve is
+  flat: checked by flattening it), a save-migration test, hint words and
+  hint-undo tests, a host test (a daily won by hints records them and keeps
+  the streak). The 1000-day check now also fails on a tray without a decoy,
+  a wave that uses every friend owned, or a bonus wave off the ramp; the
+  determinism test now also plays a whole day by hints in Node and Chromium.
+- Phone check: 172/172 at 360 x 740, 172/172 at 412 x 915 and 172/172 on
+  another day (`DAY=20390`). It presses Hint through all three steps (each
+  part checked to be inside the screen), undoes a hinted friend, checks the
+  hint counts on the result card and on done for today, and that the
+  streak still counts the day.
+- Generating a day takes the same time as before (about 17 ms in Node);
+  bonus days skip 2.3 seeds on average instead of 1.0.
+
+**How to see it.** On the phone, open today's puzzle and tap **💡 Hint**
+under the board, up to three times. Finish a wave to see the hint count on
+the result card. Practice boards and the bonus round have it too.
+
+**What is left.** Play-testing with the 9-year-old (the prompt's feedback
+section was empty), trying it on a real phone, and the K9 gaps in
+docs/GAPS.md (for example, whether showing the lunchbox at step 2 is too
+much of a giveaway).
 
 ### 2026-10-20 - Kindy mode on screen (build step 10; all lanes, owner request, K8)
 **What changed.**

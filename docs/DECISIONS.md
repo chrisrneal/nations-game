@@ -5,7 +5,7 @@ would have to happen to reverse it. **Changing one of these needs a new record
 appended here, not an edit to an old one** - later sessions rely on these being
 stable.
 
-**Read K1 first, then W8, then W1, then P1.** On 2026-10-20 the warehouse
+**Read K1 first (then K5-K9 for what was added since), then W8, then W1, then P1.** On 2026-10-20 the warehouse
 became Snack Attack, a daily grid puzzle for kids (K1); `K` records cover it,
 and K1 lists which older records still bind. On 2026-10-07 the idle game was removed
 and the warehouse management system became the whole game (W8). On 2026-10-06 the airport game became a warehouse
@@ -1685,3 +1685,95 @@ rule, so no stop):
 **Reversing it.** The Kindy screen is `apps/web/src/ui/KindyGame.tsx` and
 `KindyDone.tsx`; the hint is `packages/sim/src/hint.ts`; the stuck check is
 one line in `generate.ts`.
+
+## K9 - Hints in main mode, decoys in the tray, a bonus round that ramps, and a difficulty report
+**Status.** Accepted, 2026-10-20, at the owner's request ("hints, tray
+giveaway and difficulty ramp"). The owner asked for the rules, the roadmap,
+the spec and the decision records to be updated with the change, so this
+session wrote this record and edited ROADMAP.md as in K2, K7 and K8.
+**Decision.**
+- **A hint command** (`{ type: 'hint' }`, main mode, setup only) in the sim
+  (`mainHint.ts`). Each press is the next tier for one kid, from the stored
+  solution: 1, whose card to solve next and what it is about (cards that pin
+  their snack themselves first); 2, the lunchbox that feeds them; 3, one
+  friend of their route put in place and aimed (a friend of another type on
+  the square goes to the tray; a spare friend on the board moves before one
+  comes from the tray; one is bought only if none is owned). With the kid
+  fed by the board, the next press moves to the next kid; with all fed, the
+  hint says Go (tier 0). Off the plan (a healed kid, other friends bought)
+  the setup comes from the solver with what the player has.
+  - The press is a command, so it is in the save's log, replays the same in
+    Node and Chromium (the determinism test now also plays a whole day by
+    hints) and is checked like any other. Tier 3's moves go through the
+    normal place, turn, toTray and buy rules. The screen puts whatever tier
+    3 moved on its undo stack (worked out from the friends before and after).
+  - `GameState` gains `hints` (per wave, kept across a retry) and `hint`
+    (the one showing, cleared by Go and retry). Save schema 2; the migration
+    from 1 replays the log, checks the old hash on the old fields and writes
+    the new hash, so a damaged old save is still refused. Tested on a real
+    version-1 save (`packages/harness/fixtures/save-v1.json`).
+  - `DayRecord` gains `hints`, written when the daily is won. The profile
+    book keeps version 1: a record without it reads as 0, and an older app
+    ignores it, so neither has to refuse the other's book.
+- **S6 refined.** The View still never holds what a main-mode kid wants,
+  except the lunchbox a tier-2 hint shows: the player asked for it.
+  `GameView.mainHint` is null in Kindy and outside setup.
+- **Decoys** (`decoys`, 2): main-mode trays get friends the planted day
+  doesn't need. The solution proved on the planted tray is kept (owning more
+  never stops a setup, buying costs the same). The first decoy is a type the
+  tray already holds as many of as the solution ever places at once, never
+  used if possible, so it is spare on every wave; the second is any type
+  that throws. The generator keeps a day only if its tray keeps a friend the
+  solution never places and no wave places every friend owned. Kindy's
+  given friends are unchanged (D15): its puzzles are the same, hash for hash.
+- **The giveaway metric.** A wave gives the answer away when the friends
+  owned at its start are exactly what its solution places; a day's tray
+  does when every friend in it is placed on some wave. Before K9, on 1000
+  days from day 20000: 0.8% of daily waves and 67% of daily trays (2.2% and
+  63% in bonus rounds). Now 0% and 0%, the report's target.
+- **The bonus ramp.** Bonus waves are planted so the two kids' shortest
+  routes add up to a number rising evenly from `bonusFriendsFirst` (3) to
+  `bonusFriendsLast` (5), each kid 1-3 friends; clues pointing at another
+  kid rise from 30% to 90%. Kid squares are picked from pairs whose lengths
+  already add up, and a board without two such pairs for the hardest total
+  on four squares is thrown away before planting. Measured difficulty goes
+  3.4 to 5.9 (daily wave 10: 4.5).
+- **The report** (`npm run harness -- report`, docs/balance/generator-report.md)
+  adds the giveaway table, the bonus curve, the targets (with a failing
+  exit code when one is missed) and, for each kind, a table of kids,
+  friends needed, clue-logic steps, pass chains, spare friends and tray
+  tells per wave. The 1000-day check fails on any day without a decoy, any
+  tell wave, any bonus wave off the ramp, or a flat bonus curve.
+
+**Owner's prompt, as read against the spec** (no conflict with a locked
+rule, so no stop):
+- The prompt names docs/snack-attack.md; there is no such file. The spec is
+  docs/RULES.md (K1), where the (L) decisions and D1-D20 live.
+- The play-test feedback section of the prompt was the empty template, so
+  there was no feedback to apply.
+- "End harder than the main day's wave 10": RULES 8 (L) keeps 2 kids a
+  bonus wave, so the ramp is in route lengths and clues. Ending at 6 (both
+  kids on 3-friend routes) skips about 23 seeds a day and came within reach
+  of `generatorSeeds`; 5 skips 2.3 and still ends well above the daily.
+- "Tier 3 places one friend": the hint places it itself, as a command, and
+  buys it if none is owned (points the witness would have spent anyway).
+- "Clue-logic steps" are counted as facts on a card, plus the facts of the
+  card a "same as" or "sister" card points at.
+**Why.**
+- A 9-year-old stuck on a wave needs a way forward that teaches (whose card,
+  then what it means) before it gives the answer away (a friend placed).
+- A tray of only the answer's pieces makes the puzzle "use everything";
+  one spare friend is enough to break that, and a type the solution never
+  uses also hides the mix.
+- A bonus round as flat as the daily's end is not a reward for finishing.
+**Cost.**
+- The View can now say what a main kid wants, after a hint.
+- Every main daily, bonus round and practice board changed (new tray;
+  bonus boards entirely). Saved games keep their own puzzle.
+- Trays are 2 friends longer, so the tray more often shows all four
+  throwing types beside the shop (each button stays over 44 px at 360 px).
+- Bonus rounds skip 2.3 seeds on average instead of 1.0; the time per day
+  is unchanged (about 17 ms in Node).
+**Reversing it.** Set `decoys` to its floor and remove `withDecoys`
+(generate.ts); set `bonusFriendsFirst` = `bonusFriendsLast`; the hint is
+`mainHint.ts`, one case in `game.ts`, and the button in `Game.tsx`.

@@ -11,10 +11,7 @@ airport and Nations gap went with the code. They are in this file at commit
 - K1 / step 6, the screen is plain on purpose: pattern diagrams for friends, emoji for snacks, letters for kids, and a simple flight replay. Art and real animation are step 8. Lane U.
 - K1 / step 11, no sticker book or cosmetics yet. Profiles and the streak came in step 7 (K7). Lanes S, U.
 - K1 / step 6, the shop is a plain list in a sheet (step 9). Lane U.
-- K1 / step 6, main mode has no hint button. Kindy's hints (K8) come from the stored witness; main mode could use the same, but a main hint would have to avoid giving away the clue. Lanes S, U.
 - K1 / K5, the solver is sound but not complete: boards whose only solutions need a 4-friend route or a friend used only to block are thrown away, never shown. About 0.7 seeds a day are skipped. Lane S.
-- K1 / K5, the starting tray is sized to the planted solution, so its mix (say, three Bouncers) hints at the answer. Adding a decoy friend or two would hide it. Lanes S, D.
-- K1 / generator, bonus rounds are evenly hard (about 4.6 friends every wave) instead of ramping; tune `routeAt` for bonus. Lane S.
 - K1 / K4, clue cards run 2-7 words where the brief said 3-6, because the brief's own examples ("Something crunchy", "Same as the kid in the hat") fall outside 3-6. Owner to confirm. Lane D.
 - K1 / step 6, the determinism test hashes 300 seeds of scripted games, not 1000 as the warehouse did, to keep `npm test` under a minute; the generator check covers 1600 days besides. Lane H.
 - K1 / step 6, sounds are placeholder synth notes (fed, tummy ache, win, lose), off until turned on. Lane P.
@@ -46,3 +43,14 @@ airport and Nations gap went with the code. They are in this file at commit
 - K8, Kindy pictures are emoji drawn by CSS; they look different on iOS, Android and Windows until the art in step 8. Lane U.
 - K8, the moon on the done screen moves every 30 seconds by the fraction of the day gone; like the main countdown it can be an hour out on a daylight-saving night (K7). Lane U.
 - K8, about 1 Kindy day in 8 now takes a later seed than before (the never-stuck check); nobody had played Kindy yet, so nothing visible changed. Lane S.
+
+## Hints, tray decoys and the bonus ramp (K9)
+- K9, the prompt's play-test feedback section was the empty template, so no play-test notes were applied. The owner's gate (step 6) is still open. Owner.
+- K9, the prompt names docs/snack-attack.md, which doesn't exist; docs/RULES.md was used as the spec. Owner to confirm. Lane D.
+- K9, hint tier 2 shows the lunchbox, which says which snack the kid wants. Whether that comes too early (before a friend is placed) is for play-testing with the 9-year-old. Owner.
+- K9, off the plan (a healed kid staying, other friends bought) the hint's setup comes from the solver; its tier 3 may move a friend the player had placed for another kid, if the solver's setup doesn't use it. Lane S.
+- K9, the day's hint count goes on the profile record for the daily only. Bonus and practice hints are counted in their saves and shown on the result card, but not recorded. Lanes S, U.
+- K9, the bonus ramp ends at 5 friends a wave, not 6 (both kids on 3-friend routes): at 6 a bonus day skipped about 23 seeds on average and up to 115 of the 200 allowed. Raising `routeMax` would allow more, slower. Lane S.
+- K9, Kindy keeps its given friends (D15), so its tray still gives the answer away on about half its waves (report). Owner to say if Kindy should get a decoy. Owner, lane S.
+- K9, the second decoy is any throwing type, so on some days it is a type the solution buys later and gets used: the report counts 1.6-1.7 never-used tray friends a day, never fewer than 1. Lane S.
+- K9, the hint button, the purple lit squares and Undo of a hint are checked in headless Chromium only, not yet on a real phone. Owner, lane P.
