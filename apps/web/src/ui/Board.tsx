@@ -1,54 +1,49 @@
-import type { ReactElement, Ref } from 'react';
+import type { PointerEvent as ReactPointerEvent, ReactElement, Ref } from 'react';
 import type { GameView } from '@snacks/contracts';
-import { FRIEND_GLYPH, FRIEND_NAME, SHIRTS, SNACK_EMOJI, SNACK_NAME, facingAngle, kidBadges, stepOf } from './labels.ts';
-
-/** Squares a friend's next throw crosses and where it lands, for the setup preview (D12). */
-export function throwPreview(view: GameView, friendId: number | null): { line: Set<number>; target: number } {
-  const line = new Set<number>();
-  const friend = view.friends.find((f) => f.id === friendId);
-  if (friend === undefined || friend.cell < 0 || friend.type === 'nurse') return { line, target: -1 };
-  if (friend.type === 'straight' || friend.type === 'diagonal') {
-    const [dx, dy] = stepOf(friend.type, friend.facing);
-    let x = (friend.cell % view.width) + dx;
-    let y = Math.floor(friend.cell / view.width) + dy;
-    while (x >= 0 && y >= 0 && x < view.width && y < view.height) {
-      const cell = y * view.width + x;
-      if (cell === friend.target) break;
-      line.add(cell);
-      x += dx;
-      y += dy;
-    }
-  }
-  return { line, target: friend.target };
-}
+import { throwLine } from './aim.ts';
+import { PatternDiagram } from './Diagram.tsx';
+import { FRIEND_NAME, SHIRTS, SNACK_EMOJI, SNACK_NAME, facingAngle, kidBadges } from './labels.ts';
 
 /**
  * The board: grey playground squares, the sandy path, lunchboxes, obstacles,
- * parents' tables, friends (chess symbols, an arrow for their facing) and
- * kids (a letter, their shirt colour). Every square is a button.
+ * parents' tables, friends (their throw pattern, an arrow for their facing)
+ * and kids (a letter badge, their shirt colour). Every square is a button.
+ *
+ * During setup every friend shows where its next throw lands (D12): a dashed
+ * line to that square, never the whole route. The selected friend's aim
+ * squares (or a Nurse's heal range) are highlighted.
  */
 export function Board(props: {
   view: GameView;
   selected: number | null;
+  /** Squares a tap aims the selected friend at. */
+  aims: ReadonlyMap<number, number>;
+  /** Squares the selected Nurse heals. */
+  heals: ReadonlySet<number>;
+  /** Show the next-throw lines (setup only). */
+  preview: boolean;
   onCell: (cell: number) => void;
+  onFriendDown: (event: ReactPointerEvent<HTMLElement>, friend: number) => void;
   overlayRef: Ref<HTMLDivElement>;
   boardRef: Ref<HTMLDivElement>;
 }): ReactElement {
-  const { view, selected, overlayRef, boardRef } = props;
-  const preview = throwPreview(view, selected);
-  const targets = new Set(view.friends.filter((f) => f.cell >= 0 && f.target >= 0).map((f) => f.target));
+  const { view, selected, aims, heals, overlayRef, boardRef } = props;
   const kindy = view.mode === 'kindy';
+  const selectedTarget = view.friends.find((f) => f.id === selected)?.target ?? -1;
   return (
-    <div className={`board-wrap${kindy ? ' kindy' : ''}`}>
+    <div
+      className={`board-wrap${kindy ? ' kindy' : ''}`}
+      style={{ ['--cols' as string]: view.width, ['--rows' as string]: view.height }}
+    >
       <div className="board" ref={boardRef} style={{ gridTemplateColumns: `repeat(${view.width}, 1fr)` }} role="grid" aria-label="The playground">
         {view.squares.map((square, cell) => {
           const friend = view.friends.find((f) => f.cell === cell);
           const kid = view.kids.find((k) => k.cell === cell);
           const box = view.lunchboxes.find((l) => l.cell === cell);
           const classes = ['sq', `sq-${square}`];
-          if (preview.line.has(cell)) classes.push('sq-line');
-          if (cell === preview.target) classes.push('sq-target');
-          else if (targets.has(cell)) classes.push('sq-aim');
+          if (aims.has(cell)) classes.push('sq-aimable');
+          if (heals.has(cell)) classes.push('sq-heal');
+          if (cell === selectedTarget) classes.push('sq-target');
           if (friend !== undefined && friend.id === selected) classes.push('sq-selected');
           let label = square === 'path' ? 'path' : square === 'open' ? 'playground' : square;
           let content: ReactElement | string | null = null;
@@ -60,35 +55,72 @@ export function Board(props: {
           if (friend !== undefined) {
             label = `${FRIEND_NAME[friend.type]} friend${friend.picker ? ', picks up snacks' : ''}`;
             content = (
-              <span className={`friend friend-${friend.type}${friend.picker ? ' picker' : ''}`}>
-                <span className="friend-glyph">{FRIEND_GLYPH[friend.type]}</span>
+              <span className={`friend t-${friend.type}${friend.picker ? ' picker' : ''}`}>
+                <PatternDiagram type={friend.type} />
                 {friend.type !== 'nurse' && (
                   <span className="friend-arrow" style={{ transform: `rotate(${facingAngle(friend.type, friend.facing)}deg)` }} aria-hidden="true">
-                    ↑
+                    <span className="friend-arrow-tip" />
                   </span>
                 )}
               </span>
             );
           }
           if (kid !== undefined) {
-            label = `Kid ${kid.label}${kid.healed ? ', healed once' : ''}`;
+            label = `Kid ${kid.label}${kid.clue !== null ? `: ${kid.clue}` : ''}${kid.healed ? ', healed once' : ''}`;
             content = (
               <span className="kid" style={{ borderColor: SHIRTS[kid.look.shirt % SHIRTS.length] }}>
                 {kid.wants !== null && <span className="kid-wants">{SNACK_EMOJI[kid.wants]}</span>}
-                <span className="kid-label">{kindy ? '🙂' : kid.label}</span>
+                <span className="kid-label" style={kindy ? undefined : { background: SHIRTS[kid.look.shirt % SHIRTS.length] }}>
+                  {kindy ? '🙂' : kid.label}
+                </span>
                 <span className="kid-badges">{kidBadges(kid)}</span>
                 {kid.healed && <span className="kid-healed">🩹</span>}
               </span>
             );
           }
           return (
-            <button key={cell} type="button" className={classes.join(' ')} data-cell={cell} aria-label={label} onClick={() => props.onCell(cell)}>
+            <button
+              key={cell}
+              type="button"
+              className={classes.join(' ')}
+              data-cell={cell}
+              aria-label={label}
+              onClick={() => props.onCell(cell)}
+              onPointerDown={friend === undefined ? undefined : (event) => props.onFriendDown(event, friend.id)}
+            >
               {content}
             </button>
           );
         })}
       </div>
+      {props.preview && <ThrowPreview view={view} selected={selected} />}
       <div className="board-overlay" ref={overlayRef} aria-hidden="true" />
     </div>
+  );
+}
+
+/** Every friend's next throw (D12): a dashed line from the friend to where it lands, and a ring there. */
+function ThrowPreview(props: { view: GameView; selected: number | null }): ReactElement {
+  const { view } = props;
+  return (
+    <svg className="board-preview" viewBox={`0 0 ${view.width} ${view.height}`} preserveAspectRatio="none" aria-hidden="true">
+      {view.friends.map((friend) => {
+        const line = throwLine(view, friend);
+        if (line === null) return null;
+        const [x2, y2] = [line.to[0] + 0.5, line.to[1] + 0.5];
+        // Start at the edge of the friend's token, not under it.
+        const dx = line.to[0] - line.from[0];
+        const dy = line.to[1] - line.from[1];
+        const len = Math.hypot(dx, dy);
+        const [x1, y1] = [line.from[0] + 0.5 + (dx / len) * 0.42, line.from[1] + 0.5 + (dy / len) * 0.42];
+        const on = friend.id === props.selected ? ' on' : '';
+        return (
+          <g key={friend.id} className={`throw throw-${line.lands}${on}`} data-friend={friend.id}>
+            <line x1={x1} y1={y1} x2={x2} y2={y2} vectorEffect="non-scaling-stroke" />
+            {line.lands !== 'off' && <circle cx={x2} cy={y2} r={0.36} vectorEffect="non-scaling-stroke" />}
+          </g>
+        );
+      })}
+    </svg>
   );
 }

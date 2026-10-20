@@ -1,9 +1,15 @@
-import { useEffect, useRef, useState, type ReactElement } from 'react';
-import type { FriendType, GameView, WaveResult } from '@snacks/contracts';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react';
+import type { FriendType, GameCommand, GameView, WaveResult } from '@snacks/contracts';
 import type { Feedback, GameHost } from '../platform/index.ts';
+import { aimSquares, healSquares } from './aim.ts';
 import { Board } from './Board.tsx';
-import { FRIEND_GLYPH, FRIEND_HOW, FRIEND_NAME, FRIEND_ORDER, SHIRTS, SNACK_EMOJI, kidBadges, kidLine, snackEndWords, waveSummary } from './labels.ts';
+import { ClueCard } from './ClueCard.tsx';
+import { PatternDiagram } from './Diagram.tsx';
+import { DragController, type DragSource } from './drag.ts';
+import { clearPlan, undoFor, type UndoStep } from './history.ts';
+import { FRIEND_HOW, FRIEND_NAME, FRIEND_ORDER, SHIRTS, kidBadges, kidLetter, shortClue } from './labels.ts';
 import { playWave } from './replay.ts';
+import { ResultOverlay } from './ResultOverlay.tsx';
 import { Sheet } from './Sheet.tsx';
 import { short } from './format.ts';
 
@@ -17,21 +23,60 @@ interface Playback {
   readonly wave: WaveResult;
 }
 
+/** Which game this is: a new one starts with a daily, a bonus round or a practice board. */
+function gameKey(view: GameView): string {
+  return `${view.mode}-${view.round}-${view.day}-${view.seed}`;
+}
+
+/** One setup phase: a wave's setup in one game, started afresh by Go and by a retry. */
+function phaseKey(view: GameView): string {
+  return `${gameKey(view)}-${view.wave}-${view.phase}`;
+}
+
+const onBoardIds = (view: GameView): ReadonlySet<number> => new Set(view.friends.filter((f) => f.cell >= 0).map((f) => f.id));
+
 /**
- * The grey-squares screen (build step 6): set up friends between waves, press
- * Go, watch the wave, read what happened. Everything the player does is a
- * command to the host; everything shown comes from the View.
+ * The setup screen (build step 6, the controls pass): the board, the kids'
+ * cards, the tray, the selected friend's controls and Go all on one phone
+ * screen. Place by tap or drag, aim by tapping a lit square, undo, clear,
+ * press Go, watch the wave, read what happened over the board. Everything
+ * the player does is a command to the host; everything shown comes from the
+ * View.
  */
-export function Game(props: { host: GameHost; view: GameView; wave: WaveResult | null; feedback?: Feedback | undefined; onToast: (text: string) => void; onMenu: () => void }): ReactElement {
+export function Game(props: {
+  host: GameHost;
+  view: GameView;
+  wave: WaveResult | null;
+  healRange: number;
+  feedback?: Feedback | undefined;
+  onToast: (text: string) => void;
+  onMenu: () => void;
+}): ReactElement {
   const { host, view, feedback, onToast } = props;
   const [selection, setSelection] = useState<Selection>(null);
+  const [moving, setMoving] = useState(false);
   const [playback, setPlayback] = useState<Playback | null>(null);
   const [result, setResult] = useState<Playback | null>(null);
   const [shop, setShop] = useState(false);
+  const [clueKid, setClueKid] = useState<number | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [history, setHistory] = useState<readonly UndoStep[]>([]);
+  // Friends already on the board when this setup began (earlier waves): Clear board leaves them.
+  const [phase, setPhase] = useState(() => ({ key: phaseKey(view), earlier: onBoardIds(view) }));
   const overlayRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const beforeGo = useRef<GameView | null>(null);
   const lastFacing = useRef<Partial<Record<FriendType, number>>>({});
+
+  // A new setup phase (after Go, a retry or a new game): nothing to undo, nothing selected.
+  if (phase.key !== phaseKey(view)) {
+    // A different game: the last wave's result belongs to the old one.
+    if (!phase.key.startsWith(`${gameKey(view)}-`)) setResult(null);
+    setPhase({ key: phaseKey(view), earlier: onBoardIds(view) });
+    setHistory([]);
+    setSelection(null);
+    setMoving(false);
+  }
 
   // A new wave result: play it over the board as it stood when Go was pressed.
   useEffect(() => {
@@ -65,53 +110,165 @@ export function Game(props: { host: GameHost; view: GameView; wave: WaveResult |
 
   const shown = playback?.before ?? view;
   const setup = view.phase === 'setup' && playback === null;
-  const trayCounts = FRIEND_ORDER.map((type) => ({ type, count: view.friends.filter((f) => f.type === type && f.cell < 0).length })).filter((t) => t.count > 0);
-  const selectedFriend = selection?.kind === 'friend' ? view.friends.find((f) => f.id === selection.id) : undefined;
+  const selectedFriend = selection?.kind === 'friend' ? view.friends.find((f) => f.id === selection.id && f.cell >= 0) : undefined;
+  const aims = useMemo(() => (setup && selectedFriend !== undefined && !moving ? aimSquares(view, selectedFriend) : new Map<number, number>()), [setup, selectedFriend, moving, view]);
+  const heals = useMemo(
+    () => (setup && selectedFriend?.type === 'nurse' && !moving ? healSquares(view.width, view.height, selectedFriend.cell, props.healRange) : new Set<number>()),
+    [setup, selectedFriend, moving, view, props.healRange],
+  );
+  const owned = FRIEND_ORDER.map((type) => ({ type, left: view.friends.filter((f) => f.type === type && f.cell < 0).length, all: view.friends.filter((f) => f.type === type).length })).filter((t) => t.all > 0);
+  const toClear = clearPlan(view.friends, phase.earlier);
+  const clueOf = shown.kids.find((k) => k.id === clueKid);
+  // Three or four kids at once: their cards share one row, in short form, so the board keeps its size.
+  const crowded = shown.kids.length > 2;
 
-  const submit = async (command: Parameters<GameHost['submit']>[0]): Promise<boolean> => {
+  const submit = async (command: GameCommand): Promise<boolean> => {
     const error = await host.submit(command);
     if (error !== null) onToast(error);
     return error === null;
   };
 
+  /** A setup change the player can undo: sent to the host, and its undo kept. */
+  const change = async (command: GameCommand): Promise<boolean> => {
+    const undo = undoFor(view.friends, command);
+    const ok = await submit(command);
+    if (ok && undo !== null) setHistory((h) => [...h, undo]);
+    if (ok) feedback?.cue('tap');
+    return ok;
+  };
+
+  const facingFor = (type: FriendType): number => lastFacing.current[type] ?? view.facings[type][0] ?? 0;
+
+  const placeFromTray = async (type: FriendType, cell: number): Promise<void> => {
+    const friend = view.friends.find((f) => f.type === type && f.cell < 0);
+    if (friend === undefined) return;
+    if (await change({ type: 'place', friend: friend.id, cell, facing: facingFor(type) })) setSelection({ kind: 'friend', id: friend.id });
+  };
+
+  const moveTo = async (id: number, cell: number): Promise<void> => {
+    const friend = view.friends.find((f) => f.id === id);
+    if (friend === undefined || friend.cell === cell) return;
+    if (await change({ type: 'place', friend: id, cell, facing: friend.facing })) setSelection({ kind: 'friend', id });
+  };
+
+  const toTray = async (id: number): Promise<void> => {
+    setSelection(null);
+    setMoving(false);
+    await change({ type: 'toTray', friend: id });
+  };
+
+  const aim = async (facing: number): Promise<void> => {
+    if (selectedFriend === undefined) return;
+    lastFacing.current[selectedFriend.type] = facing;
+    if (facing === selectedFriend.facing) return;
+    await change({ type: 'turn', friend: selectedFriend.id, facing });
+  };
+
+  /** The small turn button: the next facing clockwise, for facings no square on the board stands for (at the edge). */
+  const turn = (): void => {
+    if (selectedFriend === undefined) return;
+    const facings = view.facings[selectedFriend.type];
+    void aim(facings[(facings.indexOf(selectedFriend.facing) + 1) % facings.length] ?? facings[0]!);
+  };
+
+  // The drop handler changes every render; the controller, made once, always calls the latest.
+  const dropRef = useRef<(source: DragSource, cell: number | null) => void>(() => {});
+  const [drag] = useState(() => new DragController(() => (source, cell) => dropRef.current(source, cell)));
+  useEffect(() => {
+    dropRef.current = (source, cell) => {
+      if (!setup) return;
+      setMoving(false);
+      if (source.kind === 'tray') {
+        if (cell !== null) void placeFromTray(source.type, cell);
+      } else if (cell === null) void toTray(source.id);
+      else void moveTo(source.id, cell);
+    };
+  });
+  useEffect(() => () => drag.stop(), [drag]);
+
+  const onFriendDown = (event: ReactPointerEvent<HTMLElement>, id: number): void => {
+    const token = event.currentTarget.querySelector<HTMLElement>('.friend');
+    if (setup && token !== null) drag.begin(event, { kind: 'friend', id }, token);
+  };
+
+  const onTrayDown = (event: ReactPointerEvent<HTMLElement>, type: FriendType): void => {
+    const diagram = event.currentTarget.querySelector<HTMLElement>('.tray-token');
+    if (setup && diagram !== null && view.friends.some((f) => f.type === type && f.cell < 0)) drag.begin(event, { kind: 'tray', type }, diagram);
+  };
+
   const onCell = async (cell: number): Promise<void> => {
-    if (!setup) return;
+    if (drag.justDragged() === true) return;
     const friendHere = view.friends.find((f) => f.cell === cell);
+    const kid = view.kids.find((k) => k.cell === cell);
+    if (!setup) {
+      if (kid !== undefined && kid.clue !== null) setClueKid(kid.id);
+      return;
+    }
+    const empty = view.squares[cell] === 'open' && friendHere === undefined;
+    if (moving && selectedFriend !== undefined) {
+      setMoving(false);
+      if (empty) await moveTo(selectedFriend.id, cell);
+      else if (friendHere !== undefined && friendHere.id !== selectedFriend.id) setSelection({ kind: 'friend', id: friendHere.id });
+      return;
+    }
+    const facing = aims.get(cell);
+    if (facing !== undefined) {
+      await aim(facing);
+      return;
+    }
     if (friendHere !== undefined) {
       setSelection(selection?.kind === 'friend' && selection.id === friendHere.id ? null : { kind: 'friend', id: friendHere.id });
       feedback?.cue('tap');
       return;
     }
-    const kid = view.kids.find((k) => k.cell === cell);
     if (kid !== undefined) {
-      if (kid.clue !== null) onToast(`${kid.label}: “${kid.clue}”`);
+      if (kid.clue !== null) setClueKid(kid.id);
       return;
     }
-    if (selection === null) return;
-    const friend = selection.kind === 'friend' ? selectedFriend : view.friends.find((f) => f.type === selection.type && f.cell < 0);
-    if (friend === undefined) return;
-    const facing = selection.kind === 'friend' ? friend.facing : (lastFacing.current[friend.type] ?? view.facings[friend.type][0] ?? 0);
-    if (await submit({ type: 'place', friend: friend.id, cell, facing })) {
-      feedback?.cue('tap');
-      setSelection({ kind: 'friend', id: friend.id });
-    }
+    if (selection?.kind === 'tray') await placeFromTray(selection.type, cell);
+    else if (selectedFriend !== undefined && empty) await moveTo(selectedFriend.id, cell);
+    else setSelection(null);
   };
 
-  const turn = async (by: 1 | -1): Promise<void> => {
-    if (selectedFriend === undefined) return;
-    const facings = view.facings[selectedFriend.type];
-    const at = facings.indexOf(selectedFriend.facing);
-    const facing = facings[(at + by + facings.length) % facings.length] ?? facings[0]!;
-    lastFacing.current[selectedFriend.type] = facing;
-    if (await submit({ type: 'turn', friend: selectedFriend.id, facing })) feedback?.cue('tap');
+  const undo = async (): Promise<void> => {
+    const last = history[history.length - 1];
+    if (last === undefined) return;
+    setHistory((h) => h.slice(0, -1));
+    setMoving(false);
+    for (const command of last) if (!(await submit(command))) return;
+    feedback?.cue('tap');
+  };
+
+  const clear = async (): Promise<void> => {
+    setConfirmClear(false);
+    setSelection(null);
+    setMoving(false);
+    const plan = clearPlan(view.friends, phase.earlier);
+    for (const command of plan.commands) if (!(await submit(command))) return;
+    if (plan.undo.length > 0) setHistory((h) => [...h, plan.undo]);
   };
 
   const go = async (): Promise<void> => {
+    drag.stop();
     setSelection(null);
+    setMoving(false);
     setResult(null);
     beforeGo.current = view;
     if (!(await submit({ type: 'go' }))) beforeGo.current = null;
   };
+
+  // The result over the board: the wave just watched, or after a reload the last wave of a finished day.
+  const report = playback !== null ? null : result !== null ? { wave: result.wave, label: (id: number) => result.before.kids.find((k) => k.id === id)?.label ?? kidLetter(id) } : view.phase !== 'setup' && view.lastWave !== null ? { wave: view.lastWave, label: kidLetter } : null;
+
+  const hint = !setup
+    ? playback !== null
+      ? 'Watch the snacks fly…'
+      : ' '
+    : view.loopWarning
+      ? '⚠️ A snack would go round in circles. Aim a friend so it can get out.'
+      : selection?.kind === 'tray'
+        ? `Tap a grey square for the ${FRIEND_NAME[selection.type]}, or drag it there.`
+        : 'Tap or drag a friend from the tray onto a grey square.';
 
   return (
     <div className="game">
@@ -132,171 +289,173 @@ export function Game(props: { host: GameHost; view: GameView; wave: WaveResult |
         </button>
       </header>
 
-      <main className="scroll">
-        <Board view={shown} selected={selection?.kind === 'friend' ? selection.id : null} onCell={(cell) => void onCell(cell)} overlayRef={overlayRef} boardRef={boardRef} />
+      {view.mode === 'main' && shown.kids.length > 0 && (
+        <ul className={`cluebar${crowded ? ' crowded' : ''}`} aria-label="Kids’ cards" style={{ ['--n' as string]: shown.kids.length }}>
+          {shown.kids.map((k) => (
+            <li key={k.id}>
+              <button type="button" className="clue-chip" aria-label={`Kid ${k.label}’s card: ${k.clue ?? ''}`} onClick={() => setClueKid(k.id)}>
+                <span className="clue-kid" style={{ background: SHIRTS[k.look.shirt % SHIRTS.length] }}>
+                  {k.label}
+                </span>
+                <span className="clue-chip-text">
+                  {kidBadges(k)}
+                  {kidBadges(k) !== '' && ' '}
+                  {crowded ? shortClue(k.clue ?? '') : k.clue}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
-        {view.loopWarning && setup && <p className="warn">A snack would go round in circles. Turn a friend so it can get out.</p>}
-
-        {result !== null && playback === null && (
-          <section className="panel result" aria-label="What happened">
-            <h2>{waveSummary(result.wave)}</h2>
-            <ul className="lines">
-              {result.wave.kids.map((k) => (
-                <li key={k.kid}>{kidLine(k, result.before.kids.find((kid) => kid.id === k.kid)?.label ?? '?')}</li>
-              ))}
-            </ul>
-            <details>
-              <summary>Where every snack went</summary>
-              <ul className="lines">
-                {result.wave.snacks.map((s, i) => (
-                  <li key={i}>
-                    {SNACK_EMOJI[s.snack]} {snackEndWords(s.end)}
-                  </li>
-                ))}
-              </ul>
-            </details>
+      <main className="board-area">
+        <Board
+          view={shown}
+          selected={setup && selectedFriend !== undefined ? selectedFriend.id : null}
+          aims={aims}
+          heals={heals}
+          preview={setup}
+          onCell={(cell) => void onCell(cell)}
+          onFriendDown={onFriendDown}
+          overlayRef={overlayRef}
+          boardRef={boardRef}
+        />
+        {report !== null && (
+          <ResultOverlay wave={report.wave} label={report.label} hungry={view.hungry} hungryAllowed={view.hungryAllowed} main={view.mode === 'main'}>
             {view.phase === 'setup' && (
-              <button type="button" className="btn btn-wide" onClick={() => setResult(null)}>
+              <button type="button" className="btn btn-primary btn-wide" onClick={() => setResult(null)}>
                 Set up wave {view.wave}
               </button>
             )}
-          </section>
-        )}
-
-        {view.phase === 'won' && playback === null && (
-          <section className="panel done" aria-label="Day won">
-            <h2>🎉 Everyone got a snack today!</h2>
-            <p>
-              {view.fed} kids fed{view.mode === 'main' ? `, ${view.hungry} went home hungry` : ''}.
-            </p>
-            {view.round === 'daily' && view.mode === 'main' && (
-              <button type="button" className="btn btn-primary btn-wide" onClick={() => void host.bonus()}>
-                Play today’s bonus round
-              </button>
+            {view.phase === 'won' && (
+              <div className="day-end" aria-label="Day won">
+                <p>
+                  <strong>🎉 Everyone got a snack today!</strong> {view.fed} kids fed{view.mode === 'main' ? `, ${view.hungry} went home hungry` : ''}.
+                </p>
+                {view.round === 'daily' && view.mode === 'main' && (
+                  <button type="button" className="btn btn-primary btn-wide" onClick={() => void host.bonus()}>
+                    Play today’s bonus round
+                  </button>
+                )}
+                <button type="button" className="btn btn-wide" onClick={() => void host.practice()}>
+                  New practice board
+                </button>
+              </div>
             )}
-            <button type="button" className="btn btn-wide" onClick={() => void host.practice()}>
-              New practice board
-            </button>
-          </section>
-        )}
-
-        {view.phase === 'lost' && playback === null && (
-          <section className="panel done" aria-label="Day lost">
-            <h2>Too many kids went home hungry</h2>
-            <p>Try wave {view.wave} again: the board goes back to how it was before you pressed Go.</p>
-            <button type="button" className="btn btn-primary btn-wide" onClick={() => void submit({ type: 'retry' })}>
-              Try wave {view.wave} again
-            </button>
-          </section>
-        )}
-
-        {view.mode === 'main' && view.kids.length > 0 && (
-          <section className="panel" aria-label="What the kids say">
-            <h2>Hungry kids</h2>
-            <ul className="clues">
-              {shown.kids.map((k) => (
-                <li key={k.id}>
-                  <span className="clue-kid" style={{ background: SHIRTS[k.look.shirt % SHIRTS.length] }}>
-                    {k.label}
-                  </span>
-                  <span className="clue-badges">{kidBadges(k)}</span>
-                  <span className="clue-text">{k.clue}</span>
-                  {k.healed && <span className="muted"> (healed once)</span>}
-                </li>
-              ))}
-            </ul>
-            {shown.kids.some((k) => k.look.sister > 0) && <p className="muted small">Sisters wear the same colour.</p>}
-          </section>
-        )}
-
-        {view.mode === 'main' && (
-          <section className="panel" aria-label="Today’s snacks">
-            <h2>Today’s snacks</h2>
-            <ul className="snacks">
-              {view.snacks.map((s) => (
-                <li key={s.id}>
-                  <span className="snack-emoji">{SNACK_EMOJI[s.id]}</span>
-                  <strong>{s.name}</strong>
-                  <span className="muted">
-                    {s.colour} · {s.feel} · {s.taste} · {s.shape}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
+            {view.phase === 'lost' && (
+              <div className="day-end" aria-label="Day lost">
+                <p>
+                  <strong>Too many kids went home hungry.</strong> The board goes back to how it was before you pressed Go.
+                </p>
+                <button type="button" className="btn btn-primary btn-wide" onClick={() => {
+                    setResult(null);
+                    void submit({ type: 'retry' });
+                  }}>
+                  Try wave {view.wave} again
+                </button>
+              </div>
+            )}
+          </ResultOverlay>
         )}
       </main>
 
       <footer className="dock">
-        {setup && selectedFriend !== undefined ? (
-          <div className="dock-row">
-            <span className="dock-what">
-              {FRIEND_GLYPH[selectedFriend.type]} {FRIEND_NAME[selectedFriend.type]}
-            </span>
-            {selectedFriend.type !== 'nurse' && (
-              <>
-                <button type="button" className="btn" aria-label="Turn left" onClick={() => void turn(-1)}>
-                  ↺
-                </button>
-                <button type="button" className="btn" aria-label="Turn right" onClick={() => void turn(1)}>
+        <div className="dock-row friend-row" aria-label="Selected friend">
+          {setup && selectedFriend !== undefined ? (
+            <>
+              <span className={`dock-what t-${selectedFriend.type}`}>
+                <PatternDiagram type={selectedFriend.type} />
+                <span className="dock-what-text">
+                  <strong>{FRIEND_NAME[selectedFriend.type]}</strong>
+                  <span className="muted">{moving ? 'tap a grey square' : selectedFriend.type === 'nurse' ? 'heals pink squares' : 'tap green to aim'}</span>
+                </span>
+              </span>
+              {selectedFriend.type !== 'nurse' && !moving && (
+                <button type="button" className="btn btn-turn" aria-label="Turn right" title="Turn (or tap a green square)" onClick={turn}>
                   ↻
                 </button>
-              </>
-            )}
+              )}
+              <button type="button" className={`btn btn-small${moving ? ' on' : ''}`} aria-pressed={moving} onClick={() => setMoving(!moving)}>
+                Move
+              </button>
+              <button type="button" className="btn btn-small" onClick={() => void toTray(selectedFriend.id)}>
+                To tray
+              </button>
+              <button type="button" className="btn btn-quiet btn-turn" aria-label="Done" onClick={() => setSelection(null)}>
+                ✓
+              </button>
+            </>
+          ) : (
+            <p className={`dock-hint${view.loopWarning && setup ? ' warn' : ' muted'}`}>{hint}</p>
+          )}
+        </div>
+
+        <div className="dock-row tray" role="group" aria-label="Tray">
+          {owned.length === 0 && <span className="muted small">No friends yet</span>}
+          {owned.map(({ type, left }) => (
             <button
+              key={type}
               type="button"
-              className="btn"
+              className={`btn tray-btn${selection?.kind === 'tray' && selection.type === type ? ' on' : ''}`}
+              disabled={!setup || left === 0}
+              aria-label={`${FRIEND_NAME[type]}, ${left} left`}
+              title={`${FRIEND_NAME[type]}: ${FRIEND_HOW[type]}`}
+              onPointerDown={(event) => onTrayDown(event, type)}
               onClick={() => {
-                void submit({ type: 'toTray', friend: selectedFriend.id });
-                setSelection(null);
+                if (drag.justDragged() === true) return;
+                setMoving(false);
+                setSelection(selection?.kind === 'tray' && selection.type === type ? null : { kind: 'tray', type });
               }}
             >
-              To tray
+              <span className={`tray-token t-${type}`}>
+                <PatternDiagram type={type} />
+              </span>
+              <span className="tray-name">{FRIEND_NAME[type]}</span>
+              <span className="tray-count">×{left}</span>
             </button>
-            <button type="button" className="btn btn-quiet" aria-label="Done" onClick={() => setSelection(null)}>
-              ✓
+          ))}
+          {view.shop.length > 0 && (
+            <button type="button" className="btn tray-btn tray-shop" disabled={!setup} onClick={() => setShop(true)}>
+              <span className="tray-token" aria-hidden="true">
+                🛒
+              </span>
+              <span className="tray-name">Shop</span>
+              <span className="tray-count">⭐{short(view.points)}</span>
             </button>
-          </div>
-        ) : (
-          <div className="dock-row tray" role="group" aria-label="Tray">
-            {trayCounts.length === 0 && <span className="muted">Tray empty</span>}
-            {trayCounts.map(({ type, count }) => (
-              <button
-                key={type}
-                type="button"
-                className={`btn tray-btn${selection?.kind === 'tray' && selection.type === type ? ' on' : ''}`}
-                disabled={!setup}
-                aria-label={`${FRIEND_NAME[type]}, ${count} in the tray`}
-                onClick={() => setSelection(selection?.kind === 'tray' && selection.type === type ? null : { kind: 'tray', type })}
-              >
-                <span className="tray-glyph">{FRIEND_GLYPH[type]}</span>
-                <span className="tray-count">×{count}</span>
-              </button>
-            ))}
-            {view.shop.length > 0 && (
-              <button type="button" className="btn tray-btn" disabled={!setup} onClick={() => setShop(true)}>
-                Shop
-              </button>
-            )}
-          </div>
-        )}
-        <p className={`dock-hint${result !== null && playback === null ? ' dock-summary' : ' muted'}`}>
-          {result !== null && playback === null && setup
-            ? `${waveSummary(result.wave)}. Details below the board.`
-            : !setup
-            ? playback !== null
-              ? 'Watch the snacks fly…'
-              : ' '
-            : selection?.kind === 'tray'
-              ? `Tap a grey square for the ${FRIEND_NAME[selection.type]}: it ${FRIEND_HOW[selection.type]}.`
-              : selectedFriend !== undefined
-                ? `It ${FRIEND_HOW[selectedFriend.type]}. Tap a grey square to move it.`
-                : 'Pick a friend from the tray, then tap a grey square. Tap a kid to read their card.'}
-        </p>
-        <button type="button" className="btn btn-primary btn-go" disabled={!setup} onClick={() => void go()}>
-          Go! Wave {Math.min(view.wave, view.waves)}
-        </button>
+          )}
+        </div>
+
+        <div className="dock-row actions">
+          <button type="button" className="btn btn-small" disabled={!setup || history.length === 0} onClick={() => void undo()}>
+            ↶ Undo
+          </button>
+          <button type="button" className="btn btn-small" disabled={!setup || toClear.commands.length === 0} onClick={() => setConfirmClear(true)}>
+            Clear board
+          </button>
+          <button type="button" className={`btn btn-primary btn-go${view.loopWarning && setup ? ' warn' : ''}`} disabled={!setup} onClick={() => void go()}>
+            Go! Wave {Math.min(view.wave, view.waves)}
+          </button>
+        </div>
       </footer>
+
+      {clueOf !== undefined && clueOf.clue !== null && <ClueCard view={shown} kid={clueOf} onClose={() => setClueKid(null)} />}
+
+      {confirmClear && (
+        <Sheet title="Clear the board?" onClose={() => setConfirmClear(false)}>
+          <p className="sheet-note">
+            {toClear.commands.length === 1 ? 'The friend' : `The ${toClear.commands.length} friends`} you put out for this wave go back to the tray.
+            {phase.earlier.size > 0 ? ' Friends from earlier waves stay where they are.' : ''} You can undo this.
+          </p>
+          <div className="sheet-actions">
+            <button type="button" className="btn btn-primary btn-wide" onClick={() => void clear()}>
+              Yes, clear the board
+            </button>
+            <button type="button" className="btn btn-wide" onClick={() => setConfirmClear(false)}>
+              Keep them
+            </button>
+          </div>
+        </Sheet>
+      )}
 
       {shop && (
         <Sheet title={`Shop · ⭐ ${view.points}`} onClose={() => setShop(false)}>
@@ -304,7 +463,7 @@ export function Game(props: { host: GameHost; view: GameView; wave: WaveResult |
           <ul className="shop">
             {view.shop.map((item) => (
               <li key={item.type}>
-                <span className="tray-glyph">{FRIEND_GLYPH[item.type]}</span>
+                <PatternDiagram type={item.type} className="shop-diagram" />
                 <span className="shop-what">
                   <strong>{FRIEND_NAME[item.type]}</strong>
                   <span className="muted small">{FRIEND_HOW[item.type]}</span>
@@ -313,6 +472,7 @@ export function Game(props: { host: GameHost; view: GameView; wave: WaveResult |
                   type="button"
                   className="btn"
                   disabled={!item.canBuy}
+                  aria-label={`Buy a ${FRIEND_NAME[item.type]} for ${item.price} points`}
                   onClick={() =>
                     void submit({ type: 'buy', friend: item.type }).then((ok) => {
                       if (ok) feedback?.cue('buy');
