@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react';
-import type { FriendView, GameCommand, GameView, ProfileView, WaveResult } from '@snacks/contracts';
+import type { FriendView, GameCommand, GameView, ProfileView, SnackId, WaveResult } from '@snacks/contracts';
 import type { Feedback, GameHost, Speech } from '../platform/index.ts';
 import { lineEnds } from './aim.ts';
 import { Avatar } from './Avatar.tsx';
@@ -8,10 +8,14 @@ import { Board } from './Board.tsx';
 import { DragController, type DragSource } from './drag.ts';
 import { HINT_LINES, fedSlots, hintPath, type Spot } from './kindy.ts';
 import { KindyDone } from './KindyDone.tsx';
-import { Pic } from './Pic.tsx';
+import { Icon, type IconName } from './art/Icons.tsx';
+import { KidHead } from './art/Kid.tsx';
+import { SnackArt } from './art/Snack.tsx';
 import { playWave } from './replay.ts';
 
 const BEAT_MS = 220;
+/** With reduced motion: a little quicker, and no arcs, spins or dances (K9). */
+const CALM_BEAT_MS = 160;
 /** How long a refused tap wiggles the square. */
 const NOPE_MS = 450;
 
@@ -28,7 +32,7 @@ const gameKey = (view: GameView): string => `${view.round}-${view.day}-${view.se
 
 /**
  * Kindy mode on screen (RULES 11, K8), for a child who doesn't read: no text
- * anywhere, every picture drawn by CSS (Pic.tsx), every target at least 64 px.
+ * anywhere, every picture drawn as SVG with no text in it (art/), every target at least 64 px.
  *
  * - **Set up:** tap a friend in the tray, then the square it goes on (or
  *   drag it there); it lights one big arrow square for each way it can
@@ -107,7 +111,7 @@ export function KindyGame(props: {
   useEffect(() => {
     if (playback === null || overlayRef.current === null || boardRef.current === null) return;
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
-    const r = playWave(overlayRef.current, boardRef.current, playback.before, playback.wave, reduce ? 40 : BEAT_MS);
+    const r = playWave(overlayRef.current, boardRef.current, playback.before, playback.wave, { beatMs: reduce ? CALM_BEAT_MS : BEAT_MS, calm: reduce, healRange: 1 });
     let live = true;
     void r.done.then(() => {
       if (!live) return;
@@ -310,13 +314,13 @@ export function KindyGame(props: {
         <ol className="kindy-slots" aria-label="Kids fed today">
           {fedSlots(view).map((fed, i) => (
             <li key={i} className={fed ? 'fed' : ''}>
-              <Pic glyph={fed ? '😋' : '🧒'} />
+              <KidHead className="pic" id={i + 1} mood={fed ? 'yum' : 'ok'} />
             </li>
           ))}
         </ol>
         {setup && view.hint !== null ? (
           <button type="button" className="kindy-btn kindy-ask" aria-label="Help" onClick={askHint}>
-            <Pic glyph="❓" />
+            <Icon className="pic" name="hand" />
           </button>
         ) : (
           <span className="kindy-btn-space" aria-hidden="true" />
@@ -376,7 +380,7 @@ export function KindyGame(props: {
                 else nope(event.currentTarget);
               }}
             >
-              <Pic glyph="🧺" />
+              <Icon className="pic" name="basket" />
             </button>
             <button type="button" className="kindy-btn kindy-go" aria-label="Go" disabled={!setup} onClick={() => void go()}>
               <span className="kindy-go-arrow" aria-hidden="true" />
@@ -388,15 +392,17 @@ export function KindyGame(props: {
       {partying && (
         <div className="kindy-party" role="dialog" aria-label="Everyone is fed">
           <div className="kindy-confetti" aria-hidden="true">
-            {CONFETTI.map((glyph, i) => (
-              <Pic key={i} glyph={glyph} style={{ ['--i' as string]: i }} />
+            {CONFETTI.map((piece, i) => (
+              <span key={i} className="pic confetti" style={{ ['--i' as string]: i }}>
+                {piece.snack !== undefined ? <SnackArt snack={piece.snack} /> : <Icon name={piece.icon!} />}
+              </span>
             ))}
           </div>
-          <Pic className="kindy-party-star" glyph="🏆" />
+          <Icon className="pic kindy-party-star" name="trophy" />
           <ol className="kindy-party-kids" aria-hidden="true">
             {fedSlots(view).map((_, i) => (
               <li key={i} style={{ ['--i' as string]: i }}>
-                <Pic glyph="😋" />
+                <KidHead className="pic" id={i + 1} mood="yum" />
               </li>
             ))}
           </ol>
@@ -408,10 +414,10 @@ export function KindyGame(props: {
             ) : (
               <>
                 <button type="button" className="kindy-btn kindy-again" aria-label="Another board" onClick={() => void host.practice()}>
-                  <Pic glyph="🔄" />
+                  <Icon className="pic" name="again" />
                 </button>
                 <button type="button" className="kindy-btn kindy-home" aria-label="Today" onClick={() => void host.daily()}>
-                  <Pic glyph="🏠" />
+                  <Icon className="pic" name="house" />
                 </button>
               </>
             )}
@@ -419,9 +425,29 @@ export function KindyGame(props: {
         </div>
       )}
 
-      <span className="kindy-hand pic" data-pic="👆" data-on="no" ref={handRef} aria-hidden="true" />
+      <span className="kindy-hand" data-on="no" ref={handRef} aria-hidden="true">
+        <Icon name="hand" />
+      </span>
     </section>
   );
 }
 
-const CONFETTI = ['🎉', '⭐', '🍎', '🎈', '🍌', '⭐', '🎉', '🍪', '🎈', '⭐', '🍇', '🎉', '🧀', '⭐', '🥨', '🎈'];
+/** The party's confetti: stars, balloons, poppers and the day's snacks, all drawn (no text, RULES 11). */
+const CONFETTI: readonly { readonly icon?: IconName; readonly snack?: SnackId }[] = [
+  { icon: 'party' },
+  { icon: 'star' },
+  { snack: 'apple' },
+  { icon: 'balloon' },
+  { snack: 'banana' },
+  { icon: 'star' },
+  { icon: 'party' },
+  { snack: 'cookie' },
+  { icon: 'balloon' },
+  { icon: 'star' },
+  { snack: 'grapes' },
+  { icon: 'party' },
+  { snack: 'cheese' },
+  { icon: 'star' },
+  { snack: 'pretzel' },
+  { icon: 'balloon' },
+];

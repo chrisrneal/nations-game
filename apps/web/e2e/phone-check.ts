@@ -295,6 +295,8 @@ async function checkResult(page: Page, wave: number, kids: number): Promise<void
   const fed = (await overlay.locator('[data-row="fed"]').textContent()) ?? '';
   check(`wave ${wave} result: fed, hungry against the allowance, points`, /Fed: [A-Z]/.test(fed) && /Hungry today: 0 of 3/.test(hungry) && points.includes(`+${kids}`), `${fed} | ${hungry} | ${points}`);
   await checkOnScreen(`wave ${wave} result: its button is inside the viewport`, overlay.getByRole('button', { name: /Set up wave/ }));
+  await checkOnScreen(`wave ${wave} result: each row’s picture is inside the viewport`, overlay.locator('.result-rows .row-icon'));
+  await noEmoji(page, `wave ${wave} result`);
 }
 
 /** Every visible element matching is at least `min` px each way (64 px for what a 4-year-old taps). */
@@ -356,7 +358,7 @@ async function playWaveByTaps(page: Page, puzzle: Puzzle, layout: WaveLayout): P
 
 /**
  * Kindy has no text (RULES 11): no visible text node anywhere on the page,
- * and no picture drawn by CSS from `data-pic` that is a letter or a digit.
+ * and no picture that holds text (an SVG `<text>`, `<title>` or `<desc>`).
  */
 async function noText(page: Page, where: string): Promise<void> {
   const r = (await page.evaluate(`(() => {
@@ -370,7 +372,7 @@ async function noText(page: Page, where: string): Promise<void> {
       const style = getComputedStyle(el);
       if (box.width > 0 && box.height > 0 && style.visibility !== 'hidden' && style.display !== 'none') text.push(n.textContent.trim().slice(0, 30));
     }
-    const pics = [...document.querySelectorAll('[data-pic]')].map((e) => e.getAttribute('data-pic')).filter((p) => /[\\p{L}\\p{N}]/u.test(p));
+    const pics = [...document.querySelectorAll('svg text, svg title, svg desc')].map((e) => e.tagName + ': ' + (e.textContent ?? '').slice(0, 20));
     return { text, pics, kindy: document.querySelector('.kindy-game') !== null };
   })()`)) as { text: string[]; pics: string[]; kindy: boolean };
   check(`no text anywhere on the page: ${where}`, r.kindy && r.text.length === 0 && r.pics.length === 0, [...r.text, ...r.pics].join(' | '));
@@ -456,6 +458,46 @@ function wrongThrow(puzzle: Puzzle): { cell: number; facing: number; aimAt: numb
   return null;
 }
 
+/**
+ * Writes down every Web Animation the page starts (K9): what it moves, on
+ * what, and the transforms it goes through, so the check can prove the
+ * replay moves only transform and opacity, and that the calm version has no
+ * arcs, spins or dances. Also counts the flying snacks and kids' faces.
+ */
+const RECORDER = `(() => {
+  window.__anims = [];
+  const animate = Element.prototype.animate;
+  Element.prototype.animate = function (frames, options) {
+    const list = Array.isArray(frames) ? frames : [];
+    window.__anims.push({
+      cls: this.getAttribute('class') || '',
+      props: [...new Set(list.flatMap((f) => Object.keys(f)))],
+      transforms: list.map((f) => f.transform || '').join(' | '),
+    });
+    return animate.call(this, frames, options);
+  };
+})()`;
+
+interface Recorded {
+  cls: string;
+  props: string[];
+  transforms: string;
+}
+const recorded = async (page: Page): Promise<Recorded[]> => (await page.evaluate('window.__anims ?? []')) as Recorded[];
+const resetRecorder = (page: Page): Promise<unknown> => page.evaluate('window.__anims = []');
+
+/** No emoji anywhere on the page (the art replaced them, K9): they look different on every phone. */
+async function noEmoji(page: Page, where: string): Promise<void> {
+  const found = (await page.evaluate(`(() => {
+    const out = [];
+    const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = walk.nextNode())) if (/\\p{Extended_Pictographic}/u.test(n.textContent) && n.parentElement && n.parentElement.getBoundingClientRect().width > 0) out.push(n.textContent.trim().slice(0, 30));
+    return out;
+  })()`)) as string[];
+  check(`no emoji on the page, only the art: ${where}`, found.length === 0, found.join(' | '));
+}
+
 async function openPicker(page: Page): Promise<void> {
   await page.locator('.bar-avatar').tap();
   await page.locator('.picker').waitFor({ timeout: 5000 });
@@ -523,6 +565,7 @@ async function main(): Promise<void> {
       Object.defineProperty(window, 'SpeechSynthesisUtterance', { value: Utterance, configurable: true, writable: true });
       Object.defineProperty(window, 'speechSynthesis', { value: { speak: (u) => window.__spoken.push(u.text), cancel: () => {} }, configurable: true });
     })()`);
+    await page.addInitScript(RECORDER);
     await page.goto(URL);
     await page.locator('.board').waitFor();
     await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
@@ -539,7 +582,7 @@ async function main(): Promise<void> {
     await checkOnScreen('setup: every kid’s card is inside the viewport', page.locator('.clue-chip'));
     await checkOnScreen('setup: every tray button is inside the viewport', page.locator('.tray-btn'));
     const trayText = await page.locator('.tray-btn').allTextContents();
-    const named = trayText.every((t) => /^(Straight|Diagonal|Short|Bouncer|Nurse)×\d+$|^Shop/.test(t.replace(/\s/g, '').replace('🛒', '')));
+    const named = trayText.every((t) => /^(Straight|Diagonal|Short|Bouncer|Nurse)×\d+$|^Shop/.test(t.replace(/\s/g, '')));
     const diagrams = await page.locator('.tray-btn:not(.tray-shop) svg.diagram').count();
     const friendButtons = await page.locator('.tray-btn:not(.tray-shop)').count();
     check('the tray names each friend, draws its pattern and counts what is left, no chess symbols', named && diagrams === friendButtons && !trayText.some((t) => CHESS.test(t)), trayText.join(' | '));
@@ -553,6 +596,18 @@ async function main(): Promise<void> {
 
     const puzzle = generatePuzzle('main', 'daily', DAY, 0);
 
+    // ---- the art (K9): every picture is drawn, and inside the viewport ----
+    const squaresOf = (kind: string): number => puzzle.board.squares.filter((k) => k === kind).length;
+    check('art: every lunchbox shows its snack and its colour’s mark', (await page.locator('.board .sq-lunchbox .art-lunchbox .art-snack').count()) === puzzle.board.lunchboxes.length, `${puzzle.board.lunchboxes.length} lunchboxes`);
+    await checkOnScreen('art: every lunchbox is inside the viewport', page.locator('.board .art-lunchbox'));
+    check('art: every obstacle and parents’ table is drawn', (await page.locator('.board .sq-obstacle .art-obstacle').count()) === squaresOf('obstacle') && (await page.locator('.board .sq-table .art-table').count()) === squaresOf('table'), `${squaresOf('obstacle')} obstacles, ${squaresOf('table')} tables`);
+    await checkOnScreen('art: every kid on the board is drawn, inside the viewport', page.locator('.board .kid .art-kid'));
+    await checkOnScreen('art: each kid’s card shows its clue as pictures, inside the viewport', page.locator('.clue-chip .facts'));
+    await checkOnScreen('art: each kid’s card shows the kid as on the board, inside the viewport', page.locator('.clue-chip .clue-kid .art-kid'));
+    await checkOnScreen('art: the tray shows each friend’s picture, inside the viewport', page.locator('.tray-btn:not(.tray-shop) .art-friend'));
+    await checkOnScreen('art: the top bar’s pictures are inside the viewport', page.locator('.bar .art'));
+    await noEmoji(page, 'setup');
+
     // ---- the clue card: from the board and from the cards above it; it stays open ----
     const kid = puzzle.kids.find((k) => k.wave === 1)!;
     await cellOf(page, kid.cell).tap();
@@ -562,6 +617,12 @@ async function main(): Promise<void> {
     await page.waitForTimeout(3500);
     const stillOpen = await card.isVisible();
     check('the clue card stays open until closed (no auto-hide)', stillOpen);
+    const keyed = await card.locator('.snacks li').count();
+    check('art: the clue card shows each of today’s snacks with a picture for each of its four traits', keyed === puzzle.snacks.length && (await card.locator('.snacks .trait .art').count()) === 4 * keyed && (await card.locator('.snacks .snack-pic').count()) === keyed, `${keyed} snacks`);
+    await checkOnScreen('art: the clue card’s snack pictures are inside the viewport', card.locator('.snacks .snack-pic'));
+    await checkOnScreen('art: the clue card’s trait pictures are inside the viewport', card.locator('.snacks .trait .art'));
+    await checkOnScreen('art: the clue card shows the clue as pictures, inside the viewport', card.locator('.facts.big'));
+    await noEmoji(page, 'the clue card');
     await shot(page, '2-clue-card');
     await card.getByRole('button', { name: 'Got it' }).tap();
     await page.locator('.clue-chip').first().tap();
@@ -596,7 +657,18 @@ async function main(): Promise<void> {
     const lines = await page.locator('.board-preview .throw').count();
     check('every friend shows where its next throw lands (D12)', lines === throwers, `${lines} lines for ${throwers} throwing friend(s)`);
     await touchTargets(page, 'friends placed');
+    await checkOnScreen('art: every friend placed is drawn, inside the viewport', page.locator('.board .friend .art-friend'));
     await shot(page, '4-placed');
+    await resetRecorder(page);
+    await page.evaluate(`(() => {
+      const r = (window.__replay = { snacks: 0, pictured: 0, moods: [] });
+      new MutationObserver((muts) => {
+        for (const m of muts) {
+          for (const n of m.addedNodes) if (n instanceof HTMLElement && n.classList.contains('flying-snack')) { r.snacks++; if (n.querySelector('svg.art-snack')) r.pictured++; }
+          if (m.type === 'attributes' && m.target.dataset.mood) r.moods.push(m.target.dataset.mood);
+        }
+      }).observe(document.querySelector('.board-wrap'), { subtree: true, childList: true, attributes: true, attributeFilter: ['data-mood'] });
+    })()`);
 
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
     await page.locator('.btn-go').tap();
@@ -604,10 +676,29 @@ async function main(): Promise<void> {
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
     check('the wave replay holds 55+ fps with the CPU slowed 4x', fps.frames >= 55, `${fps.frames.toFixed(1)} fps, worst frame ${fps.worst.toFixed(0)} ms`);
     await checkResult(page, 1, puzzle.kids.filter((k) => k.wave === 1).length);
+    const replay = (await page.evaluate('window.__replay')) as { snacks: number; pictured: number; moods: string[] };
+    const pickers = resolveSnacks({ board: puzzle.board, friends: first.friends.map((f, i) => ({ id: i + 1, ...f })), kids: puzzle.kids.filter((k) => k.wave === 1), mode: 'main' }).snacks.length;
+    check('the replay flies every snack as its picture, and a fed kid smiles', replay.snacks === pickers && replay.pictured === pickers && replay.moods.includes('yum'), `${replay.snacks} snacks (${pickers} pickers), faces: ${replay.moods.join(', ')}`);
+    const moved = [...new Set((await recorded(page)).flatMap((a) => a.props))];
+    check('the replay moves only transform and opacity (P7)', moved.length > 0 && moved.every((p) => ['offset', 'transform', 'opacity', 'easing', 'composite'].includes(p)), moved.join(', '));
+    const arcs = (await recorded(page)).filter((a) => a.cls === 'fly-lift' && /translateY\(-[1-9]/.test(a.transforms)).length;
+    check('the snacks arc through the air (they rise above the ground)', arcs > 0, `${arcs} arcing snacks`);
     await shot(page, '5-result');
     await noHorizontalScroll(page, 'result');
     await touchTargets(page, 'result');
     await page.getByRole('button', { name: /Set up wave 2/ }).tap();
+    if ((await page.locator('.tray-shop').count()) > 0) {
+      await page.locator('.tray-shop').tap();
+      const sheet = page.locator('.sheet');
+      await sheet.waitFor();
+      await checkOnScreen('art: the shop shows each friend’s picture, inside the viewport', sheet.locator('.shop-friend .art-friend'));
+      await checkOnScreen('art: the shop’s awning is inside the viewport', sheet.locator('.shop-awning'));
+      await checkOnScreen('art: the shop’s prices are inside the viewport', sheet.locator('.shop .btn'));
+      await touchTargets(page, 'the shop');
+      await noEmoji(page, 'the shop');
+      await shot(page, '5b-shop');
+      await page.locator('.sheet-close').tap();
+    }
 
     // ---- wave 2: Undo and Clear board first ----
     const second = puzzle.witness[1]!;
@@ -763,7 +854,7 @@ async function main(): Promise<void> {
     await page.getByRole('button', { name: 'Today’s puzzle' }).tap();
     await until(page, async () => (await barStats(page)).includes('3/10'));
     const streak0 = (await page.locator('.bar-streak').textContent()) ?? '';
-    check('the top bar shows who is playing and their streak', streak0.includes('🔥 0') && (await page.locator('.bar-avatar .avatar').count()) === 1, streak0);
+    check('the top bar shows who is playing and their streak', streak0.trim() === '0' && (await page.locator('.bar-streak .icon-flame').count()) === 1 && (await page.locator('.bar-avatar .avatar .art-avatar').count()) === 1, streak0);
     await checkOnScreen('the top bar: the player’s picture is inside the viewport', page.locator('.bar-avatar'));
     await checkOnScreen('the top bar: the streak is inside the viewport', page.locator('.bar-streak'));
     await noHorizontalScroll(page, 'the top bar with a picture and a streak');
@@ -831,7 +922,19 @@ async function main(): Promise<void> {
     const kBoard = await kindy.locator('.board').boundingBox();
     check('a Kindy profile opens its own Kindy daily: a 4 x 4 board as wide as the phone', kSquares === 16 && kBoard !== null && kBoard.width >= WIDTH - 40, `${kSquares} squares, ${Math.round(kBoard?.width ?? 0)} px wide`);
     const wantsShown = await kindy.locator('.kid-wants').count();
-    check('the snack each kid wants is a picture over their head', wantsShown === kp.kids.filter((k) => k.wave === 1).length && (await kindy.locator('.kid-wants[data-pic]').count()) === wantsShown);
+    check('the snack each kid wants is a picture over their head', wantsShown === kp.kids.filter((k) => k.wave === 1).length && (await kindy.locator('.kid-wants .art-snack').count()) === wantsShown);
+    await checkOnScreen('Kindy art: the wanted-snack bubble over each kid is inside the viewport', kindy.locator('.kid-wants'));
+    await checkOnScreen('Kindy art: each kid is drawn, inside the viewport', kindy.locator('.board .kid .art-kid'));
+    await checkOnScreen('Kindy art: the friends in the tray are drawn, inside the viewport', kindy.locator('.kindy-friend .art-friend'));
+    await checkOnScreen('Kindy art: every lunchbox is drawn with its snack, inside the viewport', kindy.locator('.board .art-lunchbox'));
+    const bubbleClear = await kindy.locator('.kid-wants').evaluateAll((els) => {
+      const board = document.querySelector('.board')!.getBoundingClientRect();
+      return els.every((el) => {
+        const b = el.getBoundingClientRect();
+        return b.top >= board.top - 0.5 && b.left >= board.left - 0.5 && b.right <= board.right + 0.5;
+      });
+    });
+    check('Kindy art: no wanted-snack bubble is cut off by the edge of the board', bubbleClear);
     for (const part of ['.board', '.kindy-tray', '.kindy-basket', '.kindy-go', '.kindy-ask', '.kindy-avatar', '.kindy-slots']) await checkOnScreen(`Kindy setup: ${part.slice(1)} is inside the viewport`, kindy.locator(part));
     const kGo = await kindy.locator('.kindy-go').boundingBox();
     check('Kindy: the big green Go is in the bottom third', kGo !== null && kGo.y >= (HEIGHT * 2) / 3 && kGo.width >= 80, `top ${Math.round(kGo?.y ?? 0)}, ${Math.round(kGo?.width ?? 0)} px`);
@@ -950,6 +1053,7 @@ async function main(): Promise<void> {
     await tile(page, 'Dog').tap();
     await until(page, async () => (await barStats(page)).includes('3/10'));
     await page.emulateMedia({ reducedMotion: 'reduce' });
+    await resetRecorder(page);
     const rest: string[] = [];
     for (const layout of puzzle.witness.slice(2)) {
       const fed = await playWaveByTaps(page, puzzle, layout);
@@ -957,6 +1061,9 @@ async function main(): Promise<void> {
       if (layout.wave < puzzle.waves) await page.getByRole('button', { name: new RegExp(`Set up wave ${layout.wave + 1}`) }).tap();
     }
     check('waves 3-10 played by taps, every kid fed', rest.every((r) => !r.includes('NOT')), rest.join(', '));
+    const calm = await recorded(page);
+    const lively = calm.filter((a) => (a.cls === 'fly-lift' && /translateY\(-[1-9]|rotate\([1-9]/.test(a.transforms)) || (/\bkid\b|art-friend|sparkle/.test(a.cls) && a.transforms.replace(/none|\s|\|/g, '') !== ''));
+    check('with reduced motion, the calm replay: no arcs, spins, dances, wobbles or sparkles', calm.length > 0 && lively.length === 0, `${calm.length} animations, ${lively.length} lively: ${lively.slice(0, 3).map((a) => a.cls).join(', ')}`);
     await page.getByRole('button', { name: 'See today’s result' }).tap();
     const doneScreen = page.getByRole('region', { name: 'Done for today' });
     await doneScreen.waitFor();
@@ -974,7 +1081,7 @@ async function main(): Promise<void> {
     await checkOnScreen('done for today: practice is inside the viewport', doneScreen.getByRole('button', { name: 'Practice board' }));
     const bonusBox = await bonusBtn.boundingBox();
     check('done for today: its buttons are in the bottom third', bonusBox !== null && bonusBox.y >= (HEIGHT * 2) / 3, `top ${Math.round(bonusBox?.y ?? 0)}`);
-    check('the top bar’s streak is 1', ((await page.locator('.bar-streak').textContent()) ?? '').includes('🔥 1'));
+    check('the top bar’s streak is 1', ((await page.locator('.bar-streak').textContent()) ?? '').trim() === '1');
     await noVerticalScroll(page, 'done for today');
     await noHorizontalScroll(page, 'done for today');
     await touchTargets(page, 'done for today');
@@ -987,7 +1094,7 @@ async function main(): Promise<void> {
     check('reopening a finished daily shows done for today, not the board', (await page.locator('.board').count()) === 0);
     await doneScreen.getByRole('button', { name: 'Practice board' }).tap();
     await page.locator('.bar-title', { hasText: 'Practice' }).waitFor();
-    check('practice is still there after the daily, and keeps the streak', ((await page.locator('.bar-streak').textContent()) ?? '').includes('🔥 1'));
+    check('practice is still there after the daily, and keeps the streak', ((await page.locator('.bar-streak').textContent()) ?? '').trim() === '1');
     await page.emulateMedia({ reducedMotion: null });
 
     await context.setOffline(true);
@@ -1022,7 +1129,7 @@ async function main(): Promise<void> {
       await oldPage.locator('.board').waitFor({ timeout: 10_000 });
       const stats = await barStats(oldPage);
       const oldStreak = (await oldPage.locator('.bar-streak').textContent()) ?? '';
-      check('an old save opens as the first profile, at the same wave, with its finished day', stats.includes('2/10') && (await friendsOnBoard(oldPage)) === first.friends.length && oldStreak.includes('🔥 1'), `${stats}, ${oldStreak}`);
+      check('an old save opens as the first profile, at the same wave, with its finished day', stats.includes('2/10') && (await friendsOnBoard(oldPage)) === first.friends.length && oldStreak.trim() === '1', `${stats}, ${oldStreak}`);
       await old.close();
     } finally {
       rmSync(oldProfile, { recursive: true, force: true });

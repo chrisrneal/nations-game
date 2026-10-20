@@ -1685,3 +1685,76 @@ rule, so no stop):
 **Reversing it.** The Kindy screen is `apps/web/src/ui/KindyGame.tsx` and
 `KindyDone.tsx`; the hint is `packages/sim/src/hint.ts`; the stuck check is
 one line in `generate.ts`.
+
+## K9 - Art and animation: one original SVG style, clues readable without colour, a replay driven by a timeline
+**Status.** Accepted, 2026-10-20, at the owner's request (build step 8: "art
+and animation"). The owner asked for the rules, the roadmap, the spec and
+the decision records to be updated with the change, so this session wrote
+this record and edited ROADMAP.md as in K2, K7 and K8.
+**Decision.**
+- **One style, all in the repo.** Every picture is inline SVG drawn by a
+  React component in `apps/web/src/ui/art/` (snacks, lunchboxes, obstacles,
+  the parents' table, kids, friends, avatars, icons) or CSS (grass, paving,
+  the shop's awning, sparkles). No image files, no third-party art, no
+  emoji in the game's screens, no new dependency. docs/ART.md is the art
+  direction: a friendly schoolyard at lunchtime, one warm brown ink, chunky
+  rounded shapes, flat fills.
+- **Clues are read from the art.** Every trait a clue can point at has a
+  picture (RULES 6). Colour is never the only cue: each snack colour has a
+  mark (triangle, square, star, diamond, leaf) on the lunchbox's tag, in the
+  clue card's snack key and in the clue's pictures; each shirt colour has a
+  pattern. `art.test.ts` takes every colour out of the pictures and fails if
+  two snacks, colour chips, lunchbox tags, shirts, friends, avatars or clue
+  pictures are then the same; the harness checks every colour in the snack
+  pool has a mark.
+- **The View carries each clue's facts** (`KidView.facts`, main mode only)
+  beside its text, so the screen draws the clue as pictures without parsing
+  words. It holds nothing the text didn't already say (S6).
+- **Friends look like game pieces.** Each stands on a round base and wears
+  the hat of its chess piece (a tower, a tipped hat, a crown, a pony hood)
+  with a badge of its throw (a plus, a cross, a ring, an L); the Nurse a cap
+  and heart (no red cross). Hungry kids have no base, so the two never mix.
+- **The replay is a timeline.** `timeline.ts` turns the wave result into
+  numbers: each snack's position and height at each moment (a beat a square,
+  arcs by the thrower's type), and when lids open, friends catch and kids
+  react, heal or walk home. It is pure and tested on hand-made results.
+  `replay.ts` plays it with the Web Animations API on transform and opacity
+  only, cloning the lunchbox's own snack picture to fly; faces change by one
+  attribute write (`data-mood`). React does not render during a wave (P7).
+  With reduced motion the timeline has no arcs or spins and the kids no
+  dances, wobbles, walks or sparkles: a face change and a gentle fade.
+- **Kindy uses the same art** at about 80 px a square, the wanted snack in a
+  bubble inside the kid's square (so the top row's bubble is not cut off),
+  and pictures only. The CSS emoji of K8 (`Pic.tsx`, `data-pic`) are gone;
+  the no-text check now also fails on any SVG `<text>`, `<title>` or
+  `<desc>`, and `art.test.ts` proves no picture holds text.
+- **Checked on every build and on a phone.** `npm test` runs the art and
+  timeline tests. The phone check also proves every picture is inside 360 x
+  740 and showing, that the replay flies every snack as its picture and
+  moves only transform and opacity, that snacks arc, and that the calm
+  version doesn't; and a new visual check compares four screens (main
+  board, Kindy board, shop, result) at 360 x 740 with committed pictures.
+
+**Owner's prompt, as read against the spec** (no conflict with a locked
+rule, so no stop):
+- "docs/snack-attack.md": there is no such file; the locked decisions (L)
+  and D1-D20 are in docs/RULES.md, which this session read as the spec.
+- "A test that fails if two snacks differ only in colour": read as the art.
+  In RULES 4 the apple and the cookie share every trait but colour (both
+  crunchy, sweet and round), by the owner's own table; the test checks the
+  drawings, and the harness checks that such snacks have different
+  outlines, so "Something red" can still be solved without seeing red.
+- "The tray, shop and profile avatars": the shop sheet gets its pictures
+  and an awning; the shop screen itself is build step 9.
+**Why.** The children should see a place, not a spreadsheet, and a
+colour-blind player must be able to solve every board. Drawing in SVG keeps
+the art small, sharp at any size, identical on every phone and testable as
+text. A timeline keeps the replay honest to the sim and testable without a
+browser.
+**Cost.**
+- About 40 KB more to download (12 KB gzipped): the build was 317 KB of JavaScript and CSS and is now 357 KB, against a budget of about 300 KB more.
+- The kids' skin and hair are picked from their id: looks only, never a clue.
+- The visual check, like the phone check, needs a build and a Chromium, so
+  it runs by hand, not in CI.
+**Reversing it.** The pictures are `apps/web/src/ui/art/`; the grey-squares
+screen with emoji is at commit `d205c40`.

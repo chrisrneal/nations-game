@@ -21,6 +21,8 @@ import { Sheet } from './Sheet.tsx';
 import { short } from './format.ts';
 
 const BEAT_MS = 220;
+/** With reduced motion: a little quicker, and no arcs, spins or dances (K9). */
+const CALM_BEAT_MS = 160;
 
 type Selection = { readonly kind: 'tray'; readonly type: FriendType } | { readonly kind: 'friend'; readonly id: number } | null;
 
@@ -99,7 +101,7 @@ export function Game(props: {
   useEffect(() => {
     if (playback === null || overlayRef.current === null || boardRef.current === null) return;
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
-    const r = playWave(overlayRef.current, boardRef.current, playback.before, playback.wave, reduce ? 40 : BEAT_MS);
+    const r = playWave(overlayRef.current, boardRef.current, playback.before, playback.wave, { beatMs: reduce ? CALM_BEAT_MS : BEAT_MS, calm: reduce, healRange: props.healRange });
     let live = true;
     void r.done.then(() => {
       if (!live) return;
@@ -112,7 +114,7 @@ export function Game(props: {
       live = false;
       r.cancel();
     };
-  }, [playback, feedback]);
+  }, [playback, feedback, props.healRange]);
 
   useEffect(() => {
     if (view.phase === 'won') feedback?.cue('win');
@@ -312,7 +314,7 @@ export function Game(props: {
           )}
         </div>
         <button type="button" className="icon-btn" aria-label="Menu" onClick={props.onMenu}>
-          ☰
+          <Icon className="menu-icon" name="menu" />
         </button>
       </header>
 
@@ -356,7 +358,7 @@ export function Game(props: {
                 {view.phase === 'won' && (
                   <div className="day-end" aria-label="Day won">
                     <p>
-                      <strong>🎉 Everyone got a snack today!</strong> {view.fed} kids fed{view.mode === 'main' ? `, ${view.hungry} went home hungry` : ''}.
+                      <Icon className="row-icon" name="party" /> <strong>Everyone got a snack today!</strong> {view.fed} kids fed{view.mode === 'main' ? `, ${view.hungry} went home hungry` : ''}.
                     </p>
                     {view.round === 'daily' ? (
                       <button type="button" className="btn btn-primary btn-wide" onClick={() => setResult(null)}>
@@ -491,12 +493,16 @@ export function Game(props: {
       )}
 
       {shop && (
-        <Sheet title={`Shop · ⭐ ${view.points}`} onClose={() => setShop(false)}>
+        <Sheet title={`Shop · ${view.points} ${view.points === 1 ? 'point' : 'points'}`} onClose={() => setShop(false)}>
+          <div className="shop-awning" aria-hidden="true" />
           <p className="sheet-note">Points come from fed kids. What you buy is yours for today only.</p>
           <ul className="shop">
             {view.shop.map((item) => (
               <li key={item.type}>
-                <PatternDiagram type={item.type} className="shop-diagram" />
+                <span className={`shop-friend t-${item.type}`}>
+                  <FriendArt type={item.type} />
+                  <PatternDiagram type={item.type} className="tray-diagram" />
+                </span>
                 <span className="shop-what">
                   <strong>{FRIEND_NAME[item.type]}</strong>
                   <span className="muted small">{FRIEND_HOW[item.type]}</span>
@@ -512,7 +518,7 @@ export function Game(props: {
                     })
                   }
                 >
-                  ⭐ {item.price}
+                  <Icon className="count-icon" name="star" /> {item.price}
                 </button>
               </li>
             ))}

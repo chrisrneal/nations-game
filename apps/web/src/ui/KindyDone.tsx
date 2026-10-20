@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { GameView, ProfileView } from '@snacks/contracts';
 import type { GameHost } from '../platform/index.ts';
 import { nightGone } from './kindy.ts';
-import { Pic } from './Pic.tsx';
+import { Icon } from './art/Icons.tsx';
+import { KidHead } from './art/Kid.tsx';
 import { weekStrip } from './people.ts';
 
 /** How often the moon moves on: a minute is a hair's breadth on a phone-wide track. */
@@ -38,26 +39,26 @@ export function KindyDone(props: { host: GameHost; view: GameView; profile: Prof
   return (
     <section className="kindy-done" aria-label="Done for today">
       <div className={`kindy-sun${newDay ? ' awake' : ''}`}>
-        <Pic glyph={newDay ? '🌞' : '😴'} label={newDay ? 'The sun is up: a new puzzle' : 'The sun is asleep until tomorrow'} />
+        <Icon className="pic" name={newDay ? 'sun' : 'sleepy-sun'} label={newDay ? 'The sun is up: a new puzzle' : 'The sun is asleep until tomorrow'} />
       </div>
       {!newDay && (
         <div className="kindy-night" ref={night} role="img" aria-label="Time until the next puzzle">
           <span className="kindy-night-sky" aria-hidden="true" />
-          <Pic className="kindy-moon" glyph="🌙" />
-          <Pic className="kindy-sunrise" glyph="🌅" />
+          <Icon className="pic kindy-moon" name="moon" />
+          <Icon className="pic kindy-sunrise" name="sunrise" />
         </div>
       )}
       <ol className="kindy-fed" aria-label="Kids fed today">
         {Array.from({ length: fed }, (_, i) => (
           <li key={i}>
-            <Pic glyph="😋" />
+            <KidHead className="pic" id={i + 1} mood="yum" />
           </li>
         ))}
       </ol>
       <ol className="kindy-week" aria-label="The last seven days">
         {weekStrip(profile.recent, view.day).map((d) => (
           <li key={d.day} className={d.done ? 'on' : ''} aria-label={d.done ? 'finished' : 'not finished'}>
-            {d.done && <Pic glyph="⭐" />}
+            {d.done && <Icon className="pic" name="star" />}
           </li>
         ))}
       </ol>
@@ -68,7 +69,7 @@ export function KindyDone(props: { host: GameHost; view: GameView; profile: Prof
           </button>
         )}
         <button type="button" className="kindy-btn kindy-again" aria-label="Practice board" onClick={() => void host.practice()}>
-          <Pic glyph="🔄" />
+          <Icon className="pic" name="again" />
         </button>
       </div>
     </section>

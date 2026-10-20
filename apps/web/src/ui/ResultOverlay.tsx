@@ -1,6 +1,8 @@
 import type { ReactElement, ReactNode } from 'react';
 import type { WaveResult } from '@snacks/contracts';
-import { SNACK_EMOJI, hungryOf, kidLine, snackEndWords, waveReport } from './labels.ts';
+import { Icon } from './art/Icons.tsx';
+import { SnackArt } from './art/Snack.tsx';
+import { SNACK_NAME, hungryOf, kidLine, snackEndWords, waveReport } from './labels.ts';
 
 /**
  * What a wave did, laid over the board once its replay ends (RULES 7): who
@@ -27,26 +29,26 @@ export function ResultOverlay(props: {
         </h2>
         <ul className="result-rows">
           <li data-row="fed">
-            <span aria-hidden="true">😋</span> Fed: <strong>{names(report.fed)}</strong>
+            <Icon className="row-icon" name="yum" /> Fed: <strong>{names(report.fed)}</strong>
           </li>
           {report.aches.length > 0 && (
             <li data-row="aches">
-              <span aria-hidden="true">🤢</span> Tummy ache: <strong>{names(report.aches)}</strong>
+              <Icon className="row-icon" name="ache" /> Tummy ache: <strong>{names(report.aches)}</strong>
             </li>
           )}
           {report.healed.length > 0 && (
             <li data-row="healed">
-              <span aria-hidden="true">🩹</span> Nurse healed: <strong>{names(report.healed)}</strong> (stays one more wave)
+              <Icon className="row-icon" name="plaster" /> Nurse healed: <strong>{names(report.healed)}</strong> (stays one more wave)
             </li>
           )}
           {props.main && (
             <li data-row="hungry">
-              <span aria-hidden="true">😢</span> Hungry today: <strong>{hungryOf(props.hungry, props.hungryAllowed)}</strong>
+              <Icon className="row-icon" name="sad" /> Hungry today: <strong>{hungryOf(props.hungry, props.hungryAllowed)}</strong>
             </li>
           )}
           {props.main && (
             <li data-row="points">
-              <span aria-hidden="true">⭐</span> Points: <strong>+{report.points}</strong>
+              <Icon className="row-icon" name="star" /> Points: <strong>+{report.points}</strong>
             </li>
           )}
         </ul>
@@ -58,7 +60,7 @@ export function ResultOverlay(props: {
             ))}
             {wave.snacks.map((s, i) => (
               <li key={i}>
-                {SNACK_EMOJI[s.snack]} {snackEndWords(s.end)}
+                <SnackArt className="line-snack" snack={s.snack} /> The {SNACK_NAME[s.snack].toLowerCase()} {snackEndWords(s.end)}
               </li>
             ))}
           </ul>

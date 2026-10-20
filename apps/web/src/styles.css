@@ -607,20 +607,9 @@ h2 {
   height: 94%;
 }
 
-/* Kids react once the snacks land (replay.ts sets data-outcome for a moment). */
-.sq[data-outcome='happy'] .kid {
-  animation: dance 0.45s ease-in-out 2;
-  border-color: var(--accent) !important;
-}
+/* Kids react as their snack lands: replay.ts sets data-mood (the face) and data-outcome for a moment. */
 
-.sq[data-outcome='ache'] .kid {
-  animation: wobble 0.3s ease-in-out 3;
-}
 
-.sq[data-outcome='hungry'] .kid,
-.sq[data-outcome='waits'] .kid {
-  opacity: 0.55;
-}
 
 @keyframes dance {
   0%,
@@ -648,11 +637,53 @@ h2 {
   }
 }
 
+/* The replay (replay.ts, K9): only transform and opacity move. */
 .flying-snack {
   position: absolute;
-  font-size: 1.4rem;
-  transform: translate(-50%, -50%);
-  will-change: left, top, transform, opacity;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  will-change: transform, opacity;
+}
+
+.fly-lift,
+.fly-shadow {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
+.fly-shadow {
+  inset: 70% 12% -6% 12%;
+  border-radius: 50%;
+  background: #4a3428;
+  opacity: 0.3;
+}
+
+.fly-lift .art {
+  filter: none;
+}
+
+/* The Nurse's sparkles: a four-point star drawn by CSS. */
+.sparkle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  background: #ffe36b;
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  will-change: transform, opacity;
+}
+
+/* A lunchbox lid pops open on its hinge. */
+.lunchbox-lid {
+  transform-box: fill-box;
+  transform-origin: 0% 100%;
+}
+
+.friend .art,
+.kid {
+  transform-origin: 50% 90%;
 }
 
 /* Drag and drop (drag.ts): a copy of the friend follows the finger. */
@@ -764,8 +795,65 @@ details summary {
   flex-wrap: wrap;
 }
 
-.snack-emoji {
-  font-size: 1.3rem;
+.snack-pic {
+  width: 40px;
+  height: 40px;
+  flex: none;
+}
+
+/* A snack's four traits in the clue card: a picture and a word each (K9). */
+.traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.trait {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.trait .art {
+  width: 18px;
+  height: 18px;
+}
+
+.facts.big {
+  margin: 2px 0 4px;
+}
+
+.facts.big .art {
+  width: 30px;
+  height: 30px;
+}
+
+.sisters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sisters .art {
+  width: 22px;
+  height: 22px;
+}
+
+/* An icon at the start of a row of words. */
+.row-icon {
+  display: inline-block;
+  width: 1.15em;
+  height: 1.15em;
+  vertical-align: -0.2em;
+}
+
+.line-snack {
+  display: inline-block;
+  width: 1.2em;
+  height: 1.2em;
+  vertical-align: -0.25em;
 }
 
 .snack-what {
@@ -778,9 +866,22 @@ details summary {
   flex-wrap: nowrap;
 }
 
-.shop-diagram {
-  width: 32px;
-  height: 32px;
+.shop-friend {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex: none;
+}
+
+.shop-friend .tray-diagram {
+  position: absolute;
+  right: -4px;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  background: #ffffff;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--friend, #4a3428);
 }
 
 .shop-what {
@@ -1028,6 +1129,12 @@ details summary {
   font-size: 0.85rem;
 }
 
+.install-icon {
+  width: 28px;
+  height: 28px;
+  flex: none;
+}
+
 .install-text {
   flex: 1;
 }
@@ -1044,12 +1151,6 @@ details summary {
   color: #ffffff;
   text-align: center;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sq[data-outcome] .kid {
-    animation: none;
-  }
 }
 
 .help-friends {
@@ -1305,9 +1406,9 @@ details summary {
 }
 
 .done-big {
-  font-size: 3rem;
-  margin: 0;
-  line-height: 1.1;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto;
 }
 
 .done-title {
@@ -1346,9 +1447,13 @@ details summary {
 }
 
 .week li.week-done {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
+  background: #fff3c4;
+  border-color: #e0a83a;
+}
+
+.week li .art {
+  width: 22px;
+  height: 22px;
 }
 
 .done-next {
@@ -1371,9 +1476,13 @@ details summary {
 }
 
 /* ---- pictures drawn by CSS (Pic.tsx): no text on the page for them ---- */
+/* A picture sized by font-size, like the emoji it replaced: 1em square. */
 .pic {
   display: inline-block;
+  width: 1em;
+  height: 1em;
   line-height: 1;
+  flex: none;
 }
 
 .pic::before,
@@ -1476,10 +1585,11 @@ details summary {
   font-size: 2.4rem;
 }
 
+/* Kindy: the kid in the lower part of the square, their bubble in the upper part, so the top row's bubble stays on the board. */
 .kindy .kid {
-  width: 76%;
-  height: 76%;
-  margin-top: 18%;
+  width: 66%;
+  height: 66%;
+  margin-top: 34%;
   overflow: visible;
 }
 
@@ -1491,10 +1601,11 @@ details summary {
 
 /* The snack a Kindy kid wants: a picture in a bubble over their head. */
 /* The snack a Kindy kid wants: a picture in a bubble over their head. */
+/* The snack a Kindy kid wants: a picture in a bubble over their head. */
 .kindy .kid-wants {
-  top: -46%;
-  width: 66%;
-  height: 66%;
+  top: -50%;
+  width: 64%;
+  height: 64%;
   border-width: 3px;
   box-shadow: 0 2px 0 #4a3428;
 }
@@ -1577,6 +1688,11 @@ details summary {
   border-color: #2f6fd6;
 }
 
+.kindy-friend .art {
+  width: 86%;
+  height: 86%;
+}
+
 .kindy-friend.on {
   background: #dbe6ff;
   box-shadow: 0 0 0 4px #2563eb;
@@ -1619,7 +1735,8 @@ details summary {
   left: 0;
   top: 0;
   z-index: 20;
-  font-size: 3.2rem;
+  width: 3.2rem;
+  height: 3.2rem;
   pointer-events: none;
   filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.35));
   opacity: 0;
@@ -1670,13 +1787,7 @@ details summary {
 }
 
 /* Kindy kids react: a happy dance, or a head shake when a wrong snack bounces off. */
-.kindy .sq[data-outcome='happy'] .kid {
-  animation: dance 0.4s ease-in-out 3;
-}
 
-.sq[data-outcome='shake'] .kid {
-  animation: shake 0.22s ease-in-out 4;
-}
 
 @keyframes shake {
   0%,
@@ -1814,11 +1925,9 @@ details summary {
 .kindy-sun {
   width: 150px;
   height: 150px;
-  border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 5rem;
-  background: radial-gradient(circle, #ffe27a 55%, #ffd23f 56%, #ffd23f 62%, transparent 63%), repeating-conic-gradient(#ffd23f 0 8deg, transparent 8deg 22deg);
+  font-size: 140px;
   animation: breathe 4s ease-in-out infinite;
 }
 
@@ -1935,4 +2044,20 @@ details summary {
 .sq-alt {
   --grass: #9ccf63;
   --path: #f0d59d;
+}
+
+/* The shop sheet is a little playground stall: a striped awning on top. */
+.shop-awning {
+  height: 16px;
+  margin: -4px -2px 6px;
+  border-radius: 0 0 10px 10px;
+  border: 2px solid #4a3428;
+  border-top: 0;
+  background: repeating-linear-gradient(90deg, #ef6f6c 0 20px, #ffffff 20px 40px);
+}
+
+.menu-icon {
+  width: 26px;
+  height: 26px;
+  margin: 0 auto;
 }

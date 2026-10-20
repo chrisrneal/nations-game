@@ -131,6 +131,16 @@ most one logic step. Clue kinds:
 | Same as | "Same as the kid in the hat" | the kid in the hat is pinned by their own card |
 | Not their sister's | "Something soft, not their sister's" | together with the trait, leaves one |
 
+**Read from the art (K9, docs/ART.md):** every trait a clue can point at
+can be seen in the pictures, and colour is never the only cue. Each snack
+colour carries its own mark (red a triangle, brown a square, yellow a star,
+orange a diamond, green a leaf) on the lunchbox's tag, in the card's snack
+key and in the clue's own pictures; crunchy, soft, sweet, salty, round, long
+and twisty each have a picture; each of the six shirt colours has its own
+pattern, so sisters match by pattern too; the hat, the glasses and the
+backpack are drawn big enough to see on a phone. No two snacks, shirts or
+friends differ only in colour (a test, `art.test.ts`).
+
 **One-step rule:** a card may point at another kid only if that kid's own card
 pins their snack directly. The **clue checker** (`clues.ts`) proves that every
 kid has exactly one possible snack, using only today's snacks and the cards
@@ -144,6 +154,17 @@ head, and appears **only** in Kindy mode (L).
 Once Go is pressed the player can't change anything. The wave is resolved in
 full the moment Go is pressed (`resolve.ts`), and the screen then replays the
 result. Nothing random happens anywhere in resolution (L).
+
+**The replay (K9)** shows exactly that result, a beat (220 ms) per square:
+each snack leaves its lunchbox (the lid pops), reaches its picker after one
+beat and flies its real route, arcing as its thrower throws (low for a
+line, a hop for a Short, high for a Bouncer's jump); a friend bobs as it
+catches and passes; a kid reacts when the first snack reaches them (a happy
+dance, a tummy-ache wobble, or in Kindy a head shake as a wrong snack
+bounces off); then fed kids go home happy down the path, the Nurse sends
+sparkles to a kid it heals, and a hungry kid walks home sad (to the parents'
+table after a tummy ache). With reduced motion the snacks glide without
+arcs or spins and the kids only change face.
 
 1. **Pickups:** every picker takes one snack.
 2. **Flight:** each snack is followed square by square under section 5 until
@@ -218,9 +239,10 @@ result. Nothing random happens anywhere in resolution (L).
 How the player gives the commands above on a phone. None of this changes a
 rule: every action is a place, turn or toTray command, checked by the sim.
 
-- **Placing:** tap a friend in the tray, then a grey square; or drag it from
-  the tray onto the square. Each tray button shows the friend's name, a small
-  diagram of its throw pattern and how many are left.
+- **Placing:** tap a friend in the tray, then a grass square; or drag it from
+  the tray onto the square. Each tray button shows the friend's picture
+  (its hat and badge hint at its pattern, K9), its name, a small diagram of
+  its throw pattern and how many are left.
 - **Moving:** drag a placed friend to another square, or select it, tap Move
   and tap a square. Dragging it off the board (or tapping To tray) puts it
   back in the tray. Drag is never the only way to do anything.
@@ -239,7 +261,8 @@ rule: every action is a place, turn or toTray command, checked by the sim.
   setup began stay. Neither can reach past Go: what a played wave did, points
   spent in the shop and earlier waves stay as they are.
 - **Clues:** each kid on the board wears a letter badge, and its card is shown
-  above the board (in a shorter form when 3 or 4 kids are on the board).
+  above the board, in words and pictures (in a shorter form when 3 or 4 kids
+  are on the board).
   Tapping the kid or its card opens the full card with today's snacks; it
   stays open until closed.
 - **After a wave**, a card over the board lists who was fed, who got a tummy
@@ -368,7 +391,8 @@ None of this changes a rule: every action is a place, turn or toTray
 command, or Go, checked by the sim.
 
 - **No text at all** from the child's picture to the end of the day: every
-  picture is drawn by CSS, so there is not one letter or digit on the page.
+  picture is drawn as SVG with no text in it (K9), so there is not one
+  letter or digit on the page.
   Words exist only as the spoken hints and as labels for screen readers.
   Parent words live behind the grown-ups' menu (section 12).
 - **The screen:** the child's picture (back to the picker), a row of five

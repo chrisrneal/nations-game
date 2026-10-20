@@ -31,7 +31,8 @@ export type IconName =
   | 'party'
   | 'sparkle'
   | 'heart'
-  | 'phone';
+  | 'phone'
+  | 'menu';
 
 const STAR = 'M12 2.2 L14.6 8.4 L21.3 8.9 L16.2 13.2 L17.8 19.8 L12 16.3 L6.2 19.8 L7.8 13.2 L2.7 8.9 L9.4 8.4 Z';
 
@@ -149,6 +150,7 @@ const DRAW: Readonly<Record<IconName, () => ReactElement>> = {
   ),
   sparkle: () => <path d="M12 1.5 Q13 11 22.5 12 Q13 13 12 22.5 Q11 13 1.5 12 Q11 11 12 1.5 Z" fill="#ffe36b" strokeWidth={1.2} />,
   heart: () => <path d="M12 20.5 C2.5 14 3.5 6 8 5.5 C10 5.3 11.5 6.8 12 8 C12.5 6.8 14 5.3 16 5.5 C20.5 6 21.5 14 12 20.5 Z" fill="#ff7fa8" />,
+  menu: () => <path d="M4 6.5 H20 M4 12 H20 M4 17.5 H20" fill="none" strokeWidth={2.4} />,
   phone: () => (
     <>
       <rect x={6} y={2} width={12} height={20} rx={3} fill="#ffffff" />
