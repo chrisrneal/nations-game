@@ -1,25 +1,40 @@
 /**
  * The phone check (docs/ROADMAP.md, phone UX budget), in headless Chromium
- * sized as a 360 px phone with touch. Builds nothing: run `npm run build`
+ * sized as a 360 x 740 phone with touch. Builds nothing: run `npm run build`
  * first, then `npm run e2e --workspace web`. Not in CI (it needs a Chromium
  * binary); results are recorded in docs/PROGRESS.md. `SHOTS=dir` saves
- * screenshots there.
+ * screenshots there. `DAY=n` plays day n's daily (days since 1970-01-01)
+ * instead of today's, by fixing the page's clock.
  *
- * Checks (K1, the grey-squares build): installable; opens on today's daily
- * with the whole board on screen; no horizontal scroll at 360 px and every
- * button at least 44 px; Go in the bottom third; wave 1 played by taps alone
- * (the solver's setup for today, worked out here in Node from the same day
- * number) feeds every kid; the replay holds 60 fps with the CPU slowed 4x;
- * reopening continues at wave 2; a new practice board is generated in under
- * a second with the CPU slowed 4x; it reopens offline.
+ * Checks (K1, the controls pass K6):
+ * - installable; opens on today's daily;
+ * - during setup the board, the kids' cards, the tray (named, with a diagram,
+ *   no chess symbols), Go and the selected friend's controls are all inside
+ *   the 360 x 740 viewport together, not covered, and nothing scrolls;
+ * - no horizontal scroll and every button at least 44 px;
+ * - wave 1 is set up by taps alone (tray, square, then a tap on a lit square
+ *   to aim), using the solver's setup for today worked out here in Node from
+ *   the same day number, and feeds every kid;
+ * - every friend shows where its next throw lands (D12);
+ * - a kid's clue card opens from the board and from the cards above it, and
+ *   stays open until closed;
+ * - the replay holds 60 fps with the CPU slowed 4x; the result lies over the
+ *   board, inside the viewport, with fed, hungry against the allowance and
+ *   points;
+ * - wave 2: Undo and Clear board (with its confirm step), then the setup made
+ *   by touch drags alone (tray to square, square to square, off the board to
+ *   the tray), aimed by taps, and it feeds every kid;
+ * - reopening continues at wave 3; a practice board is generated in under a
+ *   second with the CPU slowed 4x; it reopens offline.
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { chromium, type Page } from 'playwright-core';
+import { chromium, type CDPSession, type Locator, type Page } from 'playwright-core';
+import type { FriendType, PlacedFriend, Puzzle } from '@snacks/contracts';
 import { generatePuzzle } from '@snacks/sim';
-import { FRIEND_NAME, facingAngle } from '../src/ui/labels.ts';
+import { FRIEND_NAME, facingAngle, stepOf } from '../src/ui/labels.ts';
 
 const PORT = 4179;
 const URL = `http://localhost:${PORT}/`;
@@ -28,6 +43,8 @@ const PHONE = process.env.PHONE === 'pixel10xl' ? { width: 412, height: 915, dpr
 const WIDTH = PHONE.width;
 const HEIGHT = PHONE.height;
 const SHOTS = process.env.SHOTS;
+const DAY = process.env.DAY === undefined ? Math.floor(Date.now() / 86_400_000) : Number(process.env.DAY);
+const CHESS = /[♔-♟]/;
 
 function chromiumPath(): string {
   const candidates = [process.env.CHROMIUM, '/opt/pw-browsers/chromium', '/usr/bin/chromium', '/usr/bin/google-chrome'];
@@ -64,6 +81,19 @@ async function noHorizontalScroll(page: Page, where: string): Promise<void> {
   check(`no horizontal scroll: ${where}`, width <= WIDTH, `scrollWidth ${width}`);
 }
 
+/** Nothing on the page scrolls vertically: everything for setup is on one screen. */
+async function noVerticalScroll(page: Page, where: string): Promise<void> {
+  const r = (await page.evaluate(`(() => {
+    const doc = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+    const scrollers = [...document.querySelectorAll('*')].filter((el) => {
+      const s = getComputedStyle(el);
+      return /(auto|scroll)/.test(s.overflowY) && el.scrollHeight > el.clientHeight + 1 && el.getBoundingClientRect().height > 0;
+    }).map((el) => el.className);
+    return { doc, scrollers };
+  })()`)) as { doc: number; scrollers: string[] };
+  check(`nothing to scroll: ${where}`, r.doc <= HEIGHT && r.scrollers.length === 0, `page ${r.doc} px${r.scrollers.length > 0 ? `, scrolls: ${r.scrollers.join(', ')}` : ''}`);
+}
+
 /** Every visible button is at least 44 x 44 px. */
 async function touchTargets(page: Page, where: string): Promise<void> {
   const small = (await page.evaluate(`[...document.querySelectorAll('button')]
@@ -74,17 +104,159 @@ async function touchTargets(page: Page, where: string): Promise<void> {
   check(`touch targets at least 44 px: ${where}`, small.length === 0, small.join('; '));
 }
 
+/**
+ * The element is wholly inside the viewport and actually showing there: the
+ * topmost element at its centre is it or inside it (not covered, not
+ * clipped away, not scrolled off).
+ */
+async function onScreen(locator: Locator): Promise<{ ok: boolean; detail: string }> {
+  const count = await locator.count();
+  if (count === 0) return { ok: false, detail: 'not found' };
+  const details: string[] = [];
+  let ok = true;
+  for (let i = 0; i < count; i++) {
+    const r = await locator.nth(i).evaluate((el, [w, h]) => {
+      const b = el.getBoundingClientRect();
+      const inside = b.width > 0 && b.height > 0 && b.left >= -0.5 && b.top >= -0.5 && b.right <= w + 0.5 && b.bottom <= h + 0.5;
+      const top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+      const showing = top !== null && (top === el || el.contains(top));
+      return { inside, showing, box: `${Math.round(b.left)},${Math.round(b.top)} ${Math.round(b.width)}x${Math.round(b.height)}` };
+    }, [WIDTH, HEIGHT] as const);
+    ok &&= r.inside && r.showing;
+    details.push(`${r.box}${r.inside ? '' : ' OUTSIDE'}${r.showing ? '' : ' COVERED'}`);
+  }
+  return { ok, detail: details.join('; ') };
+}
+
+async function checkOnScreen(name: string, locator: Locator): Promise<boolean> {
+  const r = await onScreen(locator);
+  check(name, r.ok, r.detail);
+  return r.ok;
+}
+
 async function shot(page: Page, name: string): Promise<void> {
   if (SHOTS === undefined) return;
   mkdirSync(SHOTS, { recursive: true });
   await page.screenshot({ path: join(SHOTS, `${name}.png`) });
 }
 
+/** Polls until `test` holds (the host answers asynchronously), up to about 2 s. */
+async function until(page: Page, test: () => Promise<boolean>): Promise<boolean> {
+  for (let i = 0; i < 100; i++) {
+    if (await test()) return true;
+    await page.waitForTimeout(20);
+  }
+  return false;
+}
+
+const cellOf = (page: Page, cell: number): Locator => page.locator(`.board [data-cell="${cell}"]`);
+
 /** The arrow's rotation on the friend in a square, in degrees. */
 async function arrowAngle(page: Page, cell: number): Promise<number | null> {
-  const style = await page.locator(`[data-cell="${cell}"] .friend-arrow`).getAttribute('style');
-  const m = /rotate\((-?\d+)deg\)/.exec(style ?? '');
+  const arrow = cellOf(page, cell).locator('.friend-arrow');
+  if ((await arrow.count()) === 0) return null;
+  const m = /rotate\((-?\d+)deg\)/.exec((await arrow.getAttribute('style')) ?? '');
   return m === null ? null : Number(m[1]);
+}
+
+const hasFriend = async (page: Page, cell: number): Promise<boolean> => (await cellOf(page, cell).locator('.friend').count()) > 0;
+const friendsOnBoard = (page: Page): Promise<number> => page.locator('.board .friend').count();
+
+async function centre(locator: Locator): Promise<{ x: number; y: number }> {
+  const b = await locator.boundingBox();
+  if (b === null) throw new Error('no box to drag from or to');
+  return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+}
+
+/** A real touch drag (touch pointer events), finger down on `from`, moved in steps, lifted over `to`. */
+async function touchDrag(cdp: CDPSession, from: Locator, to: Locator): Promise<void> {
+  const a = await centre(from);
+  const b = await centre(to);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: a.x, y: a.y }] });
+  for (let i = 1; i <= 10; i++) {
+    const t = i / 10;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }] });
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+}
+
+const trayButton = (page: Page, type: FriendType): Locator => page.getByRole('button', { name: new RegExp(`^${FRIEND_NAME[type]}, \\d+ left`) });
+
+async function deselect(page: Page): Promise<void> {
+  const done = page.getByRole('button', { name: 'Done' });
+  if ((await done.count()) > 0) await done.tap();
+}
+
+/** The square a tap aims a friend with this facing at: the first square of its throw. Null when that is off the board. */
+function aimCell(puzzle: Puzzle, friend: PlacedFriend): number | null {
+  const { width, height } = puzzle.board;
+  const [dx, dy] = stepOf(friend.type, friend.facing);
+  const x = (friend.cell % width) + dx;
+  const y = Math.floor(friend.cell / width) + dy;
+  return x >= 0 && y >= 0 && x < width && y < height ? y * width + x : null;
+}
+
+/**
+ * Aims the friend standing on `friend.cell` by tap-to-aim: select it, check its
+ * lit squares, tap the one its facing points at. Falls back to the small turn
+ * button only for a facing no square stands for. Returns how it was aimed.
+ */
+async function aimByTap(page: Page, puzzle: Puzzle, friend: PlacedFriend): Promise<'tap' | 'turn' | 'nurse' | 'failed'> {
+  await deselect(page);
+  await cellOf(page, friend.cell).tap();
+  if (friend.type === 'nurse') {
+    const heals = await page.locator('.board .sq-heal').count();
+    await deselect(page);
+    return heals > 0 ? 'nurse' : 'failed';
+  }
+  const want = facingAngle(friend.type, friend.facing);
+  const target = aimCell(puzzle, friend);
+  let how: 'tap' | 'turn' = 'tap';
+  if (target !== null) {
+    if ((await cellOf(page, target).getAttribute('class'))?.includes('sq-aimable') !== true) return 'failed';
+    await cellOf(page, target).tap();
+  } else {
+    how = 'turn';
+    for (let i = 0; i < 8 && (await arrowAngle(page, friend.cell)) !== want; i++) {
+      const before = await arrowAngle(page, friend.cell);
+      await page.getByRole('button', { name: 'Turn right' }).tap();
+      await until(page, async () => (await arrowAngle(page, friend.cell)) !== before);
+    }
+  }
+  const ok = await until(page, async () => (await arrowAngle(page, friend.cell)) === want);
+  await deselect(page);
+  return ok ? how : 'failed';
+}
+
+/** Buys what the witness buys before this wave, through the shop sheet. */
+async function buy(page: Page, types: readonly FriendType[]): Promise<boolean> {
+  if (types.length === 0) return true;
+  await page.locator('.tray-shop').tap();
+  for (const type of types) {
+    const before = (await page.locator('.sheet-title').textContent()) ?? '';
+    await page.getByRole('button', { name: new RegExp(`^Buy a ${FRIEND_NAME[type]} for`) }).tap();
+    if (!(await until(page, async () => ((await page.locator('.sheet-title').textContent()) ?? '') !== before))) return false;
+  }
+  await page.locator('.sheet-close').tap();
+  return true;
+}
+
+/** Waits for the result over the board and checks it. */
+async function checkResult(page: Page, wave: number, kids: number): Promise<void> {
+  const overlay = page.getByRole('region', { name: 'What happened' });
+  await overlay.waitFor({ timeout: 15_000 });
+  const title = (await overlay.locator('h2').textContent()) ?? '';
+  check(`wave ${wave} feeds every kid`, title.includes(`${kids} of ${kids} fed`), title);
+  await checkOnScreen(`wave ${wave} result: the overlay is inside the viewport`, overlay.locator('.result-card'));
+  const board = await page.locator('.board').boundingBox();
+  const card = await overlay.locator('.result-card').boundingBox();
+  const over = board !== null && card !== null && card.x < board.x + board.width && card.x + card.width > board.x && card.y < board.y + board.height && card.y + card.height > board.y;
+  check(`wave ${wave} result: it lies over the board`, over);
+  const hungry = (await overlay.locator('[data-row="hungry"]').textContent()) ?? '';
+  const points = (await overlay.locator('[data-row="points"]').textContent()) ?? '';
+  const fed = (await overlay.locator('[data-row="fed"]').textContent()) ?? '';
+  check(`wave ${wave} result: fed, hungry against the allowance, points`, /Fed: [A-Z]/.test(fed) && /Hungry today: 0 of 3/.test(hungry) && points.includes(`+${kids}`), `${fed} | ${hungry} | ${points}`);
+  await checkOnScreen(`wave ${wave} result: its button is inside the viewport`, overlay.getByRole('button', { name: /Set up wave/ }));
 }
 
 async function main(): Promise<void> {
@@ -101,6 +273,8 @@ async function main(): Promise<void> {
       timezoneId: 'UTC',
     });
     const page = context.pages()[0] ?? (await context.newPage());
+    // Midday on the day being checked; timers keep running.
+    if (process.env.DAY !== undefined) await page.clock.setFixedTime(DAY * 86_400_000 + 43_200_000);
     await page.goto(URL);
     await page.locator('.board').waitFor();
     await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
@@ -111,61 +285,216 @@ async function main(): Promise<void> {
 
     const squares = await page.locator('.board .sq').count();
     check('opens on today’s daily: a 6 x 8 board', squares === 48 && (await page.locator('.bar-title').textContent())?.includes('Today') === true, `${squares} squares`);
-    const boardBox = await page.locator('.board').boundingBox();
-    check('the whole board fits the screen width', boardBox !== null && boardBox.x >= 0 && boardBox.x + boardBox.width <= WIDTH, JSON.stringify(boardBox));
-    const tray = await page.getByRole('group', { name: 'Tray' }).boundingBox();
-    check('the tray is on screen, in the bottom third', tray !== null && tray.y >= HEIGHT / 2 && tray.y + tray.height <= HEIGHT, `top ${Math.round(tray?.y ?? 0)}`);
+
+    // ---- one screen for setup ----
+    await checkOnScreen('setup: the whole board is inside the viewport', page.locator('.board'));
+    await checkOnScreen('setup: every kid’s card is inside the viewport', page.locator('.clue-chip'));
+    await checkOnScreen('setup: every tray button is inside the viewport', page.locator('.tray-btn'));
+    const trayText = await page.locator('.tray-btn').allTextContents();
+    const named = trayText.every((t) => /^(Straight|Diagonal|Short|Bouncer|Nurse)×\d+$|^Shop/.test(t.replace(/\s/g, '').replace('🛒', '')));
+    const diagrams = await page.locator('.tray-btn:not(.tray-shop) svg.diagram').count();
+    const friendButtons = await page.locator('.tray-btn:not(.tray-shop)').count();
+    check('the tray names each friend, draws its pattern and counts what is left, no chess symbols', named && diagrams === friendButtons && !trayText.some((t) => CHESS.test(t)), trayText.join(' | '));
     const go = await page.locator('.btn-go').boundingBox();
     check('Go is on screen, in the bottom third', go !== null && go.y >= (HEIGHT * 2) / 3 && go.y + go.height <= HEIGHT, `top ${Math.round(go?.y ?? 0)} of ${HEIGHT}`);
+    await checkOnScreen('setup: Go is inside the viewport', page.locator('.btn-go'));
     await noHorizontalScroll(page, 'setup');
+    await noVerticalScroll(page, 'setup');
     await touchTargets(page, 'setup');
     await shot(page, '1-setup');
 
-    // Today's wave 1, set up by taps alone: the solver's setup for the same day number.
-    const day = Math.floor(Date.now() / 86_400_000);
-    const puzzle = generatePuzzle('main', 'daily', day, 0);
-    const layout = puzzle.witness[0]!;
+    const puzzle = generatePuzzle('main', 'daily', DAY, 0);
+
+    // ---- the clue card: from the board and from the cards above it; it stays open ----
+    const kid = puzzle.kids.find((k) => k.wave === 1)!;
+    await cellOf(page, kid.cell).tap();
+    const card = page.getByRole('dialog', { name: 'Clue card' });
+    await card.waitFor({ timeout: 2000 });
+    await checkOnScreen('tapping a kid opens their clue card, inside the viewport', card);
+    await page.waitForTimeout(3500);
+    const stillOpen = await card.isVisible();
+    check('the clue card stays open until closed (no auto-hide)', stillOpen);
+    await shot(page, '2-clue-card');
+    await card.getByRole('button', { name: 'Got it' }).tap();
+    await page.locator('.clue-chip').first().tap();
+    const fromChip = await card.isVisible();
+    await card.getByRole('button', { name: 'Close' }).tap();
+    check('the card above the board opens the same clue card, and closes when asked', fromChip && (await card.count()) === 0);
+
+    // ---- wave 1: placed by taps, aimed by tapping a lit square ----
+    const first = puzzle.witness[0]!;
     let placedOk = true;
-    for (const friend of layout.friends) {
-      await page.getByRole('button', { name: new RegExp(`^${FRIEND_NAME[friend.type]}, \\d+ in the tray`) }).tap();
-      await page.locator(`[data-cell="${friend.cell}"]`).tap();
-      await page.locator(`[data-cell="${friend.cell}"] .friend`).waitFor();
-      const want = facingAngle(friend.type, friend.facing);
-      for (let i = 0; i < 8; i++) {
-        const before = await arrowAngle(page, friend.cell);
-        if (before === want || friend.type === 'nurse') break;
-        await page.getByRole('button', { name: 'Turn right' }).tap();
-        // Wait for the turn to reach the screen before deciding whether to turn again.
-        for (let t = 0; t < 50 && (await arrowAngle(page, friend.cell)) === before; t++) await page.waitForTimeout(20);
+    const aimed: string[] = [];
+    let together = false;
+    for (const friend of first.friends) {
+      await trayButton(page, friend.type).tap();
+      await cellOf(page, friend.cell).tap();
+      placedOk &&= await until(page, () => hasFriend(page, friend.cell));
+      if (!together) {
+        // A friend is selected: board, tray, Go and its controls all on screen at once.
+        const parts = await Promise.all([onScreen(page.locator('.board')), onScreen(page.locator('.tray')), onScreen(page.locator('.btn-go')), onScreen(page.getByRole('button', { name: 'To tray' })), onScreen(page.getByRole('button', { name: 'Move' }))]);
+        check('with a friend selected, the board, tray, Go and its controls are all inside the viewport', parts.every((p) => p.ok), parts.map((p) => p.detail).join(' / '));
+        const lit = await page.locator('.board .sq-aimable').count();
+        check('a selected friend lights the squares it can throw to', friend.type === 'nurse' ? (await page.locator('.board .sq-heal').count()) > 0 : lit > 0, `${lit} squares`);
+        await noVerticalScroll(page, 'a friend selected');
+        await shot(page, '3-aiming');
+        together = true;
       }
-      placedOk &&= (await arrowAngle(page, friend.cell)) === want;
-      await page.getByRole('button', { name: 'Done' }).tap();
+      aimed.push(await aimByTap(page, puzzle, friend));
     }
-    check('friends are placed and turned by taps', placedOk, `${layout.friends.length} friend(s)`);
-    await shot(page, '2-placed');
+    check('wave 1: friends placed from the tray by taps', placedOk, `${first.friends.length} friend(s)`);
+    check('wave 1: every friend aimed by tapping a lit square', aimed.every((a) => a === 'tap' || a === 'nurse' || a === 'turn') && aimed.includes('tap'), aimed.join(', '));
+    const throwers = first.friends.filter((f) => f.type !== 'nurse').length;
+    const lines = await page.locator('.board-preview .throw').count();
+    check('every friend shows where its next throw lands (D12)', lines === throwers, `${lines} lines for ${throwers} throwing friend(s)`);
     await touchTargets(page, 'friends placed');
+    await shot(page, '4-placed');
 
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
     await page.locator('.btn-go').tap();
     const fps = await measureFps(page, 1500);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
     check('the wave replay holds 55+ fps with the CPU slowed 4x', fps.frames >= 55, `${fps.frames.toFixed(1)} fps, worst frame ${fps.worst.toFixed(0)} ms`);
-    await page.getByRole('region', { name: 'What happened' }).waitFor({ timeout: 15_000 });
-    const summary = (await page.locator('.result h2').textContent()) ?? '';
-    const kids = puzzle.kids.filter((k) => k.wave === 1).length;
-    check('wave 1 feeds every kid', summary.includes(`${kids} of ${kids} fed`), summary);
-    await shot(page, '3-result');
+    await checkResult(page, 1, puzzle.kids.filter((k) => k.wave === 1).length);
+    await shot(page, '5-result');
     await noHorizontalScroll(page, 'result');
     await touchTargets(page, 'result');
+    await page.getByRole('button', { name: /Set up wave 2/ }).tap();
+
+    // ---- wave 2: Undo and Clear board first ----
+    const second = puzzle.witness[1]!;
+    check('wave 2: bought what the plan needs in the shop', await buy(page, second.buys), second.buys.join(', ') || 'nothing to buy');
+    const earlier = await friendsOnBoard(page);
+    const occupied = new Set([...first.friends.map((f) => f.cell), ...second.friends.map((f) => f.cell), ...puzzle.kids.map((k) => k.cell)]);
+    const spare = puzzle.board.squares.map((s, cell) => (s === 'open' && !occupied.has(cell) ? cell : -1)).filter((c) => c >= 0);
+    const undoBtn = page.getByRole('button', { name: /Undo/ });
+    const clearBtn = page.getByRole('button', { name: 'Clear board' });
+    check('Undo and Clear board start empty: earlier waves are locked in', (await undoBtn.isDisabled()) && (await clearBtn.isDisabled()));
+    // Undo an aim change on a friend from wave 1.
+    const old = first.friends.find((f) => f.type !== 'nurse' && aimCell(puzzle, f) !== null);
+    if (old !== undefined) {
+      await cellOf(page, old.cell).tap();
+      const lit = page.locator('.board .sq-aimable');
+      const want = await arrowAngle(page, old.cell);
+      let changed = false;
+      for (let i = 0; i < (await lit.count()) && !changed; i++) {
+        await lit.nth(i).tap();
+        changed = await until(page, async () => (await arrowAngle(page, old.cell)) !== want);
+      }
+      await undoBtn.tap();
+      const back = await until(page, async () => (await arrowAngle(page, old.cell)) === want);
+      check('Undo puts an aim change back', changed && back);
+      await deselect(page);
+    }
+    const inTray = page.locator('.tray-btn:not(.tray-shop):not([disabled])');
+    if ((await inTray.count()) > 0 && spare.length > 0) {
+      await inTray.first().tap();
+      await cellOf(page, spare[0]!).tap();
+      await until(page, () => hasFriend(page, spare[0]!));
+      await undoBtn.tap();
+      const undone = await until(page, async () => !(await hasFriend(page, spare[0]!)));
+      check('Undo sends a friend placed this wave back to the tray', undone);
+      await inTray.first().tap();
+      await cellOf(page, spare[0]!).tap();
+      await until(page, () => hasFriend(page, spare[0]!));
+      await deselect(page);
+      await clearBtn.tap();
+      const confirm = page.getByRole('dialog', { name: 'Clear the board?' });
+      await checkOnScreen('Clear board asks first, inside the viewport', confirm);
+      await confirm.getByRole('button', { name: 'Yes, clear the board' }).tap();
+      const cleared = await until(page, async () => !(await hasFriend(page, spare[0]!)));
+      check('Clear board sends back only this wave’s friends; wave 1’s stay', cleared && (await friendsOnBoard(page)) === earlier, `${await friendsOnBoard(page)} on the board, ${earlier} from wave 1`);
+      await undoBtn.tap();
+      check('Undo brings a cleared board back', await until(page, () => hasFriend(page, spare[0]!)));
+      await clearBtn.tap();
+      await page.getByRole('dialog', { name: 'Clear the board?' }).getByRole('button', { name: 'Yes, clear the board' }).tap();
+      await until(page, async () => !(await hasFriend(page, spare[0]!)));
+    } else {
+      check('Clear board is off when nothing was placed this wave', await clearBtn.isDisabled(), 'the tray is empty');
+    }
+
+    // ---- wave 2: set up by touch drags alone ----
+    const drags = { trayToBoard: 0, boardToBoard: 0, boardToTray: 0 };
+    let dragOk = true;
+    const board = new Map(first.friends.map((f) => [f.cell, f.type] as const));
+    const todo = [...second.friends];
+    const take = (cell: number, type: FriendType): void => {
+      const i = todo.findIndex((f) => f.cell === cell && f.type === type);
+      if (i >= 0) todo.splice(i, 1);
+    };
+    for (const [cell, type] of [...board]) if (todo.some((f) => f.cell === cell && f.type === type)) take(cell, type);
+    const kept = new Set(second.friends.filter((f) => board.get(f.cell) === f.type).map((f) => f.cell));
+    // Move wave 1's friends to where wave 2 wants that type, while those squares are free.
+    for (let moved = true; moved; ) {
+      moved = false;
+      for (const [cell, type] of [...board]) {
+        if (kept.has(cell)) continue;
+        const goal = todo.find((f) => f.type === type && !board.has(f.cell));
+        if (goal === undefined) continue;
+        await touchDrag(cdp, cellOf(page, cell), cellOf(page, goal.cell));
+        dragOk &&= await until(page, async () => (await hasFriend(page, goal.cell)) && !(await hasFriend(page, cell)));
+        board.delete(cell);
+        board.set(goal.cell, type);
+        kept.add(goal.cell);
+        take(goal.cell, type);
+        drags.boardToBoard++;
+        moved = true;
+      }
+    }
+    // The rest of wave 1's friends go off the board, back to the tray.
+    for (const [cell] of [...board]) {
+      if (kept.has(cell)) continue;
+      await touchDrag(cdp, cellOf(page, cell), page.locator('.tray'));
+      dragOk &&= await until(page, async () => !(await hasFriend(page, cell)));
+      board.delete(cell);
+      drags.boardToTray++;
+    }
+    // What is still missing comes from the tray.
+    for (const f of [...todo]) {
+      await touchDrag(cdp, trayButton(page, f.type), cellOf(page, f.cell));
+      dragOk &&= await until(page, () => hasFriend(page, f.cell));
+      board.set(f.cell, f.type);
+      take(f.cell, f.type);
+      drags.trayToBoard++;
+    }
+    // Make sure every kind of drag ran: one friend out to a spare square, off the board, and back from the tray.
+    const probe = second.friends[0]!;
+    const spot = spare.find((c) => !board.has(c));
+    if (spot !== undefined) {
+      await touchDrag(cdp, cellOf(page, probe.cell), cellOf(page, spot));
+      dragOk &&= await until(page, () => hasFriend(page, spot));
+      drags.boardToBoard++;
+      await touchDrag(cdp, cellOf(page, spot), page.locator('.tray'));
+      dragOk &&= await until(page, async () => !(await hasFriend(page, spot)));
+      drags.boardToTray++;
+      await touchDrag(cdp, trayButton(page, probe.type), cellOf(page, probe.cell));
+      dragOk &&= await until(page, () => hasFriend(page, probe.cell));
+      drags.trayToBoard++;
+    }
+    check(
+      'wave 2: set up by drags: tray to square, square to square, off the board to the tray',
+      dragOk && drags.trayToBoard > 0 && drags.boardToBoard > 0 && drags.boardToTray > 0,
+      `${drags.trayToBoard} from the tray, ${drags.boardToBoard} moved, ${drags.boardToTray} sent back`,
+    );
+    const placedRight = (await friendsOnBoard(page)) === second.friends.length && (await Promise.all(second.friends.map((f) => hasFriend(page, f.cell)))).every(Boolean);
+    check('wave 2: the board matches the plan', placedRight, `${await friendsOnBoard(page)} of ${second.friends.length}`);
+    const aimed2: string[] = [];
+    for (const f of second.friends) aimed2.push(await aimByTap(page, puzzle, f));
+    check('wave 2: every friend aimed by tapping a lit square', !aimed2.includes('failed'), aimed2.join(', '));
+    await noVerticalScroll(page, 'wave 2 set up');
+    await shot(page, '6-wave2');
+    await page.locator('.btn-go').tap();
+    await checkResult(page, 2, puzzle.kids.filter((k) => k.wave === 2).length);
+    await shot(page, '7-result2');
 
     await page.reload();
     await page.locator('.board').waitFor();
     const wave = (await page.locator('.bar-stats').textContent()) ?? '';
-    check('reopening continues at wave 2', wave.includes('2/10'), wave);
+    check('reopening continues at wave 3', wave.includes('3/10'), wave);
 
     await page.getByRole('button', { name: 'Menu' }).tap();
     await touchTargets(page, 'menu');
-    await shot(page, '4-menu');
+    await shot(page, '8-menu');
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
     const t0 = Date.now();
     await page.getByRole('button', { name: 'New practice board' }).tap();
@@ -173,11 +502,12 @@ async function main(): Promise<void> {
     const ms = Date.now() - t0;
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
     check('a new practice board is ready in under a second with the CPU slowed 4x', ms < 1000, `${ms} ms`);
+    await noVerticalScroll(page, 'practice board');
 
     await page.getByRole('button', { name: 'Menu' }).tap();
     await page.getByRole('button', { name: 'How to play' }).tap();
     await noHorizontalScroll(page, 'how to play');
-    await shot(page, '5-help');
+    await shot(page, '9-help');
     await page.getByRole('button', { name: 'Close' }).last().tap();
 
     await context.setOffline(true);
