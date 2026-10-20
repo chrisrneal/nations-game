@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react';
-import type { FriendType, GameCommand, GameView, WaveResult } from '@snacks/contracts';
+import type { FriendType, GameCommand, GameView, ProfileView, WaveResult } from '@snacks/contracts';
 import type { Feedback, GameHost } from '../platform/index.ts';
 import { aimSquares, healSquares } from './aim.ts';
+import { Avatar } from './Avatar.tsx';
 import { Board } from './Board.tsx';
 import { ClueCard } from './ClueCard.tsx';
 import { PatternDiagram } from './Diagram.tsx';
+import { DoneToday } from './DoneToday.tsx';
 import { DragController, type DragSource } from './drag.ts';
 import { clearPlan, undoFor, type UndoStep } from './history.ts';
 import { FRIEND_HOW, FRIEND_NAME, FRIEND_ORDER, SHIRTS, kidBadges, kidLetter, shortClue } from './labels.ts';
+import { profileLabel, streakText } from './people.ts';
 import { playWave } from './replay.ts';
 import { ResultOverlay } from './ResultOverlay.tsx';
 import { Sheet } from './Sheet.tsx';
@@ -41,18 +44,22 @@ const onBoardIds = (view: GameView): ReadonlySet<number> => new Set(view.friends
  * screen. Place by tap or drag, aim by tapping a lit square, undo, clear,
  * press Go, watch the wave, read what happened over the board. Everything
  * the player does is a command to the host; everything shown comes from the
- * View.
+ * View. The top bar shows who is playing and their streak; a finished daily
+ * shows the done-for-today screen in place of the board (K7).
  */
 export function Game(props: {
   host: GameHost;
   view: GameView;
+  profile: ProfileView;
   wave: WaveResult | null;
   healRange: number;
   feedback?: Feedback | undefined;
   onToast: (text: string) => void;
   onMenu: () => void;
+  /** The picture in the top bar: back to the picker. */
+  onProfiles: () => void;
 }): ReactElement {
-  const { host, view, feedback, onToast } = props;
+  const { host, view, profile, feedback, onToast } = props;
   const [selection, setSelection] = useState<Selection>(null);
   const [moving, setMoving] = useState(false);
   const [playback, setPlayback] = useState<Playback | null>(null);
@@ -258,6 +265,9 @@ export function Game(props: {
   };
 
   // The result over the board: the wave just watched, or after a reload the last wave of a finished day.
+  // A finished daily can't be played again (RULES 9): once its last wave's result is closed, or on reopening, it shows how the day went.
+  const done = view.round === 'daily' && view.phase === 'won' && playback === null && result === null;
+
   const report = playback !== null ? null : result !== null ? { wave: result.wave, label: (id: number) => result.before.kids.find((k) => k.id === id)?.label ?? kidLetter(id) } : view.phase !== 'setup' && view.lastWave !== null ? { wave: view.lastWave, label: kidLetter } : null;
 
   const hint = !setup
@@ -273,9 +283,14 @@ export function Game(props: {
   return (
     <div className="game">
       <header className="bar">
+        <button type="button" className="bar-avatar" aria-label={`${profileLabel(profile)} is playing. Switch player`} onClick={props.onProfiles}>
+          <Avatar id={profile.avatar} size={38} />
+        </button>
         <div className="bar-title">
-          <strong>Snack Attack</strong>
-          <span className="muted">{view.round === 'daily' ? 'Today' : view.round === 'bonus' ? 'Bonus round' : 'Practice'}</span>
+          <strong>{view.round === 'daily' ? 'Today' : view.round === 'bonus' ? 'Bonus round' : 'Practice'}</strong>
+          <span className="bar-streak" aria-label={`Streak: ${streakText(profile.streak)}`}>
+            🔥 {profile.streak}
+          </span>
         </div>
         <div className="bar-stats" aria-live="polite">
           <span title="Wave">
@@ -289,154 +304,161 @@ export function Game(props: {
         </button>
       </header>
 
-      {view.mode === 'main' && shown.kids.length > 0 && (
-        <ul className={`cluebar${crowded ? ' crowded' : ''}`} aria-label="Kids’ cards" style={{ ['--n' as string]: shown.kids.length }}>
-          {shown.kids.map((k) => (
-            <li key={k.id}>
-              <button type="button" className="clue-chip" aria-label={`Kid ${k.label}’s card: ${k.clue ?? ''}`} onClick={() => setClueKid(k.id)}>
-                <span className="clue-kid" style={{ background: SHIRTS[k.look.shirt % SHIRTS.length] }}>
-                  {k.label}
-                </span>
-                <span className="clue-chip-text">
-                  {kidBadges(k)}
-                  {kidBadges(k) !== '' && ' '}
-                  {crowded ? shortClue(k.clue ?? '') : k.clue}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      {done ? (
+        <DoneToday host={host} view={view} profile={profile} />
+      ) : (
+        <>
+          {view.mode === 'main' && shown.kids.length > 0 && (
+            <ul className={`cluebar${crowded ? ' crowded' : ''}`} aria-label="Kids’ cards" style={{ ['--n' as string]: shown.kids.length }}>
+              {shown.kids.map((k) => (
+                <li key={k.id}>
+                  <button type="button" className="clue-chip" aria-label={`Kid ${k.label}’s card: ${k.clue ?? ''}`} onClick={() => setClueKid(k.id)}>
+                    <span className="clue-kid" style={{ background: SHIRTS[k.look.shirt % SHIRTS.length] }}>
+                      {k.label}
+                    </span>
+                    <span className="clue-chip-text">
+                      {kidBadges(k)}
+                      {kidBadges(k) !== '' && ' '}
+                      {crowded ? shortClue(k.clue ?? '') : k.clue}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
 
-      <main className="board-area">
-        <Board
-          view={shown}
-          selected={setup && selectedFriend !== undefined ? selectedFriend.id : null}
-          aims={aims}
-          heals={heals}
-          preview={setup}
-          onCell={(cell) => void onCell(cell)}
-          onFriendDown={onFriendDown}
-          overlayRef={overlayRef}
-          boardRef={boardRef}
-        />
-        {report !== null && (
-          <ResultOverlay wave={report.wave} label={report.label} hungry={view.hungry} hungryAllowed={view.hungryAllowed} main={view.mode === 'main'}>
-            {view.phase === 'setup' && (
-              <button type="button" className="btn btn-primary btn-wide" onClick={() => setResult(null)}>
-                Set up wave {view.wave}
-              </button>
-            )}
-            {view.phase === 'won' && (
-              <div className="day-end" aria-label="Day won">
-                <p>
-                  <strong>🎉 Everyone got a snack today!</strong> {view.fed} kids fed{view.mode === 'main' ? `, ${view.hungry} went home hungry` : ''}.
-                </p>
-                {view.round === 'daily' && view.mode === 'main' && (
-                  <button type="button" className="btn btn-primary btn-wide" onClick={() => void host.bonus()}>
-                    Play today’s bonus round
+          <main className="board-area">
+            <Board
+              view={shown}
+              selected={setup && selectedFriend !== undefined ? selectedFriend.id : null}
+              aims={aims}
+              heals={heals}
+              preview={setup}
+              onCell={(cell) => void onCell(cell)}
+              onFriendDown={onFriendDown}
+              overlayRef={overlayRef}
+              boardRef={boardRef}
+            />
+            {report !== null && (
+              <ResultOverlay wave={report.wave} label={report.label} hungry={view.hungry} hungryAllowed={view.hungryAllowed} main={view.mode === 'main'}>
+                {view.phase === 'setup' && (
+                  <button type="button" className="btn btn-primary btn-wide" onClick={() => setResult(null)}>
+                    Set up wave {view.wave}
                   </button>
                 )}
-                <button type="button" className="btn btn-wide" onClick={() => void host.practice()}>
-                  New practice board
-                </button>
-              </div>
+                {view.phase === 'won' && (
+                  <div className="day-end" aria-label="Day won">
+                    <p>
+                      <strong>🎉 Everyone got a snack today!</strong> {view.fed} kids fed{view.mode === 'main' ? `, ${view.hungry} went home hungry` : ''}.
+                    </p>
+                    {view.round === 'daily' ? (
+                      <button type="button" className="btn btn-primary btn-wide" onClick={() => setResult(null)}>
+                        See today’s result
+                      </button>
+                    ) : (
+                      <button type="button" className="btn btn-wide" onClick={() => void host.practice()}>
+                        New practice board
+                      </button>
+                    )}
+                  </div>
+                )}
+                {view.phase === 'lost' && (
+                  <div className="day-end" aria-label="Day lost">
+                    <p>
+                      <strong>Too many kids went home hungry.</strong> The board goes back to how it was before you pressed Go.
+                    </p>
+                    <button type="button" className="btn btn-primary btn-wide" onClick={() => {
+                        setResult(null);
+                        void submit({ type: 'retry' });
+                      }}>
+                      Try wave {view.wave} again
+                    </button>
+                  </div>
+                )}
+              </ResultOverlay>
             )}
-            {view.phase === 'lost' && (
-              <div className="day-end" aria-label="Day lost">
-                <p>
-                  <strong>Too many kids went home hungry.</strong> The board goes back to how it was before you pressed Go.
-                </p>
-                <button type="button" className="btn btn-primary btn-wide" onClick={() => {
-                    setResult(null);
-                    void submit({ type: 'retry' });
-                  }}>
-                  Try wave {view.wave} again
-                </button>
-              </div>
-            )}
-          </ResultOverlay>
-        )}
-      </main>
+          </main>
 
-      <footer className="dock">
-        <div className="dock-row friend-row" aria-label="Selected friend">
-          {setup && selectedFriend !== undefined ? (
-            <>
-              <span className={`dock-what t-${selectedFriend.type}`}>
-                <PatternDiagram type={selectedFriend.type} />
-                <span className="dock-what-text">
-                  <strong>{FRIEND_NAME[selectedFriend.type]}</strong>
-                  <span className="muted">{moving ? 'tap a grey square' : selectedFriend.type === 'nurse' ? 'heals pink squares' : 'tap green to aim'}</span>
-                </span>
-              </span>
-              {selectedFriend.type !== 'nurse' && !moving && (
-                <button type="button" className="btn btn-turn" aria-label="Turn right" title="Turn (or tap a green square)" onClick={turn}>
-                  ↻
+          <footer className="dock">
+            <div className="dock-row friend-row" aria-label="Selected friend">
+              {setup && selectedFriend !== undefined ? (
+                <>
+                  <span className={`dock-what t-${selectedFriend.type}`}>
+                    <PatternDiagram type={selectedFriend.type} />
+                    <span className="dock-what-text">
+                      <strong>{FRIEND_NAME[selectedFriend.type]}</strong>
+                      <span className="muted">{moving ? 'tap a grey square' : selectedFriend.type === 'nurse' ? 'heals pink squares' : 'tap green to aim'}</span>
+                    </span>
+                  </span>
+                  {selectedFriend.type !== 'nurse' && !moving && (
+                    <button type="button" className="btn btn-turn" aria-label="Turn right" title="Turn (or tap a green square)" onClick={turn}>
+                      ↻
+                    </button>
+                  )}
+                  <button type="button" className={`btn btn-small${moving ? ' on' : ''}`} aria-pressed={moving} onClick={() => setMoving(!moving)}>
+                    Move
+                  </button>
+                  <button type="button" className="btn btn-small" onClick={() => void toTray(selectedFriend.id)}>
+                    To tray
+                  </button>
+                  <button type="button" className="btn btn-quiet btn-turn" aria-label="Done" onClick={() => setSelection(null)}>
+                    ✓
+                  </button>
+                </>
+              ) : (
+                <p className={`dock-hint${view.loopWarning && setup ? ' warn' : ' muted'}`}>{hint}</p>
+              )}
+            </div>
+
+            <div className="dock-row tray" role="group" aria-label="Tray">
+              {owned.length === 0 && <span className="muted small">No friends yet</span>}
+              {owned.map(({ type, left }) => (
+                <button
+                  key={type}
+                  type="button"
+                  className={`btn tray-btn${selection?.kind === 'tray' && selection.type === type ? ' on' : ''}`}
+                  disabled={!setup || left === 0}
+                  aria-label={`${FRIEND_NAME[type]}, ${left} left`}
+                  title={`${FRIEND_NAME[type]}: ${FRIEND_HOW[type]}`}
+                  onPointerDown={(event) => onTrayDown(event, type)}
+                  onClick={() => {
+                    if (drag.justDragged() === true) return;
+                    setMoving(false);
+                    setSelection(selection?.kind === 'tray' && selection.type === type ? null : { kind: 'tray', type });
+                  }}
+                >
+                  <span className={`tray-token t-${type}`}>
+                    <PatternDiagram type={type} />
+                  </span>
+                  <span className="tray-name">{FRIEND_NAME[type]}</span>
+                  <span className="tray-count">×{left}</span>
+                </button>
+              ))}
+              {view.shop.length > 0 && (
+                <button type="button" className="btn tray-btn tray-shop" disabled={!setup} onClick={() => setShop(true)}>
+                  <span className="tray-token" aria-hidden="true">
+                    🛒
+                  </span>
+                  <span className="tray-name">Shop</span>
+                  <span className="tray-count">⭐{short(view.points)}</span>
                 </button>
               )}
-              <button type="button" className={`btn btn-small${moving ? ' on' : ''}`} aria-pressed={moving} onClick={() => setMoving(!moving)}>
-                Move
-              </button>
-              <button type="button" className="btn btn-small" onClick={() => void toTray(selectedFriend.id)}>
-                To tray
-              </button>
-              <button type="button" className="btn btn-quiet btn-turn" aria-label="Done" onClick={() => setSelection(null)}>
-                ✓
-              </button>
-            </>
-          ) : (
-            <p className={`dock-hint${view.loopWarning && setup ? ' warn' : ' muted'}`}>{hint}</p>
-          )}
-        </div>
+            </div>
 
-        <div className="dock-row tray" role="group" aria-label="Tray">
-          {owned.length === 0 && <span className="muted small">No friends yet</span>}
-          {owned.map(({ type, left }) => (
-            <button
-              key={type}
-              type="button"
-              className={`btn tray-btn${selection?.kind === 'tray' && selection.type === type ? ' on' : ''}`}
-              disabled={!setup || left === 0}
-              aria-label={`${FRIEND_NAME[type]}, ${left} left`}
-              title={`${FRIEND_NAME[type]}: ${FRIEND_HOW[type]}`}
-              onPointerDown={(event) => onTrayDown(event, type)}
-              onClick={() => {
-                if (drag.justDragged() === true) return;
-                setMoving(false);
-                setSelection(selection?.kind === 'tray' && selection.type === type ? null : { kind: 'tray', type });
-              }}
-            >
-              <span className={`tray-token t-${type}`}>
-                <PatternDiagram type={type} />
-              </span>
-              <span className="tray-name">{FRIEND_NAME[type]}</span>
-              <span className="tray-count">×{left}</span>
-            </button>
-          ))}
-          {view.shop.length > 0 && (
-            <button type="button" className="btn tray-btn tray-shop" disabled={!setup} onClick={() => setShop(true)}>
-              <span className="tray-token" aria-hidden="true">
-                🛒
-              </span>
-              <span className="tray-name">Shop</span>
-              <span className="tray-count">⭐{short(view.points)}</span>
-            </button>
-          )}
-        </div>
-
-        <div className="dock-row actions">
-          <button type="button" className="btn btn-small" disabled={!setup || history.length === 0} onClick={() => void undo()}>
-            ↶ Undo
-          </button>
-          <button type="button" className="btn btn-small" disabled={!setup || toClear.commands.length === 0} onClick={() => setConfirmClear(true)}>
-            Clear board
-          </button>
-          <button type="button" className={`btn btn-primary btn-go${view.loopWarning && setup ? ' warn' : ''}`} disabled={!setup} onClick={() => void go()}>
-            Go! Wave {Math.min(view.wave, view.waves)}
-          </button>
-        </div>
-      </footer>
+            <div className="dock-row actions">
+              <button type="button" className="btn btn-small" disabled={!setup || history.length === 0} onClick={() => void undo()}>
+                ↶ Undo
+              </button>
+              <button type="button" className="btn btn-small" disabled={!setup || toClear.commands.length === 0} onClick={() => setConfirmClear(true)}>
+                Clear board
+              </button>
+              <button type="button" className={`btn btn-primary btn-go${view.loopWarning && setup ? ' warn' : ''}`} disabled={!setup} onClick={() => void go()}>
+                Go! Wave {Math.min(view.wave, view.waves)}
+              </button>
+            </div>
+          </footer>
+        </>
+      )}
 
       {clueOf !== undefined && clueOf.clue !== null && <ClueCard view={shown} kid={clueOf} onClose={() => setClueKid(null)} />}
 

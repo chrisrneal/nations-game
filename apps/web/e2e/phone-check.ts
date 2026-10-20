@@ -26,14 +26,31 @@
  *   the tray), aimed by taps, and it feeds every kid;
  * - reopening continues at wave 3; a practice board is generated in under a
  *   second with the CPU slowed 4x; it reopens offline.
+ *
+ * Profiles (K7):
+ * - the top bar shows who is playing and their streak; its picture opens the
+ *   picker; a quick tap on Grown-ups does nothing, a press-and-hold opens the
+ *   grown-ups' menu; two profiles are added there (a Main one, a Kindy one);
+ * - the second child plays wave 1; switching back finds the first child's
+ *   game untouched, and switching again finds the second child's progress
+ *   kept; with more than one profile a launch opens the picker;
+ * - a Kindy profile opens a picture-only "coming soon" screen with a 64 px
+ *   way back; deleting a profile asks first;
+ * - the first child plays the rest of the daily: the done-for-today screen
+ *   shows the result, the streak and a running countdown, with the bonus
+ *   round and practice; it is what reopening shows; practice keeps the streak;
+ * - an old save from before profiles (seeded into the browser's database)
+ *   opens as the first profile at the same wave, with its finished day.
+ * Every new screen and control is checked to be inside 360 x 740 and not
+ * covered, not just positioned.
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, type CDPSession, type Locator, type Page } from 'playwright-core';
-import type { FriendType, PlacedFriend, Puzzle } from '@snacks/contracts';
-import { generatePuzzle } from '@snacks/sim';
+import type { FriendType, PlacedFriend, Puzzle, WaveLayout } from '@snacks/contracts';
+import { GameSession, generatePuzzle, startGame, witnessCommands } from '@snacks/sim';
 import { FRIEND_NAME, facingAngle, stepOf } from '../src/ui/labels.ts';
 
 const PORT = 4179;
@@ -257,6 +274,106 @@ async function checkResult(page: Page, wave: number, kids: number): Promise<void
   const fed = (await overlay.locator('[data-row="fed"]').textContent()) ?? '';
   check(`wave ${wave} result: fed, hungry against the allowance, points`, /Fed: [A-Z]/.test(fed) && /Hungry today: 0 of 3/.test(hungry) && points.includes(`+${kids}`), `${fed} | ${hungry} | ${points}`);
   await checkOnScreen(`wave ${wave} result: its button is inside the viewport`, overlay.getByRole('button', { name: /Set up wave/ }));
+}
+
+/** Every visible element matching is at least `min` px each way (64 px for what a 4-year-old taps). */
+async function bigTargets(page: Page, selector: string, min: number, where: string): Promise<void> {
+  const sizes = (await page.locator(selector).evaluateAll((els) => els.map((el) => el.getBoundingClientRect()).map((r) => [Math.round(r.width), Math.round(r.height)]))) as number[][];
+  check(`targets at least ${min} px: ${where}`, sizes.length > 0 && sizes.every(([w, h]) => w! >= min && h! >= min), sizes.map(([w, h]) => `${w}x${h}`).join(', '));
+}
+
+/** A finger held on an element for `ms`, then lifted: a grown-up's press-and-hold. */
+async function touchHold(page: Page, cdp: CDPSession, target: Locator, ms: number): Promise<void> {
+  const at = await centre(target);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [at] });
+  await page.waitForTimeout(ms);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+}
+
+const barStats = async (page: Page): Promise<string> => (await page.locator('.bar-stats').textContent()) ?? '';
+
+/** The friends on the board, by square and type, read from the screen. */
+async function boardFriends(page: Page): Promise<{ cell: number; type: FriendType }[]> {
+  return page.locator('.board .sq:has(.friend)').evaluateAll((els) =>
+    els.map((el) => ({ cell: Number(el.getAttribute('data-cell')), type: (/\bt-(\w+)/.exec(el.querySelector('.friend')?.className ?? '')?.[1] ?? '') as FriendType })),
+  );
+}
+
+/**
+ * Sets up one wave of the solver's plan by taps alone, from whatever is on
+ * the board: buy, send friends the plan doesn't use to the tray, place the
+ * rest from the tray, aim every one, press Go. True when every kid is fed.
+ */
+async function playWaveByTaps(page: Page, puzzle: Puzzle, layout: WaveLayout): Promise<boolean> {
+  if (!(await buy(page, layout.buys))) return false;
+  const todo = [...layout.friends];
+  for (const friend of await boardFriends(page)) {
+    const i = todo.findIndex((f) => f.cell === friend.cell && f.type === friend.type);
+    if (i >= 0) {
+      todo.splice(i, 1);
+      continue;
+    }
+    await deselect(page);
+    await cellOf(page, friend.cell).tap();
+    await page.getByRole('button', { name: 'To tray' }).tap();
+    if (!(await until(page, async () => !(await hasFriend(page, friend.cell))))) return false;
+  }
+  for (const f of todo) {
+    await deselect(page);
+    await trayButton(page, f.type).tap();
+    await cellOf(page, f.cell).tap();
+    if (!(await until(page, () => hasFriend(page, f.cell)))) return false;
+  }
+  for (const f of layout.friends) if ((await aimByTap(page, puzzle, f)) === 'failed') return false;
+  await page.locator('.btn-go').tap();
+  const overlay = page.getByRole('region', { name: 'What happened' });
+  await overlay.waitFor({ timeout: 15_000 });
+  const kids = puzzle.kids.filter((k) => k.wave === layout.wave).length;
+  return ((await overlay.locator('h2').textContent()) ?? '').includes(`${kids} of ${kids} fed`);
+}
+
+async function openPicker(page: Page): Promise<void> {
+  await page.locator('.bar-avatar').tap();
+  await page.locator('.picker').waitFor({ timeout: 5000 });
+}
+
+const tile = (page: Page, name: string): Locator => page.getByRole('button', { name: `Play as ${name}` });
+
+/** Opens the grown-ups' menu from the picker with a press-and-hold. */
+async function grownUps(page: Page, cdp: CDPSession): Promise<Locator> {
+  await touchHold(page, cdp, page.locator('.hold-btn'), 1300);
+  const menu = page.getByRole('dialog', { name: 'Grown-ups' });
+  await menu.waitFor({ timeout: 3000 });
+  return menu;
+}
+
+/** Adds a child in the grown-ups' menu. */
+async function addChild(page: Page, avatar: string, name: string, mode: 'Main' | 'Kindy', check?: (form: Locator) => Promise<void>): Promise<void> {
+  await page.getByRole('dialog', { name: 'Grown-ups' }).getByRole('button', { name: /Add a child/ }).tap();
+  const form = page.getByRole('dialog', { name: 'Add a child' });
+  await form.waitFor();
+  await form.getByRole('button', { name: avatar, exact: true }).tap();
+  await form.getByRole('textbox').fill(name);
+  await form.getByRole('button', { name: new RegExp(`^${mode}:`) }).tap();
+  await check?.(form);
+  await form.getByRole('button', { name: 'Save' }).tap();
+  await page.getByRole('dialog', { name: 'Grown-ups' }).waitFor();
+}
+
+/**
+ * The save of a browser from before profiles (K7, version 0): the database
+ * at version 1 with slots named without a profile, and the slot being
+ * played in localStorage. Yesterday's daily finished; today's at wave 2.
+ */
+function legacySaves(day: number): { slot: string; savedAt: number; game: unknown }[] {
+  const won = new GameSession(startGame(generatePuzzle('main', 'daily', day - 1, 0)));
+  for (const layout of won.state.puzzle.witness) for (const c of witnessCommands(won.state, layout)) won.submit(c);
+  const today = new GameSession(startGame(generatePuzzle('main', 'daily', day, 0)));
+  for (const c of witnessCommands(today.state, today.state.puzzle.witness[0]!)) today.submit(c);
+  return [
+    { slot: `daily-main-${day - 1}`, savedAt: 0, game: won.save() },
+    { slot: `daily-main-${day}`, savedAt: 0, game: today.save() },
+  ];
 }
 
 async function main(): Promise<void> {
@@ -510,11 +627,174 @@ async function main(): Promise<void> {
     await shot(page, '9-help');
     await page.getByRole('button', { name: 'Close' }).last().tap();
 
+    // ---- profiles (K7): the top bar, the picker, the grown-ups' menu ----
+    await page.getByRole('button', { name: 'Menu' }).tap();
+    await page.getByRole('button', { name: 'Today’s puzzle' }).tap();
+    await until(page, async () => (await barStats(page)).includes('3/10'));
+    const streak0 = (await page.locator('.bar-streak').textContent()) ?? '';
+    check('the top bar shows who is playing and their streak', streak0.includes('🔥 0') && (await page.locator('.bar-avatar .avatar').count()) === 1, streak0);
+    await checkOnScreen('the top bar: the player’s picture is inside the viewport', page.locator('.bar-avatar'));
+    await checkOnScreen('the top bar: the streak is inside the viewport', page.locator('.bar-streak'));
+    await noHorizontalScroll(page, 'the top bar with a picture and a streak');
+
+    await openPicker(page);
+    check('one profile: the picker shows one picture', (await page.locator('.picker-tile').count()) === 1);
+    await checkOnScreen('the picker: the picture is inside the viewport', page.locator('.picker-tile'));
+    await checkOnScreen('the picker: the grown-ups button is inside the viewport', page.locator('.hold-btn'));
+    await page.locator('.hold-btn').tap();
+    await page.waitForTimeout(400);
+    check('a quick tap on Grown-ups does not open the menu, and says to hold it', (await page.getByRole('dialog', { name: 'Grown-ups' }).count()) === 0 && (await page.locator('.toast').count()) === 1);
+    await page.locator('.toast').waitFor({ state: 'detached', timeout: 5000 });
+    const menu = await grownUps(page, cdp);
+    await checkOnScreen('a press-and-hold opens the grown-ups’ menu; Add a child is inside the viewport', menu.getByRole('button', { name: /Add a child/ }));
+    await addChild(page, 'Cat', 'Sam', 'Main', async (form) => {
+      await checkOnScreen('add a child: every picture is inside the viewport', form.locator('.avatar-choice'));
+      await checkOnScreen('add a child: the name box is inside the viewport', form.getByRole('textbox'));
+      await checkOnScreen('add a child: Main and Kindy are inside the viewport', form.locator('.mode-choice'));
+      await checkOnScreen('add a child: Save is inside the viewport', form.getByRole('button', { name: 'Save' }));
+      check('add a child: a picture already taken can’t be picked', await form.getByRole('button', { name: 'Dog', exact: true }).isDisabled());
+      await touchTargets(page, 'add a child');
+      await shot(page, '10-add-child');
+    });
+    await addChild(page, 'Frog', 'Pip', 'Kindy');
+    const listed = await page.getByRole('dialog', { name: 'Grown-ups' }).locator('.parent-list li').count();
+    check('the grown-ups’ menu lists the three profiles', listed === 3, `${listed}`);
+    await checkOnScreen('the grown-ups’ menu: every Change and Delete is inside the viewport', page.getByRole('dialog', { name: 'Grown-ups' }).locator('.parent-list .btn'));
+    await touchTargets(page, 'the grown-ups’ menu');
+    await shot(page, '11-grown-ups');
+    await page.getByRole('dialog', { name: 'Grown-ups' }).locator('.sheet-close').tap();
+    check('the picker shows the three pictures', (await page.locator('.picker-tile').count()) === 3);
+    await checkOnScreen('the picker: every picture is inside the viewport', page.locator('.picker-tile'));
+    await bigTargets(page, '.picker-tile', 64, 'the picker’s pictures');
+    await noHorizontalScroll(page, 'the picker');
+    await noVerticalScroll(page, 'the picker');
+    await touchTargets(page, 'the picker');
+    await shot(page, '12-picker');
+
+    // ---- two children, one phone: each keeps their own game ----
+    await tile(page, 'Sam').tap();
+    await page.locator('.board').waitFor();
+    const samStart = await barStats(page);
+    check('Sam’s daily opens at wave 1 with nothing on the board', samStart.includes('1/10') && (await friendsOnBoard(page)) === 0 && (await page.locator('.bar-avatar').getAttribute('aria-label'))?.startsWith('Sam') === true, samStart);
+    check('Sam plays wave 1 by taps and feeds every kid', await playWaveByTaps(page, puzzle, first));
+    await page.getByRole('button', { name: /Set up wave 2/ }).tap();
+    await openPicker(page);
+    await tile(page, 'Dog').tap();
+    await until(page, async () => (await barStats(page)).includes('3/10'));
+    check('switching back: the first child’s daily is untouched, at wave 3 with wave 2’s friends', (await barStats(page)).includes('3/10') && (await friendsOnBoard(page)) === second.friends.length, `${await barStats(page)}, ${await friendsOnBoard(page)} friends`);
+    await openPicker(page);
+    await tile(page, 'Sam').tap();
+    await until(page, async () => (await barStats(page)).includes('2/10'));
+    check('switching again: Sam’s progress is kept, at wave 2 with wave 1’s friends', (await barStats(page)).includes('2/10') && (await friendsOnBoard(page)) === first.friends.length, `${await barStats(page)}, ${await friendsOnBoard(page)} friends`);
+    await page.reload();
+    await page.locator('.picker').waitFor();
+    check('with more than one profile, a launch opens the picker', (await page.locator('.board').count()) === 0 && (await page.locator('.picker-tile').count()) === 3);
+    await checkOnScreen('after a launch: every picture is inside the viewport', page.locator('.picker-tile'));
+
+    // ---- a Kindy profile: coming soon, in pictures ----
+    await tile(page, 'Pip').tap();
+    const soon = page.getByRole('region', { name: 'Kindy mode is coming soon' });
+    await soon.waitFor();
+    const words = (await soon.innerText()).replace(/[^A-Za-z]/g, '');
+    check('a Kindy profile opens a coming-soon screen with no words on it', words === '' && (await page.locator('.board').count()) === 0, words);
+    await checkOnScreen('coming soon: the way back is inside the viewport', soon.getByRole('button', { name: 'Back to the pictures' }));
+    await bigTargets(page, '.kindy-back', 64, 'coming soon’s way back');
+    await noVerticalScroll(page, 'coming soon');
+    await shot(page, '13-kindy-soon');
+    await soon.getByRole('button', { name: 'Back to the pictures' }).tap();
+    await page.locator('.picker').waitFor();
+
+    // ---- deleting asks first ----
+    await grownUps(page, cdp);
+    await page.getByRole('button', { name: 'Delete Pip' }).tap();
+    const confirm = page.getByRole('dialog', { name: 'Delete Pip?' });
+    await checkOnScreen('deleting a profile asks first, inside the viewport', confirm.getByRole('button', { name: 'Yes, delete Pip' }));
+    await checkOnScreen('deleting a profile: Keep is inside the viewport', confirm.getByRole('button', { name: 'Keep Pip' }));
+    await shot(page, '14-delete');
+    await confirm.getByRole('button', { name: 'Yes, delete Pip' }).tap();
+    await until(page, async () => (await page.getByRole('dialog', { name: 'Grown-ups' }).locator('.parent-list li').count()) === 2);
+    await page.getByRole('dialog', { name: 'Grown-ups' }).locator('.sheet-close').tap();
+    check('a deleted profile is gone from the picker', (await page.locator('.picker-tile').count()) === 2 && (await tile(page, 'Pip').count()) === 0);
+
+    // ---- the first child finishes the daily: done for today ----
+    await tile(page, 'Dog').tap();
+    await until(page, async () => (await barStats(page)).includes('3/10'));
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const rest: string[] = [];
+    for (const layout of puzzle.witness.slice(2)) {
+      const fed = await playWaveByTaps(page, puzzle, layout);
+      rest.push(`${layout.wave}${fed ? '' : ' NOT FED'}`);
+      if (layout.wave < puzzle.waves) await page.getByRole('button', { name: new RegExp(`Set up wave ${layout.wave + 1}`) }).tap();
+    }
+    check('waves 3-10 played by taps, every kid fed', rest.every((r) => !r.includes('NOT')), rest.join(', '));
+    await page.getByRole('button', { name: 'See today’s result' }).tap();
+    const doneScreen = page.getByRole('region', { name: 'Done for today' });
+    await doneScreen.waitFor();
+    const doneText = await doneScreen.innerText();
+    check('done for today: the result, the streak, a countdown', /Kids fed: \d+/.test(doneText) && /Went home hungry: 0 of 3/.test(doneText) && /first go/.test(doneText) && /Streak: 1 day/.test(doneText) && /Next puzzle in \d+:\d\d:\d\d/.test(doneText), doneText.replace(/\s+/g, ' '));
+    const clock1 = (await doneScreen.locator('.done-clock').textContent()) ?? '';
+    await page.waitForTimeout(2100);
+    const clock2 = (await doneScreen.locator('.done-clock').textContent()) ?? '';
+    check('the countdown runs', clock1 !== clock2, `${clock1} then ${clock2}`);
+    for (const part of ['.done-title', '.done-rows', '.week', '.done-next']) await checkOnScreen(`done for today: ${part.slice(1)} is inside the viewport`, doneScreen.locator(part));
+    const bonusBtn = doneScreen.getByRole('button', { name: 'Play the bonus round' });
+    await checkOnScreen('done for today: the bonus round is inside the viewport', bonusBtn);
+    await checkOnScreen('done for today: practice is inside the viewport', doneScreen.getByRole('button', { name: 'Practice board' }));
+    const bonusBox = await bonusBtn.boundingBox();
+    check('done for today: its buttons are in the bottom third', bonusBox !== null && bonusBox.y >= (HEIGHT * 2) / 3, `top ${Math.round(bonusBox?.y ?? 0)}`);
+    check('the top bar’s streak is 1', ((await page.locator('.bar-streak').textContent()) ?? '').includes('🔥 1'));
+    await noVerticalScroll(page, 'done for today');
+    await noHorizontalScroll(page, 'done for today');
+    await touchTargets(page, 'done for today');
+    await shot(page, '15-done');
+    await page.reload();
+    await page.locator('.picker').waitFor();
+    check('the picker shows the first child’s streak, not Sam’s', (await tile(page, 'Dog').locator('.picker-streak').count()) === 1 && (await tile(page, 'Sam').locator('.picker-streak').count()) === 0);
+    await tile(page, 'Dog').tap();
+    await doneScreen.waitFor();
+    check('reopening a finished daily shows done for today, not the board', (await page.locator('.board').count()) === 0);
+    await doneScreen.getByRole('button', { name: 'Practice board' }).tap();
+    await page.locator('.bar-title', { hasText: 'Practice' }).waitFor();
+    check('practice is still there after the daily, and keeps the streak', ((await page.locator('.bar-streak').textContent()) ?? '').includes('🔥 1'));
+    await page.emulateMedia({ reducedMotion: null });
+
     await context.setOffline(true);
     await page.reload();
+    await page.locator('.picker').waitFor({ timeout: 10_000 });
+    await tile(page, 'Dog').tap();
     await page.locator('.board').waitFor({ timeout: 10_000 });
     check('reopens offline', (await page.locator('.board .sq').count()) === 48);
     await context.close();
+
+    // ---- an old save from before profiles (K7) ----
+    const oldProfile = mkdtempSync(join(tmpdir(), 'snacks-legacy-'));
+    try {
+      const old = await chromium.launchPersistentContext(oldProfile, { executablePath: chromiumPath(), viewport: { width: WIDTH, height: HEIGHT }, deviceScaleFactor: PHONE.dpr, isMobile: true, hasTouch: true, timezoneId: 'UTC' });
+      const oldPage = old.pages()[0] ?? (await old.newPage());
+      if (process.env.DAY !== undefined) await oldPage.clock.setFixedTime(DAY * 86_400_000 + 43_200_000);
+      // Before the app's first script: the version-1 database with the old slots, and the old active slot.
+      await oldPage.addInitScript(`(() => {
+        if (localStorage.getItem('seeded') === '1') return;
+        localStorage.setItem('seeded', '1');
+        localStorage.setItem('snacks-active-slot', 'daily-main-${DAY}');
+        const req = indexedDB.open('snacks', 1);
+        req.onupgradeneeded = () => req.result.createObjectStore('slots', { keyPath: 'slot' });
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction('slots', 'readwrite');
+          for (const record of ${JSON.stringify(legacySaves(DAY))}) tx.objectStore('slots').put(record);
+          tx.oncomplete = () => db.close();
+        };
+      })()`);
+      await oldPage.goto(URL);
+      await oldPage.locator('.board').waitFor({ timeout: 10_000 });
+      const stats = await barStats(oldPage);
+      const oldStreak = (await oldPage.locator('.bar-streak').textContent()) ?? '';
+      check('an old save opens as the first profile, at the same wave, with its finished day', stats.includes('2/10') && (await friendsOnBoard(oldPage)) === first.friends.length && oldStreak.includes('🔥 1'), `${stats}, ${oldStreak}`);
+      await old.close();
+    } finally {
+      rmSync(oldProfile, { recursive: true, force: true });
+    }
   } finally {
     server.kill();
     rmSync(profile, { recursive: true, force: true });

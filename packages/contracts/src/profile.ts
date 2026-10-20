@@ -85,4 +85,6 @@ export interface HomeView {
   readonly current: string | null;
   /** Today on this device (D18). */
   readonly day: number;
+  /** The pictures a profile can have, in the order to offer them. */
+  readonly avatars: readonly AvatarId[];
 }

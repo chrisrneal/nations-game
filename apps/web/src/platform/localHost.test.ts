@@ -130,6 +130,7 @@ describe('the local host: profiles (RULES 12)', () => {
     const app = launch(d);
     await app.h.start();
     expect(app.home().profiles.map((p) => [p.id, p.mode, p.streak])).toEqual([['p1', 'main', 0]]);
+    expect(app.home().avatars).toEqual(AVATARS);
     expect(app.home().current).toBe('p1');
     expect(app.latest()).toMatchObject({ profile: 'p1', view: { round: 'daily', day: DAY, wave: 1 } });
     expect(await d.store.get(`p1/${slotFor('main', 'daily', DAY)}`)).toBeDefined();

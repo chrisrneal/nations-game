@@ -159,7 +159,7 @@ export function profileView(profile: Profile, today: number): ProfileView {
 }
 
 export function homeView(book: ProfileBook, current: string | null, today: number): HomeView {
-  return { profiles: book.profiles.map((p) => profileView(p, today)), current: book.profiles.some((p) => p.id === current) ? current : null, day: today };
+  return { profiles: book.profiles.map((p) => profileView(p, today)), current: book.profiles.some((p) => p.id === current) ? current : null, day: today, avatars: AVATARS };
 }
 
 // ---- reading a stored book ----

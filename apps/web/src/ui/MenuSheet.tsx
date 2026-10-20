@@ -5,8 +5,8 @@ import { PatternDiagram } from './Diagram.tsx';
 import { FRIEND_HOW, FRIEND_NAME, FRIEND_ORDER } from './labels.ts';
 import { Sheet } from './Sheet.tsx';
 
-/** The menu: today's puzzle, a practice board, how to play, sound. */
-export function MenuSheet(props: { host: GameHost; view: GameView; feedback?: Feedback | undefined; onClose: () => void }): ReactElement {
+/** The menu: today's puzzle, a practice board, switching player, how to play, sound. */
+export function MenuSheet(props: { host: GameHost; view: GameView; feedback?: Feedback | undefined; onClose: () => void; onProfiles: () => void }): ReactElement {
   const { host, feedback, onClose } = props;
   const [help, setHelp] = useState(false);
   const [sound, setSound] = useState(feedback?.prefs.sound ?? false);
@@ -23,6 +23,16 @@ export function MenuSheet(props: { host: GameHost; view: GameView; feedback?: Fe
         </button>
         <button type="button" className="btn btn-wide" onClick={() => run(() => host.practice())}>
           New practice board
+        </button>
+        <button
+          type="button"
+          className="btn btn-wide"
+          onClick={() => {
+            onClose();
+            props.onProfiles();
+          }}
+        >
+          Switch player
         </button>
         <button type="button" className="btn btn-wide" onClick={() => setHelp(true)}>
           How to play
