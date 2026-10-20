@@ -391,6 +391,10 @@ outside it is a design change.
 | `obstaclesMin` | 2 | 0 | 6 | Fewest obstacles on a main board |
 | `obstaclesMax` | 4 | 0 | 8 | Most obstacles on a main board |
 | `bonusObstacles` | 2 | 0 | 4 | Extra obstacles on a bonus board |
+| `maxProfiles` | 6 | 2 | 8 | Profiles on one device (section 12) |
+| `nameLength` | 12 | 6 | 20 | Longest profile name, in characters (section 12) |
+| `historyKept` | 400 | 60 | 3650 | Finished days a profile keeps, besides the streak still going (section 9) |
+| `recentDays` | 7 | 3 | 14 | Finished days the done-for-today screen can show (section 9) |
 
 ## 15. Invariants
 

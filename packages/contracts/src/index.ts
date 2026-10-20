@@ -44,3 +44,4 @@ export type {
   WaveLayout,
   WaveResult,
 } from './game.ts';
+export type { AvatarId, DayRecord, HomeView, Profile, ProfileBook, ProfileDraft, ProfileEdit, ProfileView } from './profile.ts';
