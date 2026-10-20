@@ -1,6 +1,6 @@
 import type { FriendView, GameState, GameView, KidView, ShopItem } from '@snacks/contracts';
 import { clueText } from './clues.ts';
-import { priceOf } from './game.ts';
+import { boughtThisSetup, priceOf } from './game.ts';
 import { FACINGS } from './geometry.ts';
 import { kindyHint } from './hint.ts';
 import { landing, occupancy, pickupFor, resolveSnacks, type WaveKid } from './resolve.ts';
@@ -45,7 +45,14 @@ export function gameView(state: GameState): GameView {
       healed: k.healed,
     };
   });
-  const shop: ShopItem[] = puzzle.shop.map((type) => ({ type, price: priceOf(type), canBuy: state.phase === 'setup' && state.points >= priceOf(type) }));
+  const shop: ShopItem[] = puzzle.shop.map((type) => {
+    const price = priceOf(type);
+    const mine = state.friends.filter((f) => f.type === type);
+    // The last one bought this setup, one still in the tray before one on the board.
+    const back = mine.filter((f) => boughtThisSetup(state, f)).sort((a, b) => Number(a.cell < 0) - Number(b.cell < 0) || a.id - b.id);
+    const setup = state.phase === 'setup';
+    return { type, price, canBuy: setup && state.points >= price, shortfall: Math.max(0, price - state.points), owned: mine.length, refund: setup ? (back.at(-1)?.id ?? -1) : -1 };
+  });
   return {
     mode: puzzle.mode,
     round: puzzle.round,

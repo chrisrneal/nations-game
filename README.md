@@ -106,8 +106,11 @@ offline or install from there).
   once). Then a card over the board says who was fed, who got a tummy ache,
   who the Nurse healed, how many have gone home hungry (of 3 allowed) and the
   points earned.
-- Fed kids earn ⭐ points to spend in the **Shop** between waves, for today
-  only. If more than 3 kids go home hungry, try that wave again.
+- Fed kids earn ⭐ points to spend in the **Shop** (the button in the tray
+  shows your points) between waves, for today only. A friend you buy goes
+  straight into the tray; changed your mind? **Give back** returns every
+  point until you press Go. If more than 3 kids go home hungry, try that
+  wave again.
 - **Finish all 10 waves** and the day is done: a "done for today" screen
   shows how it went, the 🔥 streak (days in a row with the daily finished)
   and a countdown to tomorrow's puzzle. The bonus round and practice boards

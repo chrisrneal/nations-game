@@ -31,7 +31,7 @@ for two kids sharing one phone.
 
 ## Architecture (kept from the earlier games, decision record K1)
 1. Pure sim core: `step(state, command) -> state, error, wave` (S1, K3).
-2. Commands are the only mutation: place, turn, toTray, buy, go, retry (S2).
+2. Commands are the only mutation: place, turn, toTray, buy, refund, go, retry (S2, K9).
 3. Host interface: the UI submits and subscribes; LocalHost runs the sim in a
    Web Worker (S3).
 4. No clock: a wave is resolved whole at Go and replayed as animation; the
@@ -55,6 +55,9 @@ vite-plugin-pwa, Vitest + fast-check, and playwright-core for the phone check.
   all inside 360 x 740.
 - Touch targets of at least 44 px (64 px in Kindy). No horizontal scroll at
   360 px. Safe areas respected.
+- The shop (K9): the sheet, every card and every button inside 360 x 740
+  with nothing to scroll; buy, give back, buy again, swipe it closed, place
+  the new friend and play the wave.
 - Kindy (K8): the board as wide as the phone, no text on the page anywhere
   in the child's flow, and a whole Kindy day played by taps on what the hint
   points at.
@@ -65,8 +68,11 @@ vite-plugin-pwa, Vitest + fast-check, and playwright-core for the phone check.
 - `npm test` generates and checks 1000 main dailies, 300 bonus rounds and 300
   Kindy dailies. Each must pass the clue checker and the solver, and its
   solution must win with nobody hungry. A Kindy day must also never get
-  stuck, whichever kids are left waiting (K8).
-- `npm test` also hashes 300 scripted games in Node and Chromium.
+  stuck, whichever kids are left waiting (K8). Every day's shop must sell what
+  its solution buys, and 150 days made again from their seeds must come out
+  the same, catalogue included (K9).
+- `npm test` also hashes 300 scripted games in Node and Chromium, each with a
+  buy and a refund in the shop before every wave that buys (K9).
 - `npm run harness -- report` prints difficulty by wave, seeds skipped and
   time per day (docs/balance/generator-report.md).
 
@@ -89,7 +95,11 @@ until both work on hand-made test boards.
    countdown, the streak in the top bar, and the old single save folded
    into a first profile.
 8. [ ] Art and wave animation.
-9. [ ] Shop screen.
+9. [x] Shop screen (K9): a bottom sheet from the Shop button in the tray (it
+   shows the points), a card per friend (picture, name, pattern diagram,
+   one line on what it does, how many you have, the price or "Need 2
+   more"), buying straight into the tray, Give back for a full refund until
+   Go, swipe down to close; main mode only.
 10. [x] Kindy mode on screen (K8): the 4x4 board, pictures only, tap a friend
     then a square, four big aim squares, a green play button, hints from the
     stored solution (a pointing hand and the phone's voice), the party, a

@@ -10,7 +10,6 @@ airport and Nations gap went with the code. They are in this file at commit
 - K1 / step 6, not yet checked on a real phone (iOS Safari, Android Chrome); the phone check is headless Chromium and is not in CI because it needs a build and a browser. Owner, lane P.
 - K1 / step 6, the screen is plain on purpose: pattern diagrams for friends, emoji for snacks, letters for kids, and a simple flight replay. Art and real animation are step 8. Lane U.
 - K1 / step 11, no sticker book or cosmetics yet. Profiles and the streak came in step 7 (K7). Lanes S, U.
-- K1 / step 6, the shop is a plain list in a sheet (step 9). Lane U.
 - K1 / step 6, main mode has no hint button. Kindy's hints (K8) come from the stored witness; main mode could use the same, but a main hint would have to avoid giving away the clue. Lanes S, U.
 - K1 / K5, the solver is sound but not complete: boards whose only solutions need a 4-friend route or a friend used only to block are thrown away, never shown. About 0.7 seeds a day are skipped. Lane S.
 - K1 / K5, the starting tray is sized to the planted solution, so its mix (say, three Bouncers) hints at the answer. Adding a decoy friend or two would hide it. Lanes S, D.
@@ -46,3 +45,11 @@ airport and Nations gap went with the code. They are in this file at commit
 - K8, Kindy pictures are emoji drawn by CSS; they look different on iOS, Android and Windows until the art in step 8. Lane U.
 - K8, the moon on the done screen moves every 30 seconds by the fraction of the day gone; like the main countdown it can be an hour out on a daylight-saving night (K7). Lane U.
 - K8, about 1 Kindy day in 8 now takes a later seed than before (the never-stuck check); nobody had played Kindy yet, so nothing visible changed. Lane S.
+
+## Shop screen (step 9, K9)
+- K9, **open question for the owner: "modify before buying".** The first brief said a friend could be picked from a catalogue and modified before buying. The spec defines nothing to modify (a friend is a type plus a facing, and the facing is set on the board), so nothing was invented. Recommended default: leave it so. If a hat or colour per friend was meant, that is a cosmetic for step 11 and must never change play. Owner.
+- K9, refunds are allowed until Go for anything bought in this setup (the prompt's default, as the spec was silent). After Go the points stay spent, even if the friend was never used. Owner to confirm.
+- K9, every main-mode puzzle sells all five friends, so the catalogue never changes from day to day; "that day's catalogue" (RULES 8) could later vary by seed (say, no Bouncer on some days). The harness already checks a catalogue is fixed by the seed and sells what the solution buys. Lanes S, D.
+- K9, the shop's pictures are emoji placeholders until the art in step 8. Lane U.
+- K9, swipe-down to close (every sheet now) was tested with Chromium touch events in the phone check only, not yet on a real iPhone or Android phone. Owner, lane P.
+- K9, a friend bought, placed, aimed and then given back loses its place and facing; buying again puts a new one in the tray. Lane U.

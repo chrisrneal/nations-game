@@ -8,12 +8,13 @@ import { ClueCard } from './ClueCard.tsx';
 import { PatternDiagram } from './Diagram.tsx';
 import { DoneToday } from './DoneToday.tsx';
 import { DragController, type DragSource } from './drag.ts';
-import { clearPlan, undoFor, type UndoStep } from './history.ts';
+import { clearPlan, forgetFriend, undoFor, type UndoStep } from './history.ts';
 import { FRIEND_HOW, FRIEND_NAME, FRIEND_ORDER, SHIRTS, kidBadges, kidLetter, shortClue } from './labels.ts';
 import { profileLabel, streakText } from './people.ts';
 import { playWave } from './replay.ts';
 import { ResultOverlay } from './ResultOverlay.tsx';
 import { Sheet } from './Sheet.tsx';
+import { Shop } from './Shop.tsx';
 import { short } from './format.ts';
 
 const BEAT_MS = 220;
@@ -65,6 +66,8 @@ export function Game(props: {
   const [playback, setPlayback] = useState<Playback | null>(null);
   const [result, setResult] = useState<Playback | null>(null);
   const [shop, setShop] = useState(false);
+  // Go pressed, the wave not yet back from the host: setup is over already (nothing, the shop included, can be opened).
+  const [going, setGoing] = useState(false);
   const [clueKid, setClueKid] = useState<number | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [history, setHistory] = useState<readonly UndoStep[]>([]);
@@ -78,17 +81,22 @@ export function Game(props: {
   // A new setup phase (after Go, a retry or a new game): nothing to undo, nothing selected.
   if (phase.key !== phaseKey(view)) {
     // A different game: the last wave's result belongs to the old one.
-    if (!phase.key.startsWith(`${gameKey(view)}-`)) setResult(null);
+    if (!phase.key.startsWith(`${gameKey(view)}-`)) {
+      setResult(null);
+      setGoing(false);
+    }
     setPhase({ key: phaseKey(view), earlier: onBoardIds(view) });
     setHistory([]);
     setSelection(null);
     setMoving(false);
+    setShop(false);
   }
 
   // A new wave result: play it over the board as it stood when Go was pressed.
   useEffect(() => {
     if (props.wave === null || beforeGo.current === null) return;
     setPlayback({ before: beforeGo.current, wave: props.wave });
+    setGoing(false);
     beforeGo.current = null;
   }, [props.wave]);
 
@@ -116,7 +124,7 @@ export function Game(props: {
   }, [view.phase, feedback]);
 
   const shown = playback?.before ?? view;
-  const setup = view.phase === 'setup' && playback === null;
+  const setup = view.phase === 'setup' && playback === null && !going;
   const selectedFriend = selection?.kind === 'friend' ? view.friends.find((f) => f.id === selection.id && f.cell >= 0) : undefined;
   const aims = useMemo(() => (setup && selectedFriend !== undefined && !moving ? aimSquares(view, selectedFriend) : new Map<number, number>()), [setup, selectedFriend, moving, view]);
   const heals = useMemo(
@@ -255,13 +263,30 @@ export function Game(props: {
     if (plan.undo.length > 0) setHistory((h) => [...h, plan.undo]);
   };
 
+  /** The shop (K9): a friend bought goes straight to the tray; one bought since the last Go can be given back. */
+  const buy = async (type: FriendType): Promise<void> => {
+    if (await submit({ type: 'buy', friend: type })) feedback?.cue('buy');
+  };
+
+  const refund = async (id: number): Promise<void> => {
+    if (!(await submit({ type: 'refund', friend: id }))) return;
+    // The friend is gone: nothing can be undone on it, and it can't stay selected.
+    setHistory((h) => forgetFriend(h, id));
+    if (selection?.kind === 'friend' && selection.id === id) setSelection(null);
+    feedback?.cue('tap');
+  };
+
   const go = async (): Promise<void> => {
     drag.stop();
     setSelection(null);
     setMoving(false);
     setResult(null);
     beforeGo.current = view;
-    if (!(await submit({ type: 'go' }))) beforeGo.current = null;
+    setGoing(true);
+    if (!(await submit({ type: 'go' }))) {
+      beforeGo.current = null;
+      setGoing(false);
+    }
   };
 
   // The result over the board: the wave just watched, or after a reload the last wave of a finished day.
@@ -435,12 +460,12 @@ export function Game(props: {
                 </button>
               ))}
               {view.shop.length > 0 && (
-                <button type="button" className="btn tray-btn tray-shop" disabled={!setup} onClick={() => setShop(true)}>
+                <button type="button" className="btn tray-btn tray-shop" disabled={!setup} aria-label={`Shop: ${view.points} ${view.points === 1 ? 'point' : 'points'} to spend`} onClick={() => setShop(true)}>
                   <span className="tray-token" aria-hidden="true">
                     🛒
                   </span>
                   <span className="tray-name">Shop</span>
-                  <span className="tray-count">⭐{short(view.points)}</span>
+                  <span className="tray-count">⭐ {short(view.points)}</span>
                 </button>
               )}
             </div>
@@ -479,35 +504,7 @@ export function Game(props: {
         </Sheet>
       )}
 
-      {shop && (
-        <Sheet title={`Shop · ⭐ ${view.points}`} onClose={() => setShop(false)}>
-          <p className="sheet-note">Points come from fed kids. What you buy is yours for today only.</p>
-          <ul className="shop">
-            {view.shop.map((item) => (
-              <li key={item.type}>
-                <PatternDiagram type={item.type} className="shop-diagram" />
-                <span className="shop-what">
-                  <strong>{FRIEND_NAME[item.type]}</strong>
-                  <span className="muted small">{FRIEND_HOW[item.type]}</span>
-                </span>
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={!item.canBuy}
-                  aria-label={`Buy a ${FRIEND_NAME[item.type]} for ${item.price} points`}
-                  onClick={() =>
-                    void submit({ type: 'buy', friend: item.type }).then((ok) => {
-                      if (ok) feedback?.cue('buy');
-                    })
-                  }
-                >
-                  ⭐ {item.price}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Sheet>
-      )}
+      {shop && setup && view.shop.length > 0 && <Shop view={view} onBuy={(type) => void buy(type)} onRefund={(id) => void refund(id)} onClose={() => setShop(false)} />}
     </div>
   );
 }
