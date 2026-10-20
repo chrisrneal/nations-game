@@ -82,19 +82,27 @@ offline or install from there).
 
 ## How to play
 
-- **Read the kids' cards** under the board (or tap a kid). Each card points at
-  one of today's snacks: the list under it gives each snack's colour, feel,
-  taste and shape. Sisters wear the same colour.
-- **Pick a friend** from the tray at the bottom, then **tap a grey square**.
-  Tap a placed friend to select it, turn it with ↺ ↻, tap another grey square
-  to move it, or send it back to the tray. The square its throw will reach
-  lights up green.
+- **Read the kids' cards** above the board: each kid has a letter, and its
+  card says which snack it wants. Tap a card (or the kid) to open the full
+  card with today's snacks and their colour, feel, taste and shape. Sisters
+  wear the same colour.
+- **Put friends out**: tap a friend in the tray at the bottom (each shows its
+  name, a little diagram of its throw and how many are left), then tap a grey
+  square. Or drag it straight onto the square. Drag a placed friend to move
+  it, or off the board to put it back.
+- **Aim**: tap a placed friend and the squares it can throw to light up
+  green; tap one to aim it there. A Nurse lights up the squares it heals
+  instead. Every friend's dashed line shows where its next throw lands.
+- **Undo** takes back the last placement, move or aim; **Clear board** puts
+  this wave's friends back in the tray (it asks first).
 - A friend **right next to a lunchbox** (sharing a side) picks up that snack
   and throws it. A friend in the way catches it and throws it on, its own
   way. A kid in the way takes it. Trees, tables and the edge stop it.
 - **Press Go** and watch. The first snack to reach a kid counts: the right one
   feeds them, the wrong one gives a tummy ache (a Nurse next to them helps,
-  once).
+  once). Then a card over the board says who was fed, who got a tummy ache,
+  who the Nurse healed, how many have gone home hungry (of 3 allowed) and the
+  points earned.
 - Fed kids earn ⭐ points to spend in the **Shop** between waves, for today
   only. If more than 3 kids go home hungry, try that wave again.
 - **The menu** (☰): today's puzzle, a new practice board, how to play, sound.

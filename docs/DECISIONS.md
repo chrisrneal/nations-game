@@ -1462,3 +1462,52 @@ the difficulty ramp.
   intended solution.
 **Reversing it.** Raise `routeMax` (slower), or let the solver place blockers.
 
+
+## K6 - The controls pass: one setup screen, tap-to-aim, drag, Undo and Clear in the interface only
+**Status.** Accepted, 2026-10-20, at the owner's request ("controls pass for
+phones": the tap-then-tap controls worked but were poor on a phone). The owner
+asked for the rules engine to stay as it is, and for the decision records to
+be updated with the change.
+**Decision.**
+- **One screen, no scrolling during setup** at 360 x 740: the bar, the kids'
+  cards, the board (sized by a CSS container query to the height left, squares
+  never under 44 px) and the dock: the selected friend's controls, the tray,
+  Undo, Clear board and Go. The kids' cards share one row in a shorter form
+  when 3 or 4 kids are on the board. This replaces the old layout where the
+  clue cards and the snack list scrolled under the board.
+- **Tap-to-aim.** A selected friend lights every square its pattern can throw
+  to (Straight and Diagonal up to the first thing on each line, Short 8,
+  Bouncer 8 L-hops); a tap there sends a `turn` command. One small turn button
+  stays for facings no square stands for (a friend at the edge facing off the
+  board). A selected Nurse lights its heal range. `nurseRange` reaches the
+  screen in the host's update (`GameUpdate.healRange`), so the interface keeps
+  no copy of a tunable.
+- **Drag** on pointer events: tray to square (`place`), square to square
+  (`place` at a new cell), off the board (`toTray`). Every drag has a tap way
+  (tray then square; Move then square; To tray). While a finger drags, the page
+  cancels the browser's own touch moves, because otherwise a quick drag can end
+  as a fling and Chromium swallows the next tap.
+- **Undo and Clear board live in the interface.** The screen keeps, for each
+  change in this setup, the commands that put it back, and sends them like any
+  other command. The stack empties at Go, at a retry and in a new game.
+  Clear board sends back every friend not on the board when this setup began.
+  The sim has no undo; nothing a played wave locked in can be undone.
+- **The tray** shows each friend's name, a 5 x 5 diagram of its pattern
+  (also on the board's tokens and in the shop) and how many are left. The
+  chess symbols are gone.
+- **The result** of a wave is a card over the board: fed, tummy aches,
+  healed, hungry against the allowance, points, and one button back to setup.
+- **D12 is unchanged:** every friend shows only where its next throw lands, as
+  a dashed line from the friend to that square.
+
+**Why.** A 9-year-old playing one-handed should not scroll between a kid and
+its clue, nor turn a friend through up to eight facings to aim it. Keeping undo
+and the layout in the interface leaves the sim, its saves and the
+determinism test untouched.
+**Cost.**
+- Undo history lives in memory: reloading mid-setup empties it, and Clear
+  board then treats friends placed before the reload as earlier ones.
+- A selected friend's lit squares take taps that would otherwise select a
+  friend or open a kid's card on those squares; the cards above the board and
+  the Done button cover both.
+**Reversing it.** The previous screen is at commit `f97ff86`.

@@ -2,7 +2,8 @@
 Current state: **Snack Attack, build steps 0-6 done: a plain playable game**
 (decision record K1). The engine, solver, clue checker and generator are
 built and tested, and a grey-squares screen plays the daily, its bonus round
-and practice boards. Next is the owner's gate: play it with the 9-year-old and
+and practice boards, with phone controls (tap-to-aim, drag, Undo, one screen;
+K6). Next is the owner's gate: play it with the 9-year-old and
 say whether it's fun. The warehouse simulator is at commit `734c848`; the log
 below the line describes the earlier games.
 
@@ -22,6 +23,52 @@ below the line describes the earlier games.
 - [ ] 12 Polish on real phones
 
 ## Session log
+
+### 2026-10-20 - Controls pass for phones (lanes U, P; owner request, K6)
+**What changed.** The setup screen was reworked so a 9-year-old can play
+one-handed on a 360 x 740 phone without scrolling. The rules engine did not
+change.
+- **One screen:** the kids' cards above the board, the board sized to fit, and
+  the selected friend's controls, the tray, Undo, Clear board and Go at the
+  bottom.
+- **Tap-to-aim:** tap a placed friend and the squares it can throw to light
+  up green; tap one to aim there. A Nurse lights the squares it heals. One
+  small turn button stays for aiming off the edge.
+- **Drag:** from the tray to a square, between squares, and off the board back
+  to the tray. Tapping still does all of it.
+- **Named tray:** name, a little diagram of the throw pattern, how many are
+  left. No chess symbols anywhere.
+- **Clues:** a letter badge on every kid and its card above the board; tap
+  either for the full card with today's snacks. It stays open until closed.
+- **Result over the board:** fed, tummy aches, healed, hungry (say, 0 of 3),
+  points, and one button back to setup.
+- **Undo** (placement, move, aim change, or a Clear board) and **Clear board**
+  (with a confirm step), for this setup only.
+- **D12 kept:** every friend's dashed line shows only where its next throw
+  lands.
+- Fixed on the way: a fast drag could end as a fling that swallowed the next
+  tap.
+
+**Measured.**
+- `npm test`: 230 tests pass, including the new UI tests (aim squares, heal
+  range, preview lines, diagrams, undo, clear, the result report, short
+  clues), the 1000-day generator check and the Node-vs-Chromium determinism
+  test.
+- Phone check: 51/51 at 360 x 740 and at 412 x 915, and on six different
+  days' dailies (`DAY=n`). Wave 1 is played by tap-to-aim, then wave 2 by
+  touch drags with Undo and Clear board tried first. It checks that the
+  tray, the kids' cards, the clue card and the result card are inside the
+  viewport and not covered, and that nothing scrolls. The replay holds 58-60
+  fps with the CPU slowed 4x.
+
+**How to see it.** Open the app on a phone. Tap Diagonal (or any friend) in
+the tray and tap a grey square, or drag it there. The green squares are where
+it can throw: tap one to aim. Tap the card above the board to read the clue.
+Press Go.
+
+**What is left.** The owner's gate (play it with the 9-year-old), Kindy mode
+on screen (step 10, 64 px targets), and the gaps logged under K6 in
+docs/GAPS.md.
 
 ### 2026-10-20 - Snack Attack: reset, engine, solver, clues, generator, grey screen (all lanes; owner request, K1-K5)
 **What changed.**
