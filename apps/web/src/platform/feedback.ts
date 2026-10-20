@@ -8,13 +8,17 @@
  * - Sound is off by default. Turning it on is a tap, which is the user gesture
  *   browsers require before audio can start. Every sound is synthesized: no
  *   audio files to download or cache.
+ * - Spoken Kindy hints (`voice`, speech.ts) are on by default; a grown-up
+ *   turns them off in the grown-ups' menu (D16).
  */
 export interface Prefs {
   readonly sound: boolean;
   readonly haptics: boolean;
+  /** Kindy hints are spoken as well as shown (D16). */
+  readonly voice: boolean;
 }
 
-export const DEFAULT_PREFS: Prefs = { sound: false, haptics: true };
+export const DEFAULT_PREFS: Prefs = { sound: false, haptics: true, voice: true };
 const KEY = 'snacks-prefs';
 
 export function loadPrefs(storage: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage): Prefs {
@@ -22,7 +26,7 @@ export function loadPrefs(storage: Pick<Storage, 'getItem'> | undefined = global
     const raw = storage?.getItem(KEY);
     if (raw === null || raw === undefined) return DEFAULT_PREFS;
     const parsed = JSON.parse(raw) as Partial<Prefs>;
-    return { sound: parsed.sound === true, haptics: parsed.haptics !== false };
+    return { sound: parsed.sound === true, haptics: parsed.haptics !== false, voice: parsed.voice !== false };
   } catch {
     return DEFAULT_PREFS;
   }

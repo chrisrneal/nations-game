@@ -12,6 +12,8 @@ export interface EngineUpdate {
   readonly wave: WaveResult | null;
   /** How far a Nurse heals (the `nurseRange` tunable), so the setup screen can show it without a number of its own. */
   readonly healRange: number;
+  /** Seconds a Kindy child may go without a tap before a hint shows itself (the `kindyHintIdle` tunable). */
+  readonly hintIdle: number;
 }
 
 /** What a game came to, for the profile's record of finished days (RULES 9). */
@@ -81,7 +83,7 @@ export class GameEngine {
 
   private update(error: string | null, wave: WaveResult | null): EngineUpdate {
     const state = this.requireSession().state;
-    return { view: gameView(state), fingerprint: hashState(state), error, wave, healRange: SNACK_TUNABLES.nurseRange.value };
+    return { view: gameView(state), fingerprint: hashState(state), error, wave, healRange: SNACK_TUNABLES.nurseRange.value, hintIdle: SNACK_TUNABLES.kindyHintIdle.value };
   }
 
   private requireSession(): GameSession {

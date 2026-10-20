@@ -14,6 +14,7 @@ export type { GameUpdate } from './localHost.ts';
 export type { InstallPrompt, InstallState } from './install.ts';
 export { createFeedback, type Cue, type Feedback, type Prefs } from './feedback.ts';
 export type { GameHost } from './localHost.ts';
+export { createSpeech, type Speech } from './speech.ts';
 
 const ACTIVE_KEY = 'snacks-active-slot';
 
