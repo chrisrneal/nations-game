@@ -1,8 +1,8 @@
-import type { GameCommand, GameSaveFile, GameSpec, GameView, WaveResult } from '@snacks/contracts';
-import { GameSession, SNACK_TUNABLES, gameView, hashState, newGame } from '@snacks/sim';
+import type { GameCommand, GameSaveFile, GameSpec, GameState, GameView, Mode, Phase, Round, WaveResult } from '@snacks/contracts';
+import { GameSession, SNACK_TUNABLES, gameView, hashState, loadSave, newGame } from '@snacks/sim';
 
-/** What the host hands the interface after every change. */
-export interface GameUpdate {
+/** What the engine hands the host after every change; the host adds whose game it is. */
+export interface EngineUpdate {
   readonly view: GameView;
   /** Fingerprint of the whole game: proves a save resumes the same game. */
   readonly fingerprint: string;
@@ -12,6 +12,24 @@ export interface GameUpdate {
   readonly wave: WaveResult | null;
   /** How far a Nurse heals (the `nurseRange` tunable), so the setup screen can show it without a number of its own. */
   readonly healRange: number;
+}
+
+/** What a game came to, for the profile's record of finished days (RULES 9). */
+export interface GameSummary {
+  readonly mode: Mode;
+  readonly round: Round;
+  /** The puzzle's day: the day the run started. */
+  readonly day: number;
+  readonly phase: Phase;
+  readonly fed: number;
+  readonly hungry: number;
+  /** Failed waves tried again (D10). */
+  readonly retries: number;
+}
+
+function summarize(state: GameState, log: readonly GameCommand[]): GameSummary {
+  const { mode, round, day } = state.puzzle;
+  return { mode, round, day, phase: state.phase, fed: state.fed, hungry: state.hungry, retries: log.filter((c) => c.type === 'retry').length };
 }
 
 /**
@@ -24,17 +42,17 @@ export class GameEngine {
   private session: GameSession | null = null;
 
   /** A new game: today's daily or bonus, or a practice board from a seed. */
-  newGame(spec: GameSpec): GameUpdate {
+  newGame(spec: GameSpec): EngineUpdate {
     this.session = new GameSession(newGame(spec));
     return this.update(null, null);
   }
 
-  submit(command: GameCommand): GameUpdate {
+  submit(command: GameCommand): EngineUpdate {
     const result = this.requireSession().submit(command);
     return this.update(result.error, result.wave);
   }
 
-  current(): GameUpdate | null {
+  current(): EngineUpdate | null {
     return this.session === null ? null : this.update(null, null);
   }
 
@@ -44,12 +62,24 @@ export class GameEngine {
   }
 
   /** Resumes a save (its hash is verified). */
-  importGame(save: GameSaveFile): GameUpdate {
+  importGame(save: GameSaveFile): EngineUpdate {
     this.session = GameSession.load(save);
     return this.update(null, null);
   }
 
-  private update(error: string | null, wave: WaveResult | null): GameUpdate {
+  /** What the game being played came to. */
+  summary(): GameSummary {
+    const session = this.requireSession();
+    return summarize(session.state, session.save().log);
+  }
+
+  /** What a saved game came to, without playing it: used when old saves are folded into a profile. */
+  inspect(save: GameSaveFile): GameSummary {
+    const loaded = loadSave(save);
+    return summarize(loaded.state, loaded.log);
+  }
+
+  private update(error: string | null, wave: WaveResult | null): EngineUpdate {
     const state = this.requireSession().state;
     return { view: gameView(state), fingerprint: hashState(state), error, wave, healRange: SNACK_TUNABLES.nurseRange.value };
   }
