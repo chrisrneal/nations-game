@@ -733,6 +733,8 @@ async function main(): Promise<void> {
     const doneText = await doneScreen.innerText();
     check('done for today: the result, the streak, a countdown', /Kids fed: \d+/.test(doneText) && /Went home hungry: 0 of 3/.test(doneText) && /first go/.test(doneText) && /Streak: 1 day/.test(doneText) && /Next puzzle in \d+:\d\d:\d\d/.test(doneText), doneText.replace(/\s+/g, ' '));
     const clock1 = (await doneScreen.locator('.done-clock').textContent()) ?? '';
+    // With DAY set the page's clock is fixed at midday: move it on instead of waiting.
+    if (process.env.DAY !== undefined) await page.clock.setFixedTime(DAY * 86_400_000 + 43_205_000);
     await page.waitForTimeout(2100);
     const clock2 = (await doneScreen.locator('.done-clock').textContent()) ?? '';
     check('the countdown runs', clock1 !== clock2, `${clock1} then ${clock2}`);

@@ -263,12 +263,38 @@ rule: every action is a place, turn or toTray command, checked by the sim.
   - Everyone on that date gets the same seed. The host passes in the day as a
     whole number of days since 1970-01-01 on the device's calendar, so the
     puzzle changes at local midnight (D18). The sim never reads a clock.
-  - A finished daily can't be played again; it shows its result.
+  - A finished daily can't be played again. It shows a **done for today**
+    screen: kids fed, hungry against the allowance, how many retries it took,
+    the streak, the last seven days, and a countdown to the next puzzle at
+    local midnight. The bonus round and practice are still there (K7).
   - Failing isn't final: the player retries from the start of the failed wave
     as often as they like (D10).
-  - The **streak** counts days in a row with the daily finished (D10).
+- **The streak** (D10, K7): consecutive local calendar days on which the
+  profile finished the 10-wave daily.
+  - "Finished" means all 10 waves cleared, so the bonus round opens. A day
+    finished after failing and retrying counts the same.
+  - Today counts once it is finished. Until then the streak still shows the
+    run up to yesterday; a missed day resets it to 0.
+  - The **best streak** is the longest run the profile ever had.
+  - The bonus round (D11) and practice never change it.
+  - Each profile keeps its finished days (`historyKept`, more than a year,
+    and all of a streak still going).
+- **When the date misbehaves** (K7). The game never tries to stop clock
+  cheating; it only never crashes or damages a save.
+  - **Midnight during a run:** a run finishes on the day it started. A daily
+    begun at 23:50 and won at 00:10 counts for the day it began. A run still
+    unfinished when the app is next opened on a later day stays saved, but
+    that day's puzzle opens instead.
+  - **A timezone change** just changes which day is today. Flying west can
+    show yesterday's puzzle again (a new one if it wasn't played, the done
+    screen if it was); a finished day is never counted twice. Flying east
+    can skip a day, which counts as missed.
+  - **A clock set backwards** opens that day's puzzle. Finished days are
+    kept, and days after "today" are simply not counted until the clock
+    catches up.
 - **Practice (L):** unlimited random boards. It earns no streak and no
-  stickers.
+  stickers. Each profile has its own practice board, which reopens where it
+  was left.
 - **Cosmetics (L):** the only things that last from day to day: hats, outfits
   and sticker-book entries, earned by finishing dailies. They never change
   play.
@@ -332,9 +358,28 @@ Kindy.
 
 - Each child has a profile with their own dailies, streak, completion status
   and sticker book. The mode is set when the profile is made: main or Kindy.
-- The first screen is a row of big avatar pictures; tap yours to play.
-- Adding or deleting a profile is behind a grown-up press-and-hold (D17).
-- Each profile has its own save: snapshot plus command log (S9).
+- The first screen is a grid of big avatar pictures; tap yours to play. With
+  only one profile on the device there is nothing to choose, so the app
+  opens straight on that child's game (K7). The picture in the top bar opens
+  the picker at any time.
+- Adding or deleting a profile is behind a grown-up press-and-hold (D17): a
+  small Grown-ups button on the picker, held for a second, opens a menu to
+  add a child (a picture, an optional name, Main or Kindy), change a
+  picture or name, or delete a profile after a confirm step. A quick tap
+  does nothing but say to hold it (K7).
+  - Every profile has its own picture: one already taken can't be picked.
+  - At most `maxProfiles` (6) profiles; names are optional and at most
+    `nameLength` (12) characters.
+  - The last profile can't be deleted.
+  - Deleting a profile deletes its saves too.
+- Each profile has its own saves: today's daily (with its retry state), the
+  bonus round, practice, its finished days, streak and best streak. Each
+  game is saved as snapshot plus command log (S9). Nothing leaves the
+  device: no accounts, no server.
+- Until Kindy mode is on screen (build step 10), a Kindy profile opens a
+  picture-only "coming soon" screen with a big way back to the pictures.
+- A device that was played before profiles keeps its progress: its game and
+  finished days become the first profile's (K7).
 
 ## 13. Decisions the owner accepted (all yes, 2026-10-20)
 
@@ -409,3 +454,7 @@ Checked on every build (`npm test`):
   kid takes at most one snack (property tests).
 - The View never holds what a main-mode kid wants.
 - A save reloads to the same hash; a damaged save is refused.
+- Profiles are kept apart: one child's game, retries and finished days never
+  change another's. A pre-profile save folds into the first profile with the
+  same game and finished days. A damaged profile book is kept aside and
+  never crashes the app (K7).

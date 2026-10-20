@@ -1,11 +1,14 @@
 # Progress
-Current state: **Snack Attack, build steps 0-6 done: a plain playable game**
-(decision record K1). The engine, solver, clue checker and generator are
-built and tested, and a grey-squares screen plays the daily, its bonus round
-and practice boards, with phone controls (tap-to-aim, drag, Undo, one screen;
-K6). Next is the owner's gate: play it with the 9-year-old and
-say whether it's fun. The warehouse simulator is at commit `734c848`; the log
-below the line describes the earlier games.
+Current state: **Snack Attack, build steps 0-7 done: a plain playable game
+with a profile for each child** (decision records K1, K7). The engine,
+solver, clue checker and generator are built and tested. A grey-squares
+screen plays the daily, its bonus round and practice boards, with phone
+controls (tap-to-aim, drag, Undo, one screen; K6). Each child has a profile
+with their own daily, retries, practice board, finished days and streak; a
+finished daily shows "done for today" with a countdown (K7). Next is the
+owner's gate: play it with the 9-year-old and say whether it's fun. The
+warehouse simulator is at commit `734c848`; the log below the line describes
+the earlier games.
 
 ## Build order (docs/ROADMAP.md)
 - [x] 0 Reset (K1-K5)
@@ -15,7 +18,7 @@ below the line describes the earlier games.
 - [x] 4 Clue checker and writer
 - [x] 5 Generator
 - [x] 6 Plain playable screen (the owner's gate is open)
-- [ ] 7 Daily, practice, profiles, streak
+- [x] 7 Daily, practice, profiles, streak (K7)
 - [ ] 8 Art and animation
 - [ ] 9 Shop screen
 - [ ] 10 Kindy mode on screen
@@ -23,6 +26,74 @@ below the line describes the earlier games.
 - [ ] 12 Polish on real phones
 
 ## Session log
+
+### 2026-10-20 - Profiles, daily completion and streaks (build step 7; all lanes, owner request, K7)
+**What changed.**
+- **Profiles.** Each child on the phone has a profile: a picture, an
+  optional name, and Main or Kindy.
+  - **Who's playing?** A grid of big pictures; tapping yours is the whole
+    switch. It opens on launch when there is more than one profile, and from
+    the picture in the top-left of the game.
+  - **Grown-ups** (hold the button for a second): add a child, change a
+    picture or name, delete a profile after a confirm step. Each picture
+    belongs to one child; the last profile can't be deleted.
+- **Per-profile saves.** Today's daily (with its retry state), the bonus
+  round, practice, the finished days and the streak are all per child. One
+  child playing never touches another's game.
+- **Done for today.** A finished daily can't be played again. It shows kids
+  fed, hungry against the allowance, how many retries it took, the streak, a
+  row of the last seven days and a countdown to the next puzzle, with the
+  bonus round and practice under it. Reopening shows the same screen.
+- **The streak** (🔥 in the top bar): days in a row with the 10-wave daily
+  finished. Retried days count; a missed day resets it; practice and the
+  bonus round never change it. A best streak is kept too.
+- **Dates.** A run finishes on the day it started, even past midnight. A
+  timezone change or a clock set backwards only changes which puzzle is
+  today's; nothing crashes and no finished day is lost or counted twice.
+- **Kindy profiles** are made and chosen now, and open a picture-only
+  "coming soon" screen until Kindy mode is built (step 10).
+- **Nothing lost.** The phone's existing game and finished days become the
+  first profile's on the first launch. The save format is versioned, with a
+  migration.
+- Fixed on the way: after holding Grown-ups, lifting the finger could tap
+  the menu button that had just opened under it.
+
+**Measured.**
+- `npm test`: 293 tests pass, among them 28 new profile and streak tests
+  in the sim and 21 for the host. The host tests cover:
+  - two profiles kept apart, with their own retry state and practice;
+  - recording a finished day, and the bonus round locked until it;
+  - the streak over days, a missed day, a retried day;
+  - midnight in the middle of a run, a timezone change, a clock set back
+    400 days and to before 1970;
+  - migrating the old save, and a damaged profile book.
+
+  The 1000-day generator check and the Node-vs-Chromium determinism test
+  pass too.
+- Phone check: 106/106 at 360 x 740, 106/106 at 412 x 915, and 106/106 on
+  another day's daily (`DAY=20390`). Every new screen and control is checked
+  to be inside the viewport and not covered. The check:
+  - adds two profiles through the grown-ups' menu;
+  - plays wave 1 on the second child, switches back to find the first
+    child's game untouched, then switches again to find the second child's
+    progress kept;
+  - relaunches into the picker;
+  - opens the Kindy screen (no words on it, a 64 px way back);
+  - deletes a profile;
+  - plays the first child's daily to the end and checks done for today: the
+    result, the streak and a running countdown;
+  - opens an old pre-profile database in Chromium and finds the same game as
+    the first profile.
+
+**How to see it.** Open the app: it goes straight to today's puzzle as
+before. Tap the dog picture top-left, then hold **Grown-ups** for a second
+and add a child. With two children, the app opens on the pictures. Finish
+all 10 waves to see "done for today" and the 🔥 streak.
+
+**What is left.** Kindy mode on screen (step 10), art for the avatars (step
+8), the sticker book (step 11), and the gaps logged under K7 in
+docs/GAPS.md (the owner might want to confirm the picker rule and the
+grown-ups hold).
 
 ### 2026-10-20 - Controls pass for phones (lanes U, P; owner request, K6)
 **What changed.** The setup screen was reworked so a 9-year-old can play

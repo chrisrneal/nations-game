@@ -40,8 +40,9 @@ for two kids sharing one phone.
    Chromium on every build (S5).
 6. The UI reads a View, which never says what a main-mode kid wants (S6).
 7. Saves are snapshot plus command log, versioned with migrations, in
-   IndexedDB: one slot for each day's daily, each bonus round, and practice
-   (S9).
+   IndexedDB: one slot for each day's daily, each bonus round, and practice,
+   for each profile; beside them a versioned profile book with every
+   profile's finished days, from which the streak is worked out (S9, K7).
 8. The solver and the generator are part of the pure sim (K5).
 
 Stack: TypeScript, Vite + React, a Web Worker via Comlink, IndexedDB,
@@ -79,7 +80,10 @@ until both work on hand-made test boards.
    - [x] Controls pass for phones (K6): tap-to-aim, drag to place and move, a
      named tray, clues on the board, the result over the board, Undo and
      Clear board, one screen with no scrolling.
-7. [ ] Daily, practice, profiles (avatar picker), saves per profile, the streak.
+7. [x] Daily, practice, profiles (avatar picker), saves per profile, the streak (K7):
+   the picker, the grown-ups' menu (press and hold), done for today with a
+   countdown, the streak in the top bar, a Kindy "coming soon" screen, and
+   the old single save folded into a first profile.
 8. [ ] Art and wave animation.
 9. [ ] Shop screen.
 10. [ ] Kindy mode on screen: the 4x4 board, pictures, spoken and animated hints. Its rules and generator are already built.
