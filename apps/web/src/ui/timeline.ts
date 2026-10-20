@@ -1,7 +1,7 @@
 import type { FriendType, SnackEnd, SnackId, SquareKind, WaveResult } from '@snacks/contracts';
 
 /**
- * The wave replay worked out as a timeline (RULES 7, K9): where every snack
+ * The wave replay worked out as a timeline (RULES 7, K10): where every snack
  * is at every moment, and when each friend catches, each lunchbox opens and
  * each kid reacts. It comes from the wave result alone, so the animation
  * shows exactly what the sim decided: a snack takes one beat from its

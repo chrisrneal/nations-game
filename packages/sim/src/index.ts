@@ -17,7 +17,7 @@ export { mix32, nextUint32, randomInt, seedRng } from './rng.ts';
 export { COMPASS, FACINGS, KNIGHT, THROWERS } from './geometry.ts';
 export { SNACKS, SNACK_IDS } from './snacks.ts';
 export { resolveSnacks, type Flights, type WaveInput, type WaveKid } from './resolve.ts';
-export { SCHEMA_VERSION, placementProblem, priceOf, startGame, step, type StepResult } from './game.ts';
+export { SCHEMA_VERSION, boughtThisSetup, placementProblem, priceOf, startGame, step, type StepResult } from './game.ts';
 export { clueProblems, clueText } from './clues.ts';
 export { feedSome, routesTo, solveDay, solveWave, stuckKindySet, type Budget, type DaySolution, type Progress, type WaveSolution } from './solver.ts';
 export { kindyHint } from './hint.ts';

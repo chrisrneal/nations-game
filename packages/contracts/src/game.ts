@@ -227,6 +227,8 @@ export type GameCommand =
   | { readonly type: 'turn'; readonly friend: number; readonly facing: number }
   | { readonly type: 'toTray'; readonly friend: number }
   | { readonly type: 'buy'; readonly friend: FriendType }
+  /** Give back a friend bought since the last Go, for its full price (K9). */
+  | { readonly type: 'refund'; readonly friend: number }
   | { readonly type: 'go' }
   | { readonly type: 'retry' };
 
@@ -280,17 +282,24 @@ export interface KidView {
   readonly look: KidLook;
   /** Main mode: the clue card's text. */
   readonly clue: string | null;
-  /** Main mode: the same clue as facts, which the screen draws as pictures (K9). */
+  /** Main mode: the same clue as facts, which the screen draws as pictures (K10). */
   readonly facts: readonly ClueFact[] | null;
   /** Kindy mode: the snack pictured over their head. Never set in main mode. */
   readonly wants: SnackId | null;
   readonly healed: boolean;
 }
 
+/** One card of the shop (RULES 8, K9). */
 export interface ShopItem {
   readonly type: FriendType;
   readonly price: number;
   readonly canBuy: boolean;
+  /** Points still needed to buy one; 0 when there are enough. */
+  readonly shortfall: number;
+  /** Friends of this type the player has today, in the tray or on the board. */
+  readonly owned: number;
+  /** The friend a refund gives back: the last of this type bought since the last Go, one in the tray first; -1 if none. */
+  readonly refund: number;
 }
 
 /**

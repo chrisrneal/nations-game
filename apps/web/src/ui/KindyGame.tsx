@@ -14,7 +14,7 @@ import { SnackArt } from './art/Snack.tsx';
 import { playWave } from './replay.ts';
 
 const BEAT_MS = 220;
-/** With reduced motion: a little quicker, and no arcs, spins or dances (K9). */
+/** With reduced motion: a little quicker, and no arcs, spins or dances (K10). */
 const CALM_BEAT_MS = 160;
 /** How long a refused tap wiggles the square. */
 const NOPE_MS = 450;

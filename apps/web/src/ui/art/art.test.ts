@@ -12,7 +12,7 @@ import { LunchboxArt, ObstacleArt, TableArt } from './Scenery.tsx';
 import { SnackArt } from './Snack.tsx';
 
 /**
- * The art must be readable without colour (K9, docs/ART.md): a picture with
+ * The art must be readable without colour (K10, docs/ART.md): a picture with
  * every colour taken out must still be different from every other picture
  * of its kind. These tests fail if two snacks, lunchbox tags, shirts,
  * friends, avatars or clue pictures would differ only in colour, and if any
@@ -44,7 +44,7 @@ function allDifferent(name: string, pictures: readonly [string, ReactElement][])
   }
 }
 
-describe('the art can be read without colour (K9)', () => {
+describe('the art can be read without colour (K10)', () => {
   it('the colour-blind view catches two pictures that differ only in colour', () => {
     const red = '<svg><path d="M0 0" fill="#e8483f"/></svg>';
     const green = '<svg><path d="M0 0" fill="#79c64e"/></svg>';

@@ -14,7 +14,7 @@ describe('the View (S6)', () => {
     expect(kindy.kids.every((k) => k.wants !== null && k.clue === null)).toBe(true);
   });
 
-  it('gives each main-mode clue as facts too, for its pictures (K9), and Kindy none', () => {
+  it('gives each main-mode clue as facts too, for its pictures (K10), and Kindy none', () => {
     const puzzle = generatePuzzle('main', 'daily', 20_000, 0);
     const main = gameView(startGame(puzzle));
     for (const kid of main.kids) {
@@ -44,8 +44,8 @@ describe('the View (S6)', () => {
   it('prices the shop and says what can be bought', () => {
     const v = gameView(startGame(fixturePuzzle(['a . ka'], { shop: ['short', 'nurse'] })));
     expect(v.shop).toEqual([
-      { type: 'short', price: 1, canBuy: false },
-      { type: 'nurse', price: 3, canBuy: false },
+      { type: 'short', price: 1, canBuy: false, shortfall: 1, owned: 0, refund: -1 },
+      { type: 'nurse', price: 3, canBuy: false, shortfall: 3, owned: 0, refund: -1 },
     ]);
   });
 });

@@ -5,7 +5,7 @@ import { Svg } from './Svg.tsx';
 
 /**
  * Small pictures for everything a clue can point at (RULES 4, 6), so a clue
- * can be read from the art alone (K9): a colour chip with its own mark, crunchy
+ * can be read from the art alone (K10): a colour chip with its own mark, crunchy
  * (a jagged crunch) or soft (a cloud), sweet (a wrapped sweet) or salty (a salt
  * shaker), round, long or twisty, the hat, the glasses and sisters. A "not" is
  * a slash across the picture. Each is in a 24-unit box.

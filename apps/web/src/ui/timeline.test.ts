@@ -3,7 +3,7 @@ import type { FriendType, KidOutcome, SnackEnd, SnackHop, SnackTrace, WaveResult
 import { pointAt, waveTimeline, type BoardAtGo } from './timeline.ts';
 
 /**
- * The wave replay's timeline (K9): worked out from the wave result alone, so
+ * The wave replay's timeline (K10): worked out from the wave result alone, so
  * the animation shows exactly what the sim decided (RULES 7), a beat per
  * square, and nothing about it is random.
  */
@@ -32,7 +32,7 @@ const wave = (snacks: SnackTrace[], kids: KidOutcome[]): WaveResult => ({ wave: 
 
 const fedStraight = trace([hop('straight', [1, 0], [3, 0], 2)], 'fed', 1);
 
-describe('the wave timeline (K9)', () => {
+describe('the wave timeline (K10)', () => {
   it('a snack leaves its lunchbox, reaches its picker after one beat, and the kid a beat a square later', () => {
     const t = waveTimeline(board, wave([fedStraight], [{ kid: 1, end: 'happy', ache: false, ate: 'apple' }]), { beatMs: BEAT, calm: false, healRange: 1 });
     const f = t.flights[0]!;

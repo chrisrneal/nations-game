@@ -1,6 +1,6 @@
 # Art direction: a friendly schoolyard at lunchtime
 
-One page, decision record K9. Every picture is original, drawn in the repo as
+One page, decision record K10. Every picture is original, drawn in the repo as
 inline SVG or CSS (`apps/web/src/ui/art/`), with no third-party art, no known
 characters or brands, and no image files to download. `npx tsx
 e2e/art-sheet.ts out.png` (from `apps/web`) draws every picture on one sheet;

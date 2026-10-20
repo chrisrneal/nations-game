@@ -1,18 +1,20 @@
 # Progress
-Current state: **Snack Attack, build steps 0-8 and 10 done: the whole game
-drawn in its own style, with the waves animated** (decision records K1, K7,
-K8, K9). The engine, solver, clue checker and generator are built and
-tested. The daily, its bonus round and practice boards play on one phone
-screen (tap-to-aim, drag, Undo; K6), drawn as a schoolyard at lunchtime
-(docs/ART.md): friends on game-piece bases, kids in patterned shirts, open
-lunchboxes, trees and benches, and every clue readable from the pictures
-without seeing colour (K9). A wave plays out as snacks arcing along their
-real routes, catches, dances, wobbles, sparkles and sad walks home. Each
-child has a profile with their own daily, retries, practice board,
-finished days and streak (K7); a Kindy profile plays its own 4 x 4 daily
-with pictures only (K8). Next is the owner's gate: play both modes with the
-children and say what to change. The warehouse simulator is at commit
-`734c848`; the log below the line describes the earlier games.
+Current state: **Snack Attack, build steps 0-10 done: the whole game drawn
+in its own style, with the waves animated and a proper shop** (decision
+records K1, K7, K8, K9, K10). The engine, solver, clue checker and
+generator are built and tested. The daily, its bonus round and practice
+boards play on one phone screen (tap-to-aim, drag, Undo; K6), drawn as a
+schoolyard at lunchtime (docs/ART.md): friends on game-piece bases, kids in
+patterned shirts, open lunchboxes, trees and benches, and every clue
+readable from the pictures without seeing colour (K10). A wave plays out as
+snacks arcing along their real routes, catches, dances, wobbles, sparkles
+and sad walks home. Main mode has a shop sheet of friend cards with a
+refund until Go (K9). Each child has a profile with their own daily,
+retries, practice board, finished days and streak (K7); a Kindy profile
+plays its own 4 x 4 daily with pictures only (K8). Next is the owner's
+gate: play both modes with the children and say what to change. The
+warehouse simulator is at commit `734c848`; the log below the line
+describes the earlier games.
 
 ## Build order (docs/ROADMAP.md)
 - [x] 0 Reset (K1-K5)
@@ -23,15 +25,15 @@ children and say what to change. The warehouse simulator is at commit
 - [x] 5 Generator
 - [x] 6 Plain playable screen (the owner's gate is open)
 - [x] 7 Daily, practice, profiles, streak (K7)
-- [x] 8 Art and animation (K9)
-- [ ] 9 Shop screen
+- [x] 8 Art and animation (K10)
+- [x] 9 Shop screen (K9)
 - [x] 10 Kindy mode on screen (K8)
 - [ ] 11 Sticker book and cosmetics
 - [ ] 12 Polish on real phones
 
 ## Session log
 
-### 2026-10-20 - Art and animation (build step 8; all lanes, owner request, K9)
+### 2026-10-20 - Art and animation (build step 8; all lanes, owner request, K10)
 **What changed.**
 - **One art style, drawn in the repo.** docs/ART.md sets it: a friendly
   schoolyard at lunchtime, one warm brown outline, chunky rounded shapes,
@@ -104,7 +106,54 @@ art bigger. Turn on "Reduce motion" in the phone's settings to see the calm
 version.
 **What is left.** Real phones (iOS Safari, Android Chrome) still need a
 look; the school gate and home at the path's ends are not drawn; the shop
-screen is step 9; sounds are unchanged (docs/GAPS.md, K9).
+screen is step 9; sounds are unchanged (docs/GAPS.md, K10).
+### 2026-10-20 - A proper shop screen (build step 9; all lanes, owner request, K9)
+**What changed.**
+- **The Shop button** in the tray shows the points to spend (⭐ 3). It works
+  in setup only: it switches off the moment Go is pressed and stays off
+  until the wave has played. Kindy has no shop.
+- **The shop** rises from the bottom and fits a 360 x 740 phone with nothing
+  to scroll. One card per friend: a picture (emoji for now), the name, the
+  same throw-pattern diagram as the tray, one line on what it does ("Bounces
+  a snack in an L shape, over anything in the way."), "You have 2", and the
+  price. Too few points greys the card out and its button says "Need 2
+  more".
+- **Buying** puts the friend straight into the tray. **Give back** returns
+  every point for a friend bought since the last Go, from the tray or the
+  board, until Go is pressed (the spec was silent; recorded in K9). After
+  Go the points stay spent.
+- **Closing:** the ✕, a tap above the sheet, or a swipe down on its top.
+  Every sheet in the game now closes with a swipe down.
+- **Fixed on the way:** in the split second between pressing Go and the
+  wave starting, the tray, the shop and Go could still be tapped.
+- **"Modify before buying"** is not built: the spec has nothing to modify
+  (a friend's only setting is its facing, set on the board). It is an open
+  question for the owner in K9 and docs/GAPS.md.
+
+**Measured.**
+- `npm test`: 352 tests pass. New: 13 shop tests in the sim (refunds
+  from the tray and the board, buy again, what can't be given back, after a
+  retry, the View's cards, Kindy has none, the same daily with the same
+  purchases played twice gives identical waves and hash, a day's catalogue
+  fixed by its seed), the harness checks every one of 1600 generated days
+  sells what its solution buys and makes 150 again from their seeds, and the
+  300 Node-vs-Chromium games now buy and refund too; 4 shop-card and 1 Undo
+  tests in the interface.
+- Phone check: 181/181 at 360 x 740, 181/181 at 412 x 915, and 181/181 on
+  another day's dailies (`DAY=20390`). New: with no points, the shop's
+  every card, picture, button and close inside the viewport, nothing to
+  scroll, every card greyed with "Need N more", closed by its close button;
+  the shop off while a wave plays; on the first wave whose plan buys a
+  friend: buy it (the tray counts it at once), give it back (the points
+  return), buy it again, swipe the sheet closed, place it from the tray and
+  play the wave, which feeds every kid.
+
+**How to see it.** Play today's daily. After a wave that feeds a kid, tap
+**🛒 Shop ⭐** in the tray, buy a friend, try **↩ Give back**, buy it again,
+then pull the sheet down by its top to close it; the friend is in the tray.
+
+**What is left.** The owner's answer on "modify before buying"; trying the
+swipe on a real phone; the pictures wait for the art (step 8).
 
 ### 2026-10-20 - Kindy mode on screen (build step 10; all lanes, owner request, K8)
 **What changed.**

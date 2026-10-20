@@ -1686,9 +1686,87 @@ rule, so no stop):
 `KindyDone.tsx`; the hint is `packages/sim/src/hint.ts`; the stuck check is
 one line in `generate.ts`.
 
-## K9 - Art and animation: one original SVG style, clues readable without colour, a replay driven by a timeline
+## K9 - The shop screen: a bottom sheet of cards, a refund until Go, and no options to change before buying
+**Status.** Accepted, 2026-10-20, at the owner's request (build step 9: "a
+proper shop screen"). The owner asked for the rules, the roadmap, the spec
+and the decision records to be updated with the change, so this session
+wrote this record and edited ROADMAP.md as in K2, K7 and K8.
+**Decision.**
+- **The screen** (RULES 8, "On the screen"): the Shop button in the tray
+  shows the points; it opens a bottom sheet with a card per friend the
+  puzzle sells (a picture, the name, the tray's pattern diagram, one line a
+  grade-4 reader can follow, "You have N", the price). Too few points greys
+  the card out and its button says "Need N more". A buy puts the friend
+  straight into the tray under the sheet. The sheet closes with its close
+  button, the backdrop, Escape or a swipe down on its top; every sheet now
+  closes that way, and the swipe moves it by direct DOM writes (P7). Main
+  mode only; Kindy has no shop (D15).
+- **Never during a wave.** The button is off from the moment Go is pressed
+  (before the host answers) until the replay ends, and the sheet closes if
+  setup ends under it.
+- **A refund command** (`{ type: 'refund', friend }`, S2). The spec said
+  nothing about refunds, so, as the step 9 prompt asked, a friend bought in
+  this setup can be given back for its full price until Go is pressed,
+  whether it is in the tray or on the board. "Bought in this setup" is
+  worked out from what the game already holds: a friend's id is at least
+  the checkpoint's next id (`boughtThisSetup`), because only buying makes
+  friends and the checkpoint is set at every Go and kept by a retry. So the
+  save format, the hash and the checkpoint are unchanged, and no new state
+  is stored.
+  - The View's shop item says the shortfall, how many the player has, and
+    which friend a refund gives back: the last one bought, one still in the
+    tray before one on the board.
+  - The interface's Undo stack drops every step that names a friend given
+    back. Undo still never takes back a purchase (K6); Give back does.
+- **Fairness, tested.** A sim test plays three dailies twice, with a buy, a
+  refund and a buy again before every wave that buys, and gets the same
+  wave results and the same hash. The harness checks every one of the
+  1600 generated days sells every friend its solution buys (Kindy none), and
+  makes 150 days again from their own seeds: the catalogue, and the whole
+  puzzle, come out the same. The 300 scripted games hashed in Node and
+  Chromium now buy and refund too.
+
+**Owner's prompt, as read against the spec** (no conflict with a locked
+rule, so no stop):
+- "The spec": the prompt names docs/snack-attack.md, which does not exist;
+  the spec with the (L) rules and D1-D20 is docs/RULES.md, so that is what
+  this session read and updated.
+- "Reached from the setup phase between waves": the button also works in
+  the setup before wave 1, where with no points every card says what it
+  needs. RULES 8 allows the shop whenever the game is in setup.
+- "Refunds: follow the spec": RULES 8a (K6) said only that Undo and Clear
+  board don't reach past Go or back into the shop. A refund until Go keeps
+  to that: nothing a played wave locked in can be changed.
+- **"Modify" (an open question).** The owner's first brief spoke of picking
+  from a catalogue and modifying before buying. The spec defines nothing to
+  modify: a friend is a type and a facing, and the facing is set on the
+  board. This session did not invent one. Recommended default: keep it
+  that way; the facing is the friend's only setting, chosen where it
+  matters, on the board. If the owner meant something else (say, a hat or
+  colour for each friend), that is a cosmetic for step 11 and must never
+  change play (RULES 9). Logged in docs/GAPS.md for the owner.
+- "The catalogue for a day is fixed by the seed": it is, and it was. Every
+  main-mode puzzle sells all five friends, so nothing about the catalogue
+  changes from day to day yet; the checks guard that it stays a function of
+  the seed if it ever varies.
+
+**Why.** A 9-year-old who taps the wrong friend should be able to fix it
+before the wave, without a grown-up and without losing points for good;
+after Go the points are spent, as before. Working out "bought this setup"
+from the checkpoint keeps the sim's state, saves and hashes as they were.
+**Cost.**
+- A refunded friend's number is not reused, so friend ids can have gaps.
+- A friend bought, placed and aimed, then given back, loses its place and
+  facing; buying again puts a new one in the tray.
+- The pictures are emoji until the art in step 8.
+**Reversing it.** Remove the `refund` case in `game.ts`, the `refund`
+field of `ShopItem` and the Give back button in `apps/web/src/ui/Shop.tsx`.
+The plain list the shop replaced is at commit `d205c40`.
+
+## K10 - Art and animation: one original SVG style, clues readable without colour, a replay driven by a timeline
 **Status.** Accepted, 2026-10-20, at the owner's request (build step 8: "art
-and animation"). The owner asked for the rules, the roadmap, the spec and
+and animation"). Numbered K10 because the shop screen, built in parallel
+and merged first, took K9. The owner asked for the rules, the roadmap, the spec and
 the decision records to be updated with the change, so this session wrote
 this record and edited ROADMAP.md as in K2, K7 and K8.
 **Decision.**
@@ -1744,8 +1822,9 @@ rule, so no stop):
   crunchy, sweet and round), by the owner's own table; the test checks the
   drawings, and the harness checks that such snacks have different
   outlines, so "Something red" can still be solved without seeing red.
-- "The tray, shop and profile avatars": the shop sheet gets its pictures
-  and an awning; the shop screen itself is build step 9.
+- "The tray, shop and profile avatars": the shop screen (K9, merged while
+  this was being built) gets the friends' pictures in place of its emoji, a
+  drawn star beside each price and an awning.
 **Why.** The children should see a place, not a spreadsheet, and a
 colour-blind player must be able to solve every board. Drawing in SVG keeps
 the art small, sharp at any size, identical on every phone and testable as

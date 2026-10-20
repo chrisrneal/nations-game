@@ -10,7 +10,7 @@ const TRAITS: readonly SnackTrait[] = ['colour', 'feel', 'taste', 'shape'];
 
 /**
  * A kid's full clue card (RULES 6), with today's snacks and their traits to
- * work it out against. Every trait is a picture as well as a word (K9): the
+ * work it out against. Every trait is a picture as well as a word (K10): the
  * clue's pictures match the pictures beside the snack they point at, and a
  * colour carries its own mark, so the card can be solved without seeing
  * colour. It stays open until the player closes it.

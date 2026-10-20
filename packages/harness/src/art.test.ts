@@ -1,5 +1,5 @@
 /**
- * The art covers the rules (K9, docs/ART.md): every colour a snack in the
+ * The art covers the rules (K10, docs/ART.md): every colour a snack in the
  * pool has (RULES 4) has a mark in the art, so a clue about colour can be
  * read without seeing colour; snacks that share a colour (the cookie and the
  * pretzel are both brown) have different outlines; and every shirt the
@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { SNACKS, SNACK_IDS } from '@snacks/sim';
 import { SHIRTS, SNACK_COLOURS, SNACK_DRAWN } from '../../../apps/web/src/ui/art/palette.ts';
 
-describe('the art covers every snack and shirt the rules use (K9)', () => {
+describe('the art covers every snack and shirt the rules use (K10)', () => {
   it('every colour in the snack pool has a mark of its own', () => {
     const colours = [...new Set(SNACK_IDS.map((s) => SNACKS[s].colour))];
     for (const colour of colours) expect(SNACK_COLOURS[colour], colour).toBeDefined();

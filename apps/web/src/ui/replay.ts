@@ -2,7 +2,7 @@ import type { GameView, WaveResult } from '@snacks/contracts';
 import { waveTimeline, type Flight, type Timeline, type TimelineOptions } from './timeline.ts';
 
 /**
- * Plays a wave back over the board (RULES 7, K9) from its timeline
+ * Plays a wave back over the board (RULES 7, K10) from its timeline
  * (timeline.ts): every snack flies its real route, arcing as its thrower
  * throws, friends bob as they catch and pass, lunchbox lids pop, a fed kid
  * dances and goes home happy, a tummy ache wobbles, the Nurse sends sparkles,

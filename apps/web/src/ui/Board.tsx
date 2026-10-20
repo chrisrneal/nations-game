@@ -9,7 +9,7 @@ import { SnackArt } from './art/Snack.tsx';
 import { FRIEND_NAME, SNACK_NAME, facingAngle } from './labels.ts';
 
 /**
- * The board, drawn as the schoolyard (docs/ART.md, K9): grass for the
+ * The board, drawn as the schoolyard (docs/ART.md, K10): grass for the
  * playground, sandy paving for the path, open lunchboxes with their snack and
  * its colour's mark, trees, benches and sandpits, the parents' picnic table,
  * friends on their round bases with an arrow for their facing, and kids in

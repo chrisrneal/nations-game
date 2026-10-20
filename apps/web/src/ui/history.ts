@@ -40,3 +40,11 @@ export function clearPlan(friends: readonly FriendView[], earlier: ReadonlySet<n
     undo: placed.map((f) => ({ type: 'place', friend: f.id, cell: f.cell, facing: f.facing })),
   };
 }
+
+/**
+ * A friend given back in the shop (K9) is gone: every undo step that names it
+ * is dropped, since putting it back would be refused. Steps left empty go too.
+ */
+export function forgetFriend(history: readonly UndoStep[], friend: number): UndoStep[] {
+  return history.map((step) => step.filter((c) => !('friend' in c) || c.friend !== friend)).filter((step) => step.length > 0);
+}

@@ -4,7 +4,7 @@ import type { FriendType, SnackId } from '@snacks/contracts';
  * The art's colours and marks (docs/ART.md): a sunny schoolyard at lunchtime.
  * One warm brown ink for every outline, flat fills, one soft highlight.
  *
- * Colour is never the only cue (K9): every snack colour a clue can name has
+ * Colour is never the only cue (K10): every snack colour a clue can name has
  * its own mark (a triangle for red, a square for brown...), shown on the
  * lunchbox's tag, in the snack key and in the clue's icons, and every shirt
  * colour has its own pattern, so a colour-blind player can still solve

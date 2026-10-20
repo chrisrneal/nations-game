@@ -1,5 +1,5 @@
 /**
- * The visual check (K9): four screens at 360 x 740, photographed and compared
+ * The visual check (K10): four screens at 360 x 740, photographed and compared
  * with the pictures committed in `e2e/visual/`: the main board, the Kindy
  * board, the shop and the result over the board. Like the phone check it
  * needs a build and a Chromium (`npm run build`, then `npm run visual

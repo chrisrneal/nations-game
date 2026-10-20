@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FriendView } from '@snacks/contracts';
-import { clearPlan, undoFor } from './history.ts';
+import { clearPlan, forgetFriend, undoFor } from './history.ts';
 
 const friend = (id: number, cell: number, facing = 0, type: FriendView['type'] = 'straight'): FriendView => ({ id, type, cell, facing, target: -1, picker: false });
 
@@ -55,5 +55,13 @@ describe('clear board', () => {
 
   it('has nothing to do when nothing was placed in this setup', () => {
     expect(clearPlan([friend(2, 8)], new Set([2])).commands).toEqual([]);
+  });
+});
+
+describe('a refund and the undo stack (K9)', () => {
+  it('forgets every undo step that names a friend given back, keeping the rest in order', () => {
+    const history = [[{ type: 'toTray', friend: 4 }], [{ type: 'turn', friend: 2, facing: 1 }], [{ type: 'place', friend: 4, cell: 3, facing: 0 }, { type: 'turn', friend: 2, facing: 0 }]] as const;
+    expect(forgetFriend(history, 4)).toEqual([[{ type: 'turn', friend: 2, facing: 1 }], [{ type: 'turn', friend: 2, facing: 0 }]]);
+    expect(forgetFriend(history, 9)).toEqual(history);
   });
 });

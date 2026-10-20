@@ -2,7 +2,7 @@ import type { FriendType, KidOutcome, KidView, SnackEnd, SnackId, WaveResult } f
 
 /**
  * Words for the screen: snack and friend names, what happened in a wave, the
- * kids' letters. The pictures are in art/ (K9).
+ * kids' letters. The pictures are in art/ (K10).
  */
 
 export const SNACK_NAME: Readonly<Record<SnackId, string>> = {
@@ -28,6 +28,15 @@ export const FRIEND_HOW: Readonly<Record<FriendType, string>> = {
   short: 'throws one square, any way',
   bouncer: 'jumps a snack in an L, over anything',
   nurse: 'heals tummy aches next to it',
+};
+
+/** One line in the shop for each friend, for a grade-4 reader (RULES 5, 7). */
+export const FRIEND_BLURB: Readonly<Record<FriendType, string>> = {
+  straight: 'Throws a snack in a straight line: up, down, left or right.',
+  diagonal: 'Throws a snack corner to corner, along a slanted line.',
+  short: 'Passes a snack to a square right next to it.',
+  bouncer: 'Bounces a snack in an L shape, over anything in the way.',
+  nurse: 'Doesn’t throw. Helps a kid near it get over a tummy ache.',
 };
 
 /** The order friend types appear in the tray and shop. */
