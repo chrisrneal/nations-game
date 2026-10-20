@@ -1,14 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1a3a6b"/>
-      <stop offset="1" stop-color="#0b1424"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" fill="url(#sky)"/>
-  <rect x="96" y="350" width="320" height="22" rx="11" fill="#56d3a0"/>
-  <rect x="96" y="386" width="210" height="22" rx="11" fill="#56d3a0" opacity="0.45"/>
-  <g transform="translate(256 220) rotate(-18) scale(8.4) translate(-16 -16)">
-    <path d="M30 16 24 14h-5L13 4h-3l4 10H6L3 11H1l2 5-2 5h2l3-3h8l-4 10h3l6-10h5z" fill="#eef3fb"/>
+  <rect width="512" height="512" fill="#f4c95d"/>
+  <g fill="#ffffff" opacity="0.9">
+    <rect x="64" y="64" width="112" height="112" rx="20"/>
+    <rect x="200" y="64" width="112" height="112" rx="20" fill="#f1dfb8"/>
+    <rect x="336" y="64" width="112" height="112" rx="20"/>
+    <rect x="64" y="200" width="112" height="112" rx="20"/>
+    <rect x="200" y="200" width="112" height="112" rx="20" fill="#f1dfb8"/>
+    <rect x="336" y="200" width="112" height="112" rx="20"/>
+    <rect x="64" y="336" width="112" height="112" rx="20"/>
+    <rect x="200" y="336" width="112" height="112" rx="20" fill="#f1dfb8"/>
+    <rect x="336" y="336" width="112" height="112" rx="20"/>
+  </g>
+  <path d="M120 120 Q 190 40 256 250" fill="none" stroke="#2f9e6e" stroke-width="14" stroke-linecap="round" stroke-dasharray="4 26"/>
+  <circle cx="120" cy="120" r="34" fill="#2f9e6e"/>
+  <g transform="translate(256 262)">
+    <circle cx="-22" cy="0" r="46" fill="#e0453a"/>
+    <circle cx="22" cy="0" r="46" fill="#e0453a"/>
+    <rect x="-4" y="-66" width="8" height="30" rx="4" fill="#6b4226"/>
+    <path d="M4 -52 Q 34 -78 50 -50 Q 24 -40 4 -52 Z" fill="#3fa34d"/>
   </g>
 </svg>

@@ -1,6 +1,6 @@
 /**
  * Haptics and sound (slice 7). Device APIs live here, in the platform, so the
- * interface only says what happened ("a full shipment left") and never touches
+ * interface only says what happened ("a kid was fed") and never touches
  * `navigator.vibrate` or an AudioContext itself.
  *
  * - Haptics are on by default where the device supports them (Android
@@ -15,7 +15,7 @@ export interface Prefs {
 }
 
 export const DEFAULT_PREFS: Prefs = { sound: false, haptics: true };
-const KEY = 'warehouse-prefs';
+const KEY = 'snacks-prefs';
 
 export function loadPrefs(storage: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage): Prefs {
   try {
@@ -36,7 +36,7 @@ export function savePrefs(prefs: Prefs, storage: Pick<Storage, 'setItem'> | unde
   }
 }
 
-export type Cue = 'tap' | 'depart' | 'full' | 'express' | 'buy' | 'unlock' | 'collect' | 'boost';
+export type Cue = 'tap' | 'buy' | 'fed' | 'ache' | 'win' | 'lose';
 
 export interface Feedback {
   readonly prefs: Prefs;
@@ -49,46 +49,38 @@ export interface Feedback {
 const VIBRATE: Readonly<Partial<Record<Cue, number | number[]>>> = {
   tap: 8,
   buy: 15,
-  express: [15, 40, 15],
-  unlock: [20, 50, 30],
-  collect: [10, 30, 10, 30, 25],
-  boost: [30, 30, 60],
+  ache: [30, 40, 30],
+  win: [20, 50, 30, 50, 40],
+  lose: [60],
 };
 
 /** Notes for each cue: [frequency Hz, start s, length s]. */
 const NOTES: Readonly<Partial<Record<Cue, readonly (readonly [number, number, number])[]>>> = {
   tap: [[1400, 0, 0.025]],
-  depart: [[520, 0, 0.08]],
-  full: [
+  buy: [[880, 0, 0.06]],
+  // A happy two-note chirp: a kid ate the right snack.
+  fed: [
     [660, 0, 0.07],
     [990, 0.06, 0.1],
   ],
-  express: [
-    [784, 0, 0.07],
-    [988, 0.07, 0.07],
-    [1319, 0.14, 0.14],
+  // A falling wobble: a tummy ache.
+  ache: [
+    [440, 0, 0.09],
+    [330, 0.09, 0.14],
   ],
-  buy: [[880, 0, 0.06]],
-  unlock: [
+  win: [
     [523, 0, 0.08],
     [659, 0.08, 0.08],
     [784, 0.16, 0.08],
     [1047, 0.24, 0.18],
   ],
-  collect: [
-    [784, 0, 0.08],
-    [1047, 0.08, 0.2],
-  ],
-  // A quick rising sweep: something just got faster.
-  boost: [
-    [392, 0, 0.06],
-    [587, 0.05, 0.06],
-    [784, 0.1, 0.06],
-    [1175, 0.15, 0.22],
+  lose: [
+    [392, 0, 0.12],
+    [294, 0.12, 0.22],
   ],
 };
 
-/** Departures can come several a second with eight docks; at most this many sounds a second. */
+/** A wave can feed several kids at once; at most this many sounds a second. */
 const MAX_SOUNDS_PER_SEC = 5;
 
 export function createFeedback(initial: Prefs = loadPrefs()): Feedback {
@@ -113,7 +105,7 @@ export function createFeedback(initial: Prefs = loadPrefs()): Feedback {
     const now = ctx.currentTime;
     const wall = performance.now();
     recent = recent.filter((t) => wall - t < 1000);
-    if (cue !== 'buy' && cue !== 'unlock' && cue !== 'collect' && cue !== 'boost' && recent.length >= MAX_SOUNDS_PER_SEC) return;
+    if ((cue === 'fed' || cue === 'ache' || cue === 'tap') && recent.length >= MAX_SOUNDS_PER_SEC) return;
     recent.push(wall);
     for (const [freq, start, length] of notes) {
       const osc = ctx.createOscillator();

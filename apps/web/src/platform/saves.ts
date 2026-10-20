@@ -1,12 +1,11 @@
-import type { SavedWarehouse } from './engine.ts';
+import type { GameSaveFile } from '@snacks/contracts';
 
 /** One save slot on this device. */
 export interface SlotRecord {
   readonly slot: string;
   /** Wall-clock time of the save, for the list only; the sim never sees it. */
   readonly savedAt: number;
-  readonly tick: number;
-  readonly game: SavedWarehouse;
+  readonly game: GameSaveFile;
 }
 
 export type SlotSummary = Omit<SlotRecord, 'game'>;
@@ -20,7 +19,7 @@ export interface SaveStore {
 }
 
 function summary(record: SlotRecord): SlotSummary {
-  return { slot: record.slot, savedAt: record.savedAt, tick: record.tick };
+  return { slot: record.slot, savedAt: record.savedAt };
 }
 
 function bySlot(a: SlotSummary, b: SlotSummary): number {
@@ -48,8 +47,8 @@ export class MemorySaveStore implements SaveStore {
   }
 }
 
-/** A fresh database name, so the retired Nations and airport saves (databases "nations" and "airport") are never read as warehouses. */
-export const DB_NAME = 'warehouse';
+/** A fresh database name, so the retired Nations, airport and warehouse saves are never read as Snack Attack games (K1). */
+export const DB_NAME = 'snacks';
 const STORE = 'slots';
 
 function request<T>(req: IDBRequest<T>): Promise<T> {
