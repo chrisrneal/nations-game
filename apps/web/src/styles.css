@@ -1282,41 +1282,553 @@ details summary {
   font-weight: 600;
 }
 
-/* ---- a Kindy profile before Kindy mode is on screen: pictures only ---- */
-.kindy-soon {
+/* ---- pictures drawn by CSS (Pic.tsx): no text on the page for them ---- */
+.pic {
+  display: inline-block;
+  line-height: 1;
+}
+
+.pic::before,
+.avatar::before {
+  content: attr(data-pic);
+}
+
+.loading-pic {
+  font-size: 4rem;
+  animation: dance 0.9s ease-in-out infinite;
+}
+
+/* ---- Kindy mode (RULES 11): pictures only, 64 px targets, the board as wide as the phone ---- */
+.kindy-game {
+  position: relative;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #fdf6e3;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.kindy-btn {
+  min-width: 64px;
+  min-height: 64px;
+  border-radius: 20px;
+  border: 3px solid #e3d6b4;
+  background: #ffffff;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  font-size: 2.2rem;
+  cursor: pointer;
+  touch-action: manipulation;
+  color: inherit;
+}
+
+.kindy-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.kindy-btn-space {
+  width: 64px;
+  height: 64px;
+  flex: none;
+}
+
+.kindy-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 16px;
+}
+
+.kindy-avatar {
+  flex: none;
+  border-radius: 50%;
+}
+
+.kindy-slots {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kindy-slots li {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  font-size: 1.5rem;
+  border-radius: 50%;
+  background: #efe6cf;
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+.kindy-slots li.fed {
+  background: #c9eec0;
+  filter: none;
+  opacity: 1;
+  animation: pop 0.5s ease-out;
+}
+
+.kindy-ask {
+  flex: none;
+  border-radius: 50%;
+  background: #fff3c4;
+}
+
+.kindy-area {
+  padding: 4px 16px;
+}
+
+.kindy .sq {
+  border-radius: 12px;
+  font-size: 2.4rem;
+}
+
+.kindy .kid {
+  width: 80%;
+  height: 80%;
+  border-width: 4px;
+  overflow: visible;
+}
+
+.kindy .kid-label {
+  width: auto;
+  height: auto;
+  font-size: 1em;
+}
+
+/* The snack a Kindy kid wants: a picture in a bubble over their head. */
+.kindy .kid-wants {
+  top: -22px;
+  font-size: 0.75em;
+  padding: 3px 5px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  z-index: 1;
+}
+
+.kindy .friend {
+  width: 80%;
+  height: 80%;
+}
+
+.kindy .friend-pic {
+  font-size: 0.9em;
+}
+
+.kindy .friend-arrow {
+  inset: -9px;
+}
+
+.kindy .friend-arrow-tip {
+  border-left-width: 10px;
+  border-right-width: 10px;
+  border-bottom-width: 13px;
+}
+
+/* Kindy aim squares: a big pulsing ring and an arrow the way the throw goes. */
+.kindy .sq-aimable {
+  box-shadow: inset 0 0 0 5px var(--accent);
+  animation: glow 1.2s ease-in-out infinite;
+}
+
+.kindy .sq-aimable::after {
+  display: none;
+}
+
+.aim-arrow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.aim-arrow::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 14px solid transparent;
+  border-right: 14px solid transparent;
+  border-bottom: 18px solid var(--accent);
+}
+
+/* A tap that can't do anything wiggles. */
+[data-nope] {
+  animation: wobble 0.3s ease-in-out 1;
+}
+
+/* The squares and buttons a hint points at. */
+[data-hint] {
+  outline: 5px solid #f2b544;
+  outline-offset: -5px;
+}
+
+.kindy-dock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px calc(12px + env(safe-area-inset-bottom));
+}
+
+.kindy-tray {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+  min-height: 72px;
+  padding: 4px;
+  border-radius: 22px;
+  background: #efe6cf;
+}
+
+.kindy-friend {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border-color: #2f6fd6;
+}
+
+.kindy-friend.on {
+  background: #dbe6ff;
+  box-shadow: 0 0 0 4px #2563eb;
+}
+
+.kindy-basket {
+  width: 72px;
+  height: 72px;
+  flex: none;
+}
+
+/* Go: a big green play triangle. */
+.kindy-go {
+  width: 92px;
+  height: 92px;
+  flex: none;
+  border-radius: 50%;
+  border: 0;
+  background: #2f9e6e;
+  box-shadow: 0 4px 0 #237a55;
+}
+
+.kindy-go-arrow {
+  display: block;
+  width: 0;
+  height: 0;
+  margin-left: 8px;
+  border-top: 22px solid transparent;
+  border-bottom: 22px solid transparent;
+  border-left: 34px solid #ffffff;
+}
+
+.kindy-go:not(:disabled) .kindy-go-arrow {
+  animation: breathe 2.4s ease-in-out infinite;
+}
+
+/* The hint's hand: from the friend to where it goes, then a tap, over and over. */
+.kindy-hand {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 20;
+  font-size: 3.2rem;
+  pointer-events: none;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.35));
+  opacity: 0;
+}
+
+.kindy-hand[data-on='move'] {
+  animation: hand-move 2.2s ease-in-out infinite;
+}
+
+.kindy-hand[data-on='tap'] {
+  animation: hand-tap 1.1s ease-in-out infinite;
+}
+
+@keyframes hand-move {
+  0% {
+    opacity: 0;
+    transform: translate(calc(var(--x0) - 30%), calc(var(--y0) - 10%));
+  }
+  10%,
+  25% {
+    opacity: 1;
+    transform: translate(calc(var(--x0) - 30%), calc(var(--y0) - 10%));
+  }
+  65%,
+  80% {
+    opacity: 1;
+    transform: translate(calc(var(--x1) - 30%), calc(var(--y1) - 10%));
+  }
+  72% {
+    transform: translate(calc(var(--x1) - 30%), calc(var(--y1) - 10%)) scale(0.85);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(var(--x1) - 30%), calc(var(--y1) - 10%));
+  }
+}
+
+@keyframes hand-tap {
+  0%,
+  100% {
+    opacity: 1;
+    transform: translate(calc(var(--x1) - 30%), calc(var(--y1) - 10%));
+  }
+  50% {
+    opacity: 1;
+    transform: translate(calc(var(--x1) - 30%), calc(var(--y1) - 10%)) scale(0.82);
+  }
+}
+
+/* Kindy kids react: a happy dance, or a head shake when a wrong snack bounces off. */
+.kindy .sq[data-outcome='happy'] .kid {
+  animation: dance 0.4s ease-in-out 3;
+}
+
+.sq[data-outcome='shake'] .kid {
+  animation: shake 0.22s ease-in-out 4;
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  25% {
+    transform: rotate(-14deg);
+  }
+  75% {
+    transform: rotate(14deg);
+  }
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.4);
+  }
+  70% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes glow {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.12);
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+/* The end of the day: a party over everything. */
+.kindy-party {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: space-evenly;
   padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+  background: rgba(253, 246, 227, 0.94);
+  overflow: hidden;
 }
 
-.kindy-soon-art {
-  margin: 0;
+.kindy-confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.kindy-confetti .pic {
+  position: absolute;
+  top: -48px;
+  left: calc(4% + var(--i) * 6%);
+  font-size: 2rem;
+  animation: fall calc(2.6s + var(--i) * 0.13s) linear calc(var(--i) * -0.37s) infinite;
+}
+
+@keyframes fall {
+  to {
+    transform: translateY(820px) rotate(540deg);
+  }
+}
+
+.kindy-party-star {
+  font-size: 6rem;
+  pointer-events: none;
+  animation: pop 0.7s ease-out, breathe 1.8s ease-in-out 0.7s infinite;
+}
+
+.kindy-party-kids {
   display: flex;
-  gap: 16px;
-  font-size: 3.5rem;
-}
-
-.kindy-soon-art span:nth-child(2) {
-  animation: wobble 2.4s ease-in-out infinite;
-}
-
-.kindy-soon-wait {
+  gap: 6px;
   margin: 0;
-  font-size: 3rem;
+  padding: 0;
+  list-style: none;
+  font-size: 2.6rem;
 }
 
-.kindy-back {
-  min-width: 120px;
-  min-height: 80px;
-  font-size: 2.2rem;
-  border-radius: 24px;
+.kindy-party-kids li {
+  animation: dance 0.5s ease-in-out calc(var(--i) * 0.1s) infinite;
+}
+
+.kindy-party-actions,
+.kindy-done-actions {
+  position: relative;
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+}
+
+.kindy-next {
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  border: 0;
+  background: #2f9e6e;
+  box-shadow: 0 4px 0 #237a55;
+}
+
+.kindy-again,
+.kindy-home {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+}
+
+/* Done for today, in pictures: the sleeping sun and the moon crossing the night. */
+.kindy-done {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: 8px;
+  padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
+}
+
+.kindy-sun {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 5rem;
+  background: radial-gradient(circle, #ffe27a 55%, #ffd23f 56%, #ffd23f 62%, transparent 63%), repeating-conic-gradient(#ffd23f 0 8deg, transparent 8deg 22deg);
+  animation: breathe 4s ease-in-out infinite;
+}
+
+.kindy-sun.awake {
+  animation: dance 1.2s ease-in-out infinite;
+}
+
+.kindy-night {
+  --gone: 0;
+  position: relative;
+  width: 100%;
+  height: 64px;
+  border-radius: 32px;
+  background: #2b3566;
+  overflow: hidden;
+}
+
+.kindy-night-sky {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: calc(32px + var(--gone) * (100% - 64px));
+  background: linear-gradient(90deg, #1b2148, #4a5aa8);
+}
+
+.kindy-moon {
+  position: absolute;
+  top: 50%;
+  left: calc(32px + var(--gone) * (100% - 96px));
+  transform: translate(-50%, -50%);
+  font-size: 2.3rem;
+}
+
+.kindy-sunrise {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 2.3rem;
+}
+
+.kindy-fed,
+.kindy-week {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kindy-fed {
+  font-size: 2.4rem;
+}
+
+.kindy-week li {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 1.4rem;
+  background: #efe6cf;
+}
+
+.kindy-week li.on {
+  background: #fff3c4;
+}
+
+.kindy-today {
+  width: 104px;
+  height: 104px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .kindy-soon-art span {
+  .kindy-hand[data-on='move'],
+  .kindy-hand[data-on='tap'] {
     animation: none;
+    opacity: 1;
+    transform: translate(calc(var(--x1) - 30%), calc(var(--y1) - 10%));
+  }
+  .kindy-confetti,
+  .loading-pic,
+  .kindy-sun,
+  .kindy-go:not(:disabled) .kindy-go-arrow,
+  .kindy .sq-aimable,
+  .kindy-party-kids li,
+  .kindy-party-star {
+    animation: none;
+  }
+  .kindy-confetti {
+    display: none;
   }
 }

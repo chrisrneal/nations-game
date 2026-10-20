@@ -132,10 +132,11 @@ export function createFeedback(initial: Prefs = loadPrefs()): Feedback {
     },
     canVibrate,
     setPrefs(next) {
+      const soundOn = next.sound && !prefs.sound;
       prefs = next;
       savePrefs(next);
       // Turning sound on is a tap: start (or resume) audio inside that gesture, with a confirming note.
-      if (next.sound) {
+      if (soundOn) {
         void context()?.resume();
         play('buy');
       }

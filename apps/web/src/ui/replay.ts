@@ -1,4 +1,5 @@
 import type { GameView, WaveResult } from '@snacks/contracts';
+import { kidReaction } from './kindy.ts';
 import { SNACK_EMOJI } from './labels.ts';
 
 /**
@@ -23,8 +24,9 @@ export function playWave(overlay: HTMLElement, board: HTMLElement, view: GameVie
 
   for (const trace of wave.snacks) {
     const el = document.createElement('span');
-    el.className = 'flying-snack';
-    el.textContent = SNACK_EMOJI[trace.snack];
+    // Drawn by CSS from data-pic: no text on the page, as Kindy needs (Pic.tsx).
+    el.className = 'flying-snack pic';
+    el.dataset.pic = SNACK_EMOJI[trace.snack];
     overlay.appendChild(el);
     made.push(el);
     // One beat out of the lunchbox to the picker, then each throw.
@@ -51,14 +53,14 @@ export function playWave(overlay: HTMLElement, board: HTMLElement, view: GameVie
     longest = Math.max(longest, flight + 300);
   }
 
-  // Each kid reacts once the snacks have landed: a happy dance, a wobble, or a sad walk home.
+  // Each kid reacts once the snacks have landed: a happy dance, a wobble, a sad walk home, or (Kindy) a head shake at a wrong snack.
   const marked: HTMLElement[] = [];
   const timer = setTimeout(() => {
     for (const outcome of wave.kids) {
       const kid = view.kids.find((k) => k.id === outcome.kid);
       const cell = kid === undefined ? null : board.querySelector<HTMLElement>(`[data-cell="${kid.cell}"]`);
       if (cell === null) continue;
-      cell.dataset.outcome = outcome.end === 'happy' ? 'happy' : outcome.ache ? 'ache' : outcome.end;
+      cell.dataset.outcome = outcome.end === 'happy' ? 'happy' : outcome.ache ? 'ache' : outcome.end === 'waits' ? kidReaction(wave, outcome.kid) : outcome.end;
       marked.push(cell);
     }
   }, longest);

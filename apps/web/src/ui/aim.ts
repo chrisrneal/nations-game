@@ -51,6 +51,35 @@ export function aimSquares(view: AimBoard, friend: Pick<FriendView, 'type' | 'ce
   return aims;
 }
 
+/**
+ * Kindy's tap-to-aim (RULES 11): one big square per way a friend can face,
+ * where its throw that way ends: the first thing in the way, or the last
+ * square before the edge. A facing straight off the board has no square, and
+ * never feeds anyone. At most 4 squares for a Straight, so a small finger has
+ * few, large choices.
+ */
+export function lineEnds(view: AimBoard, friend: Pick<FriendView, 'type' | 'cell'>): ReadonlyMap<number, number> {
+  const ends = new Map<number, number>();
+  if (friend.cell < 0 || friend.type === 'nurse') return ends;
+  const x0 = friend.cell % view.width;
+  const y0 = Math.floor(friend.cell / view.width);
+  const line = friend.type === 'straight' || friend.type === 'diagonal';
+  for (const facing of view.facings[friend.type]) {
+    const [dx, dy] = stepOf(friend.type, facing);
+    let x = x0 + dx;
+    let y = y0 + dy;
+    let end = -1;
+    while (onBoard(view, x, y)) {
+      end = y * view.width + x;
+      if (!line || !passesOver(view, end)) break;
+      x += dx;
+      y += dy;
+    }
+    if (end >= 0) ends.set(end, facing);
+  }
+  return ends;
+}
+
 /** The squares within `range` of a Nurse, diagonals included (RULES 7, D3), not its own. */
 export function healSquares(width: number, height: number, cell: number, range: number): ReadonlySet<number> {
   const cells = new Set<number>();

@@ -34,13 +34,32 @@
  * - the second child plays wave 1; switching back finds the first child's
  *   game untouched, and switching again finds the second child's progress
  *   kept; with more than one profile a launch opens the picker;
- * - a Kindy profile opens a picture-only "coming soon" screen with a 64 px
- *   way back; deleting a profile asks first;
+ * - deleting a profile asks first;
  * - the first child plays the rest of the daily: the done-for-today screen
  *   shows the result, the streak and a running countdown, with the bonus
  *   round and practice; it is what reopening shows; practice keeps the streak;
  * - an old save from before profiles (seeded into the browser's database)
  *   opens as the first profile at the same wave, with its finished day.
+ *
+ * Kindy mode (RULES 11, K8), played by the Kindy profile:
+ * - its own 4 x 4 daily, the board as wide as the phone, the tray, basket,
+ *   help and the green Go all inside 360 x 740, every target 64 px or more,
+ *   Go in the bottom third, nothing to scroll;
+ * - no text at all on the page anywhere in the child's Kindy flow (setup,
+ *   hints, the replay, the party, done for today, practice): no visible text
+ *   node, and no picture drawn by CSS that is a letter or digit;
+ * - left alone for the idle time, the hint's hand shows itself; the first
+ *   tap unlocks the voice (a stand-in for speechSynthesis records what it
+ *   says), and a hint is then said out loud;
+ * - a wrong snack (worked out here in Node) bounces off: the kid shakes their
+ *   head, waits, the board stays as it was and the next kid arrives;
+ * - the rest of the day is played by following the hand alone, tapping only
+ *   what it points at (each 64 px or more), until every kid is fed; then the
+ *   party, and done for today with the sleeping sun, the moon on its way to
+ *   the sunrise, a face per kid fed and the week's stars; reopening shows it
+ *   again; practice gives a new Kindy board;
+ * - turning the voice off in the grown-ups' menu keeps the hand and stops
+ *   the voice.
  * Every new screen and control is checked to be inside 360 x 740 and not
  * covered, not just positioned.
  */
@@ -50,7 +69,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, type CDPSession, type Locator, type Page } from 'playwright-core';
 import type { FriendType, PlacedFriend, Puzzle, WaveLayout } from '@snacks/contracts';
-import { GameSession, generatePuzzle, startGame, witnessCommands } from '@snacks/sim';
+import { GameSession, SNACK_TUNABLES, gameView, generatePuzzle, resolveSnacks, startGame, step, witnessCommands } from '@snacks/sim';
+import { lineEnds } from '../src/ui/aim.ts';
+import { HINT_LINES } from '../src/ui/kindy.ts';
 import { FRIEND_NAME, facingAngle, stepOf } from '../src/ui/labels.ts';
 
 const PORT = 4179;
@@ -332,6 +353,109 @@ async function playWaveByTaps(page: Page, puzzle: Puzzle, layout: WaveLayout): P
   return ((await overlay.locator('h2').textContent()) ?? '').includes(`${kids} of ${kids} fed`);
 }
 
+
+/**
+ * Kindy has no text (RULES 11): no visible text node anywhere on the page,
+ * and no picture drawn by CSS from `data-pic` that is a letter or a digit.
+ */
+async function noText(page: Page, where: string): Promise<void> {
+  const r = (await page.evaluate(`(() => {
+    const text = [];
+    const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = walk.nextNode())) {
+      const el = n.parentElement;
+      if (el === null || n.textContent.trim() === '') continue;
+      const box = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      if (box.width > 0 && box.height > 0 && style.visibility !== 'hidden' && style.display !== 'none') text.push(n.textContent.trim().slice(0, 30));
+    }
+    const pics = [...document.querySelectorAll('[data-pic]')].map((e) => e.getAttribute('data-pic')).filter((p) => /[\\p{L}\\p{N}]/u.test(p));
+    return { text, pics, kindy: document.querySelector('.kindy-game') !== null };
+  })()`)) as { text: string[]; pics: string[]; kindy: boolean };
+  check(`no text anywhere on the page: ${where}`, r.kindy && r.text.length === 0 && r.pics.length === 0, [...r.text, ...r.pics].join(' | '));
+}
+
+/** What the stand-in voice has said, without the silent line that unlocks it. */
+const spoken = async (page: Page): Promise<string[]> => ((await page.evaluate('window.__spoken ?? []')) as string[]).filter((t) => t.trim() !== '');
+
+/** Waits until a Kindy wave has played out: Go is back, or the party is on. */
+async function kindyWaveDone(page: Page): Promise<boolean> {
+  for (let i = 0; i < 150; i++) {
+    if ((await page.locator('.kindy-party').count()) > 0) return true;
+    if (await page.locator('.kindy-go').isEnabled().catch(() => false)) return true;
+    await page.waitForTimeout(100);
+  }
+  return false;
+}
+
+/**
+ * One step of a Kindy hint, as a 4-year-old would follow it: tap the help
+ * button if the hand isn't showing, then tap what the hand points at, first
+ * the friend (when it starts there) and then where it goes. Returns what was
+ * tapped, its size, and whether it was Go; null when no hand showed.
+ */
+async function followHand(page: Page): Promise<{ sizes: number[]; go: boolean } | null> {
+  const to = page.locator('[data-hint="to"]');
+  if ((await to.count()) === 0) {
+    await page.locator('.kindy-ask').tap();
+    if (!(await until(page, async () => (await to.count()) > 0))) return null;
+  }
+  const sizes: number[] = [];
+  const from = page.locator('[data-hint="from"]');
+  if ((await from.count()) > 0) {
+    const b = await from.boundingBox();
+    sizes.push(Math.min(b?.width ?? 0, b?.height ?? 0));
+    await from.tap();
+    await page.waitForTimeout(120);
+  }
+  const b = await to.boundingBox();
+  sizes.push(Math.min(b?.width ?? 0, b?.height ?? 0));
+  const go = (await to.getAttribute('class'))?.includes('kindy-go') === true;
+  await to.tap();
+  await page.waitForTimeout(150);
+  return { sizes, go };
+}
+
+/**
+ * Friends to put out for Kindy wave 1 (one, else two) so that a wrong snack
+ * reaches the kid and nothing feeds them, worked out in Node. Each comes with
+ * the square to tap to aim it, found the way the screen finds it: placed
+ * facing the way the last one was aimed (up at first), then aimed. Null if
+ * this day has no such setup.
+ */
+function wrongThrow(puzzle: Puzzle): { cell: number; facing: number; aimAt: number | null }[] | null {
+  const kid = puzzle.kids.find((k) => k.wave === 1)!;
+  const kids = [{ id: kid.id, cell: kid.cell, wants: kid.wants }];
+  const open = puzzle.board.squares.flatMap((sq, c) => (sq === 'open' ? [c] : []));
+  const spots = open.flatMap((cell) => [0, 2, 4, 6].map((facing) => ({ cell, facing })));
+  const plans = [...spots.map((a) => [a]), ...spots.flatMap((a) => spots.filter((b) => b.cell !== a.cell).map((b) => [a, b]))].filter((p) => p.length <= puzzle.tray.length);
+  for (const plan of plans) {
+    const friends = plan.map((f, i) => ({ id: i + 1, type: 'straight' as const, ...f }));
+    const r = resolveSnacks({ board: puzzle.board, friends, kids, mode: 'kindy' });
+    if (r.fed.size > 0 || !r.snacks.some((t) => t.end === 'bounced' && t.kid === kid.id)) continue;
+    let state = startGame(puzzle);
+    let last = 0;
+    const out: { cell: number; facing: number; aimAt: number | null }[] = [];
+    let ok = true;
+    plan.forEach((f, i) => {
+      const placed = step(state, { type: 'place', friend: i + 1, cell: f.cell, facing: last });
+      if (placed.error !== null) {
+        ok = false;
+        return;
+      }
+      const view = gameView(placed.state);
+      const aimAt = f.facing === last ? null : ([...lineEnds(view, view.friends[i]!)].find(([, facing]) => facing === f.facing)?.[0] ?? -1);
+      if (aimAt === -1) ok = false;
+      state = step(placed.state, { type: 'turn', friend: i + 1, facing: f.facing }).state;
+      last = f.facing;
+      out.push({ ...f, aimAt });
+    });
+    if (ok) return out;
+  }
+  return null;
+}
+
 async function openPicker(page: Page): Promise<void> {
   await page.locator('.bar-avatar').tap();
   await page.locator('.picker').waitFor({ timeout: 5000 });
@@ -392,6 +516,13 @@ async function main(): Promise<void> {
     const page = context.pages()[0] ?? (await context.newPage());
     // Midday on the day being checked; timers keep running.
     if (process.env.DAY !== undefined) await page.clock.setFixedTime(DAY * 86_400_000 + 43_200_000);
+    // A stand-in for the phone's voice (headless Chromium has none): it writes down what it is asked to say.
+    await page.addInitScript(`(() => {
+      window.__spoken = [];
+      function Utterance(text) { this.text = text; }
+      Object.defineProperty(window, 'SpeechSynthesisUtterance', { value: Utterance, configurable: true, writable: true });
+      Object.defineProperty(window, 'speechSynthesis', { value: { speak: (u) => window.__spoken.push(u.text), cancel: () => {} }, configurable: true });
+    })()`);
     await page.goto(URL);
     await page.locator('.board').waitFor();
     await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
@@ -691,17 +822,116 @@ async function main(): Promise<void> {
     check('with more than one profile, a launch opens the picker', (await page.locator('.board').count()) === 0 && (await page.locator('.picker-tile').count()) === 3);
     await checkOnScreen('after a launch: every picture is inside the viewport', page.locator('.picker-tile'));
 
-    // ---- a Kindy profile: coming soon, in pictures ----
+    // ---- Kindy mode (RULES 11): a whole day by taps on big pictures, no text ----
     await tile(page, 'Pip').tap();
-    const soon = page.getByRole('region', { name: 'Kindy mode is coming soon' });
-    await soon.waitFor();
-    const words = (await soon.innerText()).replace(/[^A-Za-z]/g, '');
-    check('a Kindy profile opens a coming-soon screen with no words on it', words === '' && (await page.locator('.board').count()) === 0, words);
-    await checkOnScreen('coming soon: the way back is inside the viewport', soon.getByRole('button', { name: 'Back to the pictures' }));
-    await bigTargets(page, '.kindy-back', 64, 'coming soon’s way back');
-    await noVerticalScroll(page, 'coming soon');
-    await shot(page, '13-kindy-soon');
-    await soon.getByRole('button', { name: 'Back to the pictures' }).tap();
+    const kindy = page.getByRole('region', { name: 'Kindy' });
+    await kindy.locator('.board').waitFor();
+    const kp = generatePuzzle('kindy', 'daily', DAY, 0);
+    const kSquares = await kindy.locator('.board .sq').count();
+    const kBoard = await kindy.locator('.board').boundingBox();
+    check('a Kindy profile opens its own Kindy daily: a 4 x 4 board as wide as the phone', kSquares === 16 && kBoard !== null && kBoard.width >= WIDTH - 40, `${kSquares} squares, ${Math.round(kBoard?.width ?? 0)} px wide`);
+    const wantsShown = await kindy.locator('.kid-wants').count();
+    check('the snack each kid wants is a picture over their head', wantsShown === kp.kids.filter((k) => k.wave === 1).length && (await kindy.locator('.kid-wants[data-pic]').count()) === wantsShown);
+    for (const part of ['.board', '.kindy-tray', '.kindy-basket', '.kindy-go', '.kindy-ask', '.kindy-avatar', '.kindy-slots']) await checkOnScreen(`Kindy setup: ${part.slice(1)} is inside the viewport`, kindy.locator(part));
+    const kGo = await kindy.locator('.kindy-go').boundingBox();
+    check('Kindy: the big green Go is in the bottom third', kGo !== null && kGo.y >= (HEIGHT * 2) / 3 && kGo.width >= 80, `top ${Math.round(kGo?.y ?? 0)}, ${Math.round(kGo?.width ?? 0)} px`);
+    await bigTargets(page, '.kindy-game button', 64, 'Kindy setup, every button');
+    await bigTargets(page, '.kindy-game .board .sq', 64, 'Kindy setup, every square');
+    await noText(page, 'Kindy setup');
+    await noHorizontalScroll(page, 'Kindy setup');
+    await noVerticalScroll(page, 'Kindy setup');
+    await shot(page, '13-kindy-setup');
+
+    // Left alone: the hand shows itself. Nothing is said yet: no tap has unlocked the voice.
+    const idleMs = SNACK_TUNABLES.kindyHintIdle.value * 1000;
+    await page.waitForTimeout(idleMs - 1500);
+    const tooSoon = await kindy.locator('[data-hint="to"]').count();
+    await page.waitForTimeout(2500);
+    const hand = await page.locator('.kindy-hand').getAttribute('data-on');
+    check(`left alone for ${idleMs / 1000} s, a pointing hand shows the next step (and not before)`, tooSoon === 0 && hand !== 'no' && (await kindy.locator('[data-hint="to"]').count()) === 1, `hand ${hand}`);
+    check('before any tap, nothing is spoken (iOS needs a tap first)', (await spoken(page)).length === 0);
+    await noText(page, 'Kindy hint');
+    await shot(page, '14-kindy-hint');
+
+    // The first tap follows the hand: it unlocks the voice, which says the hint showing; the friend lights its aim squares.
+    const firstStep = await followHand(page);
+    check('the first tap unlocks the voice, and the hint showing is said out loud', firstStep !== null && (await until(page, async () => (await spoken(page)).length > 0)), (await spoken(page)).join(' / '));
+    const lit = await kindy.locator('.board .sq-aimable').count();
+    check('a friend just put out lights at most 4 big squares to aim at, each with an arrow', lit > 0 && lit <= 4 && (await kindy.locator('.board .sq-aimable .aim-arrow').count()) === lit, `${lit} squares`);
+    await noText(page, 'Kindy aiming');
+    await shot(page, '15-kindy-aim');
+
+    // The rest of the day: only what the hand points at.
+    const steps: string[] = [];
+    let smallest = Infinity;
+    let fedSeen = 0;
+    let stuck = false;
+    for (let i = 0; i < 80 && (await page.locator('.kindy-party').count()) === 0; i++) {
+      const done = await followHand(page);
+      if (done === null) {
+        stuck = true;
+        break;
+      }
+      smallest = Math.min(smallest, ...done.sizes);
+      steps.push(done.go ? 'go' : 'tap');
+      if (done.go) {
+        await kindyWaveDone(page);
+        fedSeen = Math.max(fedSeen, await kindy.locator('.kindy-slots li.fed').count());
+      }
+    }
+    const party = page.getByRole('dialog', { name: 'Everyone is fed' });
+    check('the rest of the Kindy day is played by tapping only what the hand points at, and every kid is fed', !stuck && (await party.count()) === 1 && fedSeen >= kp.kids.length - 1, `${steps.filter((x) => x === 'go').length} waves, ${steps.length} taps, ${fedSeen} faces filled${stuck ? ', NO HAND' : ''}`);
+    check('every target the hand pointed at is at least 64 px', smallest >= 64, `${Math.round(smallest)} px`);
+    const said = await spoken(page);
+    check('the hints were said out loud, in a few words', said.length > 0 && said.every((t) => Object.values(HINT_LINES).includes(t)), said.slice(0, 4).join(' / '));
+
+    // The party, then done for today in pictures.
+    await checkOnScreen('the Kindy party: its big button is inside the viewport', party.locator('.kindy-next'));
+    await bigTargets(page, '.kindy-party button', 64, 'the Kindy party');
+    await noText(page, 'the Kindy party');
+    await shot(page, '17-kindy-party');
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    const partyFps = await measureFps(page, 1500);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    check('the Kindy party holds 55+ fps with the CPU slowed 4x', partyFps.frames >= 55, `${partyFps.frames.toFixed(1)} fps, worst frame ${Math.round(partyFps.worst)} ms`);
+    await party.locator('.kindy-next').tap();
+    const kDone = kindy.getByRole('region', { name: 'Done for today' });
+    await kDone.waitFor();
+    const gone = Number(await kDone.locator('.kindy-night').evaluate((el) => (el as HTMLElement).style.getPropertyValue('--gone')));
+    check('Kindy done for today: the sleeping sun, the moon on its way to the next puzzle, a face per kid fed, the week’s stars', (await kDone.locator('.kindy-sun').count()) === 1 && gone > 0 && gone < 1 && (await kDone.locator('.kindy-fed li').count()) === kp.kids.length && (await kDone.locator('.kindy-week li.on').count()) >= 1, `moon ${gone.toFixed(2)} of the way`);
+    for (const part of ['.kindy-sun', '.kindy-night', '.kindy-fed', '.kindy-week', '.kindy-again']) await checkOnScreen(`Kindy done for today: ${part.slice(1)} is inside the viewport`, kDone.locator(part));
+    await bigTargets(page, '.kindy-game button', 64, 'Kindy done for today');
+    await noText(page, 'Kindy done for today');
+    await noVerticalScroll(page, 'Kindy done for today');
+    await noHorizontalScroll(page, 'Kindy done for today');
+    await shot(page, '18-kindy-done');
+    await page.reload();
+    await page.locator('.picker').waitFor();
+    await tile(page, 'Pip').tap();
+    await kDone.waitFor();
+    check('reopening a finished Kindy daily shows done for today again', (await kindy.locator('.board').count()) === 0);
+    await kDone.locator('.kindy-again').tap();
+    await until(page, async () => (await kindy.locator('.board .sq').count()) === 16);
+    check('Kindy practice: a new 4 x 4 board, still no text', (await kindy.locator('.board .sq').count()) === 16);
+    await noText(page, 'Kindy practice');
+
+    // A grown-up turns the voice off: the hand still shows, nothing is said.
+    await kindy.locator('.kindy-avatar').tap();
+    await page.locator('.picker').waitFor();
+    await grownUps(page, cdp);
+    const voice = page.getByRole('button', { name: /Kindy spoken hints/ });
+    await checkOnScreen('the grown-ups’ menu: the Kindy voice switch is inside the viewport', voice);
+    await voice.tap();
+    check('the grown-ups’ menu turns Kindy’s spoken hints off', ((await voice.textContent()) ?? '').includes('off'));
+    await page.getByRole('dialog', { name: 'Grown-ups' }).locator('.sheet-close').tap();
+    await tile(page, 'Pip').tap();
+    await kindy.locator('.board').waitFor();
+    await page.evaluate('window.__spoken.length = 0');
+    await kindy.locator('.kindy-ask').tap();
+    await until(page, async () => (await kindy.locator('[data-hint="to"]').count()) > 0);
+    await page.waitForTimeout(300);
+    check('with the voice off, the hand still shows and nothing is said', (await kindy.locator('[data-hint="to"]').count()) === 1 && (await spoken(page)).length === 0);
+    await kindy.locator('.kindy-avatar').tap();
     await page.locator('.picker').waitFor();
 
     // ---- deleting asks first ----
@@ -710,7 +940,7 @@ async function main(): Promise<void> {
     const confirm = page.getByRole('dialog', { name: 'Delete Pip?' });
     await checkOnScreen('deleting a profile asks first, inside the viewport', confirm.getByRole('button', { name: 'Yes, delete Pip' }));
     await checkOnScreen('deleting a profile: Keep is inside the viewport', confirm.getByRole('button', { name: 'Keep Pip' }));
-    await shot(page, '14-delete');
+    await shot(page, '19-delete');
     await confirm.getByRole('button', { name: 'Yes, delete Pip' }).tap();
     await until(page, async () => (await page.getByRole('dialog', { name: 'Grown-ups' }).locator('.parent-list li').count()) === 2);
     await page.getByRole('dialog', { name: 'Grown-ups' }).locator('.sheet-close').tap();
@@ -748,7 +978,7 @@ async function main(): Promise<void> {
     await noVerticalScroll(page, 'done for today');
     await noHorizontalScroll(page, 'done for today');
     await touchTargets(page, 'done for today');
-    await shot(page, '15-done');
+    await shot(page, '20-done');
     await page.reload();
     await page.locator('.picker').waitFor();
     check('the picker shows the first child’s streak, not Sam’s', (await tile(page, 'Dog').locator('.picker-streak').count()) === 1 && (await tile(page, 'Sam').locator('.picker-streak').count()) === 0);
@@ -796,6 +1026,63 @@ async function main(): Promise<void> {
       await old.close();
     } finally {
       rmSync(oldProfile, { recursive: true, force: true });
+    }
+
+    // ---- Kindy: a wrong snack, on the first day from here whose wave 1 can throw one ----
+    let wrongDay = DAY;
+    while (wrongThrow(generatePuzzle('kindy', 'daily', wrongDay, 0)) === null && wrongDay < DAY + 60) wrongDay++;
+    const wp = generatePuzzle('kindy', 'daily', wrongDay, 0);
+    const wrong = wrongThrow(wp);
+    const wrongProfile = mkdtempSync(join(tmpdir(), 'snacks-kindy-'));
+    try {
+      const wctx = await chromium.launchPersistentContext(wrongProfile, { executablePath: chromiumPath(), viewport: { width: WIDTH, height: HEIGHT }, deviceScaleFactor: PHONE.dpr, isMobile: true, hasTouch: true, timezoneId: 'UTC' });
+      const wpage = wctx.pages()[0] ?? (await wctx.newPage());
+      await wpage.clock.setFixedTime(wrongDay * 86_400_000 + 43_200_000);
+      await wpage.goto(URL);
+      await wpage.locator('.board').waitFor();
+      const wcdp = await wctx.newCDPSession(wpage);
+      await openPicker(wpage);
+      await grownUps(wpage, wcdp);
+      await addChild(wpage, 'Frog', 'Pip', 'Kindy');
+      await wpage.getByRole('dialog', { name: 'Grown-ups' }).locator('.sheet-close').tap();
+      await tile(wpage, 'Pip').tap();
+      const wk = wpage.getByRole('region', { name: 'Kindy' });
+      await wk.locator('.board').waitFor();
+      if (wrong === null) check('Kindy wrong snack: a day to try it on', false, `none from day ${DAY} to ${wrongDay}`);
+      else {
+        for (const f of wrong) {
+          await wk.locator('.kindy-friend').first().tap();
+          await cellOf(wpage, f.cell).tap();
+          await until(wpage, () => hasFriend(wpage, f.cell));
+          if (f.aimAt !== null) await cellOf(wpage, f.aimAt).tap();
+        }
+        const kid1 = wp.kids.find((k) => k.wave === 1)!;
+        await wk.locator('.kindy-go').tap();
+        const shaking = async (): Promise<boolean> => (await cellOf(wpage, kid1.cell).getAttribute('data-outcome')) === 'shake';
+        const shook = (await until(wpage, shaking)) || (await until(wpage, shaking));
+        await noText(wpage, 'Kindy replay of a wrong snack');
+        await shot(wpage, '21-kindy-shake');
+        check('Kindy: a wrong snack bounces off and the kid shakes their head', shook, `day ${wrongDay}, ${wrong.length} friend(s)`);
+        await kindyWaveDone(wpage);
+        const kidsNow = await wk.locator('.board .kid').count();
+        const stayed = (await Promise.all(wrong.map((f) => hasFriend(wpage, f.cell)))).every(Boolean);
+        check('then the kid waits, the board stays as it was, and the next kid arrives beside them', (await cellOf(wpage, kid1.cell).locator('.kid').count()) === 1 && stayed && kidsNow === 2 && (await wk.locator('.kindy-slots li.fed').count()) === 0, `${kidsNow} kids`);
+        await noText(wpage, 'Kindy after a wrong snack');
+        // Then the hand takes over and still finishes the day.
+        let waves = 0;
+        for (let i = 0; i < 80 && (await wpage.locator('.kindy-party').count()) === 0; i++) {
+          const done = await followHand(wpage);
+          if (done === null) break;
+          if (done.go) {
+            waves += 1;
+            await kindyWaveDone(wpage);
+          }
+        }
+        check('after a wrong snack, following the hand still feeds every kid', (await wpage.locator('.kindy-party').count()) === 1, `${waves} more waves`);
+      }
+      await wctx.close();
+    } finally {
+      rmSync(wrongProfile, { recursive: true, force: true });
     }
   } finally {
     server.kill();

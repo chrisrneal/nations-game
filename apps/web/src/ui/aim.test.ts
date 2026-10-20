@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FriendType, FriendView, SquareKind } from '@snacks/contracts';
-import { aimSquares, healSquares, patternCells, throwLine, type AimBoard } from './aim.ts';
+import { aimSquares, healSquares, lineEnds, patternCells, throwLine, type AimBoard } from './aim.ts';
 
 const FACINGS: Readonly<Record<FriendType, readonly number[]>> = {
   straight: [0, 2, 4, 6],
@@ -166,5 +166,32 @@ describe('tray diagrams', () => {
     expect(patternCells('bouncer')).toContainEqual([1, -2]);
     expect(patternCells('bouncer').every(([x, y]) => Math.abs(x) + Math.abs(y) === 3)).toBe(true);
     expect(patternCells('nurse')).toHaveLength(8);
+  });
+});
+
+describe('Kindy aiming: one square per way to face (RULES 11)', () => {
+  it('lights where each throw ends: the first thing in the way, or the last square before the edge', () => {
+    const { view, friend } = board([
+      '.T..', // 0-3: a tree above
+      '.@.=', // 4-7: an empty path square on the right
+      '....', // 8-11
+      '.K..', // 12-15: a kid below, on the path
+    ]);
+    // Up: the tree at 1. Right: through the empty path to 7, the last square. Down: the kid at 13. Left: 4.
+    expect(sorted(lineEnds(view, friend))).toEqual([
+      [1, 0],
+      [4, 6],
+      [7, 2],
+      [13, 4],
+    ]);
+  });
+
+  it('has no square for a facing straight off the board, and none for a friend in the tray', () => {
+    const { view, friend } = board(['@...', '....']);
+    expect(sorted(lineEnds(view, friend))).toEqual([
+      [3, 2],
+      [4, 4],
+    ]);
+    expect(lineEnds(view, { ...friend, cell: -1 }).size).toBe(0);
   });
 });
