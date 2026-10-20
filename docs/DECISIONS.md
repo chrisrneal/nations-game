@@ -5,7 +5,9 @@ would have to happen to reverse it. **Changing one of these needs a new record
 appended here, not an edit to an old one** - later sessions rely on these being
 stable.
 
-**Read W8 first, then W1, then P1.** On 2026-10-07 the idle game was removed
+**Read K1 first, then W8, then W1, then P1.** On 2026-10-20 the warehouse
+became Snack Attack, a daily grid puzzle for kids (K1); `K` records cover it,
+and K1 lists which older records still bind. On 2026-10-07 the idle game was removed
 and the warehouse management system became the whole game (W8). On 2026-10-06 the airport game became a warehouse
 game (W1); on 2026-10-01 "Nations" had become the airport game (P1). P1 lists
 which of the older records still bind (the architecture ones) and W1 which of
@@ -1304,3 +1306,159 @@ catalogue.
 SKUs (with the bins they then take, bays 0-15); `wmsStockOpenMinPct` 10
 with `wmsStockOpenMaxPct` 40 opens a thin warehouse. A lower
 `wmsReorderUnits` (100) runs the racks emptier (65%) without hurting fill.
+
+## K1 - Pivot: the warehouse becomes Snack Attack, a daily grid puzzle for kids
+**Status.** Accepted, 2026-10-20, at the owner's request ("i want to wipe this
+again, instead of a warehouse sim lets try a simple chess-like tower defence
+game"). The owner then answered three rounds of questions, sent a brief of
+locked decisions, accepted all twenty proposed defaults (D1-D20 in
+docs/RULES.md) and said "Go all the way": reset, then build steps 1-6 of the
+plan (docs/ROADMAP.md) up to a plain playable screen.
+**Decision.** The game is Snack Attack (docs/RULES.md).
+- Friends placed on a grid throw snacks in chess patterns (rook, bishop, king,
+  knight; plus a Nurse) from lunchboxes to hungry kids on the path.
+- Each kid wants one snack, worked out from a clue card (main mode, a 9-year-old
+  reader) or shown as a picture (Kindy mode, a 4-year-old).
+- Set up, press Go, watch. A day is 10 waves, plus a bonus round. There is one
+  daily puzzle per day and unlimited practice, and every board is proved
+  solvable before anyone sees it.
+
+The warehouse code is removed. It is at commit `734c848`.
+**What still binds.**
+- The architecture records: S1 (pure `step`), S2 (commands only), S3 (the Host),
+  S5 (seeded RNG, whole numbers, the Node-vs-Chromium hash test), S6 (the View),
+  S9 (snapshot plus command log, versioned).
+- T1-T6 (toolchain), P5 (commands carry no player id) and P7 (animation outside
+  React).
+
+**What is retired.**
+- Every W record: the warehouse game.
+- P3 (ticks and cents): K1 counts squares, beats and points.
+- S4 and P4 (the host's clock and offline catch-up): replaced by K3.
+- The P records about the airport game, already retired by W1 and W8.
+
+**Conflicts the owner was shown, and how each was settled** (2026-10-20):
+- C1 the whole repository was the warehouse: removed; the skeleton above kept.
+- C2 the clock and offline catch-up: dropped (K3).
+- C3 ticks and cents: beats and points.
+- C4 RULES.md was tied to a test: replaced by the Snack Attack rules, test kept.
+- C5 the WMS report targets: replaced by generator checks.
+- C6 ROADMAP, DECISIONS and CLAUDE.md: rewritten by this session (K2).
+- C7 one save per device: a slot per game kind now, per profile in build step 7.
+- C8 the sim may not read Date: the host passes in the day number.
+- C9 package names: `@snacks/*`.
+- C10 big-number formatting: kept, harmless.
+- C11-C18: the session's own earlier proposals (not chess, then chess
+  patterns; kids walking, now standing; tapping a parent mid-wave, now a
+  Nurse; 8-way throws in a range, now per-type patterns; rounds; points;
+  Kindy), each settled as docs/RULES.md now says.
+
+**Why.** The owner wants a game for their own kids. The warehouse was "too easy,
+then what", and they want something "somewhat puzzly". A deterministic puzzle
+with a solver fits the existing pure, seeded, hash-tested core better than any
+earlier game did.
+**Cost.**
+- Everything game-specific is rewritten.
+- The warehouse, airport and Nations saves are not read (a new database name,
+  `snacks`).
+**Reversing it.** `git checkout 734c848` has the warehouse.
+
+## K2 - This session is the architect for the Snack Attack pivot
+**Status.** Accepted, 2026-10-20. As in P2 and W2, the owner asked for the
+change directly ("Go all the way"), so this session wrote K1-K5 and rewrote
+docs/ROADMAP.md, CLAUDE.md, docs/RULES.md, docs/PROGRESS.md, docs/GAPS.md and
+the README in one pull request with the code.
+**Why.** A pivot touches every lane, and splitting it across parallel
+sessions would leave the repository broken between them.
+**Cost.** One large pull request.
+**Reversing it.** Later sessions go back to their lanes.
+
+## K3 - No clock: a wave is resolved whole when Go is pressed, and the host passes in the day
+**Status.** Accepted, 2026-10-20 (conflicts C2, C3, C8).
+**Decision.**
+- The sim has no ticks. A command (place, turn, toTray, buy, go, retry) is
+  applied when it arrives. `go` resolves the whole wave at once and returns
+  every snack's route as data (`WaveResult`). The interface replays that as
+  animation, a beat (220 ms) per square, outside React (P7).
+- Nothing happens while the app is closed.
+- The daily's seed comes from the day number: days since 1970-01-01 on the
+  device's calendar, computed by the host and passed in. The sim never reads
+  a clock.
+
+This replaces S4 and P4 and the CLAUDE.md rule "the host owns the clock;
+catching up N ticks must equal stepping N ticks".
+**Why.** Waves are watch-only (L) and the board does not change during one, so
+there is nothing to step in time. A wave resolved whole is easier to test
+(hand-made boards) and to solve (the solver calls the same function).
+**Cost.** The animation is a replay, not the sim running. That is fine while
+waves are watch-only. A future rule that lets the player act mid-wave would
+need ticks back.
+**Reversing it.** Make `go` advance a beat at a time: the beat counts are
+already in every route.
+
+## K4 - Rules the brief left open, settled the way the engine needed
+**Status.** Accepted, 2026-10-20, by this session under CLAUDE.md's "pick
+the reading most consistent with the plan, say which, and proceed". The
+owner sees them in docs/RULES.md section 7a.
+**Decision.**
+- A Nurse heals a kid once. A healed kid still there when the day ends counts
+  as hungry.
+- Kids never arrive on a square another kid may still stand on:
+  - main mode: not on the previous wave's squares;
+  - Kindy: not on any earlier kid's square.
+- A Kindy day ends when every kid has been fed.
+- The pass cap drops a snack at its 12th catch.
+- First arrival is decided by beats:
+  - a beat is one square crossed;
+  - a Bouncer hop is 2 beats;
+  - a catch takes none;
+  - ties go to the higher picker, then the one further left (D8).
+- Clue cards run 2-7 words. The brief said 3-6, but its own examples run from
+  2 to 7 words.
+- "Same as" cards point only at hats and glasses.
+
+**Why.** Each case was otherwise undefined or could deadlock a board. A
+healed kid staying forever would block the squares that later waves arrive
+on.
+**Cost.** Five small rules the owner did not write. Each is one line of code
+or one generator constraint to change.
+**Reversing it.** Each rule is local: `game.ts` (Nurse, day end, Kindy),
+`generate.ts` (arrival squares), `clues.ts` (word counts, features).
+
+## K5 - A sound, incomplete solver, and a generator that plants a solution and then checks it
+**Status.** Accepted, 2026-10-20 (RULES 10).
+**Decision.**
+- **The solver** searches backwards from each kid to a lunchbox with the right
+  snack, through routes of up to `routeMax` (3) friends, and combines one
+  route per kid within the friends owned and the points earned. It keeps a
+  setup only if the real wave engine feeds every kid with no tummy ache.
+  - It is sound: anything it returns works.
+  - It is not complete: it may miss a solution that needs a longer route, or a
+    friend used only to block.
+- **The generator** chooses a board, then kids whose shortest route has the
+  length each wave calls for. It plants one route per kid, writes clues and
+  sizes the tray, then runs the clue checker and the solver.
+  - On any failure it tries the next seed: deterministic, so a daily is the
+    same on every device.
+  - The solver's solution is stored in the puzzle as the witness. It is never
+    in the View.
+- The harness checks 1000 main dailies and 300 each of bonus rounds and Kindy
+  dailies on every `npm test`. The report checks 1000 of each:
+  - every day passes;
+  - a main day skips 0.7 seeds on average (9 at worst);
+  - a main day takes 15 ms in Node (median) and 184 ms in the app with the CPU
+    slowed 4x.
+
+**Why.** A complete solver for a 48-square board with five friend types,
+facings, passing and blocking would be slow on a phone. Soundness is what the
+owner's rule needs ("no unsolvable boards, ever"). Throwing away the rare
+board the solver cannot crack costs a few milliseconds. Planting first means
+the solver almost always finds something, and the planted route lengths give
+the difficulty ramp.
+**Cost.**
+- A board whose only solutions need a 4-friend route or a blocker is never
+  generated, so some clever puzzles are lost.
+- The starting tray is sized to the planted plan, so its mix hints at the
+  intended solution.
+**Reversing it.** Raise `routeMax` (slower), or let the solver place blockers.
+

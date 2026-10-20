@@ -1,101 +1,89 @@
 # Roadmap
 
 ## The game
-Mobile-first installable PWA warehouse simulator (W8): the player runs a
-warehouse through its warehouse management system. Customer orders arrive
-from countries abroad; the WMS releases them, allocates stock and creates a
-pick task for every line. Purchase orders, which the WMS raises itself when
-stock runs low, are booked into dock appointments in the warehouse day; a
-docked truck becomes receive tasks, and every line counted in a put-away
-task. Picked orders are packed and staged at one of several outbound doors,
-loaded onto its trailer, and ship when the trailer leaves on its schedule
-(W10). The crew (pickers, and the dock crew who receive, put away and load)
-do the tasks the WMS lines up for them, and a tap on any worker shows their
-tasks and record. Every shipment pays, more for countries whose goodwill is
-high. The player sets the WMS's plan (pick order, release and wave interval,
-crew split, labour by need), moves people between picking and the dock,
-steps in on orders, and spends what shipments earn on more people, inbound
-dock doors and outbound doors. The warehouse keeps running
-while the app is closed, up to a cap. Single player, offline-first, no
-backend. Rules: docs/RULES.md. Why the idle game was removed: decision record
-W8 (and W1, P1 before it).
+Snack Attack (decision record K1): a cute daily puzzle with chess-like moves,
+for two kids sharing one phone.
+- **The board.** Hungry kids stand on the school path. Snacks start in
+  lunchboxes. The player places friends on the playground, and each friend
+  throws or passes a snack in a fixed chess pattern: Straight (rook), Diagonal
+  (bishop), Short (king) or Bouncer (knight). A Nurse heals tummy aches.
+- **Main mode** (a 9-year-old): each kid wants one snack, worked out from a
+  clue card.
+- **Kindy mode** (a 4-year-old who doesn't read yet): the snack is pictured.
+- **A wave.** Set up, press Go, watch it play out.
+- **A day.** 10 waves that get harder, a bonus round, points to spend in a
+  shop for that day only, and up to 3 kids allowed to go home hungry.
+- **Daily and practice.** One daily puzzle per day, the same for everyone,
+  plus unlimited practice boards. Every board is proved solvable by a solver
+  before anyone sees it.
+- Single player, offline-first, no backend. Rules: docs/RULES.md.
 
 ## Design pillars
-1. **The floor is the truth.** Everything on screen is what the sim does: the
-   workers on the floor are the WMS's workers doing their tasks, timed as the
-   sim times them, and every number traces back to an order, a PO or a task.
-2. **Every decision is a trade-off.** Each plan choice, hire or door helps one
-   thing and costs another; the screen says what each does and its catch.
-3. **Every session is worth it.** A 30-second check-in reads the day's numbers
-   and the recap; a 5-minute session changes the plan and watches it play out.
-4. **Read like a real WMS.** Dense grids, codes, a console of events, KPIs per
-   page, a dock schedule: an operator would recognise it.
-5. **Exact and offline.** Same seed and commands give the same warehouse;
-   catching up offline equals stepping through it.
+1. **Two things kept apart.** What a snack is comes from its lunchbox; how it
+   moves comes from the friend carrying it (RULES 2).
+2. **Deduction plus routing.** Work out which snack each kid wants, then find
+   a way to get it there.
+3. **Watch it happen.** Waves are watch-only; the fun during a wave is the
+   snacks flying, not tapping.
+4. **Never unfair.** No randomness in a wave, and no unsolvable board, ever.
+5. **For small hands too.** Kindy mode has pictures, no text, no failing and
+   big squares.
 
-## Architecture (kept from Nations, the airport and the idle warehouse, decision records P1, W1 and W8)
-1. Pure sim core: `step(state, commands) -> state + events` (S1, D6).
-2. Commands are the only mutation: `wms` actions (release, priority, hold,
-   unhold, assign, cancelLine, expedite, policy, role, hire, door in or out)
-   (S2, P5, W8, W9, W10).
-3. Host interface: the UI submits and subscribes; LocalHost runs the sim in a Web
-   Worker (S3).
-4. The host owns the clock; catch-up is "run N ticks fast", up to the offline
-   cap (S4, P4). The host's speed (pause, 1x, 5x by default, 10x warehouse
-   minutes a second) sets how much wall time a tick takes (W9).
-5. Determinism: seeded RNG in State, integer maths (cents, whole units, ticks),
-   state-hash test in Node and Chromium on every build (S5, P3).
-6. The UI reads a View (S6, P5).
-7. Saves are snapshot plus command log, versioned with migrations, in IndexedDB,
-   with export and import files (S9).
-Stack: TypeScript, Vite + React, Web Worker via Comlink, IndexedDB,
-vite-plugin-pwa, Vitest + fast-check, playwright-core for the phone check.
+## Architecture (kept from the earlier games, decision record K1)
+1. Pure sim core: `step(state, command) -> state, error, wave` (S1, K3).
+2. Commands are the only mutation: place, turn, toTray, buy, go, retry (S2).
+3. Host interface: the UI submits and subscribes; LocalHost runs the sim in a
+   Web Worker (S3).
+4. No clock: a wave is resolved whole at Go and replayed as animation; the
+   host passes in the day number (K3).
+5. Determinism: seeded RNG, whole numbers, the state-hash test in Node and
+   Chromium on every build (S5).
+6. The UI reads a View, which never says what a main-mode kid wants (S6).
+7. Saves are snapshot plus command log, versioned with migrations, in
+   IndexedDB: one slot for each day's daily, each bonus round, and practice
+   (S9).
+8. The solver and the generator are part of the pure sim (K5).
+
+Stack: TypeScript, Vite + React, a Web Worker via Comlink, IndexedDB,
+vite-plugin-pwa, Vitest + fast-check, and playwright-core for the phone check.
 
 ## Phone UX budget (checked by apps/web/e2e/phone-check.ts)
-Portrait and one-handed; primary actions in the bottom third; touch targets at
-least 44 px; no horizontal scroll at 360 px; safe areas respected. The screen
-is the WMS (W8): the warehouse clock, cash and today's earnings at the top, a
-KPI strip, the page in the middle (Floor, In, Out, Stock, Crew, Plan) with
-the activity console under it, and the page tabs in the thumb zone. 60 fps
-with the CPU slowed 4x: the floor by canvas, everything else by direct DOM
-writes or one React render a WMS step (P7). Number formatting for big values.
+- Portrait and one-handed. The bar is on top, the board and clue cards scroll
+  in the middle, and the tray and Go are pinned in the bottom third.
+- Touch targets of at least 44 px (64 px in Kindy). No horizontal scroll at
+  360 px. Safe areas respected.
+- The wave replay at 60 fps with the CPU slowed 4x. A day's puzzle generated
+  in under a second with the CPU slowed 4x.
 
 ## The harness
-`npm run harness -- report` runs an untouched warehouse with the default plan
-on several seeds and reports OTIF, fill, money an hour and how busy the
-pickers and the dock crew are, against the targets in RULES 11. Invariants every
-build: cash and stock never negative, every task held by at most one worker
-of its role, determinism across engines, catch-up equals stepping,
-save-reload-continue.
+- `npm test` generates and checks 1000 main dailies, 300 bonus rounds and 300
+  Kindy dailies. Each must pass the clue checker and the solver, and its
+  solution must win with nobody hungry.
+- `npm test` also hashes 300 scripted games in Node and Chromium.
+- `npm run harness -- report` prints difficulty by wave, seeds skipped and
+  time per day (docs/balance/generator-report.md).
+
+## Build order (K1)
+The engine and the solver come first. No art, shop screen or Kindy mode
+until both work on hand-made test boards.
+0. [x] Reset: K1-K5, this roadmap, the rules, the warehouse removed, packages renamed `@snacks/*`.
+1. [x] Contracts: board, friends, facings, snacks, kids, clues, commands, the wave result.
+2. [x] Resolution engine, tests first: hand-made boards for every rule, and property tests.
+3. [x] Placement solver: one wave, then a whole day with points and the shop.
+4. [x] Clue checker and clue writer.
+5. [x] Generator: plant, check, a difficulty ramp, the bonus salt, and the 1000-day harness check.
+6. [x] A plain playable screen (grey squares, chess symbols, emoji snacks).
+   **Gate:** the owner and the 9-year-old play it and say whether it's fun, or what to change.
+7. [ ] Daily, practice, profiles (avatar picker), saves per profile, the streak.
+8. [ ] Art and wave animation.
+9. [ ] Shop screen.
+10. [ ] Kindy mode on screen: the 4x4 board, pictures, spoken and animated hints. Its rules and generator are already built.
+11. [ ] Sticker book, cosmetics and streak rewards.
+12. [ ] Phone check and polish on real phones.
 
 ## History
 - **Nations** (to 2026-09-30): commit `67d1d92`.
-- **Airport Idle** (2026-10-01 to 2026-10-05): eight pivot slices (PRs
-  #41-#48), then boosts (P11), the security line (P12) and the gates as stands.
-  Commit `5f78bce`.
-- **Warehouse Idle** (2026-10-06): the airport's engine and rules renamed, plus
-  stock and purchase orders and the dashboard (W1), in one pull request (W2).
-- **The WMS** (2026-10-07): a warehouse management system beside the idle flow
-  (W5), with inbound and inventory (W6); then the WMS became home, its floor
-  animated from the WMS, with a plan the player sets (W7). Commit `b34368a`
-  is the last with the idle game.
-- **The WMS simulator** (2026-10-07): the idle game removed; tasks for every
-  worker, a Crew page, dock appointments in a warehouse day, hiring and doors
-  (W8); then 5 warehouse minutes a second with pause and 1x/10x, the wave
-  interval, and moving people by need, by hand or by the balance plan (W9);
-  then outbound doors with scheduled trailers, three times the orders, a
-  dock crew that loads, and a crew of 20 growing to 40 (W10); then 80 SKUs,
-  one in every rack bay, in a warehouse that opens stocked (W11).
-
-## Next (not planned until the owner picks)
-- Play it on a real phone and say what feels slow or confusing (docs/GAPS.md
-  lists what only a person can check).
-- Ideas that fit the simulator: demand that grows with goodwill (more
-  customers as service improves; since W10 the one thing that would make a
-  fourth outbound door or a 30th worker pay for itself), automation to buy (conveyors, a sorter,
-  pick-to-light that changes the task times), shifts and breaks for the crew,
-  dock hours that close receiving at night, workers' skills. Each needs a
-  decision record.
-
-## Later (not planned)
-Achievements, more warehouses, cloud save. Any of these needs a decision record.
+- **Airport Idle** (2026-10-01 to 2026-10-05): commit `5f78bce`.
+- **Warehouse Idle** (2026-10-06), then **the WMS** (2026-10-07), then **the WMS
+  simulator** (2026-10-07 to 2026-10-08, W8-W11): commit `734c848`.
+- **Snack Attack** (from 2026-10-20): K1.

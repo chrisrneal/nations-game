@@ -1,25 +1,86 @@
 # Progress
-Current state: **a warehouse simulator: the WMS is the whole game** (decision
-record W8). The idle game (backlog, trucks, upgrades, boosts, stars) was
-removed on 2026-10-07; it is at commit `b34368a`, and the entries below W8
-describe it. On 2026-10-06 the airport game became a warehouse game (W1,
-W2). The airport is at commit `5f78bce`; the entries below that date
-describe it in airport words (gates, planes, passengers, security). The
-Nations log is at commit `67d1d92`.
+Current state: **Snack Attack, build steps 0-6 done: a plain playable game**
+(decision record K1). The engine, solver, clue checker and generator are
+built and tested, and a grey-squares screen plays the daily, its bonus round
+and practice boards. Next is the owner's gate: play it with the 9-year-old and
+say whether it's fun. The warehouse simulator is at commit `734c848`; the log
+below the line describes the earlier games.
 
-## Slices
-- [x] Airport pivot slices 1-8 (docs/ROADMAP.md, History)
-- [x] Warehouse pivot (W1), one pull request (W2)
-- [x] Star perks (W3)
-- [x] WMS, nine slices (W5, docs/wms-plan.md)
-- [x] WMS Inbound, Outbound and Inventory pages (W6, wms-plan slice 10)
-- [x] The WMS is home: a live floor drawn from the WMS, and the plan (W7, wms-plan slice 11)
-- [x] The WMS is the game: tasks for every worker, a Crew page, dock appointments, the idle game removed (W8, wms-plan slice 12)
-- [x] Speed (5 warehouse minutes a second, pause, 1x, 10x), wave interval, moving people by need (W9)
-- [x] Outbound doors with scheduled trailers, three times the orders, the dock crew loads, a crew of 20 to 40 (W10)
-- [x] A SKU in every bay: 80 SKUs, a warehouse that opens stocked, racks drawn against a full mark (W11)
+## Build order (docs/ROADMAP.md)
+- [x] 0 Reset (K1-K5)
+- [x] 1 Contracts
+- [x] 2 Resolution engine
+- [x] 3 Placement solver
+- [x] 4 Clue checker and writer
+- [x] 5 Generator
+- [x] 6 Plain playable screen (the owner's gate is open)
+- [ ] 7 Daily, practice, profiles, streak
+- [ ] 8 Art and animation
+- [ ] 9 Shop screen
+- [ ] 10 Kindy mode on screen
+- [ ] 11 Sticker book and cosmetics
+- [ ] 12 Polish on real phones
 
 ## Session log
+
+### 2026-10-20 - Snack Attack: reset, engine, solver, clues, generator, grey screen (all lanes; owner request, K1-K5)
+**What changed.**
+- **Reset.** The warehouse is gone.
+  - The packages are `@snacks/*`.
+  - docs/RULES.md is the Snack Attack spec, including the rules the brief left
+    open (section 7a, K4).
+  - The roadmap, CLAUDE.md and decision records K1-K5 are new.
+- **Engine** (`packages/sim/src/resolve.ts`, `game.ts`): pickups, the four
+  throw patterns, catching and passing, blocking, the board edge, the pass
+  cap, who gets there first, tummy aches, the Nurse, the end of a wave,
+  winning and losing, retrying a lost wave, the shop, and Kindy rules.
+  - 34 tests on hand-made boards drawn as text.
+  - Property tests: every snack ends exactly one way; the same board always
+    gives the same result.
+- **Solver** (`solver.ts`): backwards from each kid to a lunchbox, routes of up
+  to 3 friends, within the friends owned and points earned. Every setup it
+  returns is checked by the real engine.
+- **Clues** (`clues.ts`): clue cards in plain words, and the checker that
+  proves every kid's snack can be worked out in one step.
+- **Generator** (`generate.ts`): plants a solution wave by wave, getting
+  harder through the day, then checks it with the clue checker and the solver.
+  - Main dailies, bonus rounds and Kindy days.
+  - Practice boards from any seed.
+- **Grey-squares screen** (`apps/web/src/ui`):
+  - The board, with chess symbols for friends, emoji snacks and lettered kids.
+  - Clue cards and today's snacks with their traits.
+  - The tray and the turn buttons. Each friend's throw shows on the board as
+    you set it up.
+  - Go, then a replay of every snack's flight with kids dancing or wobbling,
+    and a wave summary.
+  - Retry on a loss, the bonus round on a win, and a shop sheet.
+  - A menu: today's puzzle, a new practice board, how to play, sound.
+  - Each day's daily, bonus and practice save in their own slots, so a
+    finished daily stays finished.
+
+**Measured.**
+- `npm test`: 198 tests pass in 40 s. That includes 1000 main dailies, 300
+  bonus rounds and 300 Kindy dailies all solvable, and 300 scripted games
+  identical in Node and Chromium.
+- Generator report over 1000 days of each kind (docs/balance/generator-report.md):
+  - every day passes;
+  - a main day takes 15 ms (median);
+  - difficulty climbs from 1.0 friends a wave to 4.5 by wave 7.
+- Phone check: 18/18 at 360 px. The replay runs at 60 fps with the CPU slowed
+  4x, and a new practice board is ready in 184 ms with the CPU slowed 4x.
+
+**How to see it.** Open the app: today's daily opens. Read kid A's card, find
+the snack in "Today's snacks", pick a friend from the tray at the bottom, tap
+a grey square, and turn it with ↺ ↻. The square it will throw to lights up
+green. Press Go.
+
+**What is left.** The owner's gate (play it and say whether it's fun), then
+build steps 7-12. Gaps are listed under K1 in docs/GAPS.md.
+
+---
+
+## Earlier games' log
+
 
 ### 2026-10-08 - A SKU in every bay (lanes C, S, H, U, D; owner request, W11)
 **What changed.** The racks were mostly empty: the floor has 80 bays but
