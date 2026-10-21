@@ -1,6 +1,7 @@
 import { useState, type ReactElement } from 'react';
 import type { GameView } from '@snacks/contracts';
 import type { Feedback, GameHost } from '../platform/index.ts';
+import { useBook } from './BookContext.tsx';
 import { PatternDiagram } from './Diagram.tsx';
 import { FRIEND_HOW, FRIEND_NAME, FRIEND_ORDER } from './labels.ts';
 import { Sheet } from './Sheet.tsx';
@@ -8,6 +9,7 @@ import { Sheet } from './Sheet.tsx';
 /** The menu: today's puzzle, a practice board, switching player, how to play, sound. */
 export function MenuSheet(props: { host: GameHost; view: GameView; feedback?: Feedback | undefined; onClose: () => void; onProfiles: () => void }): ReactElement {
   const { host, feedback, onClose } = props;
+  const { openBook } = useBook();
   const [help, setHelp] = useState(false);
   const [sound, setSound] = useState(feedback?.prefs.sound ?? false);
   if (help) return <HowToPlay onClose={onClose} />;
@@ -33,6 +35,16 @@ export function MenuSheet(props: { host: GameHost; view: GameView; feedback?: Fe
           }}
         >
           Switch player
+        </button>
+        <button
+          type="button"
+          className="btn btn-wide"
+          onClick={() => {
+            onClose();
+            openBook();
+          }}
+        >
+          Sticker book
         </button>
         <button type="button" className="btn btn-wide" onClick={() => setHelp(true)}>
           How to play

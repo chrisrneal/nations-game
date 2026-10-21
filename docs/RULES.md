@@ -394,7 +394,76 @@ rule: every action is a buy or refund command, checked by the sim.
   was left.
 - **Cosmetics (L):** the only things that last from day to day: hats, outfits
   and sticker-book entries, earned by finishing dailies. They never change
-  play.
+  play (section 9a).
+
+## 9a. The sticker book and outfits (L: cosmetic only; decision record K12)
+
+What lasts from day to day is for looking at. Nothing in this section is read
+by the puzzle, the generator, the solver, the engine or the View, so no day
+is easier, harder or different because of what a child has earned (a test
+reads the sim's source to prove it).
+
+**What is earned.**
+
+| When | What | From |
+|---|---|---|
+| A daily is finished (all 10 waves, or all 5 in Kindy) | One sticker | The 24 daily stickers: four pages of six |
+| That day's bonus round is won (main mode only) | One bonus sticker | The 6 gold stickers: one page |
+| The streak (section 9) reaches exactly 3, 7, 14 or 30 days, on the day it does | A hat or outfit: party hat (3), scarf (7), crown (14), cape (30) | One of each, kept for good |
+
+- Practice earns nothing. A bonus round without its daily earns nothing.
+  Retrying, using hints, finishing after midnight (section 9) and reopening a
+  finished day change nothing: a day gives its sticker once.
+- **Which sticker is not a draw.** It is worked out from the profile's id, the
+  puzzle's day and the kind (daily or bonus): that gives a place in the pool,
+  and the sticker is the first one from there, going on round, that the
+  profile does not have yet. The same profile and day always give the same
+  sticker, however and whenever it is claimed. Two children get different
+  orders. When a pool is complete, a finished day simply gives no sticker.
+- A streak that breaks and builds again does not give a milestone's item a
+  second time. Only the exact milestone day gives it.
+
+**The sticker book.** Every profile has its own (section 12).
+- Pages of six: Snacks, Friends, Sunny day and School (daily stickers), and
+  Gold (bonus stickers). A page's backing has its own shape (circle, square,
+  flower, hexagon, star), so pages and stickers can be told apart without
+  colour. Earned stickers are in colour; the rest are silhouettes of the same
+  picture.
+- Main mode shows names and "3/24"; a hat or outfit not yet earned says how
+  many days in a row it takes.
+- **Kindy has its own book with pictures only:** a house to go back, arrows
+  and dots to turn pages, no words anywhere. Its book has no Gold page, because
+  Kindy has no bonus round (section 8). Every target is 64 px or more.
+- The book opens from done for today, from the menu (main) and from the Kindy
+  top bar. It has no scrolling at 360 x 740.
+
+**Hats and outfits.** One hat and one outfit can be worn at once, taken off by
+tapping again. Only earned items can be worn.
+- **They go on the player's own avatar and nowhere else:** the top bar, the
+  picker, the book and the reveal.
+- **They NEVER go on kids.** A kid's hat, glasses and backpack are clue
+  attributes ("the kid in the hat", section 6); a cosmetic on a kid, or one
+  that could be taken for one, would be a false clue.
+- **They do not go on friends either,** although the brief allowed it if the
+  spec did: a friend's hat and badge hint at its pattern (K10), so a cosmetic
+  there would be a false signal. The hats and outfits are also drawn in
+  colours that are not the clue hat's blue.
+- `cosmetics.test.ts` fails if a kid or friend picture, or a file that draws
+  one, ever knows about cosmetics.
+
+**The reveal.** When the done-for-today screen opens with something earned that
+has not been shown, it pops out over the screen: the sticker, and a hat or
+outfit if the day reached a milestone. It puts itself away after about 3
+seconds (a little longer for each extra item), and **a tap anywhere skips it**.
+With reduced motion it is shown still. It plays once: it is marked seen when it
+ends or is skipped, and if the app closes first it plays again next time. In
+Kindy it is a picture with no words.
+
+**Saves.** The book and what is worn are part of each profile in the profile
+save (section 12), which is now version 2. A version-1 save is migrated on
+first launch: each profile is given what its finished days would have earned,
+by the same rules, all marked seen so the child is not greeted by a pile of
+reveals. Deleting a profile deletes its book with it and touches no other.
 
 ## 10. The solver and the generator (L: no unsolvable board, ever)
 
@@ -535,7 +604,8 @@ command, or Go, checked by the sim.
   - The last profile can't be deleted.
   - Deleting a profile deletes its saves too.
 - Each profile has its own saves: today's daily (with its retry state), the
-  bonus round, practice, its finished days, streak and best streak. Each
+  bonus round, practice, its finished days, streak and best streak, and its
+  sticker book and outfits (section 9a). Each
   game is saved as snapshot plus command log (S9). Nothing leaves the
   device: no accounts, no server.
 - A Kindy profile opens the Kindy screen (section 11a). The grown-ups' menu
@@ -631,7 +701,14 @@ Checked on every build (`npm test`):
 - A main-mode day played by pressing Hint until it says Go, then Go, wins
   with nobody hungry (K11).
 - A save reloads to the same hash; a damaged save is refused.
-- Profiles are kept apart: one child's game, retries and finished days never
-  change another's. A pre-profile save folds into the first profile with the
+- Cosmetics never touch play: no game file imports the sticker catalogue or
+  the profile book, the View holds nothing about them, and a day's puzzle and
+  waves hash the same whatever a profile has earned (section 9a, K12).
+- Kids and friends are never drawn with cosmetics; a sticker is the same for
+  the same profile and day, and a day gives its sticker once; practice earns
+  none; a version-1 profile book migrates to what its days would have earned
+  (section 9a).
+- Profiles are kept apart: one child's game, retries, finished days, sticker
+  book and outfits never change another's. A pre-profile save folds into the first profile with the
   same game and finished days. A damaged profile book is kept aside and
   never crashes the app (K7).

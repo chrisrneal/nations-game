@@ -33,7 +33,10 @@ export type IconName =
   | 'bulb'
   | 'heart'
   | 'phone'
-  | 'menu';
+  | 'menu'
+  | 'book'
+  | 'arrow-left'
+  | 'arrow-right';
 
 const STAR = 'M12 2.2 L14.6 8.4 L21.3 8.9 L16.2 13.2 L17.8 19.8 L12 16.3 L6.2 19.8 L7.8 13.2 L2.7 8.9 L9.4 8.4 Z';
 
@@ -167,6 +170,16 @@ const DRAW: Readonly<Record<IconName, () => ReactElement>> = {
       <circle cx={12} cy={19} r={1} fill={INK} stroke="none" />
     </>
   ),
+  book: () => (
+    <>
+      <path d="M2.5 5 Q7.5 3 12 5.5 V20.5 Q7.5 18.5 2.5 20.5 Z" fill="#ffd9a0" />
+      <path d="M21.5 5 Q16.5 3 12 5.5 V20.5 Q16.5 18.5 21.5 20.5 Z" fill="#ffe9c4" />
+      <path d={STAR} transform="translate(13.2 8) scale(0.36)" fill="#ffd23f" strokeWidth={3} />
+      <path d="M4.5 9 H9.5 M4.5 12 H9.5 M4.5 15 H9.5" fill="none" strokeWidth={1.2} />
+    </>
+  ),
+  'arrow-left': () => <path d="M3.5 12 L11 4 V8.5 H20.5 V15.5 H11 V20 Z" fill="#ffd23f" />,
+  'arrow-right': () => <path d="M20.5 12 L13 4 V8.5 H3.5 V15.5 H13 V20 Z" fill="#ffd23f" />,
 };
 
 export function Icon(props: { name: IconName; className?: string | undefined; label?: string | undefined }): ReactElement {

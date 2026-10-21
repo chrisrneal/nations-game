@@ -2255,3 +2255,417 @@ details summary {
 .shop-card.short .shop-buy:disabled {
   opacity: 0.75;
 }
+
+/* ---- the sticker book, outfits and the reveal (RULES 9a, K12) ---- */
+
+/* A hat or outfit lies over the avatar's own box: the player's picture, never a kid or a friend. */
+.avatar {
+  position: relative;
+}
+
+.cosmetic-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* One sticker: a backing whose shape says the page, and the picture on it. Not yet earned: a silhouette. */
+.sticker {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+}
+
+.sticker .art-sticker-back {
+  position: absolute;
+  inset: 0;
+}
+
+.sticker-pic {
+  position: absolute;
+  inset: 19%;
+  display: block;
+}
+
+.sticker-locked .art-sticker-back {
+  filter: brightness(0);
+  opacity: 0.13;
+}
+
+.sticker-locked .sticker-pic {
+  filter: brightness(0);
+  opacity: 0.3;
+}
+
+.book {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+  background: var(--bg);
+  padding: env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+
+.book-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.book-title {
+  flex: 1;
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.book-count {
+  min-width: 44px;
+  text-align: right;
+  font-weight: 700;
+}
+
+.book-me {
+  flex: none;
+}
+
+.book-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.book-turn {
+  flex: none;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+.btn.book-turn {
+  width: 52px;
+}
+
+.book-arrow {
+  width: 24px;
+  height: 24px;
+}
+
+.book-page-name {
+  flex: 1;
+  text-align: center;
+}
+
+.book-dots {
+  display: flex;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.book-dots li {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 3px solid #b99f6d;
+  background: #ffffff;
+}
+
+.book-dots li.on {
+  background: #b99f6d;
+  transform: scale(1.25);
+}
+
+.book-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px 12px;
+}
+
+.book-grid li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.book-grid .sticker {
+  width: min(100%, 92px);
+}
+
+.book-name {
+  font-size: 0.78rem;
+  text-align: center;
+  line-height: 1.15;
+  min-height: 1.8em;
+}
+
+.book-kindy .book-grid {
+  gap: 16px 12px;
+  margin-top: 8px;
+}
+
+.book-kindy .book-grid .sticker {
+  width: min(100%, 96px);
+}
+
+.book-wardrobe {
+  margin-top: auto;
+}
+
+.book-wardrobe-title {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.book-wear {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.book-wear-btn {
+  width: 100%;
+  min-height: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  border-radius: 14px;
+  border: 2px solid var(--line);
+  background: var(--panel);
+  font: inherit;
+  color: inherit;
+}
+
+.book-wear-btn.on {
+  border-color: var(--accent);
+  background: #e4f6ec;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.book-wear-locked {
+  border-style: dashed;
+  background: transparent;
+}
+
+.book-wear-locked .avatar {
+  filter: brightness(0);
+  opacity: 0.22;
+}
+
+.book-wear-name {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.book-wear-state {
+  font-size: 0.7rem;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.book-kindy .book-wear-btn {
+  padding: 4px;
+  border-radius: 20px;
+  justify-content: center;
+}
+
+.book-kindy .book-wear-locked {
+  min-height: 72px;
+}
+
+.book-note {
+  margin: 6px 0 0;
+  color: var(--warn);
+  font-size: 0.85rem;
+}
+
+.done-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.btn-book .row-icon {
+  width: 20px;
+  height: 20px;
+  vertical-align: -4px;
+}
+
+.kindy-book {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: #fff3c4;
+}
+
+.kindy-bar-book {
+  flex: none;
+  border-radius: 50%;
+  background: #fff3c4;
+}
+
+/* The reveal on done for today: what was earned pops out; a tap anywhere puts it away. */
+.reveal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: env(safe-area-inset-top) 16px calc(24px + env(safe-area-inset-bottom));
+  border: 0;
+  overflow: hidden;
+  background: rgba(35, 24, 18, 0.8);
+  color: #ffffff;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  animation: reveal-fade 0.25s ease-out both;
+}
+
+.reveal-glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 340px;
+  height: 340px;
+  margin: -170px 0 0 -170px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 226, 120, 0.6), rgba(255, 226, 120, 0) 66%);
+  animation: reveal-glow 2.4s ease-in-out infinite;
+}
+
+.reveal-sparkles {
+  position: absolute;
+  inset: 0;
+}
+
+.reveal-spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  margin: -11px;
+  opacity: 0;
+  animation: reveal-spark 1.6s ease-out infinite;
+}
+
+.reveal-spark:nth-child(1) { --x: -130px; --y: -120px; animation-delay: 0.3s; }
+.reveal-spark:nth-child(2) { --x: 125px; --y: -100px; animation-delay: 0.6s; }
+.reveal-spark:nth-child(3) { --x: -140px; --y: 20px; animation-delay: 0.9s; }
+.reveal-spark:nth-child(4) { --x: 140px; --y: 40px; animation-delay: 0.45s; }
+.reveal-spark:nth-child(5) { --x: -80px; --y: 150px; animation-delay: 0.75s; }
+.reveal-spark:nth-child(6) { --x: 90px; --y: 140px; animation-delay: 1.05s; }
+
+.reveal-head,
+.reveal-items,
+.reveal-skip {
+  position: relative;
+}
+
+.reveal-head {
+  font-size: 1.4rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.reveal-items {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+}
+
+.reveal-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  animation: reveal-pop 0.8s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  animation-delay: calc(var(--i) * 350ms + 150ms);
+}
+
+.reveal-sticker {
+  width: 140px;
+}
+
+.reveal[data-reveal-count='3'] .reveal-sticker {
+  width: 96px;
+}
+
+.reveal-kindy .reveal-sticker {
+  width: 168px;
+}
+
+.reveal-name {
+  font-weight: 800;
+  text-align: center;
+}
+
+.reveal-note {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.reveal-skip {
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+@keyframes reveal-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes reveal-pop {
+  0% { transform: scale(0.2) rotate(-24deg); opacity: 0; }
+  60% { transform: scale(1.18) rotate(6deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+@keyframes reveal-glow {
+  0%, 100% { transform: scale(0.9); opacity: 0.7; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+
+@keyframes reveal-spark {
+  0% { transform: translate(0, 0) scale(0.2); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translate(var(--x), var(--y)) scale(1.1); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal-item,
+  .reveal-glow,
+  .reveal-spark {
+    animation: none;
+  }
+  .reveal-spark {
+    display: none;
+  }
+}

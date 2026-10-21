@@ -38,7 +38,7 @@ export function Picker(props: {
         {home.profiles.map((p) => (
           <li key={p.id}>
             <button type="button" className={`picker-tile${p.id === home.current ? ' on' : ''}`} aria-label={`Play as ${profileLabel(p)}`} onClick={() => props.onPick(p.id)}>
-              <Avatar id={p.avatar} size={88} />
+              <Avatar id={p.avatar} size={88} worn={p.worn} />
               <span className="picker-name">{p.name}</span>
               {p.streak > 0 && (
                 <span className="picker-streak" aria-label={`Streak ${p.streak}`}>

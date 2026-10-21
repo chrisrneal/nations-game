@@ -7,6 +7,7 @@ import { FriendArt } from './art/Friend.tsx';
 import { Board } from './Board.tsx';
 import { DragController, type DragSource } from './drag.ts';
 import { HINT_LINES, fedSlots, hintPath, type Spot } from './kindy.ts';
+import { useBook } from './BookContext.tsx';
 import { KindyDone } from './KindyDone.tsx';
 import { Icon, type IconName } from './art/Icons.tsx';
 import { KidHead } from './art/Kid.tsx';
@@ -65,6 +66,7 @@ export function KindyGame(props: {
   onProfiles: () => void;
 }): ReactElement {
   const { host, view, profile, feedback, speech } = props;
+  const { openBook } = useBook();
   const [selected, setSelected] = useState<number | null>(null);
   const [playback, setPlayback] = useState<Playback | null>(null);
   const [party, setParty] = useState(false);
@@ -309,7 +311,7 @@ export function KindyGame(props: {
     >
       <header className="kindy-bar">
         <button type="button" className="kindy-btn kindy-avatar" aria-label="Switch player" onClick={props.onProfiles}>
-          <Avatar id={profile.avatar} size={52} />
+          <Avatar id={profile.avatar} size={52} worn={profile.worn} />
         </button>
         <ol className="kindy-slots" aria-label="Kids fed today">
           {fedSlots(view).map((fed, i) => (
@@ -322,8 +324,12 @@ export function KindyGame(props: {
           <button type="button" className="kindy-btn kindy-ask" aria-label="Help" onClick={askHint}>
             <Icon className="pic" name="hand" />
           </button>
-        ) : (
+        ) : done ? (
           <span className="kindy-btn-space" aria-hidden="true" />
+        ) : (
+          <button type="button" className="kindy-btn kindy-bar-book" aria-label="Sticker book" onClick={openBook}>
+            <Icon className="pic" name="book" />
+          </button>
         )}
       </header>
 

@@ -619,6 +619,82 @@ async function noEmoji(page: Page, where: string): Promise<void> {
   check(`no emoji on the page, only the art: ${where}`, found.length === 0, found.join(' | '));
 }
 
+/** Running CSS animations by name, so a still reveal (reduced motion) and a popping one (full motion) can be told apart. */
+const runningAnimations = async (page: Page, name: string): Promise<number> =>
+  Number(await page.evaluate(`document.getAnimations().filter((a) => a.animationName === '${name}' && a.playState === 'running').length`));
+
+/**
+ * The reveal (RULES 9a, K12): the overlay, every item, the head and the skip
+ * line are wholly inside the viewport and showing, not covered. One page
+ * round trip, so it is measured before the reveal puts itself away.
+ */
+async function revealOnScreen(page: Page, where: string): Promise<void> {
+  const r = (await page.evaluate(`(() => {
+    const bad = [];
+    for (const sel of ['.reveal', '.reveal-item', '.reveal-sticker', '.reveal-head', '.reveal-skip', '.reveal-name']) {
+      for (const el of document.querySelectorAll(sel)) {
+        const b = el.getBoundingClientRect();
+        const inside = b.width > 0 && b.height > 0 && b.left >= -0.5 && b.top >= -0.5 && b.right <= ${WIDTH} + 0.5 && b.bottom <= ${HEIGHT} + 0.5;
+        const top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+        const showing = top !== null && (el === top || el.contains(top));
+        if (!inside || !showing) bad.push(sel + ' ' + Math.round(b.left) + ',' + Math.round(b.top) + ' ' + Math.round(b.width) + 'x' + Math.round(b.height) + (inside ? '' : ' OUTSIDE') + (showing ? '' : ' COVERED'));
+      }
+    }
+    return { bad, items: document.querySelectorAll('.reveal-item').length };
+  })()`)) as { bad: string[]; items: number };
+  check(`${where}: every part is inside the viewport and showing`, r.items > 0 && r.bad.length === 0, r.bad.length > 0 ? r.bad.join('; ') : `${r.items} item(s)`);
+}
+
+/** Wholly inside the viewport by its box alone: for a layer that lets taps through (pointer-events: none), which elementFromPoint skips. */
+async function insideViewport(name: string, locator: Locator): Promise<void> {
+  const box = await locator.first().boundingBox();
+  const ok = box !== null && box.width > 0 && box.height > 0 && box.x >= -0.5 && box.y >= -0.5 && box.x + box.width <= WIDTH + 0.5 && box.y + box.height <= HEIGHT + 0.5;
+  check(name, ok, box === null ? 'not found' : `${Math.round(box.x)},${Math.round(box.y)} ${Math.round(box.width)}x${Math.round(box.height)}`);
+}
+
+/** Polls (up to about 2 s) for something the host answers asynchronously, such as a button's pressed state. */
+const settled = (page: Page, test: () => Promise<boolean>): Promise<boolean> => until(page, test);
+
+/** The reveal puts itself away (up to 6 s), without a tap. */
+const revealGone = async (page: Page): Promise<boolean> =>
+  page.waitForSelector('.reveal', { state: 'detached', timeout: 6000 }).then(
+    () => true,
+    () => false,
+  );
+
+/** The open sticker book's parts, wholly inside the viewport and showing, with nothing to scroll (RULES 9a, K12). */
+async function bookOnScreen(page: Page, where: string, kindy: boolean): Promise<void> {
+  const book = page.getByRole('dialog', { name: 'Sticker book' });
+  for (const part of ['.book-bar', '.book-me', '.book-pager', '.book-grid', '.book-wardrobe']) await checkOnScreen(`${where}: ${part.slice(1)} is inside the viewport`, book.locator(part));
+  await checkOnScreen(`${where}: every sticker slot is inside the viewport`, book.locator('.book-grid .sticker'));
+  await checkOnScreen(`${where}: every hat and outfit slot is inside the viewport`, book.locator('.book-wear > li'));
+  await checkOnScreen(`${where}: the back button is inside the viewport`, book.locator('.book-back'));
+  await checkOnScreen(`${where}: both page arrows are inside the viewport`, book.locator('.book-turn'));
+  const over = await book.evaluate((el) => el.scrollHeight - el.clientHeight);
+  check(`${where}: the book itself has nothing to scroll`, over <= 1, `${over} px over`);
+  await noVerticalScroll(page, where);
+  await noHorizontalScroll(page, where);
+  if (kindy) await bigTargets(page, '.book-kindy button', 64, where);
+  else await touchTargets(page, where);
+}
+
+/** Turns through every page of the open book and counts what is in colour and what is a silhouette. */
+async function countBook(page: Page, pages: number): Promise<{ earned: number; locked: number; slots: number; names: string[] }> {
+  const book = page.getByRole('dialog', { name: 'Sticker book' });
+  let earned = 0;
+  let locked = 0;
+  let slots = 0;
+  const names: string[] = [];
+  for (let i = 0; i < pages; i++) {
+    earned += await book.locator('.book-grid li[data-earned="yes"]').count();
+    locked += await book.locator('.book-grid li[data-earned="no"] .sticker-locked').count();
+    slots += await book.locator('.book-grid li').count();
+    for (const li of await book.locator('.book-grid li[data-earned="yes"]').all()) names.push((await li.getAttribute('data-sticker-slot')) ?? '?');
+    await book.getByRole('button', { name: 'Next page' }).tap();
+  }
+  return { earned, locked, slots, names };
+}
+
 async function openPicker(page: Page): Promise<void> {
   await page.locator('.bar-avatar').tap();
   await page.locator('.picker').waitFor({ timeout: 5000 });
@@ -1210,6 +1286,15 @@ async function main(): Promise<void> {
     await party.locator('.kindy-next').tap();
     const kDone = kindy.getByRole('region', { name: 'Done for today' });
     await kDone.waitFor();
+    // The Kindy reveal: a picture only, popping and glowing (full motion here), put away by a tap.
+    check('Kindy done for today: a reveal shows the sticker just earned, as a picture', (await page.locator('.reveal-kindy').count()) === 1 && (await page.locator('.reveal-kindy .reveal-item .sticker:not(.sticker-locked)').count()) === 1);
+    check('the Kindy reveal pops and glows with full motion', (await runningAnimations(page, 'reveal-pop')) >= 1 && (await runningAnimations(page, 'reveal-glow')) >= 1);
+    await page.waitForTimeout(1500);
+    await revealOnScreen(page, 'the Kindy reveal');
+    await noText(page, 'the Kindy reveal');
+    await shot(page, '17a-kindy-reveal');
+    await page.locator('.reveal-kindy').tap();
+    check('a tap skips the Kindy reveal at once', await until(page, async () => (await page.locator('.reveal').count()) === 0));
     const gone = Number(await kDone.locator('.kindy-night').evaluate((el) => (el as HTMLElement).style.getPropertyValue('--gone')));
     check('Kindy done for today: the sleeping sun, the moon on its way to the next puzzle, a face per kid fed, the week’s stars', (await kDone.locator('.kindy-sun').count()) === 1 && gone > 0 && gone < 1 && (await kDone.locator('.kindy-fed li').count()) === kp.kids.length && (await kDone.locator('.kindy-week li.on').count()) >= 1, `moon ${gone.toFixed(2)} of the way`);
     for (const part of ['.kindy-sun', '.kindy-night', '.kindy-fed', '.kindy-week', '.kindy-again']) await checkOnScreen(`Kindy done for today: ${part.slice(1)} is inside the viewport`, kDone.locator(part));
@@ -1218,6 +1303,21 @@ async function main(): Promise<void> {
     await noVerticalScroll(page, 'Kindy done for today');
     await noHorizontalScroll(page, 'Kindy done for today');
     await shot(page, '18-kindy-done');
+    // The Kindy sticker book: pictures only, arrows and dots, a house to go back.
+    await checkOnScreen('Kindy done for today: the sticker book button is inside the viewport', kDone.locator('.kindy-book'));
+    await kDone.locator('.kindy-book').tap();
+    const kBook = page.getByRole('dialog', { name: 'Sticker book' });
+    await kBook.waitFor();
+    await noText(page, 'the Kindy sticker book');
+    await bookOnScreen(page, 'the Kindy sticker book', true);
+    check('Kindy book: four pages (no gold page without a bonus round), shown as dots', (await kBook.locator('.book-dots li').count()) === 4 && (await kBook.locator('.book-page-name').count()) === 0);
+    const kCount = await countBook(page, 4);
+    check('Kindy book: one sticker earned in colour, the other 23 silhouettes', kCount.slots === 24 && kCount.earned === 1 && kCount.locked === 23, `${kCount.slots} slots, ${kCount.earned} earned, ${kCount.locked} locked`);
+    check('Kindy book: nothing earned to wear yet, the four hats and outfits are silhouettes', (await kBook.locator('.book-wear > li[data-earned="no"]').count()) === 4);
+    await shot(page, '18a-kindy-book');
+    await kBook.getByRole('button', { name: 'Back', exact: true }).tap();
+    await kDone.waitFor();
+    check('closing the Kindy book returns to done for today', (await kBook.count()) === 0);
     await page.reload();
     await page.locator('.picker').waitFor();
     await tile(page, 'Pip').tap();
@@ -1295,6 +1395,14 @@ async function main(): Promise<void> {
     await page.getByRole('button', { name: 'See today’s result' }).tap();
     const doneScreen = page.getByRole('region', { name: 'Done for today' });
     await doneScreen.waitFor();
+    // ---- the reveal (RULES 9a, K12): what the daily earned; reduced motion makes it still, and it puts itself away ----
+    check('done for today: a reveal shows the sticker just earned', (await page.locator('.reveal').count()) === 1 && (await page.locator('.reveal-item .sticker:not(.sticker-locked)').count()) === 1);
+    check('reduced motion: the reveal does not pop or glow', (await runningAnimations(page, 'reveal-pop')) === 0 && (await runningAnimations(page, 'reveal-glow')) === 0);
+    await revealOnScreen(page, 'the reveal');
+    await noEmoji(page, 'the reveal');
+    await shot(page, '19a-reveal');
+    check('the reveal puts itself away, without a tap', await revealGone(page));
+    check('and the sticker is kept as seen, so the reveal plays once', (await page.locator('.reveal').count()) === 0);
     const doneText = await doneScreen.innerText();
     check('done for today: the result, the streak, a countdown', /Kids fed: \d+/.test(doneText) && /Went home hungry: 0 of 3/.test(doneText) && /first go/.test(doneText) && /Streak: 1 day/.test(doneText) && /Next puzzle in \d+:\d\d:\d\d/.test(doneText), doneText.replace(/\s+/g, ' '));
     const clock1 = (await doneScreen.locator('.done-clock').textContent()) ?? '';
@@ -1316,6 +1424,19 @@ async function main(): Promise<void> {
     await noHorizontalScroll(page, 'done for today');
     await touchTargets(page, 'done for today');
     await shot(page, '20-done');
+    // ---- the sticker book from done for today ----
+    await checkOnScreen('done for today: the sticker book button is inside the viewport', doneScreen.getByRole('button', { name: 'Sticker book' }));
+    await doneScreen.getByRole('button', { name: 'Sticker book' }).tap();
+    const bookDialog = page.getByRole('dialog', { name: 'Sticker book' });
+    await bookDialog.waitFor();
+    await bookOnScreen(page, 'the sticker book', false);
+    const counted = await countBook(page, 5);
+    check('the book: five pages of six, one sticker earned in colour, the other 29 silhouettes', counted.slots === 30 && counted.earned === 1 && counted.locked === 29, `${counted.slots} slots, ${counted.earned} earned, ${counted.locked} locked`);
+    check('the book: nothing to wear yet, every hat and outfit a silhouette', (await bookDialog.locator('.book-wear > li[data-earned="yes"]').count()) === 0 && (await bookDialog.locator('.book-wear > li[data-earned="no"]').count()) === 4);
+    await shot(page, '20a-book');
+    await bookDialog.getByRole('button', { name: 'Back', exact: true }).tap();
+    await doneScreen.waitFor();
+    check('closing the book returns to done for today', (await bookDialog.count()) === 0);
     await page.reload();
     await page.locator('.picker').waitFor();
     check('the picker shows the first child’s streak, not Sam’s', (await tile(page, 'Dog').locator('.picker-streak').count()) === 1 && (await tile(page, 'Sam').locator('.picker-streak').count()) === 0);
@@ -1363,6 +1484,140 @@ async function main(): Promise<void> {
       await old.close();
     } finally {
       rmSync(oldProfile, { recursive: true, force: true });
+    }
+
+    // ---- the sticker book and outfits (RULES 9a, K12) ----
+    // A profile book as the last version wrote it (version 1: six days finished, no stickers), wave 10 of
+    // today to play. The app migrates it, the last wave is played by touch, and the 7th day in a row earns a scarf.
+    const bookDir = mkdtempSync(join(tmpdir(), 'snacks-book-'));
+    try {
+      const nine = new GameSession(startGame(generatePuzzle('main', 'daily', DAY, 0)));
+      for (const layout of nine.state.puzzle.witness.slice(0, 9)) for (const c of witnessCommands(nine.state, layout)) nine.submit(c);
+      const days = [6, 5, 4, 3, 2, 1].map((back) => ({ day: DAY - back, fed: 14, hungry: 1, retries: 0, hints: 0, bonus: false }));
+      const oldBook = { format: 'snack-attack-profiles', version: 1, nextId: 2, profiles: [{ id: 'p1', name: '', avatar: 'dog', mode: 'main', history: days, best: 6, active: `daily-main-${DAY}` }] };
+      const seed = `(() => new Promise((resolve, reject) => {
+        const req = indexedDB.open('snacks', 2);
+        req.onupgradeneeded = () => { req.result.createObjectStore('slots', { keyPath: 'slot' }); req.result.createObjectStore('meta', { keyPath: 'key' }); };
+        req.onerror = () => reject(req.error);
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction(['slots', 'meta'], 'readwrite');
+          tx.objectStore('meta').put({ key: 'profiles', value: ${JSON.stringify(oldBook)} });
+          tx.objectStore('slots').put({ slot: 'p1/daily-main-${DAY}', savedAt: 0, game: ${JSON.stringify(nine.save())} });
+          tx.oncomplete = () => { db.close(); resolve(true); };
+        };
+      }))()`;
+      const bctx = await chromium.launchPersistentContext(bookDir, { executablePath: chromiumPath(), viewport: { width: WIDTH, height: HEIGHT }, deviceScaleFactor: PHONE.dpr, isMobile: true, hasTouch: true, timezoneId: 'UTC' });
+      const bp = bctx.pages()[0] ?? (await bctx.newPage());
+      if (process.env.DAY !== undefined) await bp.clock.setFixedTime(DAY * 86_400_000 + 43_200_000);
+      // Seeded from a page of this origin that does not run the app, so the app finds the old book when it opens.
+      await bp.goto(`${URL}manifest.webmanifest`);
+      await bp.evaluate(seed);
+      await bp.goto(URL);
+      await bp.locator('.board').waitFor({ timeout: 10_000 });
+      const bcdp = await bctx.newCDPSession(bp);
+      check('a version-1 profile book opens as it was: the same profile, wave 10, a streak of 6', (await barStats(bp)).includes('10/10') && ((await bp.locator('.bar-streak').textContent()) ?? '').trim() === '6');
+
+      // The menu opens the book: the old days gave their stickers and the 3-day hat, none of it shown as new.
+      await bp.getByRole('button', { name: 'Menu' }).tap();
+      await checkOnScreen('the menu: the sticker book entry is inside the viewport', bp.getByRole('button', { name: 'Sticker book' }));
+      await bp.getByRole('button', { name: 'Sticker book' }).tap();
+      const bb = bp.getByRole('dialog', { name: 'Sticker book' });
+      await bb.waitFor();
+      await bookOnScreen(bp, 'the sticker book with six days behind it', false);
+      const seeded = await countBook(bp, 5);
+      check('the migrated book holds the six days’ stickers in colour and the other 24 as silhouettes', seeded.earned === 6 && seeded.locked === 24 && seeded.slots === 30, `${seeded.earned} earned, ${seeded.locked} locked`);
+      check('the migrated book earned the 3-day party hat; the scarf, crown and cape are not yet', (await bb.locator('.book-wear > li[data-cosmetic-slot="party-hat"][data-earned="yes"]').count()) === 1 && (await bb.locator('.book-wear > li[data-earned="no"]').count()) === 3);
+      check('nothing is worn yet: neither the top bar nor the book’s avatar', (await bp.locator('.bar-avatar .cosmetic-layer, .book-me .cosmetic-layer').count()) === 0);
+
+      // Wear the hat; the child's own avatar shows it, in the book and on the game screen.
+      const hatBtn = bb.getByRole('button', { name: /Party hat/ });
+      await checkOnScreen('the party hat button is inside the viewport', hatBtn);
+      await hatBtn.tap();
+      await settled(bp, async () => (await hatBtn.getAttribute('aria-pressed')) === 'true');
+      check('wearing the party hat: the button says so and the avatar in the book wears it', (await hatBtn.getAttribute('aria-pressed')) === 'true' && (await bb.locator('.book-me .cosmetic-layer[data-cosmetic="party-hat"]').count()) === 1 && ((await hatBtn.textContent()) ?? '').includes('Wearing'));
+      await bookOnScreen(bp, 'the sticker book with the party hat on', false);
+      await shot(bp, '20b-book-hat');
+      await bb.getByRole('button', { name: 'Back', exact: true }).tap();
+      await bp.locator('.board').waitFor();
+      check('the hat is on the top bar’s avatar, inside the viewport', (await bp.locator('.bar-avatar .cosmetic-layer[data-cosmetic="party-hat"]').count()) === 1);
+      await checkOnScreen('the top bar: the avatar wearing its hat is inside the viewport', bp.locator('.bar-avatar'));
+      await insideViewport('the top bar: the hat itself is inside the viewport', bp.locator('.bar-avatar .cosmetic-layer'));
+
+      // Never on the kids: nothing worn is drawn on the board, on a kid's card, or in a clue card.
+      const wear = async (): Promise<{ board: number; cards: number; kids: number; stray: number }> =>
+        (await bp.evaluate(`({
+          board: document.querySelectorAll('.board .cosmetic-layer, .board [data-cosmetic]').length,
+          cards: document.querySelectorAll('.clue-chip .cosmetic-layer, .clue-chip [data-cosmetic], [role="dialog"][aria-label="Clue card"] [data-cosmetic]').length,
+          kids: document.querySelectorAll('.board .kid .art-kid').length,
+          stray: [...document.querySelectorAll('.cosmetic-layer')].filter((el) => el.closest('.avatar') === null).length,
+        })`)) as { board: number; cards: number; kids: number; stray: number };
+      const w0 = await wear();
+      check('with a hat on, no kid on the board and no card wears anything: cosmetics are the avatar’s alone', w0.kids > 0 && w0.board === 0 && w0.cards === 0 && w0.stray === 0, `${w0.kids} kids, ${w0.board} on the board, ${w0.cards} on cards, ${w0.stray} stray`);
+      const bkid = generatePuzzle('main', 'daily', DAY, 0).kids.find((k) => k.wave === 10) ?? generatePuzzle('main', 'daily', DAY, 0).kids[0]!;
+      await cellOf(bp, bkid.cell).tap();
+      const bcard = bp.getByRole('dialog', { name: 'Clue card' });
+      await bcard.waitFor({ timeout: 2000 });
+      const w1 = await wear();
+      check('and the clue card shows the kid’s own hat, glasses and backpack, never the player’s', w1.cards === 0 && w1.board === 0, `${w1.cards} cosmetic layers in the card`);
+      await bcard.getByRole('button', { name: 'Close' }).tap();
+
+      // The last wave by touch: the 7th day in a row.
+      const bpuzzle = generatePuzzle('main', 'daily', DAY, 0);
+      const fedLast = await playWaveByTaps(bp, bcdp, bpuzzle, bpuzzle.witness[9]!);
+      check('the seeded daily’s last wave is played by taps and feeds every kid', fedLast);
+      await bp.getByRole('button', { name: 'See today’s result' }).tap();
+      const bdone = bp.getByRole('region', { name: 'Done for today' });
+      await bdone.waitFor();
+
+      // The reveal, with full motion: the 7th sticker and the scarf pop out.
+      check('done for today: the reveal shows a new sticker and a new outfit', (await bp.locator('.reveal-item').count()) === 2 && (await bp.locator('.reveal-item .sticker').count()) === 1 && (await bp.locator('.reveal-item .avatar[data-avatar]').count()) === 1 && (await bp.locator('.reveal-item .cosmetic-layer[data-cosmetic="scarf"]').count()) === 1);
+      check('the reveal pops and glows with full motion, and says it can be skipped', (await runningAnimations(bp, 'reveal-pop')) >= 2 && (await runningAnimations(bp, 'reveal-glow')) >= 1 && ((await bp.locator('.reveal-skip').textContent()) ?? '').includes('Tap to skip'));
+      await bp.waitForTimeout(1500);
+      await revealOnScreen(bp, 'the reveal with a sticker and a scarf');
+      await shot(bp, '20c-reveal');
+      await bp.locator('.reveal').tap();
+      check('a tap skips the reveal at once', await until(bp, async () => (await bp.locator('.reveal').count()) === 0));
+      const bdoneText = await bdone.innerText();
+      check('done for today after the seventh day: the streak is 7', /Streak: 7 days/.test(bdoneText), bdoneText.replace(/\s+/g, ' '));
+      await checkOnScreen('done for today: the sticker book button is inside the viewport', bdone.getByRole('button', { name: 'Sticker book' }));
+      await bp.reload();
+      await bdone.waitFor();
+      await bp.waitForTimeout(700);
+      check('a skipped reveal does not play again when the app is opened again', (await bp.locator('.reveal').count()) === 0);
+
+      // The book now: seven stickers, two hats and outfits; wear the scarf as well.
+      await bdone.getByRole('button', { name: 'Sticker book' }).tap();
+      await bb.waitFor();
+      const after = await countBook(bp, 5);
+      check('the book holds seven stickers in colour, one for each day', after.earned === 7 && after.locked === 23 && new Set(after.names).size === 7, `${after.earned} earned, ${after.locked} locked`);
+      check('the scarf was earned on the 7th day', (await bb.locator('.book-wear > li[data-cosmetic-slot="scarf"][data-earned="yes"]').count()) === 1 && (await bb.locator('.book-wear > li[data-earned="no"]').count()) === 2);
+      check('the party hat is still on after reopening the app', (await bb.locator('.book-me .cosmetic-layer[data-cosmetic="party-hat"]').count()) === 1);
+      const scarfBtn = bb.getByRole('button', { name: /Scarf/ });
+      await scarfBtn.tap();
+      await settled(bp, async () => (await scarfBtn.getAttribute('aria-pressed')) === 'true');
+      check('wearing the scarf too: hat and outfit together on the avatar', (await scarfBtn.getAttribute('aria-pressed')) === 'true' && (await bb.locator('.book-me .cosmetic-layer[data-cosmetic="party-hat scarf"]').count()) === 1);
+      await bookOnScreen(bp, 'the sticker book wearing a hat and a scarf', false);
+      await shot(bp, '20d-book-outfit');
+      await hatBtn.tap();
+      await settled(bp, async () => (await hatBtn.getAttribute('aria-pressed')) === 'false');
+      check('tapping the hat again takes it off and leaves the scarf', (await hatBtn.getAttribute('aria-pressed')) === 'false' && (await bb.locator('.book-me .cosmetic-layer[data-cosmetic="scarf"]').count()) === 1);
+      await hatBtn.tap();
+      await settled(bp, async () => (await hatBtn.getAttribute('aria-pressed')) === 'true');
+      await bb.getByRole('button', { name: 'Back', exact: true }).tap();
+      await bdone.waitFor();
+      check('back on done for today, the top bar’s avatar wears both', (await bp.locator('.bar-avatar .cosmetic-layer[data-cosmetic="party-hat scarf"]').count()) === 1);
+      await insideViewport('done for today: the avatar in the top bar, dressed, is inside the viewport', bp.locator('.bar-avatar .cosmetic-layer'));
+      await bp.reload();
+      await bdone.waitFor();
+      check('what is worn is kept when the app is closed and opened again', (await bp.locator('.bar-avatar .cosmetic-layer[data-cosmetic="party-hat scarf"]').count()) === 1);
+      await bdone.getByRole('button', { name: 'Practice board' }).tap();
+      await bp.locator('.board').waitFor();
+      const w2 = await wear();
+      check('on a practice board, dressed, nobody else wears it: no kid, card or friend', w2.kids > 0 && w2.board === 0 && w2.cards === 0 && w2.stray === 0, `${w2.kids} kids, ${w2.board} on the board`);
+      await bctx.close();
+    } finally {
+      rmSync(bookDir, { recursive: true, force: true });
     }
 
     // ---- Kindy: a wrong snack, on the first day from here whose wave 1 can throw one ----

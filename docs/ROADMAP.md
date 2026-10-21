@@ -45,7 +45,8 @@ for two kids sharing one phone.
 7. Saves are snapshot plus command log, versioned with migrations, in
    IndexedDB: one slot for each day's daily, each bonus round, and practice,
    for each profile; beside them a versioned profile book with every
-   profile's finished days, from which the streak is worked out (S9, K7).
+   profile's finished days, from which the streak is worked out, and its
+   sticker book and outfits (S9, K7, K12).
 8. The solver and the generator are part of the pure sim (K5).
 
 Stack: TypeScript, Vite + React, a Web Worker via Comlink, IndexedDB,
@@ -64,6 +65,11 @@ vite-plugin-pwa, Vitest + fast-check, and playwright-core for the phone check.
 - Kindy (K8): the board as wide as the phone, no text on the page anywhere
   in the child's flow, and a whole Kindy day played by taps on what the hint
   points at.
+- The sticker book (K12): the reveal, the book (both modes), the wardrobe and
+  the top bar's dressed avatar all inside 360 x 740 with nothing to scroll;
+  Kindy's book and reveal with no text and 64 px targets; a daily finished
+  (the last wave by touch on a seeded profile), the reveal seen and skipped, the
+  book opened and a hat and an outfit worn, and no kid, card or friend dressed.
 - The wave replay at 60 fps with the CPU slowed 4x, moving only transform
   and opacity, with a calm version for reduced motion (K10). A day's puzzle
   generated in under a second with the CPU slowed 4x.
@@ -118,7 +124,12 @@ until both work on hand-made test boards.
     then a square, four big aim squares, a green play button, hints from the
     stored solution (a pointing hand and the phone's voice), the party, a
     picture-only done for today; Kindy days that can never get stuck.
-11. [ ] Sticker book, cosmetics and streak rewards.
+11. [x] Sticker book, cosmetics and streak rewards (K12): a sticker per
+    finished daily, a gold sticker per won bonus round, and a hat or outfit at
+    streaks of 3, 7, 14 and 30; each profile's own book (pictures only in
+    Kindy), worn on the player's own avatar and never on kids or friends; a
+    tap-to-skip reveal on done for today; the profile save at version 2 with a
+    migration. Cosmetic only (RULES 9a).
     - [x] Between steps 10 and 11 (K11): main-mode hints, decoys in the tray,
       the bonus ramp, and the difficulty report.
 12. [ ] Phone check and polish on real phones.
