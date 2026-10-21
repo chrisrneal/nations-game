@@ -1929,3 +1929,112 @@ rule, so no stop):
 **Reversing it.** Set `decoys` to its floor and remove `withDecoys`
 (generate.ts); set `bonusFriendsFirst` = `bonusFriendsLast`; the hint is
 `mainHint.ts`, one case in `game.ts`, and the button in `Game.tsx`.
+
+## K12 - The sticker book and outfits: cosmetic only, worked out from the profile and the day, worn on the player's avatar and nowhere else
+**Status.** Accepted, 2026-10-21, at the owner's request (build step 11:
+"sticker book and outfits"). The owner asked for the rules, the roadmap, the
+spec and the decision records to be updated with the change, so this session
+wrote this record and edited ROADMAP.md as in K2, K7, K10 and K11.
+**Decision.**
+- **The schedule** (RULES 9a). The spec only says "hats, outfits and
+  sticker-book entries, earned by finishing dailies" (L), so the owner's
+  default was used and is recorded here:
+  - one sticker per finished daily (a pool of 24: Snacks, Friends, Sunny day,
+    School);
+  - one gold sticker per won bonus round (a pool of 6), which can only be won
+    after that day's daily, so it still rides on a finished daily;
+  - a hat or outfit when the streak reaches exactly 3, 7, 14 and 30 days:
+    party hat, scarf, crown, cape (hat, outfit, hat, outfit);
+  - practice earns nothing.
+- **Which sticker is a function, not a draw.** `stickerFor(profileId, day,
+  kind, owned)` in `packages/sim/src/stickers.ts` hashes `profile|kind|day`
+  with the RNG's own integer mixer to a place in the pool and takes the first
+  sticker from there, going round, that the profile does not own. No clock, no
+  unseeded randomness; the purity test scans the file like the rest of the sim.
+  Two profiles fill their books in different orders. A full pool gives
+  nothing.
+- **Where it lives.** In the profile, in the profile book: `stickers`,
+  `cosmetics` (hats and outfits, each with the streak that earned it), `worn`
+  (one hat, one outfit) and a `seen` flag on each earned item for the reveal.
+  `recordDaily` and `recordBonus` (`profiles.ts`) award in the same pure
+  step that records the day, so a day that is recorded twice, retried or
+  reopened is safe. `equipCosmetic` and `acknowledgeStickers` are the only other
+  writers. The host gets `equip` and `seeStickers`; the screens read the
+  catalogue from `HomeView.catalogue`, so they never import the sim.
+- **The save** (S9). The profile book goes to version 2. The 1 to 2 migration
+  gives each profile the stickers and hats its finished days would have earned,
+  replaying the days in order with the same functions as live play (a test
+  proves a migrated book equals a played one), all marked seen. Reading a
+  version-2 book is forgiving: unknown ids, the wrong kind, repeats, and worn
+  items that are not owned or are in the wrong slot are dropped, never thrown.
+  The migration is tested on a real version-1 file
+  (`packages/harness/fixtures/profile-book-v1.json`) and in a real browser by
+  the phone check. A book from a newer game is still refused.
+- **Books are kept apart.** The book is a field of the profile, so deleting a
+  profile deletes only its own, and a new profile (a fresh id, never reused)
+  starts empty. Tests cover earning, equipping and deleting.
+- **Cosmetic only, enforced.** `packages/harness/src/cosmetics.test.ts` fails
+  if any sim file other than `stickers.ts`, `profiles.ts` and `index.ts`
+  mentions stickers or outfits or imports them, if the View holds such a key,
+  or if a day's puzzle and a wave hash differently for a profile that has
+  earned everything.
+- **Not on kids, and not on friends** (the owner's rule, plus one finding).
+  Kids' hats, glasses and backpacks are clue attributes, and K10 drew each
+  friend with the hat and badge of its pattern, so a cosmetic on either would
+  be a false clue signal. The prompt allowed friends "if the spec allows";
+  the spec (K10) does not, so cosmetics go on the player's own avatar only
+  (top bar, picker, book, reveal). `apps/web/src/ui/art/cosmetics.test.ts`
+  fails if a kid or friend picture, or any file that draws or labels one,
+  mentions cosmetics; if anything but `Avatar.tsx` imports the cosmetics
+  drawing; if `KidArt` or `FriendArt` accept a cosmetic (a `@ts-expect-error`
+  line stops compiling); or if a cosmetic is drawn in the clue hat's blue.
+  The phone check also looks at a real board, a clue card and a practice board
+  with a hat and scarf on and finds nothing worn outside the avatar.
+- **The screens.**
+  - The sticker book is an overlay over the child's game: Back, the count, the
+    child's avatar wearing what they wear, page arrows with the page name,
+    six slots a page (names under the stickers), and a row of the four hats and
+    outfits (tap to wear, tap again to take off; unearned ones are silhouettes
+    that say how many days in a row). A page's backing shape tells the pages
+    apart without colour (`catalogue.test.ts` takes the colour out and
+    checks no two stickers match).
+  - Kindy gets the same book with no words: a house, arrows and dots, 64 px
+    targets, no Gold page (no bonus round exists to fill it).
+  - The reveal sits over done for today. CSS animates it (P7): a pop with a
+    little spin, a glow and sparkles. It puts itself away after 2.6 s (350 ms
+    more per extra item) and a tap anywhere skips it. With reduced motion it is
+    shown still. It marks the items seen when it ends or is skipped, so it plays
+    once; a closed app replays it.
+  - Entry points: the done screen (both modes), the menu (main) and the Kindy
+    top bar in the spare slot where the help hand goes when there is no hint.
+- **Where this meets the spec.** (1) "docs/snack-attack.md" does not exist;
+  RULES.md is the spec, as in K10. (2) The owner's default gives a bonus
+  sticker; RULES (L) says cosmetics are "earned by finishing dailies". The
+  bonus round is part of a finished daily's day, so the two agree; noted
+  rather than stopped for. (3) CLAUDE.md makes ROADMAP.md and DECISIONS.md
+  architect-only; the owner's brief asks for both to be updated, as it did in
+  K10 and K11. No locked (L) decision or D1-D20 default was changed.
+**Why.**
+- A child should be able to look forward to a morning's sticker, and to a hat
+  for keeping a streak, without the game ever getting easier or harder for it.
+- Working the sticker out from the profile and the day, instead of storing a
+  random draw, makes it the same on every device, safe to claim twice, and
+  rebuildable if a book is ever damaged.
+- Putting hats only on the player's avatar keeps every picture of a kid and a
+  friend meaning exactly what its clue says.
+**Cost.**
+- Four hats and outfits, and 30 stickers, last a child about 30 days of dailies
+  (24 daily stickers, then none more). That is the whole book; more stickers
+  are one more row in `stickers.ts` and a picture, and a migration is not
+  needed because the pools are read, not counted.
+- The 3 and 7 and 14 and 30 are catalogue data in `stickers.ts` and RULES 9a,
+  not entries in the tunables table: they decide a gift, not the play, and
+  keeping them out of the table keeps the rule "tunables change play" true.
+- The top bar's avatar is 38 px, so a hat there is small. The book and the
+  picker show it at 56 to 88 px.
+- About 20 KB more to download.
+**Reversing it.** The screens are `StickerBook.tsx`, `StickerReveal.tsx`,
+`BookContext.tsx` and `art/Cosmetics.tsx`, `art/Stickers.tsx`; the rules are
+`stickers.ts` and the award calls in `profiles.ts`. Removing them leaves the
+profile book readable: version 2's extra fields are ignored by reading it as
+version 1 would need a downgrade, which is not written.

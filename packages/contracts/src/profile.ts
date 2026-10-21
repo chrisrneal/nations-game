@@ -26,6 +26,69 @@ export interface DayRecord {
   readonly bonus: boolean;
 }
 
+/** A sticker in the catalogue (RULES 9a). The picture is drawn by the interface from the id. */
+export interface StickerDef {
+  readonly id: string;
+  readonly kind: StickerKind;
+  readonly page: string;
+  /** In main mode's words. Kindy shows the picture only. */
+  readonly name: string;
+}
+
+export interface StickerPage {
+  readonly id: string;
+  readonly kind: StickerKind;
+  readonly name: string;
+}
+
+/** A hat or outfit in the catalogue. */
+export interface CosmeticDef {
+  readonly id: string;
+  readonly slot: CosmeticSlot;
+  /** The streak that earns it (RULES 9a). */
+  readonly streak: number;
+  readonly name: string;
+}
+
+/** Every sticker and cosmetic there is: what the book shows, earned or not. */
+export interface Catalogue {
+  readonly pages: readonly StickerPage[];
+  readonly stickers: readonly StickerDef[];
+  readonly cosmetics: readonly CosmeticDef[];
+}
+
+/** Where a sticker came from: a finished daily, or that day's bonus round (RULES 9a). */
+export type StickerKind = 'daily' | 'bonus';
+
+/** A sticker in a profile's book (RULES 9a, K12). The picture is the catalogue's; this is only that it was earned. */
+export interface EarnedSticker {
+  readonly id: string;
+  readonly kind: StickerKind;
+  /** The puzzle's day it was earned on. */
+  readonly day: number;
+  /** False until the reveal on done-for-today has been shown or skipped. */
+  readonly seen: boolean;
+}
+
+/** Where a hat or an outfit goes on the player's own avatar. Never on kids or friends (RULES 9a). */
+export type CosmeticSlot = 'hat' | 'outfit';
+
+/** A hat or outfit earned at a streak milestone (RULES 9a, K12). */
+export interface EarnedCosmetic {
+  readonly id: string;
+  /** The puzzle's day the milestone was reached. */
+  readonly day: number;
+  /** The streak that earned it. */
+  readonly streak: number;
+  readonly seen: boolean;
+}
+
+/** What an avatar wears now: at most one hat and one outfit, or nothing. */
+export interface Worn {
+  readonly hat: string | null;
+  readonly outfit: string | null;
+}
+
 /** A child's profile, as stored on the device. */
 export interface Profile {
   /** `p1`, `p2`...: never reused, so a deleted profile's saves can't be picked up by a new one. */
@@ -41,6 +104,12 @@ export interface Profile {
   readonly best: number;
   /** The save slot this profile is playing (its daily, bonus round or practice board), or null. */
   readonly active: string | null;
+  /** This profile's own sticker book, oldest first (RULES 9a). Deleting the profile deletes it. */
+  readonly stickers: readonly EarnedSticker[];
+  /** Hats and outfits earned at streak milestones, oldest first. */
+  readonly cosmetics: readonly EarnedCosmetic[];
+  /** What the avatar wears. Looks only: nothing here reaches the game. */
+  readonly worn: Worn;
 }
 
 /** Every profile on the device: the versioned profile save (S9). */
@@ -78,6 +147,11 @@ export interface ProfileView {
   readonly today: DayRecord | null;
   /** The last few finished dailies, newest last. */
   readonly recent: readonly DayRecord[];
+  readonly stickers: readonly EarnedSticker[];
+  readonly cosmetics: readonly EarnedCosmetic[];
+  readonly worn: Worn;
+  /** Earned but not yet revealed: the done-for-today reveal plays these once. */
+  readonly unseen: { readonly stickers: readonly EarnedSticker[]; readonly cosmetics: readonly EarnedCosmetic[] };
 }
 
 /** Who is on the device and who is playing. */
@@ -89,4 +163,6 @@ export interface HomeView {
   readonly day: number;
   /** The pictures a profile can have, in the order to offer them. */
   readonly avatars: readonly AvatarId[];
+  /** The sticker book's contents and the hats and outfits, from the sim. */
+  readonly catalogue: Catalogue;
 }

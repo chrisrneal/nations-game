@@ -1,0 +1,83 @@
+{
+  "format": "snack-attack-profiles",
+  "version": 1,
+  "nextId": 3,
+  "profiles": [
+    {
+      "id": "p1",
+      "name": "Sam",
+      "avatar": "dog",
+      "mode": "main",
+      "history": [
+        {
+          "day": 20400,
+          "fed": 14,
+          "hungry": 1,
+          "retries": 0,
+          "hints": 0,
+          "bonus": false
+        },
+        {
+          "day": 20401,
+          "fed": 14,
+          "hungry": 1,
+          "retries": 0,
+          "hints": 0,
+          "bonus": true
+        },
+        {
+          "day": 20402,
+          "fed": 14,
+          "hungry": 1,
+          "retries": 0,
+          "hints": 0,
+          "bonus": false
+        },
+        {
+          "day": 20403,
+          "fed": 14,
+          "hungry": 1,
+          "retries": 0,
+          "hints": 0,
+          "bonus": false
+        },
+        {
+          "day": 20406,
+          "fed": 14,
+          "hungry": 1,
+          "retries": 0,
+          "hints": 0,
+          "bonus": false
+        }
+      ],
+      "best": 4,
+      "active": "daily-main-20406"
+    },
+    {
+      "id": "p2",
+      "name": "",
+      "avatar": "cat",
+      "mode": "kindy",
+      "history": [
+        {
+          "day": 20405,
+          "fed": 5,
+          "hungry": 0,
+          "retries": 0,
+          "hints": 0,
+          "bonus": false
+        },
+        {
+          "day": 20406,
+          "fed": 5,
+          "hungry": 0,
+          "retries": 0,
+          "hints": 0,
+          "bonus": false
+        }
+      ],
+      "best": 2,
+      "active": null
+    }
+  ]
+}

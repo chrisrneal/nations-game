@@ -3,6 +3,8 @@ import fc from 'fast-check';
 import type { DayRecord, ProfileBook } from '@snacks/contracts';
 import {
   AVATARS,
+  acknowledgeStickers,
+  equipCosmetic,
   PROFILE_BOOK_VERSION,
   addProfile,
   editProfile,
@@ -18,6 +20,7 @@ import {
   setActive,
   streakOf,
 } from './profiles.ts';
+import { COSMETICS, STICKERS } from './stickers.ts';
 import { SNACK_TUNABLES as T } from './tunables.ts';
 
 const D = 20_400;
@@ -297,5 +300,144 @@ describe('the profile save: versioned, read with care (S9, K7)', () => {
 
   it('a fresh device folds to the same first profile with nothing in it', () => {
     expect(legacyBook(null, [], [])).toEqual(addProfile(emptyBook(), { name: '', avatar: AVATARS[0]!, mode: 'main' }).book);
+  });
+});
+
+// ---- the sticker book and the wardrobe (RULES 9a, K12) ----
+
+const finish = (book: ProfileBook, id: string, ...list: number[]): ProfileBook => list.reduce((b, day) => recordDaily(b, id, done(day)), book);
+const mine = (book: ProfileBook, id: string) => book.profiles.find((p) => p.id === id)!;
+
+describe('earning (RULES 9a)', () => {
+  it('a new profile has an empty book, nothing worn', () => {
+    const p = mine(made({}), 'p1');
+    expect(p.stickers).toEqual([]);
+    expect(p.cosmetics).toEqual([]);
+    expect(p.worn).toEqual({ hat: null, outfit: null });
+  });
+
+  it('a finished daily gives one daily sticker, not yet seen, and recording it again gives no more', () => {
+    const once = finish(made({}), 'p1', D);
+    const p = mine(once, 'p1');
+    expect(p.stickers).toHaveLength(1);
+    expect(p.stickers[0]).toMatchObject({ kind: 'daily', day: D, seen: false });
+    expect(STICKERS.find((s) => s.id === p.stickers[0]!.id)?.kind).toBe('daily');
+    expect(mine(finish(once, 'p1', D), 'p1').stickers).toHaveLength(1);
+  });
+
+  it('the first sticker is a function of the profile and the day, not of when it is claimed', () => {
+    const a = mine(finish(made({}), 'p1', D), 'p1').stickers[0]!.id;
+    const b = mine(finish(made({}), 'p1', D), 'p1').stickers[0]!.id;
+    expect(a).toBe(b);
+    const others = new Set(Array.from({ length: 6 }, (_, i) => mine(finish(made({}), 'p1', D + i), 'p1').stickers[0]!.id));
+    expect(others.size).toBeGreaterThan(1);
+  });
+
+  it('a won bonus round gives one bonus sticker, only with its daily, and only once', () => {
+    const base = finish(made({}), 'p1', D);
+    expect(mine(recordBonus(made({}), 'p1', D), 'p1').stickers).toEqual([]);
+    const bonus = recordBonus(base, 'p1', D);
+    expect(mine(bonus, 'p1').stickers.map((s) => s.kind)).toEqual(['daily', 'bonus']);
+    expect(mine(recordBonus(bonus, 'p1', D), 'p1').stickers).toHaveLength(2);
+  });
+
+  it('streak milestones 3, 7, 14 and 30 each give their hat or outfit, once', () => {
+    let book = made({});
+    const at: number[] = [];
+    for (let i = 0; i < 40; i++) {
+      const before = mine(book, 'p1').cosmetics.length;
+      book = finish(book, 'p1', D + i);
+      if (mine(book, 'p1').cosmetics.length > before) at.push(i + 1);
+    }
+    expect(at).toEqual([3, 7, 14, 30]);
+    expect(mine(book, 'p1').cosmetics.map((c) => [c.id, c.streak])).toEqual(COSMETICS.map((c) => [c.id, c.streak]));
+  });
+
+  it('a streak that breaks and builds again does not give the same hat twice', () => {
+    let book = finish(made({}), 'p1', D, D + 1, D + 2);
+    expect(mine(book, 'p1').cosmetics).toHaveLength(1);
+    book = finish(book, 'p1', D + 10, D + 11, D + 12);
+    expect(mine(book, 'p1').cosmetics).toHaveLength(1);
+  });
+
+  it('a full book gives nothing more, but the day is still finished', () => {
+    let book = made({});
+    for (let i = 0; i < 25; i++) book = finish(book, 'p1', D + i * 2);
+    const p = mine(book, 'p1');
+    expect(p.history).toHaveLength(25);
+    expect(p.stickers).toHaveLength(24);
+    expect(new Set(p.stickers.map((s) => s.id)).size).toBe(24);
+  });
+});
+
+describe('equipping and the reveal (RULES 9a)', () => {
+  const streak3 = (): ProfileBook => finish(made({}, {}), 'p1', D, D + 1, D + 2);
+
+  it('wears an earned hat or outfit in its own slot, and takes it off again', () => {
+    const worn = equipCosmetic(streak3(), 'p1', 'hat', 'party-hat');
+    expect(worn.error).toBeNull();
+    expect(mine(worn.book, 'p1').worn).toEqual({ hat: 'party-hat', outfit: null });
+    expect(mine(equipCosmetic(worn.book, 'p1', 'hat', null).book, 'p1').worn).toEqual({ hat: null, outfit: null });
+  });
+
+  it('refuses what is not earned, what is in the wrong slot and what does not exist', () => {
+    const base = streak3();
+    for (const [slot, id] of [['outfit', 'scarf'], ['outfit', 'party-hat'], ['hat', 'crown'], ['hat', 'nonsense']] as const) {
+      const r = equipCosmetic(base, 'p1', slot, id);
+      expect(r.error).not.toBeNull();
+      expect(r.book).toBe(base);
+    }
+    expect(equipCosmetic(base, 'p9', 'hat', 'party-hat').error).not.toBeNull();
+  });
+
+  it('marking things seen clears the reveal and nothing else', () => {
+    const base = streak3();
+    expect(mine(base, 'p1').stickers.every((s) => !s.seen)).toBe(true);
+    const seen = acknowledgeStickers(base, 'p1');
+    const p = mine(seen, 'p1');
+    expect(p.stickers.every((s) => s.seen) && p.cosmetics.every((c) => c.seen)).toBe(true);
+    expect(p.stickers.map((s) => s.id)).toEqual(mine(base, 'p1').stickers.map((s) => s.id));
+    expect(acknowledgeStickers(seen, 'p1')).toBe(seen);
+  });
+
+  it('the profile view lists what is unseen', () => {
+    const base = streak3();
+    const view = profileView(mine(base, 'p1'), D + 2);
+    expect(view.unseen.stickers).toHaveLength(3);
+    expect(view.unseen.cosmetics.map((c) => c.id)).toEqual(['party-hat']);
+    expect(profileView(mine(acknowledgeStickers(base, 'p1'), 'p1'), D + 2).unseen).toEqual({ stickers: [], cosmetics: [] });
+  });
+});
+
+describe('every profile has its own book', () => {
+  it('earning, equipping and revealing for one child leave the other child exactly as it was', () => {
+    const base = finish(made({}, { mode: 'kindy' }), 'p2', D);
+    const before = JSON.stringify(mine(base, 'p2'));
+    let book = finish(base, 'p1', D, D + 1, D + 2);
+    book = recordBonus(book, 'p1', D);
+    book = equipCosmetic(book, 'p1', 'hat', 'party-hat').book;
+    book = acknowledgeStickers(book, 'p1');
+    expect(JSON.stringify(mine(book, 'p2'))).toBe(before);
+  });
+
+  it('deleting one profile does not touch another’s book', () => {
+    let book = finish(made({}, {}, { mode: 'kindy' }), 'p1', D, D + 1, D + 2);
+    book = finish(book, 'p2', D, D + 1, D + 2);
+    book = equipCosmetic(book, 'p2', 'hat', 'party-hat').book;
+    book = finish(book, 'p3', D);
+    const keep = JSON.stringify([mine(book, 'p2'), mine(book, 'p3')]);
+    const removed = removeProfile(book, 'p1');
+    expect(removed.error).toBeNull();
+    expect(removed.book.profiles.map((p) => p.id)).toEqual(['p2', 'p3']);
+    expect(JSON.stringify(removed.book.profiles)).toBe(keep);
+    expect(mine(removeProfile(removed.book, 'p3').book, 'p2').worn.hat).toBe('party-hat');
+  });
+
+  it('a new profile never inherits a deleted profile’s book', () => {
+    let book = finish(made({}, {}), 'p1', D, D + 1, D + 2);
+    book = removeProfile(book, 'p1').book;
+    const added = addProfile(book, { name: '', avatar: AVATARS[0]!, mode: 'main' });
+    expect(added.id).toBe('p3');
+    expect(mine(added.book, 'p3').stickers).toEqual([]);
   });
 });

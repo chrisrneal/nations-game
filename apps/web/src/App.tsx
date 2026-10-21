@@ -5,7 +5,9 @@ import { Game } from './ui/Game.tsx';
 import { InstallBanner } from './ui/Install.tsx';
 import { KindyGame } from './ui/KindyGame.tsx';
 import { MenuSheet } from './ui/MenuSheet.tsx';
+import { BookContext } from './ui/BookContext.tsx';
 import { Picker } from './ui/Picker.tsx';
+import { StickerBook } from './ui/StickerBook.tsx';
 import { LunchboxArt } from './ui/art/Scenery.tsx';
 
 /**
@@ -25,6 +27,8 @@ export function App(props: { host: GameHost; install?: InstallPrompt; feedback?:
   const [wanted, setWanted] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  // The sticker book is open over the child's game (RULES 9a, K12).
+  const [book, setBook] = useState(false);
 
   useEffect(() => host.subscribeHome(setHome), [host]);
   useEffect(() => host.subscribe(setUpdate), [host]);
@@ -60,6 +64,7 @@ export function App(props: { host: GameHost; install?: InstallPrompt; feedback?:
           onPick={(id) => {
             setPicking(false);
             setMenu(false);
+            setBook(false);
             if (id === home.current) return;
             setWanted(id);
             void host.choose(id);
@@ -73,9 +78,13 @@ export function App(props: { host: GameHost; install?: InstallPrompt; feedback?:
   // The game on screen must be this child's: while a switch loads, nobody else's shows.
   if (update === null || update.profile !== profile.id || home.current !== profile.id) return <Loading pictures={profile.mode === 'kindy'} />;
 
+  const bookAccess = { catalogue: home.catalogue, openBook: () => setBook(true) };
+  const withBook = (node: ReactElement): ReactElement => <BookContext.Provider value={bookAccess}>{node}</BookContext.Provider>;
+  const bookLayer = book && <StickerBook host={host} home={home} profile={profile} onClose={() => setBook(false)} />;
+
   if (profile.mode === 'kindy') {
     // No install banner, menu or toasts: nothing to read in Kindy (RULES 11). Grown-ups go through the picker.
-    return (
+    return withBook(
       <div className="app">
         <KindyGame
           host={host}
@@ -87,11 +96,12 @@ export function App(props: { host: GameHost; install?: InstallPrompt; feedback?:
           speech={speech}
           onProfiles={() => setPicking(true)}
         />
-      </div>
+        {bookLayer}
+      </div>,
     );
   }
 
-  return (
+  return withBook(
     <div className="app">
       <InstallBanner install={install} onToast={setToast} />
       <Game
@@ -106,8 +116,9 @@ export function App(props: { host: GameHost; install?: InstallPrompt; feedback?:
         onProfiles={() => setPicking(true)}
       />
       {menu && <MenuSheet host={host} view={update.view} feedback={feedback} onClose={() => setMenu(false)} onProfiles={() => setPicking(true)} />}
+      {bookLayer}
       {toastLayer}
-    </div>
+    </div>,
   );
 }
 

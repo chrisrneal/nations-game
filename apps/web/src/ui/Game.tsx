@@ -342,7 +342,7 @@ export function Game(props: {
     <div className="game">
       <header className="bar">
         <button type="button" className="bar-avatar" aria-label={`${profileLabel(profile)} is playing. Switch player`} onClick={props.onProfiles}>
-          <Avatar id={profile.avatar} size={38} />
+          <Avatar id={profile.avatar} size={38} worn={profile.worn} />
         </button>
         <div className="bar-title">
           <strong>{view.round === 'daily' ? 'Today' : view.round === 'bonus' ? 'Bonus round' : 'Practice'}</strong>
