@@ -156,11 +156,24 @@ describe('unlocking audio (iOS)', () => {
     expect(h.state.contexts).toBe(1);
     expect(h.audio.raw.resumed).toBe(1);
     expect(h.audio.raw.state).toBe('running');
+    const silent = h.audio.nodes.filter((n) => n.kind === 'bufferSource' && n.started !== null).length;
+    expect(silent).toBe(1);
     // A silent sound is started in the gesture: that is what iOS wants.
     expect(h.audio.nodes.some((n) => n.kind === 'bufferSource' && n.started !== null)).toBe(true);
     gesture(h.target);
     expect(h.state.contexts).toBe(1);
     expect(h.audio.raw.resumed).toBe(1);
+    // Awake and primed: later touches add nothing.
+    expect(h.audio.nodes.filter((n) => n.kind === 'bufferSource' && n.started !== null)).toHaveLength(silent);
+  });
+
+  it('starts the silent sound on the first touch even when the browser already has the context running', () => {
+    const h = harness();
+    h.audio.raw.state = 'running';
+    createFeedback(DEFAULT_PREFS, h.env);
+    gesture(h.target);
+    expect(h.audio.raw.resumed).toBe(0);
+    expect(h.audio.nodes.filter((n) => n.kind === 'bufferSource' && n.started !== null)).toHaveLength(1);
   });
 
   it('listens to taps, touches, clicks and keys', () => {

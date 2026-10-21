@@ -15,7 +15,7 @@
  * - Spoken Kindy hints (`voice`, speech.ts) are on by default; a grown-up
  *   turns them off in the grown-ups' menu (D16).
  */
-import { MASTER_VOLUME, playCue, type Cue } from './sounds.ts';
+import { makeBus, playCue, type Cue } from './sounds.ts';
 
 export type { Cue } from './sounds.ts';
 
@@ -137,41 +137,41 @@ export function createFeedback(initial: Prefs = loadPrefs(), env: FeedbackEnv = 
     }
   };
 
-  /** Builds the audio graph the first time it is needed: a gentle master level and a compressor so stacked sounds never jump. */
+  /** Builds the audio graph the first time it is needed (sounds.ts: makeBus). */
   const context = (): AudioContext | null => {
     if (audio !== null) return audio;
     try {
       const ctx = (env.makeContext ?? browserContext)();
       if (ctx === null) return null;
-      const master = ctx.createGain();
-      master.gain.value = MASTER_VOLUME;
-      const compressor = ctx.createDynamicsCompressor();
-      compressor.threshold.value = -18;
-      compressor.ratio.value = 4;
-      master.connect(compressor);
-      compressor.connect(ctx.destination);
+      bus = makeBus(ctx);
       audio = ctx;
-      bus = master;
       return ctx;
     } catch {
       return null;
     }
   };
 
-  /** Inside a touch: build the context, resume it and start a silent sound, which is what iOS needs to let later sounds out. */
+  /**
+   * Inside a touch: build the context, resume it if it is asleep and start a
+   * silent sound, which is what iOS needs before it lets later sounds out. The
+   * silent sound goes out on the first touch, and again on any touch that finds
+   * the context asleep (after a phone call or the lock screen).
+   */
+  let primed = false;
   const unlock = (): void => {
     const ctx = context();
     if (ctx === null) return;
-    if (ctx.state !== 'running') {
-      wake();
-      try {
-        const silent = ctx.createBufferSource();
-        silent.buffer = ctx.createBuffer(1, 1, 22050);
-        silent.connect(ctx.destination);
-        silent.start(0);
-      } catch {
-        // The silent sound is a nicety.
-      }
+    const asleep = ctx.state !== 'running';
+    if (asleep) wake();
+    if (primed && !asleep) return;
+    primed = true;
+    try {
+      const silent = ctx.createBufferSource();
+      silent.buffer = ctx.createBuffer(1, 1, 22050);
+      silent.connect(ctx.destination);
+      silent.start(0);
+    } catch {
+      // The silent sound is a nicety.
     }
   };
 

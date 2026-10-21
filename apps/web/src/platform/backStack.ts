@@ -21,6 +21,8 @@ export interface BackEnv {
   push(): void;
   back(): void;
   onPop(listener: () => void): void;
+  /** Runs `fn` a moment later, after the screen has finished swapping one sheet for another. */
+  later?: (fn: () => void) => void;
 }
 
 function browserEnv(): BackEnv {
@@ -28,6 +30,7 @@ function browserEnv(): BackEnv {
     push: () => window.history.pushState({ snackSheet: true }, ''),
     back: () => window.history.back(),
     onPop: (listener) => window.addEventListener('popstate', listener),
+    later: (fn) => void setTimeout(fn, 0),
   };
 }
 
@@ -36,6 +39,21 @@ export function createBackStack(env: BackEnv = browserEnv()): BackStack {
   /** Pops we caused ourselves and must not treat as a person's Back press. */
   let ours = 0;
   let listening = false;
+  /** Entries whose sheet has closed but which are not yet popped: a sheet opened right now takes one over. */
+  let spare = 0;
+  const later = env.later ?? ((fn: () => void) => fn());
+
+  const settle = (): void => {
+    while (spare > 0) {
+      spare -= 1;
+      ours += 1;
+      try {
+        env.back();
+      } catch {
+        ours -= 1;
+      }
+    }
+  };
 
   const onPop = (): void => {
     if (ours > 0) {
@@ -60,21 +78,21 @@ export function createBackStack(env: BackEnv = browserEnv()): BackStack {
       }
       const entry = { close };
       open.push(entry);
-      try {
-        env.push();
-      } catch {
-        // No history to push to: Back then behaves as the browser's.
+      if (spare > 0) spare -= 1;
+      else {
+        try {
+          env.push();
+        } catch {
+          // No history to push to: Back then behaves as the browser's.
+        }
       }
       return () => {
         const at = open.indexOf(entry);
         if (at < 0) return;
         open.splice(at, 1);
-        ours += 1;
-        try {
-          env.back();
-        } catch {
-          ours -= 1;
-        }
+        // One sheet swapped for another leaves the history as it is; only a sheet closing for good pops its entry.
+        spare += 1;
+        later(settle);
       };
     },
   };

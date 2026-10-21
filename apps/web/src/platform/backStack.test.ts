@@ -8,12 +8,14 @@ import { createBackStack, type BackEnv } from './backStack.ts';
 function fakeHistory(): { env: BackEnv; entries: () => number; press: () => void; flush: () => void } {
   let entries = 1;
   let queued = 0;
+  const timers: (() => void)[] = [];
   let listener: () => void = () => {};
   return {
     env: {
       push: () => void (entries += 1),
       back: () => void (queued += 1),
       onPop: (l) => void (listener = l),
+      later: (fn) => void timers.push(fn),
     },
     entries: () => entries,
     press: () => {
@@ -23,6 +25,7 @@ function fakeHistory(): { env: BackEnv; entries: () => number; press: () => void
       }
     },
     flush: () => {
+      while (timers.length > 0) timers.shift()!();
       while (queued > 0) {
         queued -= 1;
         if (entries > 1) {
@@ -103,6 +106,21 @@ describe('the Back button (K12)', () => {
     expect(second).toBe(0);
     h.press();
     expect(second).toBe(1);
+  });
+
+  it('a sheet swapped for another in the same moment keeps its one history entry', () => {
+    const h = fakeHistory();
+    const stack = createBackStack(h.env);
+    const closed: string[] = [];
+    const old = stack.open(() => closed.push('old'));
+    old();
+    stack.open(() => closed.push('new'));
+    h.flush();
+    expect(h.entries()).toBe(2);
+    expect(stack.depth).toBe(1);
+    expect(closed).toEqual([]);
+    h.press();
+    expect(closed).toEqual(['new']);
   });
 
   it('never throws where there is no history to use', () => {
