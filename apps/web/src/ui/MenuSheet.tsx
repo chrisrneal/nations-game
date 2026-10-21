@@ -1,15 +1,15 @@
 import { useState, type ReactElement } from 'react';
 import type { GameView } from '@snacks/contracts';
-import type { Feedback, GameHost } from '../platform/index.ts';
+import type { GameHost } from '../platform/index.ts';
 import { PatternDiagram } from './Diagram.tsx';
 import { FRIEND_HOW, FRIEND_NAME, FRIEND_ORDER } from './labels.ts';
 import { Sheet } from './Sheet.tsx';
+import { UpdateNotice } from './UpdateNotice.tsx';
 
-/** The menu: today's puzzle, a practice board, switching player, how to play, sound. */
-export function MenuSheet(props: { host: GameHost; view: GameView; feedback?: Feedback | undefined; onClose: () => void; onProfiles: () => void }): ReactElement {
-  const { host, feedback, onClose } = props;
+/** The menu: today's puzzle, a practice board, switching player, how to play. Sound is the grown-ups' (ParentMenu). */
+export function MenuSheet(props: { host: GameHost; view: GameView; onClose: () => void; onProfiles: () => void }): ReactElement {
+  const { host, onClose } = props;
   const [help, setHelp] = useState(false);
-  const [sound, setSound] = useState(feedback?.prefs.sound ?? false);
   if (help) return <HowToPlay onClose={onClose} />;
   const run = (action: () => Promise<void>): void => {
     void action();
@@ -17,6 +17,7 @@ export function MenuSheet(props: { host: GameHost; view: GameView; feedback?: Fe
   };
   return (
     <Sheet title="Menu" onClose={onClose}>
+      <UpdateNotice />
       <div className="sheet-actions">
         <button type="button" className="btn btn-wide" onClick={() => run(() => host.daily())}>
           Today’s puzzle
@@ -37,19 +38,6 @@ export function MenuSheet(props: { host: GameHost; view: GameView; feedback?: Fe
         <button type="button" className="btn btn-wide" onClick={() => setHelp(true)}>
           How to play
         </button>
-        {feedback !== undefined && (
-          <button
-            type="button"
-            className="btn btn-wide"
-            aria-pressed={sound}
-            onClick={() => {
-              feedback.setPrefs({ ...feedback.prefs, sound: !sound });
-              setSound(!sound);
-            }}
-          >
-            Sound: {sound ? 'on' : 'off'}
-          </button>
-        )}
       </div>
       <p className="sheet-note muted small">
         {props.view.round === 'practice' ? `Practice board ${props.view.seed}` : `Day ${props.view.day}`} · an early test version: plain squares, no art yet.

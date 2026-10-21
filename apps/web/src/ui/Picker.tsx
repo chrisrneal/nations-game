@@ -5,6 +5,7 @@ import { Icon } from './art/Icons.tsx';
 import { Avatar } from './Avatar.tsx';
 import { ParentMenu } from './ParentMenu.tsx';
 import { profileLabel } from './people.ts';
+import { UpdateNotice } from './UpdateNotice.tsx';
 
 /** How long a grown-up holds the button (D17): long enough that a quick tap by a child does nothing. */
 const HOLD_MS = 1000;
@@ -51,6 +52,7 @@ export function Picker(props: {
         ))}
       </ul>
       <footer className="picker-foot">
+        <UpdateNotice />
         <HoldButton label="Grown-ups" onHold={() => setParents(true)} onTap={() => onToast('Grown-ups: press and hold the button.')}>
           Grown-ups <span className="muted small">(hold)</span>
         </HoldButton>

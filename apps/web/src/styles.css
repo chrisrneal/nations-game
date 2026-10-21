@@ -14,7 +14,15 @@
   --grass: #a7d96f;
   --path: #f4dca8;
   --tap: 44px;
+  /* The visible height: dvh follows the address bar as it shows and hides; older browsers get vh (K12). */
+  --app-h: 100vh;
   color-scheme: light;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --app-h: 100dvh;
+  }
 }
 
 * {
@@ -39,10 +47,51 @@ body {
   line-height: 1.35;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
+  /* A game, not a page: nothing scrolls, so nothing rubber-bands, and a double tap never zooms (K12). */
+  overflow: hidden;
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* iOS Safari still bounces a page that is merely overflow: hidden; a fixed body cannot move at all. */
+body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+}
+
+/* Game pieces, pictures and buttons: no text selection, no long-press callout (the Save Image / Copy menu on iOS), no dragging a picture out (K12). */
+.app,
+.sheet-layer,
+.rotate-notice,
+.toast {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.app img,
+.app svg {
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+}
+
+/* A child's name can still be typed and selected. */
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+/* The board is dragged, never scrolled: the browser gets no say in a touch on it (K6). */
+.board-area {
+  overscroll-behavior: none;
 }
 
 #root {
-  height: 100dvh;
+  height: var(--app-h);
 }
 
 h2 {
@@ -59,7 +108,7 @@ h2 {
 }
 
 .app {
-  height: 100dvh;
+  height: var(--app-h);
   display: flex;
   flex-direction: column;
   padding-top: env(safe-area-inset-top);
@@ -901,7 +950,7 @@ details summary {
 
 /* ---- the shop (K9): a card per friend in a bottom sheet that fits 360 x 740 without scrolling ---- */
 .shop-sheet {
-  max-height: calc(100dvh - 12px - env(safe-area-inset-top));
+  max-height: calc(var(--app-h) - 12px - env(safe-area-inset-top));
   padding-top: 4px;
 }
 
@@ -1437,7 +1486,9 @@ details summary {
 
 .picker-foot {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   padding-top: 12px;
 }
 
@@ -2254,4 +2305,81 @@ details summary {
 /* The shortfall stays readable on a buy button that is off. */
 .shop-card.short .shop-buy:disabled {
   opacity: 0.75;
+}
+
+
+/* ---- update ready (K12): one quiet line, only where nothing is moving ---- */
+.update-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 4px 8px 4px 10px;
+  border-radius: 12px;
+  background: #fff3c4;
+  border: 1px solid #ecd46b;
+  font-size: 0.85rem;
+}
+
+.update-icon {
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+
+.update-text {
+  flex: 1;
+}
+
+.picker-foot .update-notice {
+  margin: 0;
+  width: min(100%, 320px);
+}
+
+/* ---- turned on its side (K12): a picture asks for the phone upright, and the game waits underneath ---- */
+.rotate-notice {
+  display: none;
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .rotate-notice {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    background: var(--bg);
+  }
+
+  .rotate-pic {
+    width: min(60vh, 220px);
+    height: auto;
+  }
+
+  .rotate-phone {
+    transform-origin: 60px 42px;
+    animation: rotate-hint 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes rotate-hint {
+  0%,
+  25% {
+    transform: rotate(-90deg);
+  }
+  60%,
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotate-phone {
+    animation: none;
+  }
+}
+
+/* The grown-ups' sound switch sits in the child's own sheet. */
+.sound-pick .sheet-note {
+  margin-top: 4px;
 }

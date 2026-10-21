@@ -4,6 +4,7 @@ import type { GameHost } from '../platform/index.ts';
 import { Icon } from './art/Icons.tsx';
 import { hintsText, hintsToday } from './labels.ts';
 import { countdown, retriesText, streakText, weekStrip } from './people.ts';
+import { UpdateNotice } from './UpdateNotice.tsx';
 
 /**
  * Done for today (RULES 9, K7): a finished daily can't be played again, so
@@ -73,6 +74,7 @@ export function DoneToday(props: { host: GameHost; view: GameView; profile: Prof
         )}
       </div>
       <div className="done-actions">
+        <UpdateNotice />
         {newDay ? (
           <button type="button" className="btn btn-primary btn-wide" onClick={() => void host.daily()}>
             Play today’s puzzle

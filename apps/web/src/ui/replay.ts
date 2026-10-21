@@ -1,4 +1,5 @@
 import type { GameView, WaveResult } from '@snacks/contracts';
+import { soundPlan, type ReplayCue } from './soundplan.ts';
 import { waveTimeline, type Flight, type Timeline, type TimelineOptions } from './timeline.ts';
 
 /**
@@ -23,7 +24,12 @@ export interface Replay {
 const OUTCOME: Readonly<Record<'yum' | 'ache' | 'shake', string>> = { yum: 'happy', ache: 'ache', shake: 'shake' };
 const MOOD: Readonly<Record<'yum' | 'ache' | 'shake', string>> = { yum: 'yum', ache: 'ache', shake: 'sad' };
 
-export function playWave(overlay: HTMLElement, board: HTMLElement, view: GameView, wave: WaveResult, options: TimelineOptions): Replay {
+export interface PlayOptions extends TimelineOptions {
+  /** Called at the moment each sound belongs to (soundplan.ts); the platform decides whether to play it. */
+  readonly onCue?: ((cue: ReplayCue) => void) | undefined;
+}
+
+export function playWave(overlay: HTMLElement, board: HTMLElement, view: GameView, wave: WaveResult, options: PlayOptions): Replay {
   const timeline = waveTimeline(view, wave, options);
   const { calm } = options;
   const box = overlay.getBoundingClientRect();
@@ -48,6 +54,10 @@ export function playWave(overlay: HTMLElement, board: HTMLElement, view: GameVie
   };
 
   for (const flight of timeline.flights) flyOne(flight);
+  if (options.onCue !== undefined) {
+    const { onCue } = options;
+    for (const sound of soundPlan(timeline, options.beatMs)) at(sound.at, () => onCue(sound.cue));
+  }
 
   function flyOne(flight: Flight): void {
     const el = document.createElement('span');

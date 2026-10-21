@@ -3,6 +3,7 @@ import type { WaveResult } from '@snacks/contracts';
 import { Icon } from './art/Icons.tsx';
 import { SnackArt } from './art/Snack.tsx';
 import { SNACK_NAME, hintsText, hungryOf, kidLine, snackEndWords, waveReport } from './labels.ts';
+import { UpdateNotice } from './UpdateNotice.tsx';
 
 /**
  * What a wave did, laid over the board once its replay ends (RULES 7): who
@@ -72,6 +73,7 @@ export function ResultOverlay(props: {
             ))}
           </ul>
         </details>
+        <UpdateNotice />
         {props.children}
       </div>
     </section>

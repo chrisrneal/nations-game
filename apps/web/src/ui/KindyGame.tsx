@@ -74,6 +74,8 @@ export function KindyGame(props: {
   const boardRef = useRef<HTMLDivElement>(null);
   const handRef = useRef<HTMLSpanElement>(null);
   const beforeGo = useRef<GameView | null>(null);
+  // This screen watched the day being won, so the done screen's star is new (and sounds like it).
+  const watched = useRef(false);
   const lastFacing = useRef<number | null>(null);
   const idle = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unlocked = useRef(false);
@@ -111,17 +113,25 @@ export function KindyGame(props: {
   useEffect(() => {
     if (playback === null || overlayRef.current === null || boardRef.current === null) return;
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
-    const r = playWave(overlayRef.current, boardRef.current, playback.before, playback.wave, { beatMs: reduce ? CALM_BEAT_MS : BEAT_MS, calm: reduce, healRange: 1 });
+    const r = playWave(overlayRef.current, boardRef.current, playback.before, playback.wave, {
+      beatMs: reduce ? CALM_BEAT_MS : BEAT_MS,
+      calm: reduce,
+      healRange: 1,
+      onCue: (cue) => {
+        feedback?.cue(cue);
+        if (cue === 'catch') feedback?.haptic('catch');
+      },
+    });
     let live = true;
     void r.done.then(() => {
       if (!live) return;
       setPlayback(null);
-      if (playback.wave.kids.some((k) => k.end === 'happy')) feedback?.cue('fed');
-      else if (playback.wave.snacks.some((s) => s.end === 'bounced')) feedback?.cue('ache');
+      feedback?.haptic('waveEnd');
       if (playback.ends) {
         setParty(true);
-        feedback?.cue('win');
-      }
+        watched.current = true;
+        feedback?.cue('dayWin');
+      } else if (playback.wave.kids.some((k) => k.end === 'happy')) feedback?.cue('waveWin');
     });
     return () => {
       live = false;
@@ -291,6 +301,11 @@ export function KindyGame(props: {
   };
 
   const done = view.round === 'daily' && view.phase === 'won' && playback === null && !party;
+  useEffect(() => {
+    if (!done || !watched.current) return;
+    watched.current = false;
+    feedback?.cue('sticker');
+  }, [done, feedback]);
   // A won practice board (or one reopened after it was won) shows the party: there is no done screen for practice.
   const partying = view.phase === 'won' && playback === null && !done;
   const tray = view.friends.filter((f) => f.cell < 0);
