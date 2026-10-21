@@ -3,6 +3,7 @@ import { fixturePuzzle } from './fixture.ts';
 import { startGame, step } from './game.ts';
 import { generatePuzzle } from './generate.ts';
 import { gameView } from './view.ts';
+import { witnessCommands } from './witness.ts';
 
 describe('the View (S6)', () => {
   it('never says what a main-mode kid wants; Kindy shows the picture', () => {
@@ -39,6 +40,17 @@ describe('the View (S6)', () => {
     expect(gameView(s).loopWarning).toBe(false);
     s = step(s, { type: 'place', friend: 2, cell: 2, facing: 6 }).state;
     expect(gameView(s).loopWarning).toBe(true);
+  });
+
+  it('counts friends left over from an earlier wave that still throw, and nothing before the first Go', () => {
+    const p = generatePuzzle('main', 'daily', 20001, 0);
+    let s = startGame(p);
+    for (const c of witnessCommands(s, p.witness[0]!).slice(0, -1)) s = step(s, c).state;
+    expect(gameView(s).leftovers).toBe(0); // placed in this setup: nothing left over yet
+    s = step(s, { type: 'go' }).state;
+    expect(gameView(s).leftovers).toBeGreaterThan(0);
+    for (const f of s.friends.filter((x) => x.cell >= 0)) s = step(s, { type: 'toTray', friend: f.id }).state;
+    expect(gameView(s).leftovers).toBe(0);
   });
 
   it('prices the shop and says what can be bought', () => {

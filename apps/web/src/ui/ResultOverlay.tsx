@@ -2,7 +2,7 @@ import type { ReactElement, ReactNode } from 'react';
 import type { WaveResult } from '@snacks/contracts';
 import { Icon } from './art/Icons.tsx';
 import { SnackArt } from './art/Snack.tsx';
-import { SNACK_NAME, hintsText, hungryOf, kidLine, snackEndWords, waveReport } from './labels.ts';
+import { hintsText, hungryOf, kidLine, snackLines, waveReport, type ReportBoard } from './labels.ts';
 import { UpdateNotice } from './UpdateNotice.tsx';
 
 /**
@@ -13,6 +13,8 @@ import { UpdateNotice } from './UpdateNotice.tsx';
 export function ResultOverlay(props: {
   wave: WaveResult;
   label: (kid: number) => string;
+  /** The board, so the snack lines can say what a snack hit. */
+  board: ReportBoard;
   hungry: number;
   hungryAllowed: number;
   /** Main mode counts hungry kids and points; Kindy cannot be lost. */
@@ -60,15 +62,15 @@ export function ResultOverlay(props: {
             </li>
           )}
         </ul>
-        <details className="result-more">
+        <details className="result-more" open={report.aches.length > 0 || report.hungry.length > 0}>
           <summary>What happened to each snack</summary>
           <ul className="lines">
             {wave.kids.map((k) => (
               <li key={`k${k.kid}`}>{kidLine(k, label(k.kid))}</li>
             ))}
-            {wave.snacks.map((s, i) => (
-              <li key={i}>
-                <SnackArt className="line-snack" snack={s.snack} /> The {SNACK_NAME[s.snack].toLowerCase()} {snackEndWords(s.end)}
+            {snackLines(wave, props.board, label).map((l, i) => (
+              <li key={`s${i}`}>
+                <SnackArt className="line-snack" snack={l.snack} /> {l.text}
               </li>
             ))}
           </ul>

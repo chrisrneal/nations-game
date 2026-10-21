@@ -53,6 +53,15 @@ describe('clear board', () => {
     ]);
   });
 
+  it('Pack up sends back the friends from earlier waves too', () => {
+    const plan = clearPlan([friend(1, 3, 2), friend(2, 8, 4)], new Set([2]), true);
+    expect(plan.commands).toEqual([
+      { type: 'toTray', friend: 1 },
+      { type: 'toTray', friend: 2 },
+    ]);
+    expect(plan.undo).toHaveLength(2);
+  });
+
   it('has nothing to do when nothing was placed in this setup', () => {
     expect(clearPlan([friend(2, 8)], new Set([2])).commands).toEqual([]);
   });

@@ -31,10 +31,10 @@ export function undoFor(friends: readonly FriendView[], command: GameCommand): U
 /**
  * Clear board: every friend placed during this setup goes back to the tray.
  * `earlier` holds the friends already on the board when this setup began;
- * they stay where they are.
+ * they stay where they are, unless `everything` (Pack up) sends those back too.
  */
-export function clearPlan(friends: readonly FriendView[], earlier: ReadonlySet<number>): { commands: GameCommand[]; undo: UndoStep } {
-  const placed = friends.filter((f) => f.cell >= 0 && !earlier.has(f.id));
+export function clearPlan(friends: readonly FriendView[], earlier: ReadonlySet<number>, everything = false): { commands: GameCommand[]; undo: UndoStep } {
+  const placed = friends.filter((f) => f.cell >= 0 && (everything || !earlier.has(f.id)));
   return {
     commands: placed.map((f) => ({ type: 'toTray', friend: f.id })),
     undo: placed.map((f) => ({ type: 'place', friend: f.id, cell: f.cell, facing: f.facing })),

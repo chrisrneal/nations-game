@@ -79,6 +79,8 @@ export function Game(props: {
   const [going, setGoing] = useState(false);
   const [clueKid, setClueKid] = useState<number | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  // Pack up (RULES 8a): the same sheet, but friends left from earlier waves go back too.
+  const [packAll, setPackAll] = useState(false);
   const [history, setHistory] = useState<readonly UndoStep[]>([]);
   // Friends already on the board when this setup began (earlier waves): Clear board leaves them.
   const [phase, setPhase] = useState(() => ({ key: phaseKey(view), earlier: onBoardIds(view) }));
@@ -162,7 +164,8 @@ export function Game(props: {
     [setup, selectedFriend, moving, view, props.healRange],
   );
   const owned = FRIEND_ORDER.map((type) => ({ type, left: view.friends.filter((f) => f.type === type && f.cell < 0).length, all: view.friends.filter((f) => f.type === type).length })).filter((t) => t.all > 0);
-  const toClear = clearPlan(view.friends, phase.earlier);
+  const toClear = clearPlan(view.friends, phase.earlier, confirmClear && packAll);
+  const stillThrowing = setup ? view.leftovers : 0;
   // The hint showing (main mode, setup only): its kid, their lunchbox from tier 2, the friend tier 3 put out.
   const mainHint = setup ? view.mainHint : null;
   const hintKid = mainHint === null ? undefined : view.kids.find((k) => k.id === mainHint.kid);
@@ -289,11 +292,11 @@ export function Game(props: {
     feedback?.cue('tap');
   };
 
-  const clear = async (): Promise<void> => {
+  const clear = async (everything: boolean): Promise<void> => {
     setConfirmClear(false);
     setSelection(null);
     setMoving(false);
-    const plan = clearPlan(view.friends, phase.earlier);
+    const plan = clearPlan(view.friends, phase.earlier, everything);
     for (const command of plan.commands) if (!(await submit(command))) return;
     if (plan.undo.length > 0) setHistory((h) => [...h, plan.undo]);
   };
@@ -349,6 +352,8 @@ export function Game(props: {
       ? hintLine(mainHint, hintKid?.label ?? '', view.friends.find((f) => f.cell === mainHint.placed)?.type ?? null)
       : view.loopWarning
       ? 'A snack would go round in circles. Aim a friend so it can get out.'
+      : stillThrowing > 0
+      ? `${stillThrowing === 1 ? 'A friend' : `${stillThrowing} friends`} from an earlier wave will throw again.`
       : selection?.kind === 'tray'
         ? `Tap a grass square for the ${FRIEND_NAME[selection.type]}, or drag it there.`
         : 'Tap or drag a friend from the tray onto the grass.';
@@ -420,6 +425,7 @@ export function Game(props: {
               <ResultOverlay
                 wave={report.wave}
                 label={report.label}
+                board={view}
                 hungry={view.hungry}
                 hungryAllowed={view.hungryAllowed}
                 main={view.mode === 'main'}
@@ -490,9 +496,14 @@ export function Game(props: {
                   </button>
                 </>
               ) : (
-                <p className={`dock-hint${mainHint !== null ? ' hint-line' : view.loopWarning && setup ? ' warn' : ' muted'}`} aria-live="polite">
+                <p className={`dock-hint${mainHint !== null ? ' hint-line' : (view.loopWarning || stillThrowing > 0) && setup ? ' warn' : ' muted'}`} aria-live="polite">
                   {mainHint !== null && <Icon className="row-icon" name="bulb" />}
                   {hint}
+                  {mainHint === null && !view.loopWarning && stillThrowing > 0 && (
+                    <button type="button" className="btn btn-small btn-pack" onClick={() => { setPackAll(true); setConfirmClear(true); }}>
+                      Pack up
+                    </button>
+                  )}
                 </p>
               )}
             </div>
@@ -540,7 +551,7 @@ export function Game(props: {
               <button type="button" className="btn btn-small" disabled={!setup || history.length === 0} onClick={() => void undo()}>
                 ↶ Undo
               </button>
-              <button type="button" className="btn btn-small" disabled={!setup || toClear.commands.length === 0} onClick={() => setConfirmClear(true)}>
+              <button type="button" className="btn btn-small" disabled={!setup || toClear.commands.length === 0} onClick={() => { setPackAll(false); setConfirmClear(true); }}>
                 Clear board
               </button>
               {view.mode === 'main' && (
@@ -560,14 +571,15 @@ export function Game(props: {
       {clueOf !== undefined && clueOf.clue !== null && <ClueCard view={shown} kid={clueOf} about={mainHint?.kid === clueOf.id ? mainHint.about : []} onClose={() => setClueKid(null)} />}
 
       {confirmClear && (
-        <Sheet title="Clear the board?" onClose={() => setConfirmClear(false)}>
+        <Sheet title={packAll ? 'Pack everything up?' : 'Clear the board?'} onClose={() => setConfirmClear(false)}>
           <p className="sheet-note">
-            {toClear.commands.length === 1 ? 'The friend' : `The ${toClear.commands.length} friends`} you put out for this wave go back to the tray.
-            {phase.earlier.size > 0 ? ' Friends from earlier waves stay where they are.' : ''} You can undo this.
+            {packAll
+              ? `Every friend on the board goes back to the tray, even the ones from earlier waves. You can undo this.`
+              : `${toClear.commands.length === 1 ? 'The friend' : `The ${toClear.commands.length} friends`} you put out for this wave go back to the tray.${phase.earlier.size > 0 ? ' Friends from earlier waves stay where they are.' : ''} You can undo this.`}
           </p>
           <div className="sheet-actions">
-            <button type="button" className="btn btn-primary btn-wide" onClick={() => void clear()}>
-              Yes, clear the board
+            <button type="button" className="btn btn-primary btn-wide" onClick={() => void clear(packAll)}>
+              {packAll ? 'Yes, pack up' : 'Yes, clear the board'}
             </button>
             <button type="button" className="btn btn-wide" onClick={() => setConfirmClear(false)}>
               Keep them

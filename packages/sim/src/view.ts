@@ -34,6 +34,9 @@ export function gameView(state: GameState): GameView {
     return { id: f.id, type: f.type, cell: f.cell, facing: f.facing, target, picker: pickupFor(board, f) >= 0 };
   });
   const loopWarning = resolveSnacks({ board, friends: state.friends, kids: waveKids, mode: puzzle.mode }).snacks.some((s) => s.end === 'loop');
+  // On the board when this setup began (the checkpoint) and still throwing: they will fire again at Go.
+  const carried = new Set(state.checkpoint.friends.filter((f) => f.cell >= 0).map((f) => f.id));
+  const leftovers = state.phase === 'setup' ? friends.filter((f) => f.cell >= 0 && f.picker && carried.has(f.id)).length : 0;
   const kids: KidView[] = state.kids.map((k) => {
     const kid = puzzle.kids.find((p) => p.id === k.id)!;
     return {
@@ -76,6 +79,7 @@ export function gameView(state: GameState): GameView {
     kids,
     shop,
     loopWarning,
+    leftovers,
     lastWave: state.lastWave,
     facings: FACINGS,
     hint: kindyHint(state),

@@ -273,6 +273,10 @@ rule: every action is a place, turn or toTray command, checked by the sim.
   are on the board).
   Tapping the kid or its card opens the full card with today's snacks; it
   stays open until closed.
+- **Friends from earlier waves** are warned about: while any still picks up
+  and throws a snack, the line above the tray says so and a **Pack up** button
+  puts every friend, earlier ones too, back in the tray (undoable, like Clear
+  board). The warning never says what a kid wants.
 - **After a wave**, a card over the board lists who was fed, who got a tummy
   ache, who the Nurse healed, hungry kids against the allowance (say, 1 of 3)
   and the points earned, with one button back to setup.
@@ -303,6 +307,11 @@ otherwise (a healed kid staying, different friends bought) what the solver
 finds with the friends and points the player has. Undo takes back what step 3
 moved, like any other change; the press itself stays counted.
 
+- **A hint never sets a wave up to fail.** Friends from earlier waves keep
+  throwing, so a hint step sends back a carried-over friend the plan does not
+  use (in the same press), and of the steps that help it takes the first
+  that gives no kid a new tummy ache if Go were pressed right then. Tested by
+  `packages/harness/src/hint-safety.test.ts`.
 - **Counting:** hints used are counted for each wave and for the day, and
   kept in the save. A retry keeps them. The result card after a wave shows
   the wave's hints and the day's; done for today shows the day's.

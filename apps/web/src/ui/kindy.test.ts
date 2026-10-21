@@ -28,6 +28,7 @@ function view(friends: readonly FriendView[]): GameView {
     kids: [{ id: 1, cell: 3, label: 'A', look: { shirt: 0, hat: false, glasses: false, backpack: false, sister: 0 }, clue: null, facts: null, wants: 'apple', healed: false }],
     shop: [],
     loopWarning: false,
+    leftovers: 0,
     lastWave: null,
     facings: { straight: [0, 2, 4, 6], diagonal: [1, 3, 5, 7], short: [0, 1, 2, 3, 4, 5, 6, 7], bouncer: [0, 1, 2, 3, 4, 5, 6, 7], nurse: [0] },
     hint: null,

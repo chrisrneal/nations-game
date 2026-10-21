@@ -39,6 +39,17 @@ describes the earlier games.
 
 ## Session log
 
+### 2026-10-21 - Playtest audit: hints, carried-over friends, the snack report (lanes S, U, H, D, owner request)
+**What changed.**
+- **Hints.** A carried-over friend the plan does not use is sent back in the same press, and of the helpful steps the hint takes the first that gives no kid a new tummy ache if Go were pressed then. Measured on 800 waves of carried-over play: new tummy aches from a hint step went from 29 to 0. Playing a day by hints alone is won with no ache.
+- **Carried-over friends.** The View says how many still throw (`leftovers`). The line above the tray warns, with a **Pack up** button (every friend back to the tray, undoable). It never says what a kid wants.
+- **"What happened to each snack"** names the kid, says what a snack hit (tree or bench, parents' table, lunchbox), lists lunchboxes nobody picked from, and opens by itself after a tummy ache or a hungry kid.
+- **Audit result.** The reported unwinnable boards did not reproduce: 80 generated days all win from their stored solution. The list of what is not built (route preview, kid clues, stuck detector) is in docs/GAPS.md.
+
+**Measured.** `npm test` and `npm run check` pass (559 tests; 45 files). New tests: hint safety over 20 days (harness), leftovers (sim), Pack up and the snack report lines (UI). The phone check was not run.
+**How to see it.** Finish wave 1, leave a friend beside a lunchbox, and look above the tray in wave 2; open "What happened to each snack" after a wave.
+**Left.** GAPS Audit-1 to Audit-6.
+
 ### 2026-10-21 - Sticker book and outfits (lanes C, S, U, P, H, D, owner request, K12)
 **What changed.**
 - **Earning.** A finished daily gives one sticker, a won bonus round a gold one,
