@@ -70,6 +70,17 @@ vite-plugin-pwa, Vitest + fast-check, and playwright-core for the phone check.
   Kindy's book and reveal with no text and 64 px targets; a daily finished
   (the last wave by touch on a seeded profile), the reveal seen and skipped, the
   book opened and a hat and an outfit worn, and no kid, card or friend dressed.
+
+- Real-phone handling (K13, `apps/web/e2e/device-check.ts`): safe areas, no
+  rubber-band, double-tap zoom, selection or long-press menu; the layout fits
+  the screen with the browser bar showing and hidden; sound after the first
+  touch, a mute for each child, buzzes where the phone has them; Back closes
+  sheets first; the app opens offline (a new day too); an update never
+  reloads mid-wave; a phone on its side asks for upright. Each new thing on
+  screen is checked inside 360 x 740, not just positioned.
+- Performance (K13, `apps/web/e2e/perf-check.ts`, CPU slowed 4x): time to
+  interactive under 5 s cold and 3 s warm, every replay of a whole 10-wave
+  day at 50+ fps, and flat memory.
 - The wave replay at 60 fps with the CPU slowed 4x, moving only transform
   and opacity, with a calm version for reduced motion (K10). A day's puzzle
   generated in under a second with the CPU slowed 4x.
@@ -132,7 +143,13 @@ until both work on hand-made test boards.
     migration. Cosmetic only (RULES 9a).
     - [x] Between steps 10 and 11 (K11): main-mode hints, decoys in the tray,
       the bonus ramp, and the difficulty report.
-12. [ ] Phone check and polish on real phones.
+12. [ ] Phone check and polish on real phones (K13).
+    - [x] Sound, haptics, Back button, update-ready, iOS/Android handling,
+      offline and performance, all checked in Chromium (`npm run e2e`,
+      `npm run perf`); sounds are original and synthesized.
+    - [ ] The owner runs docs/device-checklist.md on a real iPhone and the
+      children's device and pastes the notes back. Nothing here is proved on
+      real hardware until then.
 
 ## History
 - **Nations** (to 2026-09-30): commit `67d1d92`.

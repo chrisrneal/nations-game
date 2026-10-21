@@ -17,6 +17,7 @@ import { KidBadge } from './KidBadge.tsx';
 import { profileLabel, streakText } from './people.ts';
 import { playWave } from './replay.ts';
 import { ResultOverlay } from './ResultOverlay.tsx';
+import { useBackClose } from './useBackClose.ts';
 import { Sheet } from './Sheet.tsx';
 import { Shop } from './Shop.tsx';
 import { short } from './format.ts';
@@ -31,6 +32,8 @@ type Selection = { readonly kind: 'tray'; readonly type: FriendType } | { readon
 interface Playback {
   readonly before: GameView;
   readonly wave: WaveResult;
+  /** Where that wave left the game (the View that came with it): won, lost, or on to the next wave. */
+  readonly after: GameView['phase'];
 }
 
 /** Which game this is: a new one starts with a daily, a bonus round or a practice board. */
@@ -103,22 +106,37 @@ export function Game(props: {
   // A new wave result: play it over the board as it stood when Go was pressed.
   useEffect(() => {
     if (props.wave === null || beforeGo.current === null) return;
-    setPlayback({ before: beforeGo.current, wave: props.wave });
+    setPlayback({ before: beforeGo.current, wave: props.wave, after: view.phase });
     setGoing(false);
     beforeGo.current = null;
+    // The View that came with this wave result says where the wave left the game.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.wave]);
 
   useEffect(() => {
     if (playback === null || overlayRef.current === null || boardRef.current === null) return;
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
-    const r = playWave(overlayRef.current, boardRef.current, playback.before, playback.wave, { beatMs: reduce ? CALM_BEAT_MS : BEAT_MS, calm: reduce, healRange: props.healRange });
+    const r = playWave(overlayRef.current, boardRef.current, playback.before, playback.wave, {
+      beatMs: reduce ? CALM_BEAT_MS : BEAT_MS,
+      calm: reduce,
+      healRange: props.healRange,
+      // The sounds fall where things happen in the replay; a catch also buzzes (Android).
+      onCue: (cue) => {
+        feedback?.cue(cue);
+        if (cue === 'catch') feedback?.haptic('catch');
+      },
+    });
     let live = true;
     void r.done.then(() => {
       if (!live) return;
       setPlayback(null);
       setResult(playback);
-      if (playback.wave.kids.some((k) => k.end === 'happy')) feedback?.cue('fed');
-      if (playback.wave.kids.some((k) => k.ache)) feedback?.cue('ache');
+      // The wave is over: a buzz, and a tune for how it went. A wave that sent a kid home hungry has already sighed.
+      feedback?.haptic('waveEnd');
+      if (playback.after === 'won') {
+        feedback?.cue('dayWin');
+      } else if (playback.after === 'lost') feedback?.cue('lose');
+      else if (!playback.wave.kids.some((k) => k.end === 'hungry')) feedback?.cue('waveWin');
     });
     return () => {
       live = false;
@@ -134,11 +152,6 @@ export function Game(props: {
     const undo = undoChange(before, view.friends);
     if (undo !== null) setHistory((h) => [...h, undo]);
   }, [view.friends]);
-
-  useEffect(() => {
-    if (view.phase === 'won') feedback?.cue('win');
-    if (view.phase === 'lost') feedback?.cue('lose');
-  }, [view.phase, feedback]);
 
   const shown = playback?.before ?? view;
   const setup = view.phase === 'setup' && playback === null && !going;
@@ -323,6 +336,8 @@ export function Game(props: {
   // The result over the board: the wave just watched, or after a reload the last wave of a finished day.
   // A finished daily can't be played again (RULES 9): once its last wave's result is closed, or on reopening, it shows how the day went.
   const done = view.round === 'daily' && view.phase === 'won' && playback === null && result === null;
+  // Back puts the wave's result card away (the same as its button) where that is safe; a lost day must be retried on purpose.
+  useBackClose(result !== null && playback === null && (view.phase === 'setup' || (view.phase === 'won' && view.round === 'daily')), () => setResult(null));
 
   const report = playback !== null ? null : result !== null ? { wave: result.wave, label: (id: number) => result.before.kids.find((k) => k.id === id)?.label ?? kidLetter(id) } : view.phase !== 'setup' && view.lastWave !== null ? { wave: view.lastWave, label: kidLetter } : null;
 
@@ -371,7 +386,7 @@ export function Game(props: {
       </header>
 
       {done ? (
-        <DoneToday host={host} view={view} profile={profile} />
+        <DoneToday host={host} view={view} profile={profile} feedback={feedback} />
       ) : (
         <>
           {view.mode === 'main' && shown.kids.length > 0 && (

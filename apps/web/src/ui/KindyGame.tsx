@@ -113,17 +113,24 @@ export function KindyGame(props: {
   useEffect(() => {
     if (playback === null || overlayRef.current === null || boardRef.current === null) return;
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
-    const r = playWave(overlayRef.current, boardRef.current, playback.before, playback.wave, { beatMs: reduce ? CALM_BEAT_MS : BEAT_MS, calm: reduce, healRange: 1 });
+    const r = playWave(overlayRef.current, boardRef.current, playback.before, playback.wave, {
+      beatMs: reduce ? CALM_BEAT_MS : BEAT_MS,
+      calm: reduce,
+      healRange: 1,
+      onCue: (cue) => {
+        feedback?.cue(cue);
+        if (cue === 'catch') feedback?.haptic('catch');
+      },
+    });
     let live = true;
     void r.done.then(() => {
       if (!live) return;
       setPlayback(null);
-      if (playback.wave.kids.some((k) => k.end === 'happy')) feedback?.cue('fed');
-      else if (playback.wave.snacks.some((s) => s.end === 'bounced')) feedback?.cue('ache');
+      feedback?.haptic('waveEnd');
       if (playback.ends) {
         setParty(true);
-        feedback?.cue('win');
-      }
+        feedback?.cue('dayWin');
+      } else if (playback.wave.kids.some((k) => k.end === 'happy')) feedback?.cue('waveWin');
     });
     return () => {
       live = false;
@@ -334,7 +341,7 @@ export function KindyGame(props: {
       </header>
 
       {done ? (
-        <KindyDone host={host} view={view} profile={profile} />
+        <KindyDone host={host} view={view} profile={profile} feedback={feedback} />
       ) : (
         <>
           <main className="board-area kindy-area">

@@ -16,7 +16,7 @@ export const revealMs = (items: number): number => 2600 + 350 * Math.max(0, item
  * plays once. CSS does the animation (P7); with reduced motion it simply
  * shows, still, for the same time.
  */
-export function StickerReveal(props: { host: GameHost; profile: ProfileView; catalogue: Catalogue; kindy: boolean; onGone: () => void }): ReactElement | null {
+export function StickerReveal(props: { host: GameHost; profile: ProfileView; catalogue: Catalogue; kindy: boolean; onGone: () => void; /** Called once when something new pops out (the sticker's sound). */ onShown?: () => void }): ReactElement | null {
   const { host, profile, catalogue, kindy, onGone } = props;
   // What to show is fixed when the screen opens: marking it seen must not empty the reveal mid-animation.
   const [shown] = useState<readonly RevealItem[]>(() => revealItems(profile, catalogue));
@@ -29,6 +29,7 @@ export function StickerReveal(props: { host: GameHost; profile: ProfileView; cat
   };
   useEffect(() => {
     if (shown.length === 0) return;
+    props.onShown?.();
     const timer = setTimeout(finish, revealMs(shown.length));
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- finish only reads refs and props that are fixed while the reveal is up

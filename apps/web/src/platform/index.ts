@@ -6,13 +6,21 @@
  */
 import { wrap } from 'comlink';
 import type { GameEngine } from './engine.ts';
+import { createBackStack, type BackStack } from './backStack.ts';
+import { installGuards } from './guards.ts';
+import { protectSaves } from './storage.ts';
+import { registerSW } from './swRegister.ts';
+import { createUpdates, type Updates } from './updates.ts';
 import { createInstallPrompt, type InstallPrompt } from './install.ts';
 import { LocalHost, type GameHost, type LegacySlot } from './localHost.ts';
 import { IndexedDbSaveStore } from './saves.ts';
 
 export type { GameUpdate } from './localHost.ts';
 export type { InstallPrompt, InstallState } from './install.ts';
-export { createFeedback, type Cue, type Feedback, type Prefs } from './feedback.ts';
+export { createFeedback, type Cue, type Feedback, type Haptic, type Prefs } from './feedback.ts';
+export type { BackStack } from './backStack.ts';
+export type { UpdateState, Updates } from './updates.ts';
+export { savesProtected } from './storage.ts';
 export type { GameHost } from './localHost.ts';
 export { createSpeech, type Speech } from './speech.ts';
 
@@ -51,4 +59,27 @@ let install: InstallPrompt | null = null;
 export function installPrompt(): InstallPrompt {
   install ??= createInstallPrompt();
   return install;
+}
+
+let back: BackStack | null = null;
+/** The Back button's stack: sheets register here so Back closes them before it leaves the game (K13). */
+export function backStack(): BackStack {
+  back ??= createBackStack();
+  return back;
+}
+
+let waiting: Updates | null = null;
+/** "A new version is ready": call at app start so the service worker registers (K13). */
+export function updates(): Updates {
+  waiting ??= createUpdates(registerSW);
+  return waiting;
+}
+
+/**
+ * Device polish at app start (K13): no long-press menus, text selection or
+ * pinch on the game, and a request that the browser keep the saves.
+ */
+export function startDevice(): void {
+  installGuards();
+  void protectSaves();
 }

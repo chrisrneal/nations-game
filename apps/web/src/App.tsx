@@ -1,14 +1,17 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import type { HomeView } from '@snacks/contracts';
-import type { Feedback, GameHost, GameUpdate, InstallPrompt, Speech } from './platform/index.ts';
+import type { Feedback, GameHost, GameUpdate, InstallPrompt, Speech, Updates } from './platform/index.ts';
 import { Game } from './ui/Game.tsx';
 import { InstallBanner } from './ui/Install.tsx';
 import { KindyGame } from './ui/KindyGame.tsx';
 import { MenuSheet } from './ui/MenuSheet.tsx';
 import { BookContext } from './ui/BookContext.tsx';
 import { Picker } from './ui/Picker.tsx';
+import { RotateNotice } from './ui/RotateNotice.tsx';
+import { UpdatesContext } from './ui/UpdateNotice.tsx';
 import { StickerBook } from './ui/StickerBook.tsx';
 import { LunchboxArt } from './ui/art/Scenery.tsx';
+import { useBackClose } from './ui/useBackClose.ts';
 
 /**
  * Snack Attack (docs/ROADMAP.md; decision record K1). Who is playing comes
@@ -18,7 +21,7 @@ import { LunchboxArt } from './ui/art/Scenery.tsx';
  * something: there is no clock (K3). The wave replay animates outside React
  * (P7).
  */
-export function App(props: { host: GameHost; install?: InstallPrompt; feedback?: Feedback; speech?: Speech }): ReactElement {
+function Screens(props: { host: GameHost; install?: InstallPrompt; feedback?: Feedback; speech?: Speech; updates?: Updates }): ReactElement {
   const { host, install, feedback, speech } = props;
   const [home, setHome] = useState<HomeView | null>(null);
   const [update, setUpdate] = useState<GameUpdate | null>(null);
@@ -49,6 +52,14 @@ export function App(props: { host: GameHost; install?: InstallPrompt; feedback?:
       {toast}
     </div>
   );
+
+  // Sound follows the child on screen: their own mute (the grown-ups' menu) applies, and the picker is quiet.
+  const playing = profile !== undefined && !picking ? profile.id : null;
+  useEffect(() => {
+    feedback?.setProfile(playing);
+  }, [feedback, playing]);
+  // Back closes the picker when it was opened over a game, before it leaves the app (K13).
+  useBackClose(picking && profile !== undefined, () => setPicking(false));
 
   if (home === null) return <Loading />;
 
@@ -115,10 +126,20 @@ export function App(props: { host: GameHost; install?: InstallPrompt; feedback?:
         onMenu={() => setMenu(true)}
         onProfiles={() => setPicking(true)}
       />
-      {menu && <MenuSheet host={host} view={update.view} feedback={feedback} onClose={() => setMenu(false)} onProfiles={() => setPicking(true)} />}
+      {menu && <MenuSheet host={host} view={update.view} onClose={() => setMenu(false)} onProfiles={() => setPicking(true)} />}
       {bookLayer}
       {toastLayer}
     </div>,
+  );
+}
+
+/** The whole app: the screens, the update button's source and the turn-it-upright cover (K13). */
+export function App(props: { host: GameHost; install?: InstallPrompt; feedback?: Feedback; speech?: Speech; updates?: Updates }): ReactElement {
+  return (
+    <UpdatesContext.Provider value={props.updates}>
+      <Screens {...props} />
+      <RotateNotice />
+    </UpdatesContext.Provider>
   );
 }
 

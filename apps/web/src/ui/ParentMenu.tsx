@@ -40,6 +40,7 @@ export function ParentMenu(props: { home: HomeView; host: GameHost; feedback?: F
     return (
       <ProfileForm
         home={home}
+        feedback={feedback}
         title={`Change ${profileLabel(p)}`}
         self={p.id}
         start={{ name: p.name, avatar: p.avatar, mode: p.mode }}
@@ -85,7 +86,10 @@ export function ParentMenu(props: { home: HomeView; host: GameHost; feedback?: F
             <Avatar id={p.avatar} size={44} />
             <span className="parent-what">
               <strong>{p.name === '' ? 'No name' : p.name}</strong>
-              <span className="muted small">{p.mode === 'main' ? 'Main' : 'Kindy'} · streak {streakText(p.streak)}</span>
+              <span className="muted small">
+                {p.mode === 'main' ? 'Main' : 'Kindy'} · streak {streakText(p.streak)}
+                {feedback?.isMuted(p.id) === true ? ' · sound off' : ''}
+              </span>
             </span>
             <button type="button" className="btn btn-small" aria-label={`Change ${profileLabel(p)}`} onClick={() => setPage({ kind: 'edit', id: p.id })}>
               Change
@@ -123,6 +127,7 @@ export function ParentMenu(props: { home: HomeView; host: GameHost; feedback?: F
 /** Picking a picture nobody else has, an optional name and (for a new profile) the mode. */
 function ProfileForm(props: {
   home: HomeView;
+  feedback?: Feedback | undefined;
   title: string;
   self?: string;
   start: { name: string; avatar: AvatarId; mode: Mode };
@@ -134,6 +139,8 @@ function ProfileForm(props: {
   const [name, setName] = useState(props.start.name);
   const [avatar, setAvatar] = useState(props.start.avatar);
   const [mode, setMode] = useState(props.start.mode);
+  // The sound is this child's own, and takes effect at once: it is not part of Save.
+  const [muted, setMuted] = useState(() => (props.self === undefined ? false : (props.feedback?.isMuted(props.self) ?? false)));
   const taken = (a: AvatarId): boolean => home.profiles.some((p) => p.avatar === a && p.id !== props.self);
   return (
     <Sheet title={props.title} onClose={props.onCancel}>
@@ -165,6 +172,23 @@ function ProfileForm(props: {
               </button>
             ))}
           </fieldset>
+        )}
+        {props.self !== undefined && props.feedback !== undefined && (
+          <div className="sound-pick">
+            <button
+              type="button"
+              className="btn btn-wide"
+              aria-pressed={!muted}
+              onClick={() => {
+                if (props.self === undefined) return;
+                props.feedback?.setMuted(props.self, !muted);
+                setMuted(!muted);
+              }}
+            >
+              Sound: {muted ? 'off' : 'on'}
+            </button>
+            <p className="sheet-note muted small">Just for this child. It is kept on this phone.</p>
+          </div>
         )}
         <div className="sheet-actions">
           <button type="submit" className="btn btn-primary btn-wide">

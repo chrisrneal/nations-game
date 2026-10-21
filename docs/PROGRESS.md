@@ -1,7 +1,8 @@
 # Progress
-Current state: **Snack Attack, build steps 0-11 done: the whole game drawn
-in its own style, with the waves animated, a proper shop, and a sticker book
-with outfits** (decision records K1, K7, K8, K9, K10, K11, K12). The engine, solver, clue checker and
+Current state: **Snack Attack, build steps 0-11 done, and sound and real-device
+polish built: the whole game drawn in its own style, with the waves animated,
+a proper shop, a sticker book with outfits, original sounds and a device
+checklist for real phones** (decision records K1, K7, K8, K9, K10, K11, K12, K13). The engine, solver, clue checker and
 generator are built and tested. The daily, its bonus round and practice
 boards play on one phone screen (tap-to-aim, drag, Undo; K6), drawn as a
 schoolyard at lunchtime (docs/ART.md): friends on game-piece bases, kids in
@@ -92,6 +93,69 @@ of 3 gives the party hat; wear it in the book and it shows on the picture in
 the top corner.
 **What is left.** A real-phone try (iOS Safari, Android Chrome); the owner's
 view on the sticker pictures and the schedule (GAPS).
+
+- [ ] 11 Sticker book and cosmetics
+- [~] 12 Polish on real phones (K13: built and checked in Chromium; the owner's device checklist is next)
+
+## Session log
+
+### 2026-10-21 - Sound and real-device polish (all lanes, owner request, K13)
+**What changed.**
+- **Sound.** The placeholder beeps are replaced by 13 original synthesized cues in
+  one scale (`platform/sounds.ts`): tap, buy, throw, catch/pass, fed, happy dance,
+  tummy ache, Nurse heal, goes home hungry, wave win, day win, try again, sticker
+  reveal (played when the sticker book's reveal pops out). They play at the moment each thing happens in the replay
+  (`ui/soundplan.ts`), the wave's tune when the replay ends. Audio starts on the
+  first touch (iOS) and sleeps while the app is hidden. Sound is on, gently, for
+  everyone; a grown-up mutes one child under Grown-ups, Change, Sound (kept per
+  profile). The old in-game switch is gone.
+- **Haptics.** A short buzz on a catch and when a wave ends, only where
+  `navigator.vibrate` exists (Android); nothing on iOS, never an error.
+- **iOS and Android.** Safe areas, a fixed body so nothing rubber-bands, no
+  double-tap or pinch zoom, no selection or long-press menu on the game, `--app-h`
+  (100dvh with a fallback), the theme/background/splash all one cream, a
+  maskable icon of its own, ten iPhone launch screens, persistent storage requested,
+  and a picture asking for the phone upright when it is on its side. The Back button
+  closes sheets, the clue card, the shop, the picker and the result card before it
+  leaves the game.
+- **Offline and updates.** The service worker now waits for a tap
+  (`registerType: 'prompt'`): "A new version is ready" with an Update button shows
+  on the result card, the done screen, the menu and the picker, never over the
+  board or during a replay, and nothing reloads by itself.
+- **Checks.** `npm run e2e` now runs the phone check, the new device check
+  (93 checks: sound, haptics, safe areas, zoom and selection, install, Back,
+  rotate, mute, offline cold start for today and an unseen day, restart, updates
+  found mid-wave) and the sound check (renders every cue in Chromium: audible, under
+  -9 dBFS, silent at both ends). `npm run perf` plays a whole day at 4x CPU. The
+  phone check's helpers moved to `e2e/support.ts` (no behaviour change).
+- **Performance** (CPU slowed 4x, a full 10-wave day, this machine's Chromium):
+  time to interactive 0.87 s cold, 0.47 s warm (median of 3; budgets 5 s and 3 s);
+  every replay 59.8-62.9 fps (lowest 59.8); the JS heap after a garbage
+  collection grew from 4.5 MB (wave 2) to 5.2 MB
+  (wave 10), and the page's element count came back down at the end (no leak).
+  Nothing was below 50 fps, so nothing needed fixing.
+
+  | wave | fps | worst frame ms | friends | heap MB |
+  |---|---|---|---|---|
+  | 1 | 62.7 | 29 | 1 | 4.3 |
+  | 2 | 62.9 | 24 | 1 | 4.5 |
+  | 3 | 62.7 | 24 | 1 | 4.7 |
+  | 4 | 61.5 | 32 | 2 | 4.8 |
+  | 5 | 61.6 | 33 | 1 | 4.8 |
+  | 6 | 59.8 | 69 | 2 | 4.9 |
+  | 7 | 61.4 | 39 | 4 | 5.0 |
+  | 8 | 60.7 | 71 | 4 | 5.1 |
+  | 9 | 61.8 | 33 | 4 | 5.1 |
+  | 10 | 62.7 | 28 | 4 | 5.2 |
+- **Decision record K13** and RULES section 16 say all of this; ROADMAP step 12 and
+  the phone UX budget are updated. The owner's prompt asked for those edits, which
+  CLAUDE.md otherwise keeps to the architect.
+**How to see it.** Open the Vercel preview or the deploy on a phone and follow
+docs/device-checklist.md (about 10 minutes). On a computer: `npm run build`, then
+`npm run e2e` and `npm run perf --workspace web`. To hear the sounds on a
+computer: `AUDIO_OUT=sounds.wav npm run audio --workspace web`.
+**What is left.** Nothing here is proved on a real phone: the checklist is yours to
+run and paste back. 
 
 ### 2026-10-20 - Hints, tray giveaway and difficulty ramp (all lanes, owner request, K11)
 **What changed.**

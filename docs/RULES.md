@@ -609,7 +609,8 @@ command, or Go, checked by the sim.
   game is saved as snapshot plus command log (S9). Nothing leaves the
   device: no accounts, no server.
 - A Kindy profile opens the Kindy screen (section 11a). The grown-ups' menu
-  also turns Kindy's spoken hints off or on (D16).
+  also turns Kindy's spoken hints off or on (D16), and turns each child's
+  sound off or on (section 16, K13).
 - A device that was played before profiles keeps its progress: its game and
   finished days become the first profile's (K7).
 
@@ -712,3 +713,35 @@ Checked on every build (`npm test`):
   book and outfits never change another's. A pre-profile save folds into the first profile with the
   same game and finished days. A damaged profile book is kept aside and
   never crashes the app (K7).
+
+## 16. Sound, haptics and real phones (K13)
+
+Nothing here changes how a wave resolves or what a number is: it is what the
+phone does around the game.
+- **Sounds.** 13 cues, all synthesized, in one scale: tap, buy, throw,
+  catch/pass, fed, happy dance, tummy ache, Nurse heal, goes home hungry, wave
+  win, day win, try again (a lost wave) and sticker reveal. During a replay
+  each plays at the moment it happens: a throw at the lunchbox, a catch at
+  every friend that takes a snack and passes it on, the chime and the dance
+  when a kid is fed, the wobble for a tummy ache (and for a Kindy snack that
+  bounces off), sparkles when the Nurse heals, a sigh when a kid goes home
+  hungry. Many of one kind at once are one sound. When the replay ends: the
+  wave win (no kid sent home that wave), the day win, or try again. A wave
+  that sent a kid home hungry has already sighed and gets no fanfare.
+- **Volume.** Gentle by default (the loudest cue peaks near -14 dBFS); no
+  volume control of its own, just the phone's. On iOS the phone's silent
+  switch silences the game.
+- **Mute.** On for every child; a grown-up turns it off for one child in the
+  grown-ups' menu ("Change", then "Sound"). It is kept on the phone with the
+  profile's id. The picker plays nothing.
+- **Haptics.** Where the phone can vibrate (Android): a short buzz when a
+  snack is caught and when a wave ends. iOS has none, and nothing happens.
+- **Back.** On Android, Back closes the open sheet, clue card, shop, picker or
+  result card before it leaves the game.
+- **Updates.** A new version waits quietly and is offered (never forced) on
+  the result card between waves, the done screen, the menu and the picker.
+- **Turned on its side.** A picture asks for the phone upright; the game waits.
+- **Saves** are kept in the browser's persistent storage where it will grant
+  it. A website's storage can be cleared by a phone that is very low on
+  space, or by Safari after a week unused; an app added to the Home Screen is
+  not treated that way.

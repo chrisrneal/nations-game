@@ -1,4 +1,5 @@
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactElement, type ReactNode } from 'react';
+import { useBackClose } from './useBackClose.ts';
 
 /** How far the head must be pulled down, in px, for the sheet to close. */
 const SWIPE_CLOSE_PX = 72;
@@ -19,6 +20,8 @@ export function Sheet(props: { title: string; onClose: () => void; children: Rea
   const { onClose } = props;
   const sheetRef = useRef<HTMLElement>(null);
   const pull = useRef<{ id: number; y: number; dy: number } | null>(null);
+  // The phone's Back button closes the sheet before it leaves the game (K13).
+  useBackClose(true, onClose);
   useEffect(() => () => window.removeEventListener('touchmove', holdTouch), []);
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
