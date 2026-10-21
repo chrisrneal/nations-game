@@ -42,16 +42,16 @@
  *   the picker, never during setup, inside the viewport; nothing reloads until
  *   Update is tapped, and the game carries on where it was.
  */
-import { createServer, type Server } from 'node:http';
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, extname, join, normalize } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { chromium, type BrowserContext, type CDPSession, type Page } from 'playwright-core';
 import { generatePuzzle } from '@snacks/sim';
 import {
+  DIST_DIR,
   HEIGHT,
   WIDTH,
+  serve,
   addChild,
   barStats,
   cellOf,
@@ -77,43 +77,12 @@ import {
   until,
 } from './support.ts';
 
-const DIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist');
 const PORT = 4180;
 const URL = `http://localhost:${PORT}/`;
+const DIST = DIST_DIR;
 /** A fixed day, so the check never straddles midnight. */
 const DAY = Math.floor(Date.now() / 86_400_000);
 const NOON = DAY * 86_400_000 + 43_200_000;
-
-const TYPES: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.webmanifest': 'application/manifest+json',
-  '.json': 'application/json',
-};
-
-/** The build, served from disk, and a service worker whose bytes change when `version` does: a new deploy. */
-function serve(): Promise<{ server: Server; bump(): void; swFetches(): number }> {
-  let version = 0;
-  let sw = 0;
-  const server = createServer((req, res) => {
-    const path = normalize(decodeURIComponent((req.url ?? '/').split('?')[0]!)).replace(/^(\.\.[/\\])+/, '');
-    let file = join(DIST, path === '/' || path === '' ? 'index.html' : path);
-    if (!existsSync(file) || statSync(file).isDirectory()) file = join(DIST, 'index.html');
-    let body: Buffer = readFileSync(file);
-    if (file.endsWith('sw.js')) {
-      sw += 1;
-      body = Buffer.concat([body, Buffer.from(`\n// version ${version}\n`)]);
-    }
-    const headers: Record<string, string> = { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream' };
-    if (/sw\.js$|index\.html$|\.webmanifest$/.test(file)) headers['Cache-Control'] = 'public, max-age=0, must-revalidate';
-    res.writeHead(200, headers);
-    res.end(body);
-  });
-  return new Promise((resolve) => server.listen(PORT, () => resolve({ server, bump: () => void (version += 1), swFetches: () => sw })));
-}
 
 /** Stands in for the phone's audio, haptics and clock; written to the page before the app starts. */
 const device = (options: { vibrate: boolean }): string => `(() => {
@@ -168,7 +137,7 @@ const swState = (page: Page): Promise<{ waiting: boolean; active: boolean; contr
 const lookForUpdate = (page: Page): Promise<unknown> => page.evaluate(`${registration}.then((r) => r.update())`);
 
 async function main(): Promise<void> {
-  const { server, bump, swFetches } = await serve();
+  const { server, bump, swFetches } = await serve(PORT);
   const profile = mkdtempSync(join(tmpdir(), 'snacks-device-'));
   const puzzle = generatePuzzle('main', 'daily', DAY, 0);
   try {

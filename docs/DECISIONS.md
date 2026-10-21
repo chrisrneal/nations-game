@@ -1929,3 +1929,100 @@ rule, so no stop):
 **Reversing it.** Set `decoys` to its floor and remove `withDecoys`
 (generate.ts); set `bonusFriendsFirst` = `bonusFriendsLast`; the hint is
 `mainHint.ts`, one case in `game.ts`, and the button in `Game.tsx`.
+
+## K12 - Sound, haptics and real-device polish: synthesized sounds, a mute for each child, Back that closes sheets, and an update that never interrupts a wave
+**Status.** Accepted, 2026-10-21, at the owner's request ("sound and real-device
+polish"). The owner asked for the rules, the roadmap, the spec and the decision
+records to be updated, so this session wrote this record and edited ROADMAP.md
+and RULES.md, as in K2, K7, K8 and K11 (CLAUDE.md keeps those files to the
+architect otherwise). No locked (L) rule or D1-D20 default is changed. The
+prompt names docs/snack-attack.md, which does not exist (see K11); RULES.md was
+the spec.
+**Decision.**
+- **A sound set** (`platform/sounds.ts`), all made with the Web Audio API in
+  code, nothing downloaded: tap, buy, throw, catch/pass, fed, happy dance,
+  tummy ache, Nurse heal, goes home hungry, wave win, day win, try again (a
+  lost wave) and sticker reveal. Every pitched voice is a note of one scale
+  (C major pentatonic) in a sine or triangle with the same fast fade-in and
+  slow fade-out; effects are bands of noise or gliding notes. A cue is data (a
+  list of voices), so Node tests check it (scale, length, peak, soft ends)
+  and `e2e/audio-check.ts` renders each offline in Chromium and measures it.
+  Level: master 0.8 through a compressor; the loudest cue peaks at about
+  -14 dBFS, the quietest at -26.
+- **Sounds follow the replay.** `ui/soundplan.ts` turns the wave timeline into
+  cues at the moments they happen (a throw at the lunchbox, a catch at each
+  friend, the chime when a kid is fed and a dance just after, a wobble for a
+  tummy ache, sparkles for the Nurse, a sigh for a kid sent home). Cues of the
+  same kind within 80 ms are one sound. The wave's tune (win, day win, try
+  again) plays when the replay ends, not when Go is pressed. The sticker cue
+  plays when the done screen's star appears after a day just won; there is no
+  sticker book yet (step 11), so that is all it is for now.
+- **Sound is on, gently, and a grown-up mutes a child.** Before, sound was a
+  phone-wide switch in the player's menu, off by default (placeholder beeps).
+  Now it is on for everyone and the switch is a grown-up's: in the grown-ups'
+  menu, in each child's "Change" sheet, "Sound: on/off", kept per profile in
+  the phone's preferences (`snacks-prefs`, `muted: [profile ids]`). The old
+  in-game switch is gone. The picker is silent. The phone's own silent switch
+  still wins on iOS (the audio session is set to "ambient", which also leaves
+  the phone's music playing).
+- **iOS audio.** Nothing is built before the first touch. The first touch
+  (pointer, touch, click or key) builds the audio context, resumes it and
+  starts a silent sound, which is what iOS wants; a touch that finds it
+  asleep again (a call, the lock screen) does the same. Hidden, the audio is
+  suspended; back in front, resumed.
+- **Haptics** (`navigator.vibrate`, Android): a 12 ms buzz on a catch (at most
+  one in 120 ms) and a short pattern when a wave ends; none on iOS or without
+  the API; nothing ever throws. Not tied to the mute.
+- **The Back button** (`platform/backStack.ts`, `ui/useBackClose.ts`): every
+  sheet, the clue card, the shop, the picker opened over a game and the
+  result card (where putting it away is safe) pushes one history entry when it
+  opens, so Back closes the top one instead of leaving the app. A sheet
+  closed any other way takes its entry back out; one sheet swapped for another
+  in the same moment keeps its entry (found by the device check: popping and
+  pushing at once closed the new sheet). With nothing open, Back is the
+  browser's own.
+- **"Update ready"** (`platform/updates.ts`): the service worker now waits
+  (`registerType: 'prompt'`) instead of taking over (it used to be
+  `autoUpdate`, which reloads). A new version installs quietly; the app looks
+  again when it comes back to the front and hourly. "A new version is ready"
+  with an Update button shows only at calm moments: the result card (which
+  appears after the replay), the done screen, the menu and the picker; never
+  on the board, so a wave is never cut short. Nothing reloads until Update is
+  tapped; untouched, the new version opens the next time the app is closed
+  and launched. Kindy screens say nothing (no text); the picker, where a
+  grown-up goes, does.
+- **Phone handling.** `viewport-fit=cover`, no pinch zoom (`maximum-scale=1`,
+  `user-scalable=no`, and Safari's pinch events stopped); a fixed body with
+  `overscroll-behavior: none` so nothing rubber-bands; `touch-action:
+  manipulation` against double-tap zoom; no text selection, long-press menu,
+  callout or picture dragging on the game (a name box keeps its own);
+  heights from `--app-h` (100dvh, with a 100vh fallback); the status bar,
+  splash, manifest and page are one cream (#fff8ec, was #f4f2ee); a maskable
+  icon of its own; ten iPhone launch screens (`e2e/make-assets.ts`, not in the
+  offline cache); a request that the browser keep the saves (persistent
+  storage), asked once at start. A phone turned on its side is covered by a
+  picture of a phone turning upright (no words), under which the game waits.
+**Why.**
+- Placeholder beeps off by default meant the sound was never heard and never
+  judged; a small cohesive set, gentle and on, makes the game feel finished.
+- A 4-year-old can find a switch on a menu; they can't find one a grown-up
+  holds a button for. The mute belongs to the grown-ups.
+- Android's Back leaves an installed app, which is what a child does by
+  accident; an update that reloads mid-wave would lose the animation and
+  the moment.
+- Everything on the list is something a real phone does that a simulated
+  browser does not, so the checks stand in where they can and
+  docs/device-checklist.md covers the rest.
+**Cost.**
+- `Cue` lost `win` (now `dayWin`) and gained ten; `Prefs` lost `sound` and
+  gained `muted` (an old saved `sound` value is ignored: sound is on).
+- No pinch zoom: a person who needs to magnify the screen must use the
+  phone's own zoom. The board is one fixed screen, so there is little to gain.
+- A copy installed before this one is on the old `autoUpdate` setting: until
+  it has taken this version it updates itself the old way once; every
+  version after this one waits for a tap.
+- The sticker cue has nothing to attach to until step 11.
+**Reversing it.** Sounds: `platform/sounds.ts` (the recipes) and
+`ui/soundplan.ts`. Updates: `registerType: 'autoUpdate'` in vite.config.ts and
+drop `UpdateNotice`. Back: remove `useBackClose` from `Sheet`. Zoom: the
+viewport meta in index.html.

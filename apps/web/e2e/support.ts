@@ -3,8 +3,10 @@
  * (device-check.ts) and the performance check (perf-check.ts): the checks' own
  * bookkeeping, "is it inside the viewport", and driving a day by taps.
  */
-import { existsSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { createServer, type Server } from 'node:http';
+import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, extname, join, normalize } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { CDPSession, Locator, Page } from 'playwright-core';
 import type { FriendType, PlacedFriend, Puzzle, WaveLayout } from '@snacks/contracts';
 import { GameSession, gameView, generatePuzzle, resolveSnacks, startGame, step, witnessCommands } from '@snacks/sim';
@@ -116,7 +118,9 @@ export async function shot(page: Page, name: string): Promise<void> {
 
 /** Polls until `test` holds (the host answers asynchronously), up to about 2 s. */
 export async function until(page: Page, test: () => Promise<boolean>): Promise<boolean> {
-  for (let i = 0; i < 100; i++) {
+  // `SLOW=4` (the performance check) gives every wait four times as long.
+  const tries = 100 * (Number(process.env.SLOW) || 1);
+  for (let i = 0; i < tries; i++) {
     if (await test()) return true;
     await page.waitForTimeout(20);
   }
@@ -179,6 +183,7 @@ export async function aimByTap(page: Page, puzzle: Puzzle, friend: PlacedFriend)
   await deselect(page);
   await cellOf(page, friend.cell).tap();
   if (friend.type === 'nurse') {
+    await until(page, async () => (await page.locator('.board .sq-heal').count()) > 0);
     const heals = await page.locator('.board .sq-heal').count();
     await deselect(page);
     return heals > 0 ? 'nurse' : 'failed';
@@ -187,7 +192,8 @@ export async function aimByTap(page: Page, puzzle: Puzzle, friend: PlacedFriend)
   const target = aimCell(puzzle, friend);
   let how: 'tap' | 'turn' = 'tap';
   if (target !== null) {
-    if ((await cellOf(page, target).getAttribute('class'))?.includes('sq-aimable') !== true) return 'failed';
+    // The friend's lit squares take a moment to draw on a slow phone.
+    if (!(await until(page, async () => ((await cellOf(page, target).getAttribute('class')) ?? '').includes('sq-aimable')))) return 'failed';
     await cellOf(page, target).tap();
   } else {
     how = 'turn';
@@ -571,3 +577,38 @@ export const setCrashPage = (page: Page | null): void => {
   crashPage = page;
 };
 export const getCrashPage = (): Page | null => crashPage;
+
+export const DIST_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist');
+const DIST = DIST_DIR;
+
+const TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.webmanifest': 'application/manifest+json',
+  '.json': 'application/json',
+};
+
+/** The build, served from disk, and a service worker whose bytes change when `version` does: a new deploy. */
+export function serve(port: number): Promise<{ server: Server; bump(): void; swFetches(): number }> {
+  let version = 0;
+  let sw = 0;
+  const server = createServer((req, res) => {
+    const path = normalize(decodeURIComponent((req.url ?? '/').split('?')[0]!)).replace(/^(\.\.[/\\])+/, '');
+    let file = join(DIST, path === '/' || path === '' ? 'index.html' : path);
+    if (!existsSync(file) || statSync(file).isDirectory()) file = join(DIST, 'index.html');
+    let body: Buffer = readFileSync(file);
+    if (file.endsWith('sw.js')) {
+      sw += 1;
+      body = Buffer.concat([body, Buffer.from(`\n// version ${version}\n`)]);
+    }
+    const headers: Record<string, string> = { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream' };
+    if (/sw\.js$|index\.html$|\.webmanifest$/.test(file)) headers['Cache-Control'] = 'public, max-age=0, must-revalidate';
+    res.writeHead(200, headers);
+    res.end(body);
+  });
+  return new Promise((resolve) => server.listen(port, () => resolve({ server, bump: () => void (version += 1), swFetches: () => sw })));
+}
+

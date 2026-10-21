@@ -26,5 +26,11 @@ Files:
   arrived it folds the old single save into the first profile.
 - `saves.ts` - save slots and the profile book in IndexedDB (database
   `snacks`, version 2: stores `slots` and `meta`; memory store for tests).
-- `feedback.ts` - haptics and synthesized sounds.
+- `feedback.ts` - sound (a mute for each profile, unlocked by the first touch,
+  asleep while hidden) and haptics (K12). `sounds.ts` holds the recipes for
+  the 13 cues; `fakeAudio.ts` is a stand-in audio graph for tests only.
+- `backStack.ts` - the Back button closes sheets before it leaves the game.
+- `updates.ts` / `swRegister.ts` - "a new version is ready", never automatic.
+- `guards.ts` / `storage.ts` - no long-press menus, selection or pinch; a request
+  that the browser keep the saves.
 - `install.ts` - the install prompt (`beforeinstallprompt`, iOS instructions).

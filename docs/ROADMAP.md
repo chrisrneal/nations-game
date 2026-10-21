@@ -64,6 +64,16 @@ vite-plugin-pwa, Vitest + fast-check, and playwright-core for the phone check.
 - Kindy (K8): the board as wide as the phone, no text on the page anywhere
   in the child's flow, and a whole Kindy day played by taps on what the hint
   points at.
+- Real-phone handling (K12, `apps/web/e2e/device-check.ts`): safe areas, no
+  rubber-band, double-tap zoom, selection or long-press menu; the layout fits
+  the screen with the browser bar showing and hidden; sound after the first
+  touch, a mute for each child, buzzes where the phone has them; Back closes
+  sheets first; the app opens offline (a new day too); an update never
+  reloads mid-wave; a phone on its side asks for upright. Each new thing on
+  screen is checked inside 360 x 740, not just positioned.
+- Performance (K12, `apps/web/e2e/perf-check.ts`, CPU slowed 4x): time to
+  interactive under 5 s cold and 3 s warm, every replay of a whole 10-wave
+  day at 50+ fps, and flat memory.
 - The wave replay at 60 fps with the CPU slowed 4x, moving only transform
   and opacity, with a calm version for reduced motion (K10). A day's puzzle
   generated in under a second with the CPU slowed 4x.
@@ -121,7 +131,13 @@ until both work on hand-made test boards.
 11. [ ] Sticker book, cosmetics and streak rewards.
     - [x] Between steps 10 and 11 (K11): main-mode hints, decoys in the tray,
       the bonus ramp, and the difficulty report.
-12. [ ] Phone check and polish on real phones.
+12. [ ] Phone check and polish on real phones (K12).
+    - [x] Sound, haptics, Back button, update-ready, iOS/Android handling,
+      offline and performance, all checked in Chromium (`npm run e2e`,
+      `npm run perf`); sounds are original and synthesized.
+    - [ ] The owner runs docs/device-checklist.md on a real iPhone and the
+      children's device and pastes the notes back. Nothing here is proved on
+      real hardware until then.
 
 ## History
 - **Nations** (to 2026-09-30): commit `67d1d92`.
