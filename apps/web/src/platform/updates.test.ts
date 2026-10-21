@@ -17,7 +17,7 @@ function setup(env: { hidden?: () => boolean } = {}) {
   return { updates, reg, apply, target, registered, found };
 }
 
-describe('updates (K12)', () => {
+describe('updates (K13)', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 

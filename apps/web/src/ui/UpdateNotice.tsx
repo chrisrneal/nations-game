@@ -3,7 +3,7 @@ import type { Updates } from '../platform/index.ts';
 import { Icon } from './art/Icons.tsx';
 
 /**
- * "A new version is ready" (decision record K12). The app never reloads on its
+ * "A new version is ready" (decision record K13). The app never reloads on its
  * own; this is the one gentle button, shown only where nothing is happening:
  * between waves (inside the result card, which appears after the replay ends),
  * on the done-for-today screen, in the menu and on the picker. It is never

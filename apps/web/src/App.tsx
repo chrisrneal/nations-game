@@ -5,9 +5,11 @@ import { Game } from './ui/Game.tsx';
 import { InstallBanner } from './ui/Install.tsx';
 import { KindyGame } from './ui/KindyGame.tsx';
 import { MenuSheet } from './ui/MenuSheet.tsx';
+import { BookContext } from './ui/BookContext.tsx';
 import { Picker } from './ui/Picker.tsx';
 import { RotateNotice } from './ui/RotateNotice.tsx';
 import { UpdatesContext } from './ui/UpdateNotice.tsx';
+import { StickerBook } from './ui/StickerBook.tsx';
 import { LunchboxArt } from './ui/art/Scenery.tsx';
 import { useBackClose } from './ui/useBackClose.ts';
 
@@ -28,6 +30,8 @@ function Screens(props: { host: GameHost; install?: InstallPrompt; feedback?: Fe
   const [wanted, setWanted] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  // The sticker book is open over the child's game (RULES 9a, K12).
+  const [book, setBook] = useState(false);
 
   useEffect(() => host.subscribeHome(setHome), [host]);
   useEffect(() => host.subscribe(setUpdate), [host]);
@@ -54,7 +58,7 @@ function Screens(props: { host: GameHost; install?: InstallPrompt; feedback?: Fe
   useEffect(() => {
     feedback?.setProfile(playing);
   }, [feedback, playing]);
-  // Back closes the picker when it was opened over a game, before it leaves the app (K12).
+  // Back closes the picker when it was opened over a game, before it leaves the app (K13).
   useBackClose(picking && profile !== undefined, () => setPicking(false));
 
   if (home === null) return <Loading />;
@@ -71,6 +75,7 @@ function Screens(props: { host: GameHost; install?: InstallPrompt; feedback?: Fe
           onPick={(id) => {
             setPicking(false);
             setMenu(false);
+            setBook(false);
             if (id === home.current) return;
             setWanted(id);
             void host.choose(id);
@@ -84,9 +89,13 @@ function Screens(props: { host: GameHost; install?: InstallPrompt; feedback?: Fe
   // The game on screen must be this child's: while a switch loads, nobody else's shows.
   if (update === null || update.profile !== profile.id || home.current !== profile.id) return <Loading pictures={profile.mode === 'kindy'} />;
 
+  const bookAccess = { catalogue: home.catalogue, openBook: () => setBook(true) };
+  const withBook = (node: ReactElement): ReactElement => <BookContext.Provider value={bookAccess}>{node}</BookContext.Provider>;
+  const bookLayer = book && <StickerBook host={host} home={home} profile={profile} onClose={() => setBook(false)} />;
+
   if (profile.mode === 'kindy') {
     // No install banner, menu or toasts: nothing to read in Kindy (RULES 11). Grown-ups go through the picker.
-    return (
+    return withBook(
       <div className="app">
         <KindyGame
           host={host}
@@ -98,11 +107,12 @@ function Screens(props: { host: GameHost; install?: InstallPrompt; feedback?: Fe
           speech={speech}
           onProfiles={() => setPicking(true)}
         />
-      </div>
+        {bookLayer}
+      </div>,
     );
   }
 
-  return (
+  return withBook(
     <div className="app">
       <InstallBanner install={install} onToast={setToast} />
       <Game
@@ -117,12 +127,13 @@ function Screens(props: { host: GameHost; install?: InstallPrompt; feedback?: Fe
         onProfiles={() => setPicking(true)}
       />
       {menu && <MenuSheet host={host} view={update.view} onClose={() => setMenu(false)} onProfiles={() => setPicking(true)} />}
+      {bookLayer}
       {toastLayer}
-    </div>
+    </div>,
   );
 }
 
-/** The whole app: the screens, the update button's source and the turn-it-upright cover (K12). */
+/** The whole app: the screens, the update button's source and the turn-it-upright cover (K13). */
 export function App(props: { host: GameHost; install?: InstallPrompt; feedback?: Feedback; speech?: Speech; updates?: Updates }): ReactElement {
   return (
     <UpdatesContext.Provider value={props.updates}>

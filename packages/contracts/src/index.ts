@@ -47,4 +47,4 @@ export type {
   WaveLayout,
   WaveResult,
 } from './game.ts';
-export type { AvatarId, DayRecord, HomeView, Profile, ProfileBook, ProfileDraft, ProfileEdit, ProfileView } from './profile.ts';
+export type { AvatarId, Catalogue, CosmeticDef, CosmeticSlot, StickerDef, StickerPage, DayRecord, EarnedCosmetic, EarnedSticker, HomeView, Profile, ProfileBook, ProfileDraft, ProfileEdit, ProfileView, StickerKind, Worn } from './profile.ts';

@@ -1,5 +1,5 @@
 /**
- * The sound check (decision record K12), in headless Chromium: every cue is
+ * The sound check (decision record K13), in headless Chromium: every cue is
  * rendered offline with the real Web Audio engine, through the same output path
  * the app uses (sounds.ts: makeBus), and measured. A speaker is not needed, so
  * it also runs where the phone check cannot.

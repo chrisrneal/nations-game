@@ -1,4 +1,5 @@
-import type { AvatarId, DayRecord, HomeView, Mode, Profile, ProfileBook, ProfileDraft, ProfileEdit, ProfileView } from '@snacks/contracts';
+import type { AvatarId, CosmeticSlot, DayRecord, EarnedCosmetic, EarnedSticker, HomeView, Mode, Profile, ProfileBook, ProfileDraft, ProfileEdit, ProfileView, StickerKind, Worn } from '@snacks/contracts';
+import { CATALOGUE, COSMETICS, STICKERS, cosmeticFor, stickerFor } from './stickers.ts';
 import { SNACK_TUNABLES as T } from './tunables.ts';
 
 /**
@@ -11,7 +12,10 @@ import { SNACK_TUNABLES as T } from './tunables.ts';
  */
 
 /** Current profile-book format. Bump it with a migration in BOOK_MIGRATIONS. */
-export const PROFILE_BOOK_VERSION = 1;
+/** 2 added each profile's sticker book and wardrobe (RULES 9a, K12). */
+export const PROFILE_BOOK_VERSION = 2;
+
+const NOTHING_WORN: Worn = { hat: null, outfit: null };
 
 /** The pictures, in the order the picker offers them. The first is the default profile's. */
 export const AVATARS: readonly AvatarId[] = ['dog', 'cat', 'fox', 'panda', 'frog', 'owl', 'bunny', 'tiger'];
@@ -58,7 +62,7 @@ export function addProfile(book: ProfileBook, draft: ProfileDraft): BookChange {
   const problem = avatarProblem(book, draft.avatar, null);
   if (problem !== null) return refuse(book, problem);
   const id = `p${book.nextId}`;
-  const profile: Profile = { id, name: cleanName(draft.name), avatar: draft.avatar, mode: draft.mode, history: [], best: 0, active: null };
+  const profile: Profile = { id, name: cleanName(draft.name), avatar: draft.avatar, mode: draft.mode, history: [], best: 0, active: null, stickers: [], cosmetics: [], worn: NOTHING_WORN };
   return { book: { ...book, nextId: book.nextId + 1, profiles: [...book.profiles, profile] }, error: null, id };
 }
 
@@ -127,22 +131,62 @@ function withHistory(profile: Profile, history: readonly DayRecord[]): Profile {
   return { ...profile, history: kept, best: Math.max(profile.best, longestStreak(sorted)) };
 }
 
+/** Adds a sticker for a finished day or bonus round, if the pool has one left (RULES 9a). */
+function withSticker(p: Profile, day: number, kind: StickerKind, seen: boolean): Profile {
+  const id = stickerFor(p.id, day, kind, new Set(p.stickers.map((s) => s.id)));
+  return id === null ? p : { ...p, stickers: [...p.stickers, { id, kind, day, seen }] };
+}
+
+/** Adds the hat or outfit a streak ending on `day` has reached, if it has not been earned yet. */
+function withMilestone(p: Profile, day: number, seen: boolean): Profile {
+  const streak = streakOf(p.history, day);
+  const id = cosmeticFor(streak, new Set(p.cosmetics.map((c) => c.id)));
+  return id === null ? p : { ...p, cosmetics: [...p.cosmetics, { id, day, streak, seen }] };
+}
+
 /**
  * A finished daily (RULES 9). The host passes the puzzle's day, so a run
  * that crosses midnight counts for the day it started. A day already
- * recorded stays as first finished: recording is safe to repeat.
+ * recorded stays as first finished: recording is safe to repeat, and earns
+ * its sticker (and any streak milestone's hat) exactly once (RULES 9a).
  */
 export function recordDaily(book: ProfileBook, id: string, finished: FinishedDay): ProfileBook {
   return update(book, id, (p) => {
     if (p.history.some((r) => r.day === finished.day)) return p;
     const record: DayRecord = { day: finished.day, fed: finished.fed, hungry: finished.hungry, retries: finished.retries, hints: finished.hints ?? 0, bonus: false };
-    return withHistory(p, [...p.history, record]);
+    return withMilestone(withSticker(withHistory(p, [...p.history, record]), finished.day, 'daily', false), finished.day, false);
   });
 }
 
-/** That day's bonus round was won (D11): marks the day's record. No streak, and nothing without the daily. */
+/** That day's bonus round was won (D11): marks the day's record and gives a bonus sticker. No streak, and nothing without the daily. */
 export function recordBonus(book: ProfileBook, id: string, day: number): ProfileBook {
-  return update(book, id, (p) => (p.history.some((r) => r.day === day && !r.bonus) ? { ...p, history: p.history.map((r) => (r.day === day ? { ...r, bonus: true } : r)) } : p));
+  return update(book, id, (p) => {
+    if (!p.history.some((r) => r.day === day && !r.bonus)) return p;
+    return withSticker({ ...p, history: p.history.map((r) => (r.day === day ? { ...r, bonus: true } : r)) }, day, 'bonus', false);
+  });
+}
+
+/**
+ * Wears an earned hat or outfit on the profile's own avatar, or takes the
+ * slot's item off with null (RULES 9a). Looks only: nothing here reaches the
+ * game. Refused for anything not earned or put in the wrong slot.
+ */
+export function equipCosmetic(book: ProfileBook, id: string, slot: CosmeticSlot, cosmetic: string | null): BookChange {
+  const profile = book.profiles.find((p) => p.id === id);
+  if (profile === undefined) return refuse(book, 'No such profile.');
+  if (cosmetic !== null) {
+    const def = COSMETICS.find((c) => c.id === cosmetic);
+    if (def === undefined || def.slot !== slot) return refuse(book, 'That does not go there.');
+    if (!profile.cosmetics.some((c) => c.id === cosmetic)) return refuse(book, 'That has not been earned yet.');
+  }
+  return { book: update(book, id, (p) => ({ ...p, worn: { ...p.worn, [slot]: cosmetic } })), error: null, id };
+}
+
+/** The reveal has been shown or skipped: everything earned so far is seen. The same book comes back when there is nothing to mark. */
+export function acknowledgeStickers(book: ProfileBook, id: string): ProfileBook {
+  const profile = book.profiles.find((p) => p.id === id);
+  if (profile === undefined || (profile.stickers.every((s) => s.seen) && profile.cosmetics.every((c) => c.seen))) return book;
+  return update(book, id, (p) => ({ ...p, stickers: p.stickers.map((s) => (s.seen ? s : { ...s, seen: true })), cosmetics: p.cosmetics.map((c) => (c.seen ? c : { ...c, seen: true })) }));
 }
 
 export function profileView(profile: Profile, today: number): ProfileView {
@@ -155,11 +199,15 @@ export function profileView(profile: Profile, today: number): ProfileView {
     best: profile.best,
     today: profile.history.find((r) => r.day === today) ?? null,
     recent: profile.history.slice(Math.max(0, profile.history.length - T.recentDays.value)),
+    stickers: profile.stickers,
+    cosmetics: profile.cosmetics,
+    worn: profile.worn,
+    unseen: { stickers: profile.stickers.filter((x) => !x.seen), cosmetics: profile.cosmetics.filter((x) => !x.seen) },
   };
 }
 
 export function homeView(book: ProfileBook, current: string | null, today: number): HomeView {
-  return { profiles: book.profiles.map((p) => profileView(p, today)), current: book.profiles.some((p) => p.id === current) ? current : null, day: today, avatars: AVATARS };
+  return { profiles: book.profiles.map((p) => profileView(p, today)), current: book.profiles.some((p) => p.id === current) ? current : null, day: today, avatars: AVATARS, catalogue: CATALOGUE };
 }
 
 // ---- reading a stored book ----
@@ -171,7 +219,10 @@ export type BookMigration = (book: Record<string, unknown>) => Record<string, un
  * first stored book. Version 0 was no book at all: one save per device,
  * folded into a first profile by `legacyBook`.
  */
-export const BOOK_MIGRATIONS: Readonly<Record<number, BookMigration>> = {};
+export const BOOK_MIGRATIONS: Readonly<Record<number, BookMigration>> = {
+  // 1 to 2 (K12): every profile gets the sticker book and hats its finished days would have earned, all marked seen.
+  1: (book) => ({ ...book, version: 2, profiles: Array.isArray(book.profiles) ? book.profiles.map(backfill) : book.profiles }),
+};
 
 const whole = (v: unknown): number | null => (typeof v === 'number' && Number.isSafeInteger(v) ? v : null);
 const count = (v: unknown): number => Math.max(0, whole(v) ?? 0);
@@ -195,8 +246,70 @@ function readProfile(raw: unknown, taken: readonly Profile[]): Profile | null {
   const records = Array.isArray(r.history) ? r.history.map(readRecord).filter((x): x is DayRecord => x !== null) : [];
   const byDay = new Map<number, DayRecord>();
   for (const record of records) if (!byDay.has(record.day)) byDay.set(record.day, record);
-  const base: Profile = { id: r.id, name: cleanName(r.name), avatar, mode, history: [], best: count(r.best), active: typeof r.active === 'string' ? r.active : null };
+  const cosmetics = readCosmetics(r.cosmetics);
+  const base: Profile = { id: r.id, name: cleanName(r.name), avatar, mode, history: [], best: count(r.best), active: typeof r.active === 'string' ? r.active : null, stickers: readStickers(r.stickers), cosmetics, worn: readWorn(r.worn, cosmetics) };
   return withHistory(base, [...byDay.values()]);
+}
+
+/** Stickers as stored: ones in the catalogue under their own kind, each once, in the order they were earned. A bad `seen` reads as seen, so nothing replays. */
+function readStickers(raw: unknown): EarnedSticker[] {
+  const out = new Map<string, EarnedSticker>();
+  for (const entry of Array.isArray(raw) ? raw : []) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const e = entry as Record<string, unknown>;
+    const def = STICKERS.find((s) => s.id === e.id);
+    const day = whole(e.day);
+    if (def === undefined || def.kind !== e.kind || day === null || out.has(def.id)) continue;
+    out.set(def.id, { id: def.id, kind: def.kind, day, seen: e.seen !== false });
+  }
+  return [...out.values()];
+}
+
+function readCosmetics(raw: unknown): EarnedCosmetic[] {
+  const out = new Map<string, EarnedCosmetic>();
+  for (const entry of Array.isArray(raw) ? raw : []) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const e = entry as Record<string, unknown>;
+    const def = COSMETICS.find((c) => c.id === e.id);
+    const day = whole(e.day);
+    if (def === undefined || day === null || out.has(def.id)) continue;
+    out.set(def.id, { id: def.id, day, streak: def.streak, seen: e.seen !== false });
+  }
+  return [...out.values()];
+}
+
+/** What is worn must be earned and in its own slot; anything else is taken off. */
+function readWorn(raw: unknown, owned: readonly EarnedCosmetic[]): Worn {
+  const r = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  const pick = (slot: CosmeticSlot): string | null => {
+    const def = COSMETICS.find((c) => c.id === r[slot]);
+    return def !== undefined && def.slot === slot && owned.some((c) => c.id === def.id) ? def.id : null;
+  };
+  return { hat: pick('hat'), outfit: pick('outfit') };
+}
+
+/**
+ * Version 1 to 2: a profile from before the sticker book gets what its
+ * finished days would have given, day by day with the same rules as live
+ * play, so a migrated book and a played one are the same. All of it is
+ * marked seen: nobody is greeted by a reveal for days long past.
+ */
+function backfill(raw: unknown): unknown {
+  if (typeof raw !== 'object' || raw === null) return raw;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.id !== 'string') return raw;
+  const byDay = new Map<number, DayRecord>();
+  for (const entry of Array.isArray(r.history) ? r.history : []) {
+    const record = readRecord(entry);
+    if (record !== null && !byDay.has(record.day)) byDay.set(record.day, record);
+  }
+  const history = [...byDay.values()].sort((a, b) => a.day - b.day);
+  let p: Profile = { id: r.id, name: '', avatar: AVATARS[0]!, mode: 'main', history, best: 0, active: null, stickers: [], cosmetics: [], worn: NOTHING_WORN };
+  for (const record of history) {
+    p = withMilestone(withSticker(p, record.day, 'daily', true), record.day, true);
+    if (record.bonus) p = withSticker(p, record.day, 'bonus', true);
+  }
+  return { ...r, stickers: p.stickers, cosmetics: p.cosmetics, worn: NOTHING_WORN };
 }
 
 /**
@@ -238,5 +351,6 @@ export function legacyBook(active: string | null, finished: readonly FinishedDay
   let book = setActive(first.book, id, active);
   for (const day of finished) book = recordDaily(book, id, day);
   for (const day of bonusWon) book = recordBonus(book, id, day);
-  return book;
+  // Days long past: no reveal for them (K12).
+  return acknowledgeStickers(book, id);
 }

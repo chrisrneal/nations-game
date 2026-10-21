@@ -9,7 +9,7 @@ function fire(target: EventTarget, type: string, on: object): boolean {
   return event.defaultPrevented;
 }
 
-describe('touch guards (K12)', () => {
+describe('touch guards (K13)', () => {
   const window = new EventTarget();
   installGuards(window);
 
@@ -33,7 +33,7 @@ describe('touch guards (K12)', () => {
   });
 });
 
-describe('keeping saves (K12)', () => {
+describe('keeping saves (K13)', () => {
   const store = (persisted: boolean, grants: boolean): StorageLike => ({
     persisted: () => Promise.resolve(persisted),
     persist: () => Promise.resolve(grants),

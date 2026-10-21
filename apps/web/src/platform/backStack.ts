@@ -1,5 +1,5 @@
 /**
- * The Back button (decision record K12). On Android Chrome, Back from the
+ * The Back button (decision record K13). On Android Chrome, Back from the
  * installed app leaves the app, which a child would do by accident with a sheet
  * open. Every sheet and overlay therefore registers here when it opens: that
  * pushes one history entry, so Back pops it and closes the top sheet instead.

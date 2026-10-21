@@ -27,7 +27,7 @@ Files:
 - `saves.ts` - save slots and the profile book in IndexedDB (database
   `snacks`, version 2: stores `slots` and `meta`; memory store for tests).
 - `feedback.ts` - sound (a mute for each profile, unlocked by the first touch,
-  asleep while hidden) and haptics (K12). `sounds.ts` holds the recipes for
+  asleep while hidden) and haptics (K13). `sounds.ts` holds the recipes for
   the 13 cues; `fakeAudio.ts` is a stand-in audio graph for tests only.
 - `backStack.ts` - the Back button closes sheets before it leaves the game.
 - `updates.ts` / `swRegister.ts` - "a new version is ready", never automatic.

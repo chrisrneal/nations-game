@@ -1,5 +1,5 @@
 /**
- * Saves that survive (decision record K12). Profiles and games live in
+ * Saves that survive (decision record K13). Profiles and games live in
  * IndexedDB. A browser may clear a site's storage when the phone runs low on
  * space, and Safari clears it for a site not used for a week unless the app is
  * on the Home Screen. Asking for "persistent" storage tells the browser not to:

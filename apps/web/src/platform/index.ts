@@ -62,21 +62,21 @@ export function installPrompt(): InstallPrompt {
 }
 
 let back: BackStack | null = null;
-/** The Back button's stack: sheets register here so Back closes them before it leaves the game (K12). */
+/** The Back button's stack: sheets register here so Back closes them before it leaves the game (K13). */
 export function backStack(): BackStack {
   back ??= createBackStack();
   return back;
 }
 
 let waiting: Updates | null = null;
-/** "A new version is ready": call at app start so the service worker registers (K12). */
+/** "A new version is ready": call at app start so the service worker registers (K13). */
 export function updates(): Updates {
   waiting ??= createUpdates(registerSW);
   return waiting;
 }
 
 /**
- * Device polish at app start (K12): no long-press menus, text selection or
+ * Device polish at app start (K13): no long-press menus, text selection or
  * pinch on the game, and a request that the browser keep the saves.
  */
 export function startDevice(): void {

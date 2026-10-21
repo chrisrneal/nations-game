@@ -1,5 +1,5 @@
-import type { GameCommand, GameSaveFile, GameSpec, HomeView, Mode, Profile, ProfileBook, ProfileDraft, ProfileEdit, Round } from '@snacks/contracts';
-import { AVATARS, addProfile, editProfile, homeView, legacyBook, readBook, recordBonus, recordDaily, removeProfile, setActive, type FinishedDay } from '@snacks/sim';
+import type { CosmeticSlot, GameCommand, GameSaveFile, GameSpec, HomeView, Mode, Profile, ProfileBook, ProfileDraft, ProfileEdit, Round } from '@snacks/contracts';
+import { AVATARS, acknowledgeStickers, addProfile, editProfile, equipCosmetic, homeView, legacyBook, readBook, recordBonus, recordDaily, removeProfile, setActive, type FinishedDay } from '@snacks/sim';
 import type { EngineUpdate, GameEngine } from './engine.ts';
 import type { SaveStore } from './saves.ts';
 
@@ -38,6 +38,10 @@ export interface GameHost {
   addProfile(draft: ProfileDraft): Promise<string | null>;
   editProfile(id: string, edit: ProfileEdit): Promise<string | null>;
   deleteProfile(id: string): Promise<string | null>;
+  /** The reveal of what the current child just earned has been shown or skipped (RULES 9a). */
+  seeStickers(): Promise<void>;
+  /** The current child puts a hat or outfit on their own avatar, or takes it off with null; resolves to why it was refused, or null. */
+  equip(slot: CosmeticSlot, cosmetic: string | null): Promise<string | null>;
   /** Today, as days since 1970-01-01 on this device's calendar (D18). */
   today(): number;
   /** Milliseconds to the next local midnight, when the next daily opens. */
@@ -236,6 +240,27 @@ export class LocalHost implements GameHost {
         this.current = null;
         this.slot = null;
       }
+      this.publishHome();
+      return null;
+    });
+  }
+
+  seeStickers(): Promise<void> {
+    return this.serial(async () => {
+      if (this.current === null) return;
+      const book = acknowledgeStickers(this.requireBook(), this.current);
+      if (book === this.book) return;
+      await this.saveBook(book);
+      this.publishHome();
+    });
+  }
+
+  equip(slot: CosmeticSlot, cosmetic: string | null): Promise<string | null> {
+    return this.serial(async () => {
+      if (this.current === null) return 'Pick who is playing first.';
+      const change = equipCosmetic(this.requireBook(), this.current, slot, cosmetic);
+      if (change.error !== null) return change.error;
+      await this.saveBook(change.book);
       this.publishHome();
       return null;
     });

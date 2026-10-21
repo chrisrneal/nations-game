@@ -1,5 +1,5 @@
 /**
- * Haptics and sound (decision record K12). Device APIs live here, in the
+ * Haptics and sound (decision record K13). Device APIs live here, in the
  * platform, so the interface only says what happened ("a kid was fed") and
  * never touches `navigator.vibrate` or an AudioContext itself.
  *

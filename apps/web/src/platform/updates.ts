@@ -1,5 +1,5 @@
 /**
- * "A new version is ready" (decision record K12). The service worker is set to
+ * "A new version is ready" (decision record K13). The service worker is set to
  * wait, not to take over: a new deploy installs quietly in the background and
  * this module says so, and the interface offers a button at a calm moment
  * (between waves, the done screen, the menu, the picker). Nothing reloads the

@@ -45,7 +45,8 @@ for two kids sharing one phone.
 7. Saves are snapshot plus command log, versioned with migrations, in
    IndexedDB: one slot for each day's daily, each bonus round, and practice,
    for each profile; beside them a versioned profile book with every
-   profile's finished days, from which the streak is worked out (S9, K7).
+   profile's finished days, from which the streak is worked out, and its
+   sticker book and outfits (S9, K7, K12).
 8. The solver and the generator are part of the pure sim (K5).
 
 Stack: TypeScript, Vite + React, a Web Worker via Comlink, IndexedDB,
@@ -64,14 +65,20 @@ vite-plugin-pwa, Vitest + fast-check, and playwright-core for the phone check.
 - Kindy (K8): the board as wide as the phone, no text on the page anywhere
   in the child's flow, and a whole Kindy day played by taps on what the hint
   points at.
-- Real-phone handling (K12, `apps/web/e2e/device-check.ts`): safe areas, no
+- The sticker book (K12): the reveal, the book (both modes), the wardrobe and
+  the top bar's dressed avatar all inside 360 x 740 with nothing to scroll;
+  Kindy's book and reveal with no text and 64 px targets; a daily finished
+  (the last wave by touch on a seeded profile), the reveal seen and skipped, the
+  book opened and a hat and an outfit worn, and no kid, card or friend dressed.
+
+- Real-phone handling (K13, `apps/web/e2e/device-check.ts`): safe areas, no
   rubber-band, double-tap zoom, selection or long-press menu; the layout fits
   the screen with the browser bar showing and hidden; sound after the first
   touch, a mute for each child, buzzes where the phone has them; Back closes
   sheets first; the app opens offline (a new day too); an update never
   reloads mid-wave; a phone on its side asks for upright. Each new thing on
   screen is checked inside 360 x 740, not just positioned.
-- Performance (K12, `apps/web/e2e/perf-check.ts`, CPU slowed 4x): time to
+- Performance (K13, `apps/web/e2e/perf-check.ts`, CPU slowed 4x): time to
   interactive under 5 s cold and 3 s warm, every replay of a whole 10-wave
   day at 50+ fps, and flat memory.
 - The wave replay at 60 fps with the CPU slowed 4x, moving only transform
@@ -128,10 +135,15 @@ until both work on hand-made test boards.
     then a square, four big aim squares, a green play button, hints from the
     stored solution (a pointing hand and the phone's voice), the party, a
     picture-only done for today; Kindy days that can never get stuck.
-11. [ ] Sticker book, cosmetics and streak rewards.
+11. [x] Sticker book, cosmetics and streak rewards (K12): a sticker per
+    finished daily, a gold sticker per won bonus round, and a hat or outfit at
+    streaks of 3, 7, 14 and 30; each profile's own book (pictures only in
+    Kindy), worn on the player's own avatar and never on kids or friends; a
+    tap-to-skip reveal on done for today; the profile save at version 2 with a
+    migration. Cosmetic only (RULES 9a).
     - [x] Between steps 10 and 11 (K11): main-mode hints, decoys in the tray,
       the bonus ramp, and the difficulty report.
-12. [ ] Phone check and polish on real phones (K12).
+12. [ ] Phone check and polish on real phones (K13).
     - [x] Sound, haptics, Back button, update-ready, iOS/Android handling,
       offline and performance, all checked in Chromium (`npm run e2e`,
       `npm run perf`); sounds are original and synthesized.

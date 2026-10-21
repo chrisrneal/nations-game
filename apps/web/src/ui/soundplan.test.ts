@@ -4,7 +4,7 @@ import { soundPlan } from './soundplan.ts';
 import { waveTimeline, type BoardAtGo } from './timeline.ts';
 
 /**
- * What the wave replay sounds like (K12): each moment of the timeline gets its
+ * What the wave replay sounds like (K13): each moment of the timeline gets its
  * cue, at the moment it happens, and a crowd of identical moments is one sound.
  */
 
@@ -31,7 +31,7 @@ const plan = (snacks: SnackTrace[], kids: KidOutcome[]) => soundPlan(waveTimelin
 
 const fed = trace([hop('straight', [1, 0], [3, 0], 2)], 'fed', 1);
 
-describe('the replay’s sounds (K12)', () => {
+describe('the replay’s sounds (K13)', () => {
   it('a throw from the lunchbox, the picker’s catch, then the kid is fed and dances', () => {
     const p = plan([fed], [{ kid: 1, end: 'happy', ache: false, ate: 'apple' }]);
     expect(p.map((s) => s.cue)).toEqual(['throw', 'catch', 'fed', 'dance']);

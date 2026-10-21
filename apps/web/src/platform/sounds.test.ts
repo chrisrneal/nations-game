@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CUES, MASTER_VOLUME, MAX_CUE_SECONDS, RECIPES, SCALE_HZ, cueSeconds, overlapPeak, playCue, type Cue } from './sounds.ts';
 import { fakeAudio } from './fakeAudio.ts';
 
-describe('the sound set (decision record K12)', () => {
+describe('the sound set (decision record K13)', () => {
   it('has a recipe for every cue the game asks for', () => {
     expect([...CUES].sort()).toEqual(
       ['ache', 'buy', 'catch', 'dance', 'dayWin', 'fed', 'heal', 'hungry', 'lose', 'sticker', 'tap', 'throw', 'waveWin'].sort(),

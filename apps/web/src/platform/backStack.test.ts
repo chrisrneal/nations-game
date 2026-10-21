@@ -37,7 +37,7 @@ function fakeHistory(): { env: BackEnv; entries: () => number; press: () => void
   };
 }
 
-describe('the Back button (K12)', () => {
+describe('the Back button (K13)', () => {
   it('closes the open sheet instead of leaving the game', () => {
     const h = fakeHistory();
     const stack = createBackStack(h.env);

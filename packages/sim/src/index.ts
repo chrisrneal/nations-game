@@ -30,9 +30,11 @@ export {
   AVATARS,
   BOOK_MIGRATIONS,
   PROFILE_BOOK_VERSION,
+  acknowledgeStickers,
   addProfile,
   editProfile,
   emptyBook,
+  equipCosmetic,
   homeView,
   legacyBook,
   longestStreak,
@@ -47,5 +49,6 @@ export {
   type BookMigration,
   type FinishedDay,
 } from './profiles.ts';
+export { CATALOGUE, COSMETICS, MILESTONES, STICKERS, STICKER_PAGES, cosmeticFor, stickerFor } from './stickers.ts';
 export { fixturePuzzle, parseFixture, type Fixture } from './fixture.ts';
 export { playWitness, witnessCommands } from './witness.ts';

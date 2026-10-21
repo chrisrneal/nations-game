@@ -1,5 +1,5 @@
 /**
- * Touch guards (decision record K12): a child's finger on a game piece must
+ * Touch guards (decision record K13): a child's finger on a game piece must
  * never open a long-press menu, select text, drag a picture out or pinch the
  * page. CSS does most of it (`user-select`, `-webkit-touch-callout`,
  * `touch-action`, styles.css); these listeners cover what CSS cannot reach,

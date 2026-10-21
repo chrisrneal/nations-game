@@ -1,8 +1,8 @@
 # Progress
-Current state: **Snack Attack, build steps 0-10 done, and sound and real-device
-polish built (K12): the whole game drawn in its own style, with the waves
-animated, a proper shop, original sounds and a device checklist for real
-phones** (decision records K1, K7, K8, K9, K10, K11, K12). The engine, solver, clue checker and
+Current state: **Snack Attack, build steps 0-11 done, and sound and real-device
+polish built: the whole game drawn in its own style, with the waves animated,
+a proper shop, a sticker book with outfits, original sounds and a device
+checklist for real phones** (decision records K1, K7, K8, K9, K10, K11, K12, K13). The engine, solver, clue checker and
 generator are built and tested. The daily, its bonus round and practice
 boards play on one phone screen (tap-to-aim, drag, Undo; K6), drawn as a
 schoolyard at lunchtime (docs/ART.md): friends on game-piece bases, kids in
@@ -15,7 +15,10 @@ they no longer give the answer away, and the bonus round ramps up past the
 daily's hardest wave (K11). Each child has a profile with their own daily,
 retries, practice board, finished days and streak (K7); a Kindy profile
 plays its own 4 x 4 daily with pictures only (K8). Next is the owner's
-gate: play both modes with the children and say what to change. The
+gate: play both modes with the children and say what to change. Finishing a
+daily now earns a sticker for the child's own sticker book, a won bonus round
+a gold one, and a streak of 3, 7, 14 or 30 days a hat or outfit for their
+avatar (K12); none of it touches play. The
 warehouse simulator is at commit `734c848`; the log below the line
 describes the earlier games.
 
@@ -31,17 +34,77 @@ describes the earlier games.
 - [x] 8 Art and animation (K10)
 - [x] 9 Shop screen (K9)
 - [x] 10 Kindy mode on screen (K8)
-- [ ] 11 Sticker book and cosmetics
-- [~] 12 Polish on real phones (K12: built and checked in Chromium; the owner's device checklist is next)
+- [x] 11 Sticker book and cosmetics (K12)
+- [ ] 12 Polish on real phones
 
 ## Session log
 
-### 2026-10-21 - Sound and real-device polish (all lanes, owner request, K12)
+### 2026-10-21 - Sticker book and outfits (lanes C, S, U, P, H, D, owner request, K12)
+**What changed.**
+- **Earning.** A finished daily gives one sticker, a won bonus round a gold one,
+  and a streak that reaches exactly 3, 7, 14 or 30 days a hat or outfit (party
+  hat, scarf, crown, cape). Practice earns nothing. Which sticker you get is
+  worked out from your profile and the day, never drawn at random, so it is the
+  same however it is claimed.
+- **The sticker book.** Each profile has its own: four pages of daily stickers
+  and a gold page of bonus stickers, six to a page; earned ones in colour, the
+  rest silhouettes. Kindy has a picture-only version (a house, arrows, dots,
+  no words, no gold page). It opens from done for today, the menu, and the
+  Kindy top bar.
+- **Outfits.** A hat and an outfit can be worn on the child's own avatar (top
+  bar, picker, book). They are never drawn on kids or on friends, because kids'
+  hats are clue attributes and friends' hats hint at their pattern; tests fail
+  if that ever changes.
+- **The reveal.** On done for today a new sticker (and hat or outfit) pops out;
+  it puts itself away after a few seconds and a tap skips it. It plays once.
+- **Saves.** The profile save is version 2 (stickers, outfits, what is worn,
+  and whether each has been shown). Version-1 saves migrate to what their days
+  would have earned, marked as seen. Deleting a profile removes only its book.
+- **Docs.** RULES 9a (new), 12 and 15; ROADMAP step 11 and the phone budget;
+  decision record K12; GAPS.
+
+**Measured.** `npm test`: 507 tests pass (436 before); `npm run check` and
+`npm run build` pass; the 1000-day generator check and the Node-vs-Chromium
+determinism test are unchanged and green. The phone check: 351 of 351 checks
+pass at 360 x 740 (the first run found six mistakes in the new checks themselves,
+fixed).
+**New tests.** Sim: 9 catalogue and schedule tests (determinism, pools,
+milestones), 30 profile-book tests (earning once, bonus, milestones, equip,
+reveal flags, books kept apart, deleting a profile, the 1 to 2 migration equal
+to live play, damaged books). Harness: 4 "cosmetics never reach play" tests
+and the migration run on a real version-1 file. Host: 9 tests (reveal kept
+until seen, practice earns nothing, Kindy earns, the third day gives a hat,
+worn items kept, deleting a profile leaves the others, a version-1 book on
+disk). UI: 6 book tests, 8 tests that cosmetics never reach kids or friends,
+6 catalogue and picture tests (every id has a picture, none differ only in
+colour, no text).
+**Phone check.** New: the main daily's reveal (still under reduced motion,
+puts itself away), the book from done for today (five pages of six, one in
+colour, 29 silhouettes); the Kindy reveal (pops, no text, a tap skips) and
+Kindy book (four dots, no text, 64 px targets); and a seeded browser with a
+version-1 book and six days behind it: the migration, the book from the
+menu, a hat worn and a clue card checked for isolation, the last wave of a
+daily played by touch, the full-motion reveal of a sticker and a scarf, the
+book, a hat and a scarf worn together and kept after reopening, and a
+practice board with nobody else dressed.
+**How to see it.** `npm run dev`, finish a daily (or on a phone, the deployed
+preview): the sticker pops out on done for today; tap Sticker book. A streak
+of 3 gives the party hat; wear it in the book and it shows on the picture in
+the top corner.
+**What is left.** A real-phone try (iOS Safari, Android Chrome); the owner's
+view on the sticker pictures and the schedule (GAPS).
+
+- [ ] 11 Sticker book and cosmetics
+- [~] 12 Polish on real phones (K13: built and checked in Chromium; the owner's device checklist is next)
+
+## Session log
+
+### 2026-10-21 - Sound and real-device polish (all lanes, owner request, K13)
 **What changed.**
 - **Sound.** The placeholder beeps are replaced by 13 original synthesized cues in
   one scale (`platform/sounds.ts`): tap, buy, throw, catch/pass, fed, happy dance,
   tummy ache, Nurse heal, goes home hungry, wave win, day win, try again, sticker
-  reveal. They play at the moment each thing happens in the replay
+  reveal (played when the sticker book's reveal pops out). They play at the moment each thing happens in the replay
   (`ui/soundplan.ts`), the wave's tune when the replay ends. Audio starts on the
   first touch (iOS) and sleeps while the app is hidden. Sound is on, gently, for
   everyone; a grown-up mutes one child under Grown-ups, Change, Sound (kept per
@@ -84,7 +147,7 @@ describes the earlier games.
   | 8 | 60.7 | 71 | 4 | 5.1 |
   | 9 | 61.8 | 33 | 4 | 5.1 |
   | 10 | 62.7 | 28 | 4 | 5.2 |
-- **Decision record K12** and RULES section 16 say all of this; ROADMAP step 12 and
+- **Decision record K13** and RULES section 16 say all of this; ROADMAP step 12 and
   the phone UX budget are updated. The owner's prompt asked for those edits, which
   CLAUDE.md otherwise keeps to the architect.
 **How to see it.** Open the Vercel preview or the deploy on a phone and follow
@@ -92,7 +155,7 @@ docs/device-checklist.md (about 10 minutes). On a computer: `npm run build`, the
 `npm run e2e` and `npm run perf --workspace web`. To hear the sounds on a
 computer: `AUDIO_OUT=sounds.wav npm run audio --workspace web`.
 **What is left.** Nothing here is proved on a real phone: the checklist is yours to
-run and paste back. The sticker cue waits for the sticker book (step 11).
+run and paste back. 
 
 ### 2026-10-20 - Hints, tray giveaway and difficulty ramp (all lanes, owner request, K11)
 **What changed.**

@@ -527,6 +527,82 @@ export async function noEmoji(page: Page, where: string): Promise<void> {
   check(`no emoji on the page, only the art: ${where}`, found.length === 0, found.join(' | '));
 }
 
+/** Running CSS animations by name, so a still reveal (reduced motion) and a popping one (full motion) can be told apart. */
+export const runningAnimations = async (page: Page, name: string): Promise<number> =>
+  Number(await page.evaluate(`document.getAnimations().filter((a) => a.animationName === '${name}' && a.playState === 'running').length`));
+
+/**
+ * The reveal (RULES 9a, K12): the overlay, every item, the head and the skip
+ * line are wholly inside the viewport and showing, not covered. One page
+ * round trip, so it is measured before the reveal puts itself away.
+ */
+export async function revealOnScreen(page: Page, where: string): Promise<void> {
+  const r = (await page.evaluate(`(() => {
+    const bad = [];
+    for (const sel of ['.reveal', '.reveal-item', '.reveal-sticker', '.reveal-head', '.reveal-skip', '.reveal-name']) {
+      for (const el of document.querySelectorAll(sel)) {
+        const b = el.getBoundingClientRect();
+        const inside = b.width > 0 && b.height > 0 && b.left >= -0.5 && b.top >= -0.5 && b.right <= ${WIDTH} + 0.5 && b.bottom <= ${HEIGHT} + 0.5;
+        const top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+        const showing = top !== null && (el === top || el.contains(top));
+        if (!inside || !showing) bad.push(sel + ' ' + Math.round(b.left) + ',' + Math.round(b.top) + ' ' + Math.round(b.width) + 'x' + Math.round(b.height) + (inside ? '' : ' OUTSIDE') + (showing ? '' : ' COVERED'));
+      }
+    }
+    return { bad, items: document.querySelectorAll('.reveal-item').length };
+  })()`)) as { bad: string[]; items: number };
+  check(`${where}: every part is inside the viewport and showing`, r.items > 0 && r.bad.length === 0, r.bad.length > 0 ? r.bad.join('; ') : `${r.items} item(s)`);
+}
+
+/** Wholly inside the viewport by its box alone: for a layer that lets taps through (pointer-events: none), which elementFromPoint skips. */
+export async function insideViewport(name: string, locator: Locator): Promise<void> {
+  const box = await locator.first().boundingBox();
+  const ok = box !== null && box.width > 0 && box.height > 0 && box.x >= -0.5 && box.y >= -0.5 && box.x + box.width <= WIDTH + 0.5 && box.y + box.height <= HEIGHT + 0.5;
+  check(name, ok, box === null ? 'not found' : `${Math.round(box.x)},${Math.round(box.y)} ${Math.round(box.width)}x${Math.round(box.height)}`);
+}
+
+/** Polls (up to about 2 s) for something the host answers asynchronously, such as a button's pressed state. */
+export const settled = (page: Page, test: () => Promise<boolean>): Promise<boolean> => until(page, test);
+
+/** The reveal puts itself away (up to 6 s), without a tap. */
+export const revealGone = async (page: Page): Promise<boolean> =>
+  page.waitForSelector('.reveal', { state: 'detached', timeout: 6000 }).then(
+    () => true,
+    () => false,
+  );
+
+/** The open sticker book's parts, wholly inside the viewport and showing, with nothing to scroll (RULES 9a, K12). */
+export async function bookOnScreen(page: Page, where: string, kindy: boolean): Promise<void> {
+  const book = page.getByRole('dialog', { name: 'Sticker book' });
+  for (const part of ['.book-bar', '.book-me', '.book-pager', '.book-grid', '.book-wardrobe']) await checkOnScreen(`${where}: ${part.slice(1)} is inside the viewport`, book.locator(part));
+  await checkOnScreen(`${where}: every sticker slot is inside the viewport`, book.locator('.book-grid .sticker'));
+  await checkOnScreen(`${where}: every hat and outfit slot is inside the viewport`, book.locator('.book-wear > li'));
+  await checkOnScreen(`${where}: the back button is inside the viewport`, book.locator('.book-back'));
+  await checkOnScreen(`${where}: both page arrows are inside the viewport`, book.locator('.book-turn'));
+  const over = await book.evaluate((el) => el.scrollHeight - el.clientHeight);
+  check(`${where}: the book itself has nothing to scroll`, over <= 1, `${over} px over`);
+  await noVerticalScroll(page, where);
+  await noHorizontalScroll(page, where);
+  if (kindy) await bigTargets(page, '.book-kindy button', 64, where);
+  else await touchTargets(page, where);
+}
+
+/** Turns through every page of the open book and counts what is in colour and what is a silhouette. */
+export async function countBook(page: Page, pages: number): Promise<{ earned: number; locked: number; slots: number; names: string[] }> {
+  const book = page.getByRole('dialog', { name: 'Sticker book' });
+  let earned = 0;
+  let locked = 0;
+  let slots = 0;
+  const names: string[] = [];
+  for (let i = 0; i < pages; i++) {
+    earned += await book.locator('.book-grid li[data-earned="yes"]').count();
+    locked += await book.locator('.book-grid li[data-earned="no"] .sticker-locked').count();
+    slots += await book.locator('.book-grid li').count();
+    for (const li of await book.locator('.book-grid li[data-earned="yes"]').all()) names.push((await li.getAttribute('data-sticker-slot')) ?? '?');
+    await book.getByRole('button', { name: 'Next page' }).tap();
+  }
+  return { earned, locked, slots, names };
+}
+
 export async function openPicker(page: Page): Promise<void> {
   await page.locator('.bar-avatar').tap();
   await page.locator('.picker').waitFor({ timeout: 5000 });

@@ -1,5 +1,5 @@
 /**
- * The device check (decision record K12): how the built app behaves the way a
+ * The device check (decision record K13): how the built app behaves the way a
  * real phone would make it behave, in headless Chromium sized as a 360 x 740
  * touch phone. It stands in for the things a simulated browser can stand in
  * for; docs/device-checklist.md is what the owner runs on real phones for the
@@ -7,7 +7,7 @@
  * It serves the build from its own small server so it can ship a "new version"
  * of the app (a changed service worker) while the app is open.
  *
- * Sound and haptics (K12):
+ * Sound and haptics (K13):
  * - nothing builds an audio context before the first touch; the first touch
  *   builds it, resumes it and starts a silent sound (what iOS needs);
  * - a tap, a placed friend and every moment of a wave make sound, in the

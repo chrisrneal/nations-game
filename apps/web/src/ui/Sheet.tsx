@@ -20,7 +20,7 @@ export function Sheet(props: { title: string; onClose: () => void; children: Rea
   const { onClose } = props;
   const sheetRef = useRef<HTMLElement>(null);
   const pull = useRef<{ id: number; y: number; dy: number } | null>(null);
-  // The phone's Back button closes the sheet before it leaves the game (K12).
+  // The phone's Back button closes the sheet before it leaves the game (K13).
   useBackClose(true, onClose);
   useEffect(() => () => window.removeEventListener('touchmove', holdTouch), []);
   useEffect(() => {

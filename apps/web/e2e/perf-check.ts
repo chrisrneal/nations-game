@@ -1,5 +1,5 @@
 /**
- * The performance check (decision record K12): a budget phone is a mid-range
+ * The performance check (decision record K13): a budget phone is a mid-range
  * Android, so Chromium's CPU is slowed 4x (CDP `Emulation.setCPUThrottlingRate`).
  *
  * - time to interactive: from navigation start until the board is drawn and a

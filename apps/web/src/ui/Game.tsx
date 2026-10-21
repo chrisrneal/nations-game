@@ -88,8 +88,6 @@ export function Game(props: {
   // The friends as they stood when Hint was pressed: what its tier 3 changed is undone like any other change (RULES 8b).
   const beforeHint = useRef<GameView['friends'] | null>(null);
   const lastFacing = useRef<Partial<Record<FriendType, number>>>({});
-  // This screen watched the day being won, so the done screen's star is new (and sounds like it).
-  const watched = useRef(false);
 
   // A new setup phase (after Go, a retry or a new game): nothing to undo, nothing selected.
   if (phase.key !== phaseKey(view)) {
@@ -136,7 +134,6 @@ export function Game(props: {
       // The wave is over: a buzz, and a tune for how it went. A wave that sent a kid home hungry has already sighed.
       feedback?.haptic('waveEnd');
       if (playback.after === 'won') {
-        watched.current = true;
         feedback?.cue('dayWin');
       } else if (playback.after === 'lost') feedback?.cue('lose');
       else if (!playback.wave.kids.some((k) => k.end === 'hungry')) feedback?.cue('waveWin');
@@ -341,11 +338,6 @@ export function Game(props: {
   const done = view.round === 'daily' && view.phase === 'won' && playback === null && result === null;
   // Back puts the wave's result card away (the same as its button) where that is safe; a lost day must be retried on purpose.
   useBackClose(result !== null && playback === null && (view.phase === 'setup' || (view.phase === 'won' && view.round === 'daily')), () => setResult(null));
-  useEffect(() => {
-    if (!done || !watched.current) return;
-    watched.current = false;
-    feedback?.cue('sticker');
-  }, [done, feedback]);
 
   const report = playback !== null ? null : result !== null ? { wave: result.wave, label: (id: number) => result.before.kids.find((k) => k.id === id)?.label ?? kidLetter(id) } : view.phase !== 'setup' && view.lastWave !== null ? { wave: view.lastWave, label: kidLetter } : null;
 
@@ -365,7 +357,7 @@ export function Game(props: {
     <div className="game">
       <header className="bar">
         <button type="button" className="bar-avatar" aria-label={`${profileLabel(profile)} is playing. Switch player`} onClick={props.onProfiles}>
-          <Avatar id={profile.avatar} size={38} />
+          <Avatar id={profile.avatar} size={38} worn={profile.worn} />
         </button>
         <div className="bar-title">
           <strong>{view.round === 'daily' ? 'Today' : view.round === 'bonus' ? 'Bonus round' : 'Practice'}</strong>
@@ -394,7 +386,7 @@ export function Game(props: {
       </header>
 
       {done ? (
-        <DoneToday host={host} view={view} profile={profile} />
+        <DoneToday host={host} view={view} profile={profile} feedback={feedback} />
       ) : (
         <>
           {view.mode === 'main' && shown.kids.length > 0 && (

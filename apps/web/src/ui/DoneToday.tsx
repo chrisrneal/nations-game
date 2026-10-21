@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { GameView, ProfileView } from '@snacks/contracts';
-import type { GameHost } from '../platform/index.ts';
+import type { Feedback, GameHost } from '../platform/index.ts';
+import { useBook } from './BookContext.tsx';
+import { StickerReveal } from './StickerReveal.tsx';
 import { Icon } from './art/Icons.tsx';
 import { hintsText, hintsToday } from './labels.ts';
 import { countdown, retriesText, streakText, weekStrip } from './people.ts';
@@ -11,9 +13,11 @@ import { UpdateNotice } from './UpdateNotice.tsx';
  * it shows how it went, the streak and a countdown to the next puzzle at
  * local midnight. The bonus round and practice are still there.
  */
-export function DoneToday(props: { host: GameHost; view: GameView; profile: ProfileView }): ReactElement {
+export function DoneToday(props: { host: GameHost; view: GameView; profile: ProfileView; feedback?: Feedback | undefined }): ReactElement {
   const { host, view, profile } = props;
   const record = profile.recent.find((r) => r.day === view.day);
+  const { catalogue, openBook } = useBook();
+  const [revealing, setRevealing] = useState(profile.unseen.stickers.length + profile.unseen.cosmetics.length > 0);
   const clock = useRef<HTMLElement>(null);
   const [newDay, setNewDay] = useState(() => host.today() !== view.day);
   // Once a second, straight into the DOM: the screen itself doesn't re-render (P7).
@@ -32,6 +36,7 @@ export function DoneToday(props: { host: GameHost; view: GameView; profile: Prof
   const bonusWon = record?.bonus === true;
   return (
     <section className="done" aria-label="Done for today">
+      {revealing && <StickerReveal onShown={() => props.feedback?.cue('sticker')} host={host} profile={profile} catalogue={catalogue} kindy={false} onGone={() => setRevealing(false)} />}
       <div className="done-card">
         <Icon className="done-big" name="trophy" />
         <h2 className="done-title">Done for today!</h2>
@@ -88,9 +93,14 @@ export function DoneToday(props: { host: GameHost; view: GameView; profile: Prof
             Play the bonus round
           </button>
         )}
-        <button type="button" className="btn btn-wide" onClick={() => void host.practice()}>
-          Practice board
-        </button>
+        <div className="done-pair">
+          <button type="button" className="btn" onClick={() => void host.practice()}>
+            Practice board
+          </button>
+          <button type="button" className="btn btn-book" onClick={openBook}>
+            <Icon className="row-icon" name="book" /> Sticker book
+          </button>
+        </div>
       </div>
     </section>
   );

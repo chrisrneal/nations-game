@@ -474,7 +474,7 @@ describe('the local host: saves from before profiles (K7, version 0)', () => {
     expect(profile(app, 'p1')).toMatchObject({ streak: 1, best: 1, recent: [{ day: DAY - 1, bonus: true }] });
     expect((await d.store.list()).map((s) => s.slot)).toEqual([`p1/bonus-main-${DAY - 1}`, `p1/daily-main-${DAY - 2}`, `p1/daily-main-${DAY - 1}`, `p1/daily-main-${DAY}`, 'p1/practice-main']);
     expect(d.legacyActive.get()).toBeNull();
-    expect(await d.store.getMeta('profiles')).toMatchObject({ format: 'snack-attack-profiles', version: 1 });
+    expect(await d.store.getMeta('profiles')).toMatchObject({ format: 'snack-attack-profiles', version: 2 });
   });
 
   it('migrates once: a second launch reads the book and changes nothing', async () => {
@@ -498,5 +498,152 @@ describe('the local host: saves from before profiles (K7, version 0)', () => {
     expect(again.home().profiles.map((p) => p.id)).toEqual(['p1']);
     expect(again.latest()!.fingerprint).toBe(fingerprint);
     expect(await d.store.getMeta('profiles-unread')).toMatchObject({ version: 99 });
+  });
+});
+
+describe('the local host: the sticker book and outfits (RULES 9a, K12)', () => {
+  /** Plays today's daily to the end as the current profile. */
+  async function finishToday(app: App, day = DAY): Promise<void> {
+    await playWaves(app, track('main', 'daily', day), 1, 10);
+    expect(app.latest()!.view.phase).toBe('won');
+  }
+
+  it('a finished daily gives that profile a sticker to reveal, and nobody else', async () => {
+    const d = device();
+    const app = await twoProfiles(d);
+    await app.h.choose('p2');
+    expect(profile(app, 'p2').stickers).toEqual([]);
+    await finishToday(app);
+    expect(profile(app, 'p2').stickers).toHaveLength(1);
+    expect(profile(app, 'p2').unseen.stickers).toHaveLength(1);
+    expect(profile(app, 'p1').stickers).toEqual([]);
+    expect(profile(app, 'p1').cosmetics).toEqual([]);
+  });
+
+  it('the reveal is kept until it has been seen, across launches, and seeing it clears it', async () => {
+    const d = device();
+    const app = launch(d);
+    await app.h.start();
+    await finishToday(app);
+    const id = profile(app, 'p1').stickers[0]!.id;
+    const again = launch(d);
+    await again.h.start();
+    expect(profile(again, 'p1').unseen.stickers.map((s) => s.id)).toEqual([id]);
+    await again.h.seeStickers();
+    expect(profile(again, 'p1').unseen).toEqual({ stickers: [], cosmetics: [] });
+    const third = launch(d);
+    await third.h.start();
+    expect(profile(third, 'p1').unseen.stickers).toEqual([]);
+    expect(profile(third, 'p1').stickers.map((s) => s.id)).toEqual([id]);
+  });
+
+  it('opening a finished day again, or recording it twice, gives no second sticker', async () => {
+    const d = device();
+    const app = launch(d);
+    await app.h.start();
+    await finishToday(app);
+    await app.h.daily();
+    const again = launch(d);
+    await again.h.start();
+    expect(profile(again, 'p1').stickers).toHaveLength(1);
+  });
+
+  it('a won bonus round gives a bonus sticker', async () => {
+    const app = launch(device());
+    await app.h.start();
+    await finishToday(app);
+    await app.h.bonus();
+    await playWaves(app, track('main', 'bonus', DAY), 1, 10);
+    expect(profile(app, 'p1').stickers.map((s) => s.kind)).toEqual(['daily', 'bonus']);
+  });
+
+  it('practice earns nothing: no sticker, no hat', async () => {
+    const app = launch(device());
+    await app.h.start();
+    await app.h.practice();
+    await playWaves(app, track('main', 'practice', 0, 5), 1, 10);
+    expect(app.latest()!.view).toMatchObject({ round: 'practice', phase: 'won' });
+    expect(profile(app, 'p1')).toMatchObject({ stickers: [], cosmetics: [], worn: { hat: null, outfit: null } });
+  });
+
+  it('a Kindy daily earns a sticker too', async () => {
+    const d = device();
+    const app = launch(d);
+    await app.h.start();
+    expect(await app.h.addProfile({ name: 'Pip', avatar: AVATARS[2]!, mode: 'kindy' })).toBeNull();
+    await app.h.choose('p2');
+    const game = track('kindy', 'daily', DAY);
+    for (const layout of game.state.puzzle.witness) for (const command of witnessCommands(game.state, layout)) await send(app, game, command);
+    expect(app.latest()!.view.phase).toBe('won');
+    expect(profile(app, 'p2').stickers).toHaveLength(1);
+  });
+
+  it('the third day in a row gives a hat, which can be worn and taken off, and is kept across launches', async () => {
+    const d = device();
+    const app = launch(d);
+    await app.h.start();
+    for (let i = 0; i < 3; i++) {
+      d.clock.now = (DAY + i) * DAY_MS + HOUR;
+      await app.h.daily();
+      await finishToday(app, DAY + i);
+    }
+    expect(profile(app, 'p1').streak).toBe(3);
+    expect(profile(app, 'p1').cosmetics.map((c) => c.id)).toEqual(['party-hat']);
+    expect(await app.h.equip('hat', 'party-hat')).toBeNull();
+    const again = launch(d);
+    await again.h.start();
+    expect(profile(again, 'p1').worn).toEqual({ hat: 'party-hat', outfit: null });
+    expect(await again.h.equip('hat', null)).toBeNull();
+    expect(profile(again, 'p1').worn.hat).toBeNull();
+  });
+
+  it('refuses a hat that has not been earned, and wearing for one child never dresses another', async () => {
+    const d = device();
+    const app = await twoProfiles(d);
+    expect(await app.h.equip('hat', 'crown')).not.toBeNull();
+    expect(await app.h.equip('outfit', 'party-hat')).not.toBeNull();
+    expect(profile(app, 'p1').worn).toEqual({ hat: null, outfit: null });
+    expect(profile(app, 'p2').worn).toEqual({ hat: null, outfit: null });
+  });
+
+  it('deleting a profile leaves the other profiles’ books exactly as they were', async () => {
+    const d = device();
+    const app = await twoProfiles(d);
+    await finishToday(app);
+    await app.h.choose('p2');
+    await finishToday(app);
+    const keep = JSON.stringify(profile(app, 'p2'));
+    await app.h.choose('p1');
+    await app.h.addProfile({ name: 'Third', avatar: AVATARS[2]!, mode: 'kindy' });
+    expect(await app.h.deleteProfile('p3')).toBeNull();
+    expect(JSON.stringify(profile(app, 'p2'))).toBe(keep);
+    expect(await app.h.deleteProfile('p1')).toBeNull();
+    expect(JSON.stringify(profile(app, 'p2'))).toBe(keep);
+    const again = launch(d);
+    await again.h.start();
+    expect(JSON.stringify(profile(again, 'p2'))).toBe(keep);
+  });
+
+  it('a profile book written by the last version is migrated on launch, keeping every profile and day', async () => {
+    const d = device();
+    const day = (n: number, bonus = false) => ({ day: n, fed: 14, hungry: 0, retries: 0, hints: 0, bonus });
+    await d.store.putMeta('profiles', {
+      format: 'snack-attack-profiles',
+      version: 1,
+      nextId: 3,
+      profiles: [
+        { id: 'p1', name: 'Sam', avatar: AVATARS[0], mode: 'main', history: [day(DAY - 3), day(DAY - 2, true), day(DAY - 1)], best: 3, active: null },
+        { id: 'p2', name: '', avatar: AVATARS[1], mode: 'kindy', history: [day(DAY - 1)], best: 1, active: null },
+      ],
+    });
+    const app = launch(d);
+    await app.h.start();
+    expect(await d.store.getMeta('profiles')).toMatchObject({ version: 2 });
+    expect(app.home().profiles.map((p) => [p.id, p.name, p.mode, p.best, p.stickers.length, p.unseen.stickers.length])).toEqual([
+      ['p1', 'Sam', 'main', 3, 4, 0],
+      ['p2', '', 'kindy', 1, 1, 0],
+    ]);
+    expect(profile(app, 'p1').cosmetics.map((c) => c.id)).toEqual(['party-hat']);
+    expect(profile(app, 'p1')).toMatchObject({ streak: 3 });
   });
 });

@@ -4,7 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 /**
  * PWA config is lane P. Things here that matter beyond taste:
- * - `registerType: 'prompt'` (K12): a new deploy installs in the background and
+ * - `registerType: 'prompt'` (K13): a new deploy installs in the background and
  *   waits. The app says "a new version is ready" at a calm moment and the player
  *   taps Update; nothing reloads the page by itself, so a wave is never cut
  *   short. Untouched, the new version opens the next time the app is closed

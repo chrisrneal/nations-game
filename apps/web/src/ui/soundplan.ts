@@ -2,7 +2,7 @@ import type { Cue } from '../platform/index.ts';
 import type { Timeline } from './timeline.ts';
 
 /**
- * What the wave replay sounds like (decision record K12): each moment of the
+ * What the wave replay sounds like (decision record K13): each moment of the
  * timeline (timeline.ts) gets a cue at the moment it happens. Pure numbers,
  * like the timeline, so the sounds match what the sim decided. replay.ts
  * schedules the plan beside the animations; the platform plays it.

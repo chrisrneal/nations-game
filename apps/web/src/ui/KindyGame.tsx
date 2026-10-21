@@ -7,6 +7,7 @@ import { FriendArt } from './art/Friend.tsx';
 import { Board } from './Board.tsx';
 import { DragController, type DragSource } from './drag.ts';
 import { HINT_LINES, fedSlots, hintPath, type Spot } from './kindy.ts';
+import { useBook } from './BookContext.tsx';
 import { KindyDone } from './KindyDone.tsx';
 import { Icon, type IconName } from './art/Icons.tsx';
 import { KidHead } from './art/Kid.tsx';
@@ -65,6 +66,7 @@ export function KindyGame(props: {
   onProfiles: () => void;
 }): ReactElement {
   const { host, view, profile, feedback, speech } = props;
+  const { openBook } = useBook();
   const [selected, setSelected] = useState<number | null>(null);
   const [playback, setPlayback] = useState<Playback | null>(null);
   const [party, setParty] = useState(false);
@@ -74,8 +76,6 @@ export function KindyGame(props: {
   const boardRef = useRef<HTMLDivElement>(null);
   const handRef = useRef<HTMLSpanElement>(null);
   const beforeGo = useRef<GameView | null>(null);
-  // This screen watched the day being won, so the done screen's star is new (and sounds like it).
-  const watched = useRef(false);
   const lastFacing = useRef<number | null>(null);
   const idle = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unlocked = useRef(false);
@@ -129,7 +129,6 @@ export function KindyGame(props: {
       feedback?.haptic('waveEnd');
       if (playback.ends) {
         setParty(true);
-        watched.current = true;
         feedback?.cue('dayWin');
       } else if (playback.wave.kids.some((k) => k.end === 'happy')) feedback?.cue('waveWin');
     });
@@ -301,11 +300,6 @@ export function KindyGame(props: {
   };
 
   const done = view.round === 'daily' && view.phase === 'won' && playback === null && !party;
-  useEffect(() => {
-    if (!done || !watched.current) return;
-    watched.current = false;
-    feedback?.cue('sticker');
-  }, [done, feedback]);
   // A won practice board (or one reopened after it was won) shows the party: there is no done screen for practice.
   const partying = view.phase === 'won' && playback === null && !done;
   const tray = view.friends.filter((f) => f.cell < 0);
@@ -324,7 +318,7 @@ export function KindyGame(props: {
     >
       <header className="kindy-bar">
         <button type="button" className="kindy-btn kindy-avatar" aria-label="Switch player" onClick={props.onProfiles}>
-          <Avatar id={profile.avatar} size={52} />
+          <Avatar id={profile.avatar} size={52} worn={profile.worn} />
         </button>
         <ol className="kindy-slots" aria-label="Kids fed today">
           {fedSlots(view).map((fed, i) => (
@@ -337,13 +331,17 @@ export function KindyGame(props: {
           <button type="button" className="kindy-btn kindy-ask" aria-label="Help" onClick={askHint}>
             <Icon className="pic" name="hand" />
           </button>
-        ) : (
+        ) : done ? (
           <span className="kindy-btn-space" aria-hidden="true" />
+        ) : (
+          <button type="button" className="kindy-btn kindy-bar-book" aria-label="Sticker book" onClick={openBook}>
+            <Icon className="pic" name="book" />
+          </button>
         )}
       </header>
 
       {done ? (
-        <KindyDone host={host} view={view} profile={profile} />
+        <KindyDone host={host} view={view} profile={profile} feedback={feedback} />
       ) : (
         <>
           <main className="board-area kindy-area">

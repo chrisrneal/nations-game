@@ -1,5 +1,5 @@
 /**
- * The sound set (decision record K12): small, original and synthesized with the
+ * The sound set (decision record K13): small, original and synthesized with the
  * Web Audio API, so there is nothing to download or cache. Every pitched sound
  * is a note of one scale (C major pentatonic) in a soft sine or triangle
  * voice with the same quick fade in and slow fade out, and every effect (the

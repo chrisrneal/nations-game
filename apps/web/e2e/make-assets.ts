@@ -1,5 +1,5 @@
 /**
- * Draws the home-screen assets that are not hand-made (decision record K12):
+ * Draws the home-screen assets that are not hand-made (decision record K13):
  * the maskable app icon (the picture shrunk into the circle Android may crop
  * it to) and the iPhone launch screens (a cream screen with the icon in the
  * middle), from public/icon.svg. Run `npm run assets --workspace web` after

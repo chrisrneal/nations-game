@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { GameView, ProfileView } from '@snacks/contracts';
-import type { GameHost } from '../platform/index.ts';
+import type { Feedback, GameHost } from '../platform/index.ts';
 import { nightGone } from './kindy.ts';
+import { useBook } from './BookContext.tsx';
+import { StickerReveal } from './StickerReveal.tsx';
 import { Icon } from './art/Icons.tsx';
 import { KidHead } from './art/Kid.tsx';
 import { weekStrip } from './people.ts';
@@ -17,9 +19,11 @@ const MOON_MS = 30_000;
  * finished. A practice board is one tap away. When the new day comes, the
  * sun wakes up and a big play button opens it.
  */
-export function KindyDone(props: { host: GameHost; view: GameView; profile: ProfileView }): ReactElement {
+export function KindyDone(props: { host: GameHost; view: GameView; profile: ProfileView; feedback?: Feedback | undefined }): ReactElement {
   const { host, view, profile } = props;
   const record = profile.recent.find((r) => r.day === view.day);
+  const { catalogue, openBook } = useBook();
+  const [revealing, setRevealing] = useState(profile.unseen.stickers.length + profile.unseen.cosmetics.length > 0);
   const night = useRef<HTMLDivElement>(null);
   const [newDay, setNewDay] = useState(() => host.today() !== view.day);
   // Straight into the DOM: the screen itself doesn't re-render (P7).
@@ -38,6 +42,7 @@ export function KindyDone(props: { host: GameHost; view: GameView; profile: Prof
   const fed = record?.fed ?? view.fed;
   return (
     <section className="kindy-done" aria-label="Done for today">
+      {revealing && <StickerReveal onShown={() => props.feedback?.cue('sticker')} host={host} profile={profile} catalogue={catalogue} kindy onGone={() => setRevealing(false)} />}
       <div className={`kindy-sun${newDay ? ' awake' : ''}`}>
         <Icon className="pic" name={newDay ? 'sun' : 'sleepy-sun'} label={newDay ? 'The sun is up: a new puzzle' : 'The sun is asleep until tomorrow'} />
       </div>
@@ -70,6 +75,9 @@ export function KindyDone(props: { host: GameHost; view: GameView; profile: Prof
         )}
         <button type="button" className="kindy-btn kindy-again" aria-label="Practice board" onClick={() => void host.practice()}>
           <Icon className="pic" name="again" />
+        </button>
+        <button type="button" className="kindy-btn kindy-book" aria-label="Sticker book" onClick={openBook}>
+          <Icon className="pic" name="book" />
         </button>
       </div>
     </section>

@@ -8,7 +8,7 @@ airport and Nations gap went with the code. They are in this file at commit
 ## Snack Attack (K1)
 - K1 / step 6, the owner's gate is open: nobody has played it yet. The owner and the 9-year-old to play several dailies and say what is fun, too easy, too hard or confusing. Owner.
 - K1 / step 6, not yet checked on a real phone (iOS Safari, Android Chrome); the phone check is headless Chromium and is not in CI because it needs a build and a browser. Owner, lane P.
-- K1 / step 11, no sticker book or cosmetics yet. Profiles and the streak came in step 7 (K7). Lanes S, U.
+- K12 / step 11, the sticker pictures are first drafts (the game's own snack, friend and icon art on five backing shapes) and the schedule is the default (a sticker a day, gold for a bonus round, a hat or outfit at 3, 7, 14 and 30 days); the owner to say what to change. A full book (24 daily stickers) gives no more daily stickers, and after day 30 there is no new hat or outfit. Lanes S, U, D.
 - K1 / step 6, the shop is a plain list in a sheet (step 9). Lane U.
 - K1 / K5, the solver is sound but not complete: boards whose only solutions need a 4-friend route or a friend used only to block are thrown away, never shown. About 0.7 seeds a day are skipped. Lane S.
 - K1 / K4, clue cards run 2-7 words where the brief said 3-6, because the brief's own examples ("Something crunchy", "Same as the kid in the hat") fall outside 3-6. Owner to confirm. Lane D.
@@ -67,17 +67,21 @@ airport and Nations gap went with the code. They are in this file at commit
 - K11, the second decoy is any throwing type, so on some days it is a type the solution buys later and gets used: the report counts 1.6-1.7 never-used tray friends a day, never fewer than 1. Lane S.
 - K11, the hint button, the purple lit squares and Undo of a hint are checked in headless Chromium only, not yet on a real phone. Owner, lane P.
 - K11, the Hint button is a light bulb with no word under it: with the word, Go wrapped onto three lines on a 360 px phone on busy days, and the board ran under the dock (found by the phone check on day 20390). How to play names it. Watch whether the 9-year-old finds it. Owner, lane U.
+- K12, the hat on the top bar's avatar is 38 px wide in main mode, so it is small there; the book, the picker and the reveal show it larger. Lane U.
+- K12, cosmetics are not on friends (their hats and badges hint at their pattern, K10) or kids (clue attributes), by design; if the owner wants friends dressed it needs a new record that keeps pattern hints readable. Owner, lanes U, D.
+- K12, the reveal is shown on done for today only; a sticker earned on a day finished by reopening the app later is revealed the next time done for today opens. Lane U.
+- K12, the phone check's seeded browser plays only the last wave of a day by touch (waves 1-9 come from a save made with the sim) to keep the check short. Lane P.
 
-## Sound and real-device polish (K12)
-- K12, **nothing is proved on a real phone.** The sounds, the buzz, the safe areas, the Back button, the install prompt, the update flow and the turn-upright picture are checked in headless Chromium with stand-ins (a recorded AudioContext, a fake vibrate, Chromium's safe-area override, a local server that ships a new service worker). Real iOS Safari and Android Chrome may differ. The owner runs docs/device-checklist.md and pastes the notes back. Owner, lane P.
-- K12, how the sounds *sound* is the owner's call: the levels, lengths and notes are measured (all under -9 dBFS, in one scale) but whether they are pleasant, too quiet on a phone speaker or too busy in a big wave has only been judged by numbers. A WAV of the whole set can be rendered with `AUDIO_OUT=sounds.wav npm run audio --workspace web`. Owner.
-- K12, the Hint, Undo and other taps make a 'tap' sound; nothing marks a refused tap yet. Lane U.
-- K12, the sticker-reveal cue plays when the done screen appears after a day just won; there is no sticker book (step 11), so it has nothing to attach to. Lanes S, U.
-- K12, Kindy has no "update ready" (no text allowed); a Kindy child's phone updates when a grown-up taps Update on the picker, or the next time the app is closed and opened. Lane U.
-- K12, no pinch zoom (`maximum-scale=1`): a person who needs magnification must use the phone's own zoom. Owner to confirm.
-- K12, the Back button closes the result card but not the Kindy party, a lost-day card or a replay in progress; Back there leaves the app. Lane U.
-- K12, iOS audio follows the phone's silent switch (the 'ambient' audio session), so a phone on silent is silent. Switching to 'playback' would ignore it. Owner to say which is wanted.
-- K12, the iPhone launch screens cover ten sizes (iPhone X to 16 Pro Max, SE); newer or other sizes show a plain page until the app is ready. They are made by `npm run assets --workspace web`. Lane P.
-- K12, a copy of the app installed before this version updates itself the old way once, which reloads it; every later update waits for a tap. Lane P.
-- K12, the board can still run under the dock on a short phone when the install bar shows (K6 gap); the install bar now goes at once when installed, but not before. Lane U.
-- K12, `npm run e2e` (phone, device and sound checks) and `npm run perf` need a build and a Chromium, so they run by hand, not in CI. Lane P.
+
+## Sound and real-device polish (K13)
+- K13, **nothing is proved on a real phone.** The sounds, the buzz, the safe areas, the Back button, the install prompt, the update flow and the turn-upright picture are checked in headless Chromium with stand-ins (a recorded AudioContext, a fake vibrate, Chromium's safe-area override, a local server that ships a new service worker). Real iOS Safari and Android Chrome may differ. The owner runs docs/device-checklist.md and pastes the notes back. Owner, lane P.
+- K13, how the sounds *sound* is the owner's call: the levels, lengths and notes are measured (all under -9 dBFS, in one scale) but whether they are pleasant, too quiet on a phone speaker or too busy in a big wave has only been judged by numbers. A WAV of the whole set can be rendered with `AUDIO_OUT=sounds.wav npm run audio --workspace web`. Owner.
+- K13, the Hint, Undo and other taps make a 'tap' sound; nothing marks a refused tap yet. Lane U.
+- K13, Kindy has no "update ready" (no text allowed); a Kindy child's phone updates when a grown-up taps Update on the picker, or the next time the app is closed and opened. Lane U.
+- K13, no pinch zoom (`maximum-scale=1`): a person who needs magnification must use the phone's own zoom. Owner to confirm.
+- K13, the Back button closes the result card but not the Kindy party, a lost-day card or a replay in progress; Back there leaves the app. Lane U.
+- K13, iOS audio follows the phone's silent switch (the 'ambient' audio session), so a phone on silent is silent. Switching to 'playback' would ignore it. Owner to say which is wanted.
+- K13, the iPhone launch screens cover ten sizes (iPhone X to 16 Pro Max, SE); newer or other sizes show a plain page until the app is ready. They are made by `npm run assets --workspace web`. Lane P.
+- K13, a copy of the app installed before this version updates itself the old way once, which reloads it; every later update waits for a tap. Lane P.
+- K13, the board can still run under the dock on a short phone when the install bar shows (K6 gap); the install bar now goes at once when installed, but not before. Lane U.
+- K13, `npm run e2e` (phone, device and sound checks) and `npm run perf` need a build and a Chromium, so they run by hand, not in CI. Lane P.
