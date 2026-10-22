@@ -457,6 +457,12 @@ export function Game(props: {
                       }}>
                       Try wave {view.wave} again
                     </button>
+                    <button type="button" className="btn btn-wide" onClick={() => {
+                        setResult(null);
+                        void submit({ type: 'restart' });
+                      }}>
+                      Start the whole day over
+                    </button>
                   </div>
                 )}
               </ResultOverlay>

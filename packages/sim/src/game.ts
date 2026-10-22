@@ -109,6 +109,11 @@ export function step(state: GameState, command: GameCommand): StepResult {
       wave: null,
     };
   }
+  if (command.type === 'restart') {
+    if (state.phase === 'won') return refuse(state, 'A finished day cannot be started over.');
+    // Hints used stay counted, as with a retry (RULES 8b); everything else is the day's first setup.
+    return { state: { ...startGame(state.puzzle), hints: state.hints }, error: null, wave: null };
+  }
   if (state.phase !== 'setup') return refuse(state, 'The day is over.');
   switch (command.type) {
     case 'place': {

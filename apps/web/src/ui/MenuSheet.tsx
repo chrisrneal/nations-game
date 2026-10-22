@@ -12,7 +12,31 @@ export function MenuSheet(props: { host: GameHost; view: GameView; onClose: () =
   const { host, onClose } = props;
   const { openBook } = useBook();
   const [help, setHelp] = useState(false);
+  const [confirmRestart, setConfirmRestart] = useState(false);
   if (help) return <HowToPlay onClose={onClose} />;
+  // A day still being played can be started over from wave 1, however stuck it is.
+  if (confirmRestart) {
+    return (
+      <Sheet title="Start this puzzle over?" onClose={() => setConfirmRestart(false)}>
+        <p className="sheet-note">Everything goes back to how it was at the very start: wave 1, your first friends, no points. Hints you used stay counted.</p>
+        <div className="sheet-actions">
+          <button
+            type="button"
+            className="btn btn-primary btn-wide"
+            onClick={() => {
+              void host.submit({ type: 'restart' });
+              onClose();
+            }}
+          >
+            Yes, start over
+          </button>
+          <button type="button" className="btn btn-wide" onClick={() => setConfirmRestart(false)}>
+            Keep playing
+          </button>
+        </div>
+      </Sheet>
+    );
+  }
   const run = (action: () => Promise<void>): void => {
     void action();
     onClose();
@@ -21,6 +45,11 @@ export function MenuSheet(props: { host: GameHost; view: GameView; onClose: () =
     <Sheet title="Menu" onClose={onClose}>
       <UpdateNotice />
       <div className="sheet-actions">
+        {props.view.phase !== 'won' && (
+          <button type="button" className="btn btn-wide" onClick={() => setConfirmRestart(true)}>
+            Start this puzzle over
+          </button>
+        )}
         <button type="button" className="btn btn-wide" onClick={() => run(() => host.daily())}>
           Today’s puzzle
         </button>

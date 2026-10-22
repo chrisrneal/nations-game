@@ -39,6 +39,18 @@ describes the earlier games.
 
 ## Session log
 
+### 2026-10-22 - Start a puzzle over from zero (lanes C, S, U, P, D, owner request)
+**What changed.** New `restart` command: the whole day goes back to wave 1 with
+the starting tray, in setup or after a lost day (not once won). Hints used stay
+counted and it counts as a retry. Menu has "Start this puzzle over" (with a
+confirm); the lost card has "Start the whole day over". Checked 720 daily,
+bonus and practice puzzles (main and Kindy): every one wins from the start, so
+a "no answer" board comes from earlier choices in the day (retry only went back
+one wave), which restart now fixes.
+**How to see it.** Play a wave, open the menu, tap Start this puzzle over.
+**What is left.** No warning yet when the rest of a day can no longer be won;
+logged in docs/GAPS.md.
+
 ### 2026-10-21 - Sticker book and outfits (lanes C, S, U, P, H, D, owner request, K12)
 **What changed.**
 - **Earning.** A finished daily gives one sticker, a won bonus round a gold one,

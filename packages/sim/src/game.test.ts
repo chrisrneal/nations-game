@@ -120,6 +120,24 @@ describe('losing and trying again (RULES 8, D10)', () => {
     expect(s.friends[0]?.cell).toBe(-1);
     expect(step(s, { type: 'retry' }).error).toMatch(/lost/);
   });
+
+  it('a restart goes back to wave 1 with the starting tray, mid-day or after a lost day, keeping hints used', () => {
+    const fresh = startGame(p);
+    let s = play(fresh, { type: 'place', friend: 1, cell: 1, facing: 2 }, { type: 'go' });
+    expect(s.wave).toBe(2);
+    s = { ...s, hints: [2, 1] };
+    const mid = play(s, { type: 'restart' });
+    expect(mid).toEqual({ ...fresh, hints: [2, 1] });
+    let lost = play(fresh, { type: 'go' }, { type: 'go' });
+    expect(lost.phase).toBe('lost');
+    lost = play(lost, { type: 'restart' });
+    expect(lost).toEqual(fresh);
+  });
+
+  it('a won day cannot be restarted', () => {
+    const won = { ...startGame(p), phase: 'won' as const };
+    expect(step(won, { type: 'restart' }).error).toMatch(/finished/);
+  });
 });
 
 describe('Kindy mode (RULES 11)', () => {

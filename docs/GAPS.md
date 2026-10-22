@@ -85,3 +85,5 @@ airport and Nations gap went with the code. They are in this file at commit
 - K13, a copy of the app installed before this version updates itself the old way once, which reloads it; every later update waits for a tap. Lane P.
 - K13, the board can still run under the dock on a short phone when the install bar shows (K6 gap); the install bar now goes at once when installed, but not before. Lane U.
 - K13, `npm run e2e` (phone, device and sound checks) and `npm run perf` need a build and a Chromium, so they run by hand, not in CI. Lane P.
+
+- 2026-10-22 (restart): no "this day can no longer be won" detector. The solver only proves a day from the start; solving from a mid-day state (owned friends, points, healed kids, hungry allowance) is not built. Restart is the way out for now.

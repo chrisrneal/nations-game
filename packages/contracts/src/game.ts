@@ -260,6 +260,8 @@ export type GameCommand =
   | { readonly type: 'refund'; readonly friend: number }
   | { readonly type: 'go' }
   | { readonly type: 'retry' }
+  /** Start the whole puzzle again from wave 1 with the starting tray, in setup or after a lost day. Hints used stay counted. */
+  | { readonly type: 'restart' }
   /** Main mode, during setup: the next tier of hint (RULES 8b). Tier 3 places a friend itself. */
   | { readonly type: 'hint' };
 

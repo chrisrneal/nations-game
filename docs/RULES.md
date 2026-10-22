@@ -366,6 +366,12 @@ rule: every action is a buy or refund command, checked by the sim.
     there (K7).
   - Failing isn't final: the player retries from the start of the failed wave
     as often as they like (D10).
+  - A day can also be **started over from wave 1** (Menu, "Start this puzzle
+    over", after a confirm; or on the lost card): the starting tray, no points,
+    nobody fed. Hints already used stay counted, and it counts as a retry.
+    This is the way out when earlier choices (points spent on the wrong
+    friends) leave later waves with no answer. Every puzzle is proved
+    solvable from the start (K5), so starting over always has a way through.
 - **The streak** (D10, K7): consecutive local calendar days on which the
   profile finished the 10-wave daily.
   - "Finished" means all 10 waves cleared, so the bonus round opens. A day
