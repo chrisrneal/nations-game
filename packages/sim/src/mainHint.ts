@@ -1,6 +1,6 @@
 import type { Friend, FriendType, GameCommand, GameState, HintTopic, MainHint, PlacedFriend, PuzzleKid } from '@snacks/contracts';
 import { priceOf } from './game.ts';
-import { resolveSnacks, type WaveKid } from './resolve.ts';
+import { pickupFor, resolveSnacks, type WaveKid } from './resolve.ts';
 import { buysFor, fedBy, solveWave, type Budget } from './solver.ts';
 
 /**
@@ -79,27 +79,50 @@ function routeOf(state: GameState, kids: readonly WaveKid[], target: readonly Pl
 }
 
 /**
- * Commands that put one friend right (the route's first wrong one, then any
- * other of the target's), or take one in the way back; null when there is
- * nothing to do.
+ * Every command set that puts one friend right (the route's wrong ones first,
+ * then any other of the target's), or takes one in the way back; empty when
+ * there is nothing to do. A friend left over from an earlier wave that still
+ * throws and that the plan does not use goes back in the same press.
  */
-function nextFriend(state: GameState, kids: readonly WaveKid[], target: readonly PlacedFriend[], kid: number): { commands: GameCommand[]; placed: number } | null {
+function nextFriends(state: GameState, kids: readonly WaveKid[], target: readonly PlacedFriend[], kid: number): Step[] {
   const placed = state.friends.filter((f) => f.cell >= 0);
   const planned = (cell: number, type: FriendType): boolean => target.some((p) => p.cell === cell && p.type === type);
+  // A friend left over from an earlier wave that the plan does not use would keep throwing while the route is built (it can
+  // give a kid a tummy ache before the plan is done), so those go back to the tray first.
+  const stale = placed.find((f) => !planned(f.cell, f.type) && pickupFor(state.puzzle.board, f) >= 0);
+  const steps: Step[] = [];
   for (const p of [...routeOf(state, kids, target, kid), ...target]) {
     const here = placed.find((f) => f.cell === p.cell);
     if (here !== undefined && here.type === p.type) {
       if (here.facing === p.facing) continue;
-      return { commands: [{ type: 'turn', friend: here.id, facing: p.facing }], placed: p.cell };
+      steps.push({ commands: [{ type: 'turn', friend: here.id, facing: p.facing }], placed: p.cell });
+      continue;
     }
     const commands: GameCommand[] = here === undefined ? [] : [{ type: 'toTray', friend: here.id }];
     const spare = placed.find((f) => f.type === p.type && !planned(f.cell, f.type)) ?? state.friends.find((f) => f.type === p.type && f.cell < 0);
     if (spare !== undefined) commands.push({ type: 'place', friend: spare.id, cell: p.cell, facing: p.facing });
     else commands.push({ type: 'buy', friend: p.type }, { type: 'place', friend: state.nextFriendId, cell: p.cell, facing: p.facing });
-    return { commands, placed: p.cell };
+    steps.push({ commands, placed: p.cell });
   }
+  if (stale !== undefined) {
+    // Sent back in the same press as the step, unless that step already moves it.
+    const away: GameCommand = { type: 'toTray', friend: stale.id };
+    if (steps.length === 0) return [{ commands: [away], placed: -1 }];
+    return steps.map((s) => (s.commands.some((c) => 'friend' in c && c.friend === stale.id) ? s : { ...s, commands: [away, ...s.commands] }));
+  }
+  if (steps.length > 0) return steps;
   const extra = placed.find((f) => !planned(f.cell, f.type));
-  return extra === undefined ? null : { commands: [{ type: 'toTray', friend: extra.id }], placed: -1 };
+  return extra === undefined ? [] : [{ commands: [{ type: 'toTray', friend: extra.id }], placed: -1 }];
+}
+
+interface Step {
+  commands: GameCommand[];
+  placed: number;
+}
+
+/** Kids a setup gives a tummy ache. */
+function achesOf(state: GameState, kids: readonly WaveKid[]): ReadonlySet<number> {
+  return new Set(resolveSnacks({ board: state.puzzle.board, friends: state.friends, kids, mode: state.puzzle.mode }).aches.keys());
 }
 
 /**
@@ -128,14 +151,27 @@ export function pressHint(state: GameState, apply: (state: GameState, command: G
     let placed = -1;
     if (tier === 3) {
       const target = targetSetup(state, kids, kid.id);
-      const step = target === null ? null : nextFriend(state, kids, target, kid.id);
-      if (step === null) return { state, error: 'No hint can help with this board now. Try moving your friends.' };
-      for (const command of step.commands) {
-        const r = apply(next, command);
-        if (r.error !== null) return { state, error: r.error };
-        next = r.state;
+      const options = target === null ? [] : nextFriends(state, kids, target, kid.id);
+      if (options.length === 0) return { state, error: 'No hint can help with this board now. Try moving your friends.' };
+      // Half a route can throw a snack at the wrong kid before the rest stands, so of the steps that help, take the first
+      // that gives nobody a new tummy ache if the player pressed Go right after (the finished plan never does).
+      const achesBefore = achesOf(state, kids);
+      let chosen: { step: Step; state: GameState } | null = null;
+      for (const option of options) {
+        let tried = state;
+        for (const command of option.commands) {
+          const r = apply(tried, command);
+          if (r.error !== null) return { state, error: r.error };
+          tried = r.state;
+        }
+        chosen ??= { step: option, state: tried };
+        if ([...achesOf(tried, kids)].every((k) => achesBefore.has(k))) {
+          chosen = { step: option, state: tried };
+          break;
+        }
       }
-      placed = step.placed;
+      next = chosen!.state;
+      placed = chosen!.step.placed;
     }
     hint = { tier: tier as MainHint['tier'], kid: kid.id, about: topics(kid), lunchbox, placed };
   }

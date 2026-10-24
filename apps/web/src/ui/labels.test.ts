@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MainHint } from '@snacks/contracts';
-import { facingAngle, hintLine, hintsText, hintsToday, hungryOf, kidLetter, kidLine, kidLooks, shortClue, waveReport, waveSummary } from './labels.ts';
+import { facingAngle, hintLine, hintsText, hintsToday, hungryOf, kidLetter, kidLine, kidLooks, shortClue, snackLines, waveReport, waveSummary } from './labels.ts';
 
 describe('screen words', () => {
   it('points a friend’s arrow the way it throws', () => {
@@ -16,6 +16,27 @@ describe('screen words', () => {
     expect(kidLine({ kid: 1, end: 'happy', ache: false, ate: 'apple' }, 'A')).toBe('A ate the Apple and went home happy');
     expect(kidLine({ kid: 1, end: 'hungry', ache: false, ate: null }, 'B')).toBe('B got no snack and went home hungry');
     expect(kidLine({ kid: 1, end: 'hungry', ache: true, ate: 'cookie' }, 'C')).toMatch(/tummy ache from the Cookie/);
+  });
+
+  it('says what happened to every snack, and to lunchboxes nobody picked from', () => {
+    const board = { width: 3, height: 2, squares: ['open', 'open', 'obstacle', 'lunchbox', 'lunchbox', 'path'] as const, lunchboxes: [{ cell: 3, snack: 'apple' as const }, { cell: 4, snack: 'cheese' as const }] };
+    const hop = (toX: number, toY: number) => ({ fromX: 0, fromY: 0, toX, toY, beats: 1, by: 'straight' as const });
+    const wave = {
+      wave: 1,
+      points: 0,
+      wentHungry: 1,
+      kids: [{ kid: 1, end: 'hungry' as const, ache: true, ate: 'apple' as const }],
+      snacks: [
+        { snack: 'apple' as const, picker: 1, lunchbox: 3, hops: [hop(2, 0)], beats: 2, end: 'blocked' as const, kid: -1 },
+        { snack: 'banana' as const, picker: 2, lunchbox: 9, hops: [hop(2, 1)], beats: 2, end: 'ache' as const, kid: 1 },
+      ],
+    };
+    const lines = snackLines(wave, board, kidLetter).map((l) => l.text);
+    expect(lines).toEqual([
+      'The apple hit a tree or bench and was lost',
+      'The banana reached kid A first and gave a tummy ache',
+      'The cheese stick stayed in its lunchbox: no friend picked it up',
+    ]);
   });
 
   it('sums up a wave', () => {

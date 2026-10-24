@@ -371,6 +371,11 @@ export interface GameView {
   readonly shop: readonly ShopItem[];
   /** A snack would loop until the pass cap drops it (RULES D12). */
   readonly loopWarning: boolean;
+  /**
+   * Friends left on the board from an earlier wave that still pick up a snack and throw it (RULES 8). Says nothing about
+   * what any kid wants, so it can warn without giving the answer away.
+   */
+  readonly leftovers: number;
   readonly lastWave: WaveResult | null;
   /** Facings each friend type may take, in turning order. */
   readonly facings: Readonly<Record<FriendType, readonly number[]>>;

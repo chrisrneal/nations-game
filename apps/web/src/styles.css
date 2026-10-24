@@ -2797,3 +2797,10 @@ details summary {
     display: none;
   }
 }
+
+/* Pack up (RULES 8a): the small button beside the "friends from an earlier wave will throw again" warning. */
+.dock-hint .btn-pack {
+  margin-left: 8px;
+  min-height: 44px;
+  vertical-align: middle;
+}

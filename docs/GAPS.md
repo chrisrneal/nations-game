@@ -85,3 +85,12 @@ airport and Nations gap went with the code. They are in this file at commit
 - K13, a copy of the app installed before this version updates itself the old way once, which reloads it; every later update waits for a tap. Lane P.
 - K13, the board can still run under the dock on a short phone when the install bar shows (K6 gap); the install bar now goes at once when installed, but not before. Lane U.
 - K13, `npm run e2e` (phone, device and sound checks) and `npm run perf` need a build and a Chromium, so they run by hand, not in CI. Lane P.
+
+
+## Playtest audit: hints, carried-over friends, the snack report (owner request, 2026-10-21)
+- Audit-1, **Phase 3 is not built: no full-route preview.** The screen still draws only each friend's next hop (D12). Drawing the whole route and where it stops (tree, table, edge, kid, Nurse) reverses D12 and needs a new decision record from the architect; `previewRoutes` (a route with no kid verdicts, so it never reveals a want) is drafted in the audit notes, not in the code. Architect, lanes S and U.
+- Audit-2, **Phase 4 is not built: kid clues.** 24-34% of wave 1-3 clues are negatives ("Not yellow"). The plan: positive-only clues in waves 1-3, at most one negative in waves 4-6, and a tap-to-cross-off on the full clue card (UI-only state). Changing what the generator writes changes every day's puzzle, so it needs a decision record. Architect, lanes S and U.
+- Audit-3, **no stuck detector.** `solveDay` assumes every earlier kid was fed. After a mistake (fewer points, a healed kid in the way) nothing checks that the next wave can still be won. Idea: run `solveWave` on the real next-wave state after Go and say so. Lane S/U.
+- Audit-4, no "Report a problem" button that exports `puzzle.seed` and the state for the harness to replay. Lane U/P.
+- Audit-5, the hint check is a fuzz over 20 generated days in `npm test`; a hint step with *scattered random* friends (not just carried-over ones) still gave one new tummy ache in 3,555 steps when every option did. Not reachable by a player following hints, but Go pressed mid-hint is still the player's risk until the route preview (Audit-1). Lane S.
+- Audit-6, the new Pack up button and the snack report were checked by unit tests and the typechecker only; the phone check (`npm run e2e`) was not run. Lane P.

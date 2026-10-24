@@ -1,4 +1,4 @@
-import type { FriendType, HintTopic, KidOutcome, KidView, MainHint, SnackEnd, SnackId, WaveResult } from '@snacks/contracts';
+import type { FriendType, HintTopic, KidOutcome, KidView, MainHint, SnackEnd, SnackId, SquareKind, WaveResult } from '@snacks/contracts';
 
 /**
  * Words for the screen: snack and friend names, what happened in a wave, the
@@ -90,6 +90,53 @@ const END_WORDS: Readonly<Record<SnackEnd, string>> = {
 
 export function snackEndWords(end: SnackEnd): string {
   return END_WORDS[end];
+}
+
+/** The squares of the board, as much as the report needs to say where a snack stopped. */
+export interface ReportBoard {
+  readonly width: number;
+  readonly height: number;
+  readonly squares: readonly SquareKind[];
+  readonly lunchboxes: readonly { readonly cell: number; readonly snack: SnackId }[];
+}
+
+export interface SnackLine {
+  readonly snack: SnackId;
+  readonly text: string;
+}
+
+/**
+ * One line for every lunchbox, so the report is never empty and never skips a snack (RULES 7): where each picked-up
+ * snack ended (naming the kid, or what it hit), and which lunchboxes nobody picked from. Worked out from the wave's
+ * own hops and the board, so the sim and its saves are untouched.
+ */
+export function snackLines(wave: WaveResult, board: ReportBoard, label: (kid: number) => string): SnackLine[] {
+  const lines: SnackLine[] = wave.snacks.map((s) => {
+    const name = SNACK_NAME[s.snack].toLowerCase();
+    const last = s.hops[s.hops.length - 1];
+    const cell = last === undefined || last.toX < 0 || last.toY < 0 || last.toX >= board.width || last.toY >= board.height ? -1 : last.toY * board.width + last.toX;
+    const kid = s.kid >= 0 ? label(s.kid) : '';
+    switch (s.end) {
+      case 'fed':
+        return { snack: s.snack, text: `The ${name} was eaten by kid ${kid}` };
+      case 'ache':
+        return { snack: s.snack, text: `The ${name} reached kid ${kid} first and gave a tummy ache` };
+      case 'bounced':
+        return { snack: s.snack, text: `The ${name} bounced off kid ${kid}` };
+      case 'wasted':
+        return { snack: s.snack, text: `The ${name} reached kid ${kid} too late: they already had a snack` };
+      case 'blocked': {
+        const hit = cell < 0 ? 'something' : board.squares[cell] === 'table' ? 'the parents’ table' : board.squares[cell] === 'lunchbox' ? 'a lunchbox' : 'a tree or bench';
+        return { snack: s.snack, text: `The ${name} hit ${hit} and was lost` };
+      }
+      default:
+        return { snack: s.snack, text: `The ${name} ${snackEndWords(s.end)}` };
+    }
+  });
+  for (const box of board.lunchboxes) {
+    if (!wave.snacks.some((s) => s.lunchbox === box.cell)) lines.push({ snack: box.snack, text: `The ${SNACK_NAME[box.snack].toLowerCase()} stayed in its lunchbox: no friend picked it up` });
+  }
+  return lines;
 }
 
 /** One line about a kid after a wave. */
